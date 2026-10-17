@@ -1,0 +1,18 @@
+# Example: docker compose up --build, then open http://localhost:3002.
+# .env next to this file holds the settings (see apps/web/.env.example);
+# SESSION_SECRET is required, ANTHROPIC_API_KEY or the OpenAI-compatible
+# variables enable the chat. Chromium and the workspace path are set by the image.
+services:
+  web:
+    build: .
+    image: spooldoc
+    ports:
+      - "3002:3000"
+    env_file: .env
+    volumes:
+      - workspace:/workspace
+    read_only: false
+    restart: unless-stopped
+
+volumes:
+  workspace:

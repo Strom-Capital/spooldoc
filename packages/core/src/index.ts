@@ -6,6 +6,7 @@ export * from "./values.js";
 export * from "./extract.js";
 export * from "./xmlspool.js";
 export * from "./template.js";
+export * from "./pagesize.js";
 export * from "./mask.js";
 export * from "./workspace.js";
 export { EBCDIC_TABLES } from "./tables.generated.js";

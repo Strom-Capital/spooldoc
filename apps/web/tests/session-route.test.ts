@@ -74,6 +74,28 @@ describe('/api/session', () => {
     expect(body).toEqual({ connected: false, model: null, masking: true, pdf: false });
   });
 
+  it('reports masking off when SPOOLDOC_MASK=false', async () => {
+    process.env.SPOOLDOC_MASK = 'false';
+    resetConfig();
+    try {
+      const body = await (await GET(appRequest('/api/session'))).json();
+      expect(body.masking).toBe(false);
+    } finally {
+      delete process.env.SPOOLDOC_MASK;
+      resetConfig();
+    }
+  });
+
+  it('reports pdf: true when SPOOLDOC_CHROMIUM_PATH is an executable', async () => {
+    process.env.SPOOLDOC_CHROMIUM_PATH = process.execPath;
+    try {
+      const body = await (await GET(appRequest('/api/session'))).json();
+      expect(body.pdf).toBe(true);
+    } finally {
+      delete process.env.SPOOLDOC_CHROMIUM_PATH;
+    }
+  });
+
   it('DELETE closes the connection and clears the session', async () => {
     await signOn(GOOD_PASSWORD);
     const conn = [...connections.values()][0];

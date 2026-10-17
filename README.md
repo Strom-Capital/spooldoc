@@ -11,11 +11,22 @@ template. Automation (queue watcher, delivery, archive) comes second.
 
 ## Status
 
-Early development. `packages/core` exists: the capture format, an *SCS
-parser with EBCDIC decode tables, document definitions in YAML, text and
-XML-in-spool extraction, Nunjucks templates, PDF rendering through an
-optional Chromium, value masking for model prompts and a file workspace.
-It is tested against real demo spooled files captured from PUB400.
+Version 1 is design-time complete: connect to an IBM i, capture a spooled
+file, let a model propose a definition and a template, check the extracted
+JSON next to the page, and render HTML or PDF. Next:
+
+- A queue watcher that picks up new spooled files and renders them unattended.
+- Delivery: email, folders and archive.
+- DOCX and XLSX renderers next to HTML and PDF.
+- A command line for capture, extract and render in batch jobs.
+
+## Packages
+
+`packages/core` holds the capture format, an *SCS parser with EBCDIC
+decode tables, document definitions in YAML, text and XML-in-spool
+extraction, Nunjucks templates, PDF rendering through an optional
+Chromium, value masking for model prompts and a file workspace. It is
+tested against real demo spooled files captured from PUB400.
 
 `packages/ibmi` connects to an IBM i through jt400 (the `node-jt400`
 package and its Java bridge, so a JDK is needed to install it): it lists
@@ -48,7 +59,35 @@ pnpm dev                                       # core and ibmi in watch mode, Ne
 ```
 
 Open http://localhost:3002. PDF export needs `SPOOLDOC_CHROMIUM_PATH`
-pointing at a Chromium or Chrome executable.
+pointing at a Chromium or Chrome executable. The PDF of a document is
+named after the definition's `output.name` (for example
+`invoice-260102.pdf`), printed on A4, portrait unless the spooled file is
+wider than 160 columns or the template's `@page { size: ... }` says
+otherwise.
+
+### Run with Docker
+
+The image holds the web app, a Java runtime for jt400 and Chromium for
+PDFs, and runs on amd64 and arm64:
+
+```sh
+docker build -t spooldoc .
+docker run -p 3002:3000 \
+  -e SESSION_SECRET="$(openssl rand -base64 32)" \
+  -e ANTHROPIC_API_KEY=... \
+  -v spooldoc-workspace:/workspace \
+  spooldoc
+```
+
+Or `docker compose up --build` with the settings in a `.env` file next to
+`compose.yaml` (the variables of `apps/web/.env.example`). Captured
+samples, definitions and templates live in the `/workspace` volume. Keep
+`SESSION_SECRET` the same across restarts, or every session ends.
+
+The container needs network access to the IBM i on the host server ports
+jt400 uses: 449 (port mapper) and 8470 to 8476 (central, database on 8471
+for JDBC, network print, remote command and sign-on). Set
+`SPOOLDOC_ALLOWED_HOSTS` to limit which hosts users can connect to.
 
 ### Model
 
@@ -66,24 +105,37 @@ to set one up. Keys stay on the server; no request can supply one.
 
 Masking is on by default (`SPOOLDOC_MASK=true`): digits in values become 9
 and letters X or x before page text goes to the model, while labels that
-repeat across pages, positions and lengths stay as printed. Values in tool
-results (the extracted fields and the rendered text) are masked the same
-way; the files the model writes and the workbench itself use the real
-values.
+repeat across pages, positions and lengths stay as printed. The chat
+panel shows "Values masked", or "Values sent in clear" when
+`SPOOLDOC_MASK=false`.
 
-The model receives the page text of the sample (the first pages in the
-instructions, any other page on request), its metadata (spooled file name,
-queue, user data, page size, code page) and the current definition and
-template. It never receives credentials, the session or the IBM i
-connection. Its four tools only read the sample and write
-`definitions/<type>.yaml` and `templates/<type>.html` in the workspace.
+## Trust
 
-### Trust
+What the model receives:
 
-The IBM i password stays in an encrypted, httpOnly session cookie and in
-the server's connection cache; it is never logged or returned. The model,
-when one is configured, never receives credentials. The workspace folder
-holds captured spool data in clear text, so keep it private.
+- The page text of the sample: the first pages in the instructions, any
+  other page on request. Values are masked by default.
+- The spooled file metadata: name, queue, user data, page size, code page.
+- The current definition and template.
+- Tool results (extracted fields, rendered text), masked the same way.
+
+What it never receives: IBM i credentials, the session, the IBM i
+connection or any other sample. No tool reaches the IBM i: the four tools
+read the sample on disk and write `definitions/<type>.yaml` and
+`templates/<type>.html` in the workspace. The files the model writes and
+the workbench itself use the real values.
+
+The workspace holds captured spool data in clear text on disk. Protect it
+like the spooled files themselves: file permissions, backups and the
+Docker volume included.
+
+PDFs render locally in headless Chromium; the page may not make any
+network request, so a template cannot fetch or send anything.
+
+The IBM i password stays in an encrypted, httpOnly session cookie that
+expires after 12 hours, and in the server's connection cache; it is never
+logged or returned. The model key is server configuration only: no
+request can supply or read one.
 
 ## Layout
 
@@ -102,6 +154,8 @@ holds captured spool data in clear text, so keep it private.
   template editors and the HTML preview. `lib/server` holds config,
   session, the IBM i connection (`ibmi.ts` is the only module that loads
   the jt400 driver) and rendering; route handlers are under `app/api`.
+- `Dockerfile` and `compose.yaml`: the container image and an example
+  service for it.
 - `demo-spool`: CL and RPG sources that create output queues and
   print invented documents on any IBM i, for demos and end-to-end tests.
   Written for a PUB400 account.

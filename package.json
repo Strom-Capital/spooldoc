@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "license": "MIT",
+  "author": "Ström Capital Oy",
   "engines": {
     "node": ">=22"
   },

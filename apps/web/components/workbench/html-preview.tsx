@@ -20,10 +20,12 @@ export function HtmlPreview({ header }: { header?: ReactNode }) {
   const unsaved = drafts.yaml !== null || drafts.html !== null;
   const pdfHref = `/api/pdf/${encodeURIComponent(sampleId)}?document=${documentIndex}`;
   const pdfHint = !pdf
-    ? 'PDF needs playwright-core and SPOOLDOC_CHROMIUM_PATH on the server.'
-    : unsaved
-      ? 'The PDF uses the saved definition and template.'
-      : 'Open the PDF of this document';
+    ? 'Set SPOOLDOC_CHROMIUM_PATH to render PDFs'
+    : !render?.html
+      ? 'Nothing to print yet: fix the definition or the template first.'
+      : unsaved
+        ? 'Opens the PDF of the saved definition and template in a new tab.'
+        : 'Open the PDF of this document in a new tab';
 
   return (
     <section className="flex h-full min-h-0 flex-col" aria-label="HTML preview">
@@ -32,7 +34,7 @@ export function HtmlPreview({ header }: { header?: ReactNode }) {
         <DocumentSelect />
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="ml-auto" tabIndex={pdf ? undefined : 0}>
+            <span className="ml-auto" tabIndex={pdf && render?.html ? undefined : 0}>
               {pdf && render?.html ? (
                 <Button asChild size="sm" variant="outline">
                   <a href={pdfHref} target="_blank" rel="noopener noreferrer">
