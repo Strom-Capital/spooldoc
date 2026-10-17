@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pick list</title>
+<style>
+  @page { size: A4; margin: 15mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10pt; color: #1a1a1a; margin: 0; }
+  h1 { font-size: 18pt; margin: 0 0 6mm; }
+  h2 { font-size: 11pt; margin: 6mm 0 2mm; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 1mm 6mm; margin: 0; }
+  dt { color: #555; }
+  dd { margin: 0; white-space: pre-line; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 1.5mm 2mm; border-bottom: 0.2mm solid #ccc; vertical-align: top; }
+  th { font-weight: 600; border-bottom: 0.4mm solid #333; }
+  tr { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+  <h1>Pick list</h1>
+  <dl>
+    <dt>Picklist No</dt><dd>{{ doc.picklistNo }}</dd>
+    <dt>Order No</dt><dd>{{ doc.orderNo }}</dd>
+    <dt>Customer No</dt><dd>{{ doc.customerNo }}</dd>
+    <dt>Route</dt><dd>{{ doc.route }}</dd>
+    <dt>Ship Date</dt><dd>{{ doc.shipDate }}</dd>
+    <dt>Warehouse</dt><dd>{{ doc.warehouse }}</dd>
+    <dt>Deliver Name</dt><dd>{{ doc.deliverName }}</dd>
+    <dt>Deliver Address1</dt><dd>{{ doc.deliverAddress1 }}</dd>
+    <dt>Deliver Address2</dt><dd>{{ doc.deliverAddress2 }}</dd>
+    <dt>Deliver Address3</dt><dd>{{ doc.deliverAddress3 }}</dd>
+    <dt>Line Count</dt><dd>{{ doc.lineCount }}</dd>
+  </dl>
+  <h2>Lines</h2>
+  <table>
+    <thead><tr><th>Line</th><th>Item</th><th>Description</th><th>Bin</th><th>Lot</th><th>Quantity</th><th>Unit</th></tr></thead>
+    <tbody>
+      {% for row in doc.lines %}
+      <tr><td>{{ row.line }}</td><td>{{ row.item }}</td><td>{{ row.description }}</td><td>{{ row.bin }}</td><td>{{ row.lot }}</td><td>{{ row.quantity }}</td><td>{{ row.unit }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

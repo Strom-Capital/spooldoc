@@ -1,0 +1,51 @@
+# Invoices printed back to back: one invoice starts on a new page and can continue
+# on the next page under an "INVOICE (CONTINUED)" header.
+type: invoice
+version: 1
+match:
+  splf: SPDINVOICE
+  userData: INVOICE
+  page1: "^\\S.*\\bINVOICE$"
+source: text
+text:
+  page: { width: 132, length: 66 }
+  header: { lines: 5 }
+  footer: { fromLine: 60 }
+  split: { field: invoiceNo }
+  fields:
+    - { name: invoiceNo, anchor: { after: "Invoice no.......:" } }
+    - { name: invoiceDate, anchor: { after: "Invoice date.....:" }, type: date }
+    - { name: dueDate, anchor: { after: "Due date.........:" }, type: date }
+    - { name: paymentTerms, anchor: { after: "Payment terms....:" } }
+    - { name: reference, anchor: { after: "Your reference...:" } }
+    - { name: orderNo, anchor: { after: "Our order no.....:" } }
+    - { name: currency, anchor: { after: "Currency.........:" } }
+    - { name: customerNo, anchor: { after: "Customer no" } }
+    # The bill-to block has fixed positions; a missing address line prints as a blank line.
+    - { name: customerName, anchor: { line: 9, column: 5, length: 40 } }
+    - { name: address1, anchor: { line: 10, column: 5, length: 40 } }
+    - { name: address2, anchor: { line: 11, column: 5, length: 40 } }
+    - { name: address3, anchor: { line: 12, column: 5, length: 40 } }
+    # Totals print on the last page of an invoice.
+    - { name: netAmount, anchor: { after: "Net amount" }, page: last, type: number }
+    - { name: vatRate, anchor: { regex: "VAT ([\\d.,]+) %" }, page: last, type: number }
+    - { name: vatAmount, anchor: { regex: "VAT [\\d.,]+ %\\s+(\\S+)" }, page: last, type: number }
+    - { name: totalAmount, anchor: { regex: "Total [A-Z]{3}\\s+(\\S+)" }, page: last, type: number }
+  tables:
+    - name: lines
+      header: { pattern: "^Line\\s+Item\\s+Description" }
+      # Rows end at the totals rule or at "Continued on next page", both indented.
+      until: { pattern: "^\\s{40,}\\S" }
+      # The rule under the column headers and the delivery note rows are not item lines.
+      skip: { pattern: "^-{10,}|^\\s+Delivery note" }
+      columns:
+        - { name: line, column: 1, length: 4, type: number }
+        - { name: item, column: 7, length: 10 }
+        - { name: description, column: 19, length: 36 }
+        - { name: quantity, column: 55, length: 8, type: number }
+        - { name: unit, column: 65, length: 6 }
+        - { name: unitPrice, column: 71, length: 12, type: number }
+        - { name: amount, column: 91, length: 20, type: number }
+output:
+  name: "invoice-{{ invoiceNo }}"
+  title: Invoice

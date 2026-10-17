@@ -1,0 +1,494 @@
+{
+  "id": "SPDPICK-000000-000035",
+  "version": 1,
+  "capturedAt": "2026-10-17T21:40:38Z",
+  "system": "ibmi.example.com",
+  "splf": {
+    "name": "SPDPICK",
+    "number": 35,
+    "jobName": "QPRTJOB",
+    "jobUser": "DEMOUSER",
+    "jobNumber": "000000"
+  },
+  "attributes": {
+    "queue": {
+      "library": "MYLIB",
+      "name": "FORMS"
+    },
+    "userData": "PICKLIST",
+    "formType": "*STD",
+    "deviceType": "*SCS",
+    "pages": 5,
+    "pageWidth": 132,
+    "pageLength": 66,
+    "cpi": 10,
+    "lpi": 6,
+    "chrid": {
+      "charset": 697,
+      "codePage": 273
+    },
+    "jobCcsid": 273,
+    "created": "2026-10-17T21:40:38"
+  },
+  "codePage": 273,
+  "rawBase64": "NMQBACvSA0X/ACvSBEwAAwAr0gQNAAAAK9IKhQEBAgEDAgQCACvSAwkCACvSBhEAAUpAACvSBgEBAAABACvTBvYAAP//ACvSCkgAAAEBAQADAQAAK9EHBQALAJABACvSBEkA8AAr0gZASkA94AAr0gQVAPAANMQBACvRA4ECACvIA0ABAAAAAAAAAAAAAAAAAAAA1OjD1kDT48RAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBA18nD0kDTyeLjQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDXgYeFQPEAFeaBmYWIlqSihUDw8UDUwcnVQObB2cXI1uTixQAVAA0AFdeJg5JAk4mio0CVlktLS0t6QPfw8PDw8UBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAxIWTiaWFmUCjlgAV1pmEhZlAlZZLS0tLS0tLS3pA9fHw8fFAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDV1tnjyMXZ1UDi5NfX0+hAw9YAFcOkoqOWlIWZQJWWS0tLS0t6QPHw8PDxQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAyIGZgpakmUDZloGEQPQAFdmWpKOFS0tLS0tLS0tLS0t6QNnx8kDV1tnjyEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAwqSJk4SJlYdAwwAV4oiJl0CEgaOFS0tLS0tLS3pA8vDy9mDx8GDy8UBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDGyWD58PHw8EDW5NPkABXmgZmFiJakooVLS0tLS0tLekDw8QAVAA0AFX5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fgAV04mVhUBAyaOFlEBAQEBAQEBAxIWig5mJl6OJlpVAQEBAQEBAQEBAQEBAQEBAQEBAQEBAwomVQEBAQEBAQEBA05ajQEBAQEBAQEBAQEDYpIGVo4mjqEBA5JWJo0BAQNeJg5KFhAAVYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgABVAQPHwQEDBYPHw8PFAQEBAQEDC2cHD0sXjQPTw1NRAQEBAQEBAQEBAQEBAQEBAQEBAQEDBYPDxYPDzQEBAQEDT8vbx8PHxQEBAQEBAQEBAQEBAQED2QEDXw+JAQEBAbW1tbW1tbW0AFUBA8vBAQMVg9fDw8UBAQEBAQOLBxsXj6EDH09blxeJA4snpxUDx8EBAQEBAQEBAQEBAQMRg8PFg8PFAQEBAQNPy9vHw8fhAQEBAQEBAQEBAQEBAQPlAQNfZQEBAQEBtbW1tbW1tbQAVQEDz8EBAw2Dz8PDxQEBAQEBA4uPFxdNA19PB48VA8tTUQPHn8tRAQEBAQEBAQEBAQEBA6GDx8GDw8UBAQEBA0/L28fDx9UBAQEBAQEBAQEBAQEDx8kBA18PiQEBAQG1tbW1tbW1tABVAQPTwQEDBYPHw8PJAQEBAQEDC2cHD0sXjQPbw1NRAQEBAQEBAQEBAQEBAQEBAQEBAQEDBYPDxYPD0QEBAQEDT8vbx8PHyQEBAQEBAQEBAQEBAQPH1QEDXw+JAQEBAbW1tbW1tbW0AFWBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYAAV04mVhaJ6QPQAFQANNMQ814mDkoWEQIKoQG1tbW1tbW1tbW1tbW1tbW1tbW1tQEBAxIGjhUBtbW1tbW1tbW1tQEBAw4iFg5KFhEBtbW1tbW1tbW1tbW1tbW1tbW1tbQAVNMRCNMA0YH5cQIijo5eiemFhl6SC9PDwS4OWlEBcfmBAQEBADQAAAAAMAAANNMQB1OjD1kDT48RAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBA18nD0kDTyeLjQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDXgYeFQPEAFeaBmYWIlqSihUDw8UDUwcnVQObB2cXI1uTixQAVAA0AFdeJg5JAk4mio0CVlktLS0t6QPfw8PDw8kBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAxIWTiaWFmUCjlgAV1pmEhZlAlZZLS0tLS0tLS3pA9fHw8vFAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDCwdLF2UBQQOLW1eJA0+PEABXDpKKjlpSFmUCVlktLS0tLekDx8PDw8kBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQNSJk5NA04GVhUDx8gAV2Zako4VLS0tLS0tLS0tLS3pA2fDzQMPJ4+gAFeKIiZdAhIGjhUtLS0tLS0t6QPLw8vZg8fBg8vJAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAxslg8/Px8PBA48HU18XZxQAV5oGZhYiWpKKFS0tLS0tLS3pA8PEAFQANABV+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn4AFdOJlYVAQMmjhZRAQEBAQEBAQMSFooOZiZejiZaVQEBAQEBAQEBAQEBAQEBAQEBAQEBAQMKJlUBAQEBAQEBAQNOWo0BAQEBAQEBAQEBA2KSBlaOJo6hAQOSViaNAQEDXiYOShYQAFWBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYAAVQEDx8EBAwmDy8PDyQEBAQEBAyMXnQNXk40DU+EBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAwmDw8mDx8kBAQEBA0/L28fDx9EBAQEBAQEBAQEBAQEBA+EBA18PiQEBAQG1tbW1tbW1tABVAQPLwQEDBYPHw8PFAQEBAQEDC2cHD0sXjQPTw1NRAQEBAQEBAQEBAQEBAQEBAQEBAQEDBYPDxYPDzQEBAQEDT8vbx8PHxQEBAQEBAQEBAQEBAQPHxQEDXw+JAQEBAbW1tbW1tbW0AFUBA8/BAQMVg9fDw8UBAQEBAQOLBxsXj6EDH09blxeJA4snpxUDx8EBAQEBAQEBAQEBAQMRg8PFg8PFAQEBAQNPy9vHw8fhAQEBAQEBAQEBAQEBA8fRAQNfZQEBAQEBtbW1tbW1tbQAVQED08EBAw2Dz8PDxQEBAQEBA4uPFxdNA19PB48VA8tTUQPHn8tRAQEBAQEBAQEBAQEBA6GDx8GDw8UBAQEBA0/L28fDx9UBAQEBAQEBAQEBAQEDx90BA18PiQEBAQG1tbW1tbW1tABVAQPXwQEDBYPHw8PJAQEBAQEDC2cHD0sXjQPbw1NRAQEBAQEBAQEBAQEBAQEBAQEBAQEDBYPDxYPD0QEBAQEDT8vbx8PHyQEBAQEBAQEBAQEBAQPLwQEDXw+JAQEBAbW1tbW1tbW0AFUBA9vBAQMZg9vDw8UBAQEBAQOJKSuPg0cHT0sFA1PHwQEBAQEBAQEBAQEBAQEBAQEBAQMJg8PNg8PVAQEBAQNPy9vHw8flAQEBAQEBAQEBAQEBA8vNAQNfD4kBAQEBtbW1tbW1tbQAVQED38EBAw2Dz8PDyQEBAQEBAwdXH08VAwsHZQPTw5/Tw5/RAQEBAQEBAQEBAQEBAQEBA6GDx8WDw8kBAQEBA0/L28fDx9kBAQEBAQEBAQEBAQEBA8kBA1EBAQEBAQG1tbW1tbW1tABVAQPjwQEDCYPLw8PFAQEBAQEDIxedAwtbT40DU+Of08EBAQEBAQEBAQEBAQEBAQEBAQEDCYPDyYPHxQEBAQEDT8vbx8PHzQEBAQEBAQEBAQEBAQED1QEDXw+JAQEBAbW1tbW1tbW0AFUBA+fBAQMdg9/Dw8UBAQEBAQNLg6OLJQPHwQNTUQNfW0+jF4uPF2UBAQEBAQEBAQEBAQMNg8PZg8PJAQEBAQNPy9vHw8vBAQEBAQEBAQEBAQEBAQPhAQNRAQEBAQEBtbW1tbW1tbQAVYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgABXTiZWFonpA+QAVAA00xDzXiYOShYRAgqhAbW1tbW1tbW1tbW1tbW1tbW1tbW1AQEDEgaOFQG1tbW1tbW1tbW1AQEDDiIWDkoWEQG1tbW1tbW1tbW1tbW1tbW1tbW1tABU0xEI0wDRgflxAiKOjl6J6YWGXpIL08PBLg5aUQFx+YEBAQEANAAAAAAAAAAAMAAANNMQB1OjD1kDT48RAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBA18nD0kDTyeLjQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDXgYeFQPEAFeaBmYWIlqSihUDw8UDUwcnVQObB2cXI1uTixQAVAA0AFdeJg5JAk4mio0CVlktLS0t6QPfw8PDw80BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAxIWTiaWFmUCjlgAV1pmEhZlAlZZLS0tLS0tLS3pA9fHw8/FAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDUStLF00pA2cHSxdXV5OJA1ugAFcOkoqOWlIWZQJWWS0tLS0t6QPHw8PDzQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBA44WWk5OJoqSkoqOJhUD3ABXZlqSjhUtLS0tLS0tLS0tLekDZ8PdAw8XV49nB00BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQNfTQPT1ABXiiImXQISBo4VLS0tLS0tLekDy8PL2YPHwYPLzQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQMbJYPTw8fDwQNHo5Uri0ujTSgAV5oGZhYiWpKKFS0tLS0tLS3pA8PEAFQANABV+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn4AFdOJlYVAQMmjhZRAQEBAQEBAQMSFooOZiZejiZaVQEBAQEBAQEBAQEBAQEBAQEBAQEBAQMKJlUBAQEBAQEBAQNOWo0BAQEBAQEBAQEBA2KSBlaOJo6hAQOSViaNAQEDXiYOShYQAFWBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYAAVQEDx8EBAxGD08PDxQEBAQEBAyOjE2cHk08nDQMjW4sVAxNXx8kBAQEBAQEBAQEBAQEBAw2Dw9WDw90BAQEBA0/L28fDx90BAQEBAQEBAQEBAQEDx8EBA1EBAQEBAQG1tbW1tbW1tABVAQPLwQEDCYPLw8PJAQEBAQEDIxedA1eTjQNT4QEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDCYPDyYPHyQEBAQEDT8vbx8PH0QEBAQEBAQEBAQEBAQPHzQEDXw+JAQEBAbW1tbW1tbW0AFWBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYAAV04mVhaJ6QPIAFQANNMQ814mDkoWEQIKoQG1tbW1tbW1tbW1tbW1tbW1tbW1tQEBAxIGjhUBtbW1tbW1tbW1tQEBAw4iFg5KFhEBtbW1tbW1tbW1tbW1tbW1tbW1tbQAVNMRCNMA0YH5cQIijo5eiemFhl6SC9PDwS4OWlEBcfmBAQEBADQAAAAwAAA00xAHU6MPWQNPjxEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDXycPSQNPJ4uNAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQNeBh4VA8QAV5oGZhYiWpKKFQPDxQNTBydVA5sHZxcjW5OLFABUADQAV14mDkkCTiaKjQJWWS0tLS3pA9/Dw8PD0QEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDEhZOJpYWZQKOWABXWmYSFmUCVlktLS0tLS0tLekD18fD18UBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQMXB4uPF2dVA49bW0+JA1ugAFcOkoqOWlIWZQJWWS0tLS0t6QPHw8PD1QEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBA4oGjgZSBkoGjpEDyQMIAFdmWpKOFS0tLS0tLS0tLS0t6QNnx9UDFweLjABXiiImXQISBo4VLS0tLS0tLekDy8PL2YPHwYPL0QEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQMbJYPXz8fDwQNPB19fFxdXZwdXjwQAV5oGZhYiWpKKFS0tLS0tLS3pA8PEAFQANABV+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn4AFdOJlYVAQMmjhZRAQEBAQEBAQMSFooOZiZejiZaVQEBAQEBAQEBAQEBAQEBAQEBAQEBAQMKJlUBAQEBAQEBAQNOWo0BAQEBAQEBAQEBA2KSBlaOJo6hAQOSViaNAQEDXiYOShYQAFWBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYAAVQEDx8EBAx2D38PDxQEBAQEBA0uDo4slA8fBA1NRA19bT6MXi48XZQEBAQEBAQEBAQEBAw2Dw9mDw8kBAQEBA0/L28fDy8EBAQEBAQEBAQEBAQEDx8kBA1EBAQEBAQG1tbW1tbW1tABVAQPLwQEDEYPTw8PFAQEBAQEDI6MTZweTTycNAyNbixUDE1fHyQEBAQEBAQEBAQEBAQEDDYPD1YPD3QEBAQEDT8vbx8PH3QEBAQEBAQEBAQEBAQPH1QEDUQEBAQEBAbW1tbW1tbW0AFUBA8/BAQMJg8vDw8kBAQEBAQMjF50DV5ONA1PhAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQMJg8PJg8fJAQEBAQNPy9vHw8fRAQEBAQEBAQEBAQEBA8fhAQNfD4kBAQEBtbW1tbW1tbQAVQED08EBAwWDx8PDxQEBAQEBAwtnBw9LF40D08NTUQEBAQEBAQEBAQEBAQEBAQEBAQEBAwWDw8WDw80BAQEBA0/L28fDx8UBAQEBAQEBAQEBAQEDy8UBA18PiQEBAQG1tbW1tbW1tABVAQPXwQEDFYPXw8PFAQEBAQEDiwcbF4+hAx9PW5cXiQOLJ6cVA8fBAQEBAQEBAQEBAQEDEYPDxYPDxQEBAQEDT8vbx8PH4QEBAQEBAQEBAQEBAQPL0QEDX2UBAQEBAbW1tbW1tbW0AFUBA9vBAQMNg8/Dw8UBAQEBAQOLjxcXTQNfTwePFQPLU1EDx5/LUQEBAQEBAQEBAQEBAQOhg8fBg8PFAQEBAQNPy9vHw8fVAQEBAQEBAQEBAQEBAQPNAQNfD4kBAQEBtbW1tbW1tbQAVQED38EBAwWDx8PDyQEBAQEBAwtnBw9LF40D28NTUQEBAQEBAQEBAQEBAQEBAQEBAQEBAwWDw8WDw9EBAQEBA0/L28fDx8kBAQEBAQEBAQEBAQEBA9kBA18PiQEBAQG1tbW1tbW1tABVAQPjwQEDGYPbw8PFAQEBAQEDiSkrj4NHB09LBQNTx8EBAQEBAQEBAQEBAQEBAQEBAQEDCYPDzYPD1QEBAQEDT8vbx8PH5QEBAQEBAQEBAQEBAQED5QEDXw+JAQEBAbW1tbW1tbW0AFUBA+fBAQMNg8/Dw8kBAQEBAQMHVx9PFQMLB2UD08Of08Of0QEBAQEBAQEBAQEBAQEBAQOhg8fFg8PJAQEBAQNPy9vHw8fZAQEBAQEBAQEBAQEBA8fJAQNRAQEBAQEBtbW1tbW1tbQAVQPHw8EBAwmDy8PDxQEBAQEBAyMXnQMLW0+NA1Pjn9PBAQEBAQEBAQEBAQEBAQEBAQEBAwmDw8mDx8UBAQEBA0/L28fDx80BAQEBAQEBAQEBAQEDx9UBA18PiQEBAQG1tbW1tbW1tABVA8fHwQEDHYPfw8PFAQEBAQEDS4OjiyUDx8EDU1EDX1tPoxeLjxdlAQEBAQEBAQEBAQEDDYPD2YPDyQEBAQEDT8vbx8PLwQEBAQEBAQEBAQEBAQPH4QEDUQEBAQEBAbW1tbW1tbW0AFUDx8vBAQMRg9PDw8UBAQEBAQMjoxNnB5NPJw0DI1uLFQMTV8fJAQEBAQEBAQEBAQEBAQMNg8PVg8PdAQEBAQNPy9vHw8fdAQEBAQEBAQEBAQEBA8vFAQNRAQEBAQEBtbW1tbW1tbQAVYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgABXTiZWFonpA8fIAFQANNMQ814mDkoWEQIKoQG1tbW1tbW1tbW1tbW1tbW1tbW1tQEBAxIGjhUBtbW1tbW1tbW1tQEBAw4iFg5KFhEBtbW1tbW1tbW1tbW1tbW1tbW1tbQAVNMRCNMA0YH5cQIijo5eiemFhl6SC9PDwS4OWlEBcfmBAQEBADQAAAAAAAAAADAAADTTEAdTow9ZA0+PEQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQNfJw9JA08ni40BAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBA14GHhUDxABXmgZmFiJakooVA8PFA1MHJ1UDmwdnFyNbk4sUAFQANABXXiYOSQJOJoqNAlZZLS0tLekD38PDw8PVAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQMSFk4mlhZlAo5YAFdaZhIWZQJWWS0tLS0tLS0t6QPXx8PfxQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAyMnHyNPB1cRAxsHZ1OJAw9YAFcOkoqOWlIWZQJWWS0tLS0t6QPHw8PD3QEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBA2aSZgZNA2Zako4VA+AAV2Zako4VLS0tLS0tLS0tLS3pA2fD5QObF4uMAFeKIiZdAhIGjhUtLS0tLS0t6QPLw8vZg8fBg8vVAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAxslg9vDx8PBA4sXJ1UrR1tLJABXmgZmFiJakooVLS0tLS0tLekDw8QAVAA0AFX5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fn5+fgAV04mVhUBAyaOFlEBAQEBAQEBAxIWig5mJl6OJlpVAQEBAQEBAQEBAQEBAQEBAQEBAQEBAwomVQEBAQEBAQEBA05ajQEBAQEBAQEBAQEDYpIGVo4mjqEBA5JWJo0BAQNeJg5KFhAAVYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgABVAQPHwQEDCYPLw8PFAQEBAQEDIxedAwtbT40DU+Of08EBAQEBAQEBAQEBAQEBAQEBAQEDCYPDyYPHxQEBAQEDT8vbx8PHzQEBAQEBAQEBAQEBAQPH0QEDXw+JAQEBAbW1tbW1tbW0AFUBA8vBAQMdg9/Dw8UBAQEBAQNLg6OLJQPHwQNTUQNfW0+jF4uPF2UBAQEBAQEBAQEBAQMNg8PZg8PJAQEBAQNPy9vHw8vBAQEBAQEBAQEBAQEBA8fdAQNRAQEBAQEBtbW1tbW1tbQAVQEDz8EBAxGD08PDxQEBAQEBAyOjE2cHk08nDQMjW4sVAxNXx8kBAQEBAQEBAQEBAQEBAw2Dw9WDw90BAQEBA0/L28fDx90BAQEBAQEBAQEBAQEDy8EBA1EBAQEBAQG1tbW1tbW1tABVAQPTwQEDCYPLw8PJAQEBAQEDIxedA1eTjQNT4QEBAQEBAQEBAQEBAQEBAQEBAQEBAQEDCYPDyYPHyQEBAQEDT8vbx8PH0QEBAQEBAQEBAQEBAQPLzQEDXw+JAQEBAbW1tbW1tbW0AFUBA9fBAQMFg8fDw8UBAQEBAQMLZwcPSxeNA9PDU1EBAQEBAQEBAQEBAQEBAQEBAQEBAQMFg8PFg8PNAQEBAQNPy9vHw8fFAQEBAQEBAQEBAQEBAQPJAQNfD4kBAQEBtbW1tbW1tbQAVQED28EBAxWD18PDxQEBAQEBA4sHGxePoQMfT1uXF4kDiyenFQPHwQEBAQEBAQEBAQEBAxGDw8WDw8UBAQEBA0/L28fDx+EBAQEBAQEBAQEBAQEBA9UBA19lAQEBAQG1tbW1tbW1tABVgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGAAFdOJlYWiekD2ABUADTTEPNeJg5KFhECCqEBtbW1tbW1tbW1tbW1tbW1tbW1tbUBAQMSBo4VAbW1tbW1tbW1tbUBAQMOIhYOShYRAbW1tbW1tbW1tbW1tbW1tbW1tbW0AFTTEQjTANGB+XECIo6OXonphYZekgvTw8EuDlpRAXH5gQEBAQA0M",
+  "pages": [
+    {
+      "no": 1,
+      "lines": [
+        {
+          "no": 1,
+          "text": "MYCO LTD                                              PICK LIST                                                        Page 1"
+        },
+        {
+          "no": 2,
+          "text": "Warehouse 01 MAIN WAREHOUSE"
+        },
+        {
+          "no": 4,
+          "text": "Pick list no....: 700001                                   Deliver to"
+        },
+        {
+          "no": 5,
+          "text": "Order no........: 51011                                    NORTHERN SUPPLY CO"
+        },
+        {
+          "no": 6,
+          "text": "Customer no.....: 10001                                    Harbour Road 4"
+        },
+        {
+          "no": 7,
+          "text": "Route...........: R12 NORTH                                Building C"
+        },
+        {
+          "no": 8,
+          "text": "Ship date.......: 2026-10-21                               FI-90100 OULU"
+        },
+        {
+          "no": 9,
+          "text": "Warehouse.......: 01"
+        },
+        {
+          "no": 11,
+          "text": "========================================================================================================================"
+        },
+        {
+          "no": 12,
+          "text": "Line  Item        Description                      Bin         Lot           Quantity  Unit   Picked"
+        },
+        {
+          "no": 13,
+          "text": "------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 14,
+          "text": "  10  A-1001      BRACKET 40MM                     A-01-03     L261011              6  PCS    ________"
+        },
+        {
+          "no": 15,
+          "text": "  20  E-5001      SAFETY GLOVES SIZE 10            D-01-01     L261018              9  PR     ________"
+        },
+        {
+          "no": 16,
+          "text": "  30  C-3001      STEEL PLATE 2MM 1X2M             Y-10-01     L261015             12  PCS    ________"
+        },
+        {
+          "no": 17,
+          "text": "  40  A-1002      BRACKET 60MM                     A-01-04     L261012             15  PCS    ________"
+        },
+        {
+          "no": 18,
+          "text": "------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 19,
+          "text": "Lines: 4"
+        },
+        {
+          "no": 60,
+          "text": "Picked by ____________________   Date __________   Checked ____________________"
+        },
+        {
+          "no": 66,
+          "text": "                                                   -=* https://pub400.com *=-"
+        }
+      ]
+    },
+    {
+      "no": 2,
+      "lines": [
+        {
+          "no": 1,
+          "text": "MYCO LTD                                              PICK LIST                                                        Page 1"
+        },
+        {
+          "no": 2,
+          "text": "Warehouse 01 MAIN WAREHOUSE"
+        },
+        {
+          "no": 4,
+          "text": "Pick list no....: 700002                                   Deliver to"
+        },
+        {
+          "no": 5,
+          "text": "Order no........: 51021                                    BAKER & SONS LTD"
+        },
+        {
+          "no": 6,
+          "text": "Customer no.....: 10002                                    Mill Lane 12"
+        },
+        {
+          "no": 7,
+          "text": "Route...........: R03 CITY"
+        },
+        {
+          "no": 8,
+          "text": "Ship date.......: 2026-10-22                               FI-33100 TAMPERE"
+        },
+        {
+          "no": 9,
+          "text": "Warehouse.......: 01"
+        },
+        {
+          "no": 11,
+          "text": "========================================================================================================================"
+        },
+        {
+          "no": 12,
+          "text": "Line  Item        Description                      Bin         Lot           Quantity  Unit   Picked"
+        },
+        {
+          "no": 13,
+          "text": "------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 14,
+          "text": "  10  B-2002      HEX NUT M8                       B-02-12     L261014              8  PCS    ________"
+        },
+        {
+          "no": 15,
+          "text": "  20  A-1001      BRACKET 40MM                     A-01-03     L261011             11  PCS    ________"
+        },
+        {
+          "no": 16,
+          "text": "  30  E-5001      SAFETY GLOVES SIZE 10            D-01-01     L261018             14  PR     ________"
+        },
+        {
+          "no": 17,
+          "text": "  40  C-3001      STEEL PLATE 2MM 1X2M             Y-10-01     L261015             17  PCS    ________"
+        },
+        {
+          "no": 18,
+          "text": "  50  A-1002      BRACKET 60MM                     A-01-04     L261012             20  PCS    ________"
+        },
+        {
+          "no": 19,
+          "text": "  60  F-6001      SÄÄTÖJALKA M10                   B-03-05     L261019             23  PCS    ________"
+        },
+        {
+          "no": 20,
+          "text": "  70  C-3002      ANGLE BAR 40X40X4                Y-11-02     L261016              2  M      ________"
+        },
+        {
+          "no": 21,
+          "text": "  80  B-2001      HEX BOLT M8X40                   B-02-11     L261013              5  PCS    ________"
+        },
+        {
+          "no": 22,
+          "text": "  90  G-7001      KÖYSI 10 MM POLYESTER            C-06-02     L261020              8  M      ________"
+        },
+        {
+          "no": 23,
+          "text": "------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 24,
+          "text": "Lines: 9"
+        },
+        {
+          "no": 60,
+          "text": "Picked by ____________________   Date __________   Checked ____________________"
+        },
+        {
+          "no": 66,
+          "text": "                                                   -=* https://pub400.com *=-"
+        }
+      ]
+    },
+    {
+      "no": 3,
+      "lines": [
+        {
+          "no": 1,
+          "text": "MYCO LTD                                              PICK LIST                                                        Page 1"
+        },
+        {
+          "no": 2,
+          "text": "Warehouse 01 MAIN WAREHOUSE"
+        },
+        {
+          "no": 4,
+          "text": "Pick list no....: 700003                                   Deliver to"
+        },
+        {
+          "no": 5,
+          "text": "Order no........: 51031                                    MÄKELÄ RAKENNUS OY"
+        },
+        {
+          "no": 6,
+          "text": "Customer no.....: 10003                                    Teollisuustie 7"
+        },
+        {
+          "no": 7,
+          "text": "Route...........: R07 CENTRAL                              PL 45"
+        },
+        {
+          "no": 8,
+          "text": "Ship date.......: 2026-10-23                               FI-40100 JYVÄSKYLÄ"
+        },
+        {
+          "no": 9,
+          "text": "Warehouse.......: 01"
+        },
+        {
+          "no": 11,
+          "text": "========================================================================================================================"
+        },
+        {
+          "no": 12,
+          "text": "Line  Item        Description                      Bin         Lot           Quantity  Unit   Picked"
+        },
+        {
+          "no": 13,
+          "text": "------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 14,
+          "text": "  10  D-4001      HYDRAULIC HOSE DN12              C-05-07     L261017             10  M      ________"
+        },
+        {
+          "no": 15,
+          "text": "  20  B-2002      HEX NUT M8                       B-02-12     L261014             13  PCS    ________"
+        },
+        {
+          "no": 16,
+          "text": "------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 17,
+          "text": "Lines: 2"
+        },
+        {
+          "no": 60,
+          "text": "Picked by ____________________   Date __________   Checked ____________________"
+        },
+        {
+          "no": 66,
+          "text": "                                                   -=* https://pub400.com *=-"
+        }
+      ]
+    },
+    {
+      "no": 4,
+      "lines": [
+        {
+          "no": 1,
+          "text": "MYCO LTD                                              PICK LIST                                                        Page 1"
+        },
+        {
+          "no": 2,
+          "text": "Warehouse 01 MAIN WAREHOUSE"
+        },
+        {
+          "no": 4,
+          "text": "Pick list no....: 700004                                   Deliver to"
+        },
+        {
+          "no": 5,
+          "text": "Order no........: 51051                                    EASTERN TOOLS OY"
+        },
+        {
+          "no": 6,
+          "text": "Customer no.....: 10005                                    Satamakatu 2 B"
+        },
+        {
+          "no": 7,
+          "text": "Route...........: R15 EAST"
+        },
+        {
+          "no": 8,
+          "text": "Ship date.......: 2026-10-24                               FI-53100 LAPPEENRANTA"
+        },
+        {
+          "no": 9,
+          "text": "Warehouse.......: 01"
+        },
+        {
+          "no": 11,
+          "text": "========================================================================================================================"
+        },
+        {
+          "no": 12,
+          "text": "Line  Item        Description                      Bin         Lot           Quantity  Unit   Picked"
+        },
+        {
+          "no": 13,
+          "text": "------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 14,
+          "text": "  10  G-7001      KÖYSI 10 MM POLYESTER            C-06-02     L261020             12  M      ________"
+        },
+        {
+          "no": 15,
+          "text": "  20  D-4001      HYDRAULIC HOSE DN12              C-05-07     L261017             15  M      ________"
+        },
+        {
+          "no": 16,
+          "text": "  30  B-2002      HEX NUT M8                       B-02-12     L261014             18  PCS    ________"
+        },
+        {
+          "no": 17,
+          "text": "  40  A-1001      BRACKET 40MM                     A-01-03     L261011             21  PCS    ________"
+        },
+        {
+          "no": 18,
+          "text": "  50  E-5001      SAFETY GLOVES SIZE 10            D-01-01     L261018             24  PR     ________"
+        },
+        {
+          "no": 19,
+          "text": "  60  C-3001      STEEL PLATE 2MM 1X2M             Y-10-01     L261015              3  PCS    ________"
+        },
+        {
+          "no": 20,
+          "text": "  70  A-1002      BRACKET 60MM                     A-01-04     L261012              6  PCS    ________"
+        },
+        {
+          "no": 21,
+          "text": "  80  F-6001      SÄÄTÖJALKA M10                   B-03-05     L261019              9  PCS    ________"
+        },
+        {
+          "no": 22,
+          "text": "  90  C-3002      ANGLE BAR 40X40X4                Y-11-02     L261016             12  M      ________"
+        },
+        {
+          "no": 23,
+          "text": " 100  B-2001      HEX BOLT M8X40                   B-02-11     L261013             15  PCS    ________"
+        },
+        {
+          "no": 24,
+          "text": " 110  G-7001      KÖYSI 10 MM POLYESTER            C-06-02     L261020             18  M      ________"
+        },
+        {
+          "no": 25,
+          "text": " 120  D-4001      HYDRAULIC HOSE DN12              C-05-07     L261017             21  M      ________"
+        },
+        {
+          "no": 26,
+          "text": "------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 27,
+          "text": "Lines: 12"
+        },
+        {
+          "no": 60,
+          "text": "Picked by ____________________   Date __________   Checked ____________________"
+        },
+        {
+          "no": 66,
+          "text": "                                                   -=* https://pub400.com *=-"
+        }
+      ]
+    },
+    {
+      "no": 5,
+      "lines": [
+        {
+          "no": 1,
+          "text": "MYCO LTD                                              PICK LIST                                                        Page 1"
+        },
+        {
+          "no": 2,
+          "text": "Warehouse 01 MAIN WAREHOUSE"
+        },
+        {
+          "no": 4,
+          "text": "Pick list no....: 700005                                   Deliver to"
+        },
+        {
+          "no": 5,
+          "text": "Order no........: 51071                                    HIGHLAND FARMS CO"
+        },
+        {
+          "no": 6,
+          "text": "Customer no.....: 10007                                    Rural Route 8"
+        },
+        {
+          "no": 7,
+          "text": "Route...........: R09 WEST"
+        },
+        {
+          "no": 8,
+          "text": "Ship date.......: 2026-10-25                               FI-60100 SEINÄJOKI"
+        },
+        {
+          "no": 9,
+          "text": "Warehouse.......: 01"
+        },
+        {
+          "no": 11,
+          "text": "========================================================================================================================"
+        },
+        {
+          "no": 12,
+          "text": "Line  Item        Description                      Bin         Lot           Quantity  Unit   Picked"
+        },
+        {
+          "no": 13,
+          "text": "------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 14,
+          "text": "  10  B-2001      HEX BOLT M8X40                   B-02-11     L261013             14  PCS    ________"
+        },
+        {
+          "no": 15,
+          "text": "  20  G-7001      KÖYSI 10 MM POLYESTER            C-06-02     L261020             17  M      ________"
+        },
+        {
+          "no": 16,
+          "text": "  30  D-4001      HYDRAULIC HOSE DN12              C-05-07     L261017             20  M      ________"
+        },
+        {
+          "no": 17,
+          "text": "  40  B-2002      HEX NUT M8                       B-02-12     L261014             23  PCS    ________"
+        },
+        {
+          "no": 18,
+          "text": "  50  A-1001      BRACKET 40MM                     A-01-03     L261011              2  PCS    ________"
+        },
+        {
+          "no": 19,
+          "text": "  60  E-5001      SAFETY GLOVES SIZE 10            D-01-01     L261018              5  PR     ________"
+        },
+        {
+          "no": 20,
+          "text": "------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 21,
+          "text": "Lines: 6"
+        },
+        {
+          "no": 60,
+          "text": "Picked by ____________________   Date __________   Checked ____________________"
+        },
+        {
+          "no": 66,
+          "text": "                                                   -=* https://pub400.com *=-"
+        }
+      ]
+    }
+  ]
+}

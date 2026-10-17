@@ -11,23 +11,34 @@ template. Automation (queue watcher, delivery, archive) comes second.
 
 ## Status
 
-Concept stage. Nothing runs yet. The concept deck lives outside this
-repository for now.
+Early development. `packages/core` exists: the capture format, an *SCS
+parser with EBCDIC decode tables, document definitions in YAML, text and
+XML-in-spool extraction, Nunjucks templates, PDF rendering through an
+optional Chromium, value masking for model prompts and a file workspace.
+It is tested against real demo spooled files captured from PUB400. There
+is no UI and no IBM i connection yet.
 
-## Planned layout
+```sh
+pnpm install
+pnpm -r build && pnpm -r test
+pnpm --filter @spooldoc/core demo   # the six demo invoices as JSON
+```
 
-- `packages/core`: document model, definition schema, spool readers (*SCS
-  via jt400, XML in spool, SQL-only fallback), render engines, delivery
-  channels, all behind plugin interfaces.
-- `packages/server`: the web app and API: connect, capture, propose,
-  preview, refine.
-- `packages/cli`: capture a sample, render a definition locally, run
-  sample-based tests.
+## Layout
+
+- `packages/core`: pure TypeScript core, no UI and no IBM i dependency:
+  samples, *SCS parser, definitions, extraction, templates, PDF, masking,
+  workspace. Fixtures in `packages/core/fixtures` are captured demo
+  spooled files with their definitions, templates and expected JSON.
+- `packages/ibmi` (coming): connect to an IBM i, list output queues and
+  capture spooled files as samples.
+- `apps/web` (coming): the design-time web app: connect, capture,
+  propose, preview, refine.
 - `demo-spool`: CL and RPG sources that create output queues and
   print invented documents on any IBM i, for demos and end-to-end tests.
   Written for a PUB400 account.
-- `samples/`: captured spooled files with their expected JSON, used as
-  test fixtures. Invented data only.
+- `workspace/`: the default `SPOOLDOC_WORKSPACE` (samples, definitions,
+  templates). Ignored by git except its README.
 
 ## Rules
 

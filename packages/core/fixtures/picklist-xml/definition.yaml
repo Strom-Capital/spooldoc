@@ -1,0 +1,31 @@
+# One XML document per pick list, printed into a 300 column spooled file.
+type: picklist-xml
+version: 1
+match:
+  splf: SPDXML
+  userData: PICKXML
+source: xml
+xml:
+  document: FORM
+  fields:
+    title: DOCUMENT/TITLE
+    picklistNo: DOCUMENT/PICKLIST_NO
+    orderNo: DOCUMENT/ORDER_NO
+    customerNo: DOCUMENT/CUSTOMER_NO
+    shipTo: DOCUMENT/SHIP_TO
+    shipDate: { path: DOCUMENT/SHIP_DATE, type: date }
+    outputName: DOCUMENT/OUTPUT_NAME
+  groups:
+    lines:
+      path: DOCUMENT/LINES/LINE
+      map:
+        line: { path: NO, type: number }
+        item: ITEM
+        description: DESCRIPTION
+        warehouse: WAREHOUSE
+        bin: BIN
+        quantity: { path: QTY, type: number }
+        unit: UNIT
+output:
+  name: "{{ outputName }}"
+  title: Pick list

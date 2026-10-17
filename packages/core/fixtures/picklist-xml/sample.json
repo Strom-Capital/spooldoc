@@ -1,0 +1,542 @@
+{
+  "id": "SPDXML-000000-000036",
+  "version": 1,
+  "capturedAt": "2026-10-17T21:40:38Z",
+  "system": "ibmi.example.com",
+  "splf": {
+    "name": "SPDXML",
+    "number": 36,
+    "jobName": "QPRTJOB",
+    "jobUser": "DEMOUSER",
+    "jobNumber": "000000"
+  },
+  "attributes": {
+    "queue": {
+      "library": "MYLIB",
+      "name": "FORMS"
+    },
+    "userData": "PICKXML",
+    "formType": "*STD",
+    "deviceType": "*SCS",
+    "pages": 5,
+    "pageWidth": 300,
+    "pageLength": 66,
+    "cpi": 15,
+    "lpi": 6,
+    "chrid": {
+      "charset": 697,
+      "codePage": 273
+    },
+    "jobCcsid": 273,
+    "created": "2026-10-17T21:40:38"
+  },
+  "codePage": 273,
+  "rawBase64": "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",
+  "pages": [
+    {
+      "no": 1,
+      "lines": [
+        {
+          "no": 1,
+          "text": "<?xml version=\"1.0\"?>"
+        },
+        {
+          "no": 2,
+          "text": "<FORM>"
+        },
+        {
+          "no": 3,
+          "text": "  <DOCUMENT>"
+        },
+        {
+          "no": 4,
+          "text": "    <TITLE>PICK LIST</TITLE>"
+        },
+        {
+          "no": 5,
+          "text": "    <PICKLIST_NO>700001</PICKLIST_NO>"
+        },
+        {
+          "no": 6,
+          "text": "    <ORDER_NO>51011</ORDER_NO>"
+        },
+        {
+          "no": 7,
+          "text": "    <CUSTOMER_NO>10001</CUSTOMER_NO>"
+        },
+        {
+          "no": 8,
+          "text": "    <SHIP_TO>NORTHERN SUPPLY CO"
+        },
+        {
+          "no": 9,
+          "text": "Harbour Road 4"
+        },
+        {
+          "no": 10,
+          "text": "Building C"
+        },
+        {
+          "no": 11,
+          "text": "FI-90100 OULU</SHIP_TO>"
+        },
+        {
+          "no": 12,
+          "text": "    <SHIP_DATE>2026-10-21</SHIP_DATE>"
+        },
+        {
+          "no": 13,
+          "text": "    <LINES>"
+        },
+        {
+          "no": 14,
+          "text": "      <LINE><NO>10</NO><ITEM>A-1001</ITEM><DESCRIPTION>BRACKET 40MM</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>A-01-03</BIN><QTY>6</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 15,
+          "text": "      <LINE><NO>20</NO><ITEM>E-5001</ITEM><DESCRIPTION>SAFETY GLOVES SIZE 10</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>D-01-01</BIN><QTY>9</QTY><UNIT>PR</UNIT></LINE>"
+        },
+        {
+          "no": 16,
+          "text": "      <LINE><NO>30</NO><ITEM>C-3001</ITEM><DESCRIPTION>STEEL PLATE 2MM 1X2M</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>Y-10-01</BIN><QTY>12</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 17,
+          "text": "      <LINE><NO>40</NO><ITEM>A-1002</ITEM><DESCRIPTION>BRACKET 60MM</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>A-01-04</BIN><QTY>15</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 18,
+          "text": "    </LINES>"
+        },
+        {
+          "no": 19,
+          "text": "    <OUTPUT_NAME>PICKLIST_700001</OUTPUT_NAME>"
+        },
+        {
+          "no": 20,
+          "text": "  </DOCUMENT>"
+        },
+        {
+          "no": 21,
+          "text": "</FORM>"
+        },
+        {
+          "no": 66,
+          "text": "                                                                                                                                       -=* https://pub400.com *=-"
+        }
+      ]
+    },
+    {
+      "no": 2,
+      "lines": [
+        {
+          "no": 1,
+          "text": "<?xml version=\"1.0\"?>"
+        },
+        {
+          "no": 2,
+          "text": "<FORM>"
+        },
+        {
+          "no": 3,
+          "text": "  <DOCUMENT>"
+        },
+        {
+          "no": 4,
+          "text": "    <TITLE>PICK LIST</TITLE>"
+        },
+        {
+          "no": 5,
+          "text": "    <PICKLIST_NO>700002</PICKLIST_NO>"
+        },
+        {
+          "no": 6,
+          "text": "    <ORDER_NO>51021</ORDER_NO>"
+        },
+        {
+          "no": 7,
+          "text": "    <CUSTOMER_NO>10002</CUSTOMER_NO>"
+        },
+        {
+          "no": 8,
+          "text": "    <SHIP_TO>BAKER &amp; SONS LTD"
+        },
+        {
+          "no": 9,
+          "text": "Mill Lane 12"
+        },
+        {
+          "no": 10,
+          "text": "FI-33100 TAMPERE</SHIP_TO>"
+        },
+        {
+          "no": 11,
+          "text": "    <SHIP_DATE>2026-10-22</SHIP_DATE>"
+        },
+        {
+          "no": 12,
+          "text": "    <LINES>"
+        },
+        {
+          "no": 13,
+          "text": "      <LINE><NO>10</NO><ITEM>B-2002</ITEM><DESCRIPTION>HEX NUT M8</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>B-02-12</BIN><QTY>8</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 14,
+          "text": "      <LINE><NO>20</NO><ITEM>A-1001</ITEM><DESCRIPTION>BRACKET 40MM</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>A-01-03</BIN><QTY>11</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 15,
+          "text": "      <LINE><NO>30</NO><ITEM>E-5001</ITEM><DESCRIPTION>SAFETY GLOVES SIZE 10</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>D-01-01</BIN><QTY>14</QTY><UNIT>PR</UNIT></LINE>"
+        },
+        {
+          "no": 16,
+          "text": "      <LINE><NO>40</NO><ITEM>C-3001</ITEM><DESCRIPTION>STEEL PLATE 2MM 1X2M</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>Y-10-01</BIN><QTY>17</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 17,
+          "text": "      <LINE><NO>50</NO><ITEM>A-1002</ITEM><DESCRIPTION>BRACKET 60MM</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>A-01-04</BIN><QTY>20</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 18,
+          "text": "      <LINE><NO>60</NO><ITEM>F-6001</ITEM><DESCRIPTION>SÄÄTÖJALKA M10</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>B-03-05</BIN><QTY>23</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 19,
+          "text": "      <LINE><NO>70</NO><ITEM>C-3002</ITEM><DESCRIPTION>ANGLE BAR 40X40X4</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>Y-11-02</BIN><QTY>2</QTY><UNIT>M</UNIT></LINE>"
+        },
+        {
+          "no": 20,
+          "text": "      <LINE><NO>80</NO><ITEM>B-2001</ITEM><DESCRIPTION>HEX BOLT M8X40</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>B-02-11</BIN><QTY>5</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 21,
+          "text": "      <LINE><NO>90</NO><ITEM>G-7001</ITEM><DESCRIPTION>KÖYSI 10 MM POLYESTER</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>C-06-02</BIN><QTY>8</QTY><UNIT>M</UNIT></LINE>"
+        },
+        {
+          "no": 22,
+          "text": "    </LINES>"
+        },
+        {
+          "no": 23,
+          "text": "    <OUTPUT_NAME>PICKLIST_700002</OUTPUT_NAME>"
+        },
+        {
+          "no": 24,
+          "text": "  </DOCUMENT>"
+        },
+        {
+          "no": 25,
+          "text": "</FORM>"
+        },
+        {
+          "no": 66,
+          "text": "                                                                                                                                       -=* https://pub400.com *=-"
+        }
+      ]
+    },
+    {
+      "no": 3,
+      "lines": [
+        {
+          "no": 1,
+          "text": "<?xml version=\"1.0\"?>"
+        },
+        {
+          "no": 2,
+          "text": "<FORM>"
+        },
+        {
+          "no": 3,
+          "text": "  <DOCUMENT>"
+        },
+        {
+          "no": 4,
+          "text": "    <TITLE>PICK LIST</TITLE>"
+        },
+        {
+          "no": 5,
+          "text": "    <PICKLIST_NO>700003</PICKLIST_NO>"
+        },
+        {
+          "no": 6,
+          "text": "    <ORDER_NO>51031</ORDER_NO>"
+        },
+        {
+          "no": 7,
+          "text": "    <CUSTOMER_NO>10003</CUSTOMER_NO>"
+        },
+        {
+          "no": 8,
+          "text": "    <SHIP_TO>MÄKELÄ RAKENNUS OY"
+        },
+        {
+          "no": 9,
+          "text": "Teollisuustie 7"
+        },
+        {
+          "no": 10,
+          "text": "PL 45"
+        },
+        {
+          "no": 11,
+          "text": "FI-40100 JYVÄSKYLÄ</SHIP_TO>"
+        },
+        {
+          "no": 12,
+          "text": "    <SHIP_DATE>2026-10-23</SHIP_DATE>"
+        },
+        {
+          "no": 13,
+          "text": "    <LINES>"
+        },
+        {
+          "no": 14,
+          "text": "      <LINE><NO>10</NO><ITEM>D-4001</ITEM><DESCRIPTION>HYDRAULIC HOSE DN12</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>C-05-07</BIN><QTY>10</QTY><UNIT>M</UNIT></LINE>"
+        },
+        {
+          "no": 15,
+          "text": "      <LINE><NO>20</NO><ITEM>B-2002</ITEM><DESCRIPTION>HEX NUT M8</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>B-02-12</BIN><QTY>13</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 16,
+          "text": "    </LINES>"
+        },
+        {
+          "no": 17,
+          "text": "    <OUTPUT_NAME>PICKLIST_700003</OUTPUT_NAME>"
+        },
+        {
+          "no": 18,
+          "text": "  </DOCUMENT>"
+        },
+        {
+          "no": 19,
+          "text": "</FORM>"
+        },
+        {
+          "no": 66,
+          "text": "                                                                                                                                       -=* https://pub400.com *=-"
+        }
+      ]
+    },
+    {
+      "no": 4,
+      "lines": [
+        {
+          "no": 1,
+          "text": "<?xml version=\"1.0\"?>"
+        },
+        {
+          "no": 2,
+          "text": "<FORM>"
+        },
+        {
+          "no": 3,
+          "text": "  <DOCUMENT>"
+        },
+        {
+          "no": 4,
+          "text": "    <TITLE>PICK LIST</TITLE>"
+        },
+        {
+          "no": 5,
+          "text": "    <PICKLIST_NO>700004</PICKLIST_NO>"
+        },
+        {
+          "no": 6,
+          "text": "    <ORDER_NO>51051</ORDER_NO>"
+        },
+        {
+          "no": 7,
+          "text": "    <CUSTOMER_NO>10005</CUSTOMER_NO>"
+        },
+        {
+          "no": 8,
+          "text": "    <SHIP_TO>EASTERN TOOLS OY"
+        },
+        {
+          "no": 9,
+          "text": "Satamakatu 2 B"
+        },
+        {
+          "no": 10,
+          "text": "FI-53100 LAPPEENRANTA</SHIP_TO>"
+        },
+        {
+          "no": 11,
+          "text": "    <SHIP_DATE>2026-10-24</SHIP_DATE>"
+        },
+        {
+          "no": 12,
+          "text": "    <LINES>"
+        },
+        {
+          "no": 13,
+          "text": "      <LINE><NO>10</NO><ITEM>G-7001</ITEM><DESCRIPTION>KÖYSI 10 MM POLYESTER</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>C-06-02</BIN><QTY>12</QTY><UNIT>M</UNIT></LINE>"
+        },
+        {
+          "no": 14,
+          "text": "      <LINE><NO>20</NO><ITEM>D-4001</ITEM><DESCRIPTION>HYDRAULIC HOSE DN12</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>C-05-07</BIN><QTY>15</QTY><UNIT>M</UNIT></LINE>"
+        },
+        {
+          "no": 15,
+          "text": "      <LINE><NO>30</NO><ITEM>B-2002</ITEM><DESCRIPTION>HEX NUT M8</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>B-02-12</BIN><QTY>18</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 16,
+          "text": "      <LINE><NO>40</NO><ITEM>A-1001</ITEM><DESCRIPTION>BRACKET 40MM</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>A-01-03</BIN><QTY>21</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 17,
+          "text": "      <LINE><NO>50</NO><ITEM>E-5001</ITEM><DESCRIPTION>SAFETY GLOVES SIZE 10</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>D-01-01</BIN><QTY>24</QTY><UNIT>PR</UNIT></LINE>"
+        },
+        {
+          "no": 18,
+          "text": "      <LINE><NO>60</NO><ITEM>C-3001</ITEM><DESCRIPTION>STEEL PLATE 2MM 1X2M</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>Y-10-01</BIN><QTY>3</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 19,
+          "text": "      <LINE><NO>70</NO><ITEM>A-1002</ITEM><DESCRIPTION>BRACKET 60MM</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>A-01-04</BIN><QTY>6</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 20,
+          "text": "      <LINE><NO>80</NO><ITEM>F-6001</ITEM><DESCRIPTION>SÄÄTÖJALKA M10</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>B-03-05</BIN><QTY>9</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 21,
+          "text": "      <LINE><NO>90</NO><ITEM>C-3002</ITEM><DESCRIPTION>ANGLE BAR 40X40X4</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>Y-11-02</BIN><QTY>12</QTY><UNIT>M</UNIT></LINE>"
+        },
+        {
+          "no": 22,
+          "text": "      <LINE><NO>100</NO><ITEM>B-2001</ITEM><DESCRIPTION>HEX BOLT M8X40</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>B-02-11</BIN><QTY>15</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 23,
+          "text": "      <LINE><NO>110</NO><ITEM>G-7001</ITEM><DESCRIPTION>KÖYSI 10 MM POLYESTER</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>C-06-02</BIN><QTY>18</QTY><UNIT>M</UNIT></LINE>"
+        },
+        {
+          "no": 24,
+          "text": "      <LINE><NO>120</NO><ITEM>D-4001</ITEM><DESCRIPTION>HYDRAULIC HOSE DN12</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>C-05-07</BIN><QTY>21</QTY><UNIT>M</UNIT></LINE>"
+        },
+        {
+          "no": 25,
+          "text": "    </LINES>"
+        },
+        {
+          "no": 26,
+          "text": "    <OUTPUT_NAME>PICKLIST_700004</OUTPUT_NAME>"
+        },
+        {
+          "no": 27,
+          "text": "  </DOCUMENT>"
+        },
+        {
+          "no": 28,
+          "text": "</FORM>"
+        },
+        {
+          "no": 66,
+          "text": "                                                                                                                                       -=* https://pub400.com *=-"
+        }
+      ]
+    },
+    {
+      "no": 5,
+      "lines": [
+        {
+          "no": 1,
+          "text": "<?xml version=\"1.0\"?>"
+        },
+        {
+          "no": 2,
+          "text": "<FORM>"
+        },
+        {
+          "no": 3,
+          "text": "  <DOCUMENT>"
+        },
+        {
+          "no": 4,
+          "text": "    <TITLE>PICK LIST</TITLE>"
+        },
+        {
+          "no": 5,
+          "text": "    <PICKLIST_NO>700005</PICKLIST_NO>"
+        },
+        {
+          "no": 6,
+          "text": "    <ORDER_NO>51071</ORDER_NO>"
+        },
+        {
+          "no": 7,
+          "text": "    <CUSTOMER_NO>10007</CUSTOMER_NO>"
+        },
+        {
+          "no": 8,
+          "text": "    <SHIP_TO>HIGHLAND FARMS CO"
+        },
+        {
+          "no": 9,
+          "text": "Rural Route 8"
+        },
+        {
+          "no": 10,
+          "text": "FI-60100 SEINÄJOKI</SHIP_TO>"
+        },
+        {
+          "no": 11,
+          "text": "    <SHIP_DATE>2026-10-25</SHIP_DATE>"
+        },
+        {
+          "no": 12,
+          "text": "    <LINES>"
+        },
+        {
+          "no": 13,
+          "text": "      <LINE><NO>10</NO><ITEM>B-2001</ITEM><DESCRIPTION>HEX BOLT M8X40</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>B-02-11</BIN><QTY>14</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 14,
+          "text": "      <LINE><NO>20</NO><ITEM>G-7001</ITEM><DESCRIPTION>KÖYSI 10 MM POLYESTER</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>C-06-02</BIN><QTY>17</QTY><UNIT>M</UNIT></LINE>"
+        },
+        {
+          "no": 15,
+          "text": "      <LINE><NO>30</NO><ITEM>D-4001</ITEM><DESCRIPTION>HYDRAULIC HOSE DN12</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>C-05-07</BIN><QTY>20</QTY><UNIT>M</UNIT></LINE>"
+        },
+        {
+          "no": 16,
+          "text": "      <LINE><NO>40</NO><ITEM>B-2002</ITEM><DESCRIPTION>HEX NUT M8</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>B-02-12</BIN><QTY>23</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 17,
+          "text": "      <LINE><NO>50</NO><ITEM>A-1001</ITEM><DESCRIPTION>BRACKET 40MM</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>A-01-03</BIN><QTY>2</QTY><UNIT>PCS</UNIT></LINE>"
+        },
+        {
+          "no": 18,
+          "text": "      <LINE><NO>60</NO><ITEM>E-5001</ITEM><DESCRIPTION>SAFETY GLOVES SIZE 10</DESCRIPTION><WAREHOUSE>01</WAREHOUSE><BIN>D-01-01</BIN><QTY>5</QTY><UNIT>PR</UNIT></LINE>"
+        },
+        {
+          "no": 19,
+          "text": "    </LINES>"
+        },
+        {
+          "no": 20,
+          "text": "    <OUTPUT_NAME>PICKLIST_700005</OUTPUT_NAME>"
+        },
+        {
+          "no": 21,
+          "text": "  </DOCUMENT>"
+        },
+        {
+          "no": 22,
+          "text": "</FORM>"
+        },
+        {
+          "no": 66,
+          "text": "                                                                                                                                       -=* https://pub400.com *=-"
+        }
+      ]
+    }
+  ]
+}

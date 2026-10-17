@@ -5,3 +5,5 @@ dist/
 local/
 *.log
 .DS_Store
+workspace/*
+!workspace/README.md

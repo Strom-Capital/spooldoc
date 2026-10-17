@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Open order lines by customer</title>
+<style>
+  @page { size: A4; margin: 15mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 10pt; color: #1a1a1a; margin: 0; }
+  h1 { font-size: 18pt; margin: 0 0 6mm; }
+  h2 { font-size: 11pt; margin: 6mm 0 2mm; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 1mm 6mm; margin: 0; }
+  dt { color: #555; }
+  dd { margin: 0; white-space: pre-line; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 1.5mm 2mm; border-bottom: 0.2mm solid #ccc; vertical-align: top; }
+  th { font-weight: 600; border-bottom: 0.4mm solid #333; }
+  tr { page-break-inside: avoid; }
+</style>
+</head>
+<body>
+  <h1>Open order lines by customer</h1>
+  <dl>
+    <dt>Company</dt><dd>{{ doc.company }}</dd>
+    <dt>Title</dt><dd>{{ doc.title }}</dd>
+    <dt>Run Date</dt><dd>{{ doc.runDate }}</dd>
+    <dt>Run Time</dt><dd>{{ doc.runTime }}</dd>
+    <dt>Program</dt><dd>{{ doc.program }}</dd>
+    <dt>Warehouse</dt><dd>{{ doc.warehouse }}</dd>
+  </dl>
+  <h2>Lines</h2>
+  <table>
+    <thead><tr><th>Customer No</th><th>Customer Name</th><th>Order No</th><th>Line No</th><th>Item</th><th>Description</th><th>Unit</th><th>Quantity</th><th>Unit Price</th><th>Amount</th><th>Ship Date</th><th>Type Code</th><th>Type Text</th><th>Message</th></tr></thead>
+    <tbody>
+      {% for row in doc.lines %}
+      <tr><td>{{ row.customerNo }}</td><td>{{ row.customerName }}</td><td>{{ row.orderNo }}</td><td>{{ row.lineNo }}</td><td>{{ row.item }}</td><td>{{ row.description }}</td><td>{{ row.unit }}</td><td>{{ row.quantity }}</td><td>{{ row.unitPrice }}</td><td>{{ row.amount }}</td><td>{{ row.shipDate }}</td><td>{{ row.typeCode }}</td><td>{{ row.typeText }}</td><td>{{ row.message }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</body>
+</html>

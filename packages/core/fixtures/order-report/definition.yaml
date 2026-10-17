@@ -1,0 +1,42 @@
+# Operational report: page 1 is a parameter page, every later page repeats a four line
+# header, and each order line prints as a record of three lines.
+type: order-report
+version: 1
+match:
+  splf: SPDORDERR
+  userData: ORDERRPT
+source: text
+text:
+  page: { width: 198, length: 51 }
+  skipFirstPage: true
+  header: { lines: 4 }
+  footer: { fromLine: 49 }
+  fields:
+    - { name: company, anchor: { line: 1, column: 1, length: 30 } }
+    - { name: title, anchor: { line: 1, column: 85, length: 40 } }
+    - { name: runDate, anchor: { regex: "(\\d{4}-\\d{2}-\\d{2}) \\d{2}:\\d{2}:\\d{2}" }, type: date }
+    - { name: runTime, anchor: { regex: "\\d{4}-\\d{2}-\\d{2} (\\d{2}:\\d{2}:\\d{2})" } }
+    - { name: program, anchor: { line: 1, column: 189, length: 10 } }
+    - { name: warehouse, anchor: { line: 2, column: 85, length: 40 } }
+  records:
+    - name: lines
+      start: { pattern: "^\\d{5}\\s{4}\\S" }
+      lines: 3
+      columns:
+        - { name: customerNo, line: 1, column: 1, length: 5 }
+        - { name: customerName, line: 1, column: 10, length: 31 }
+        - { name: orderNo, line: 1, column: 42, length: 7 }
+        - { name: lineNo, line: 1, column: 49, length: 5, type: number }
+        - { name: item, line: 1, column: 56, length: 10 }
+        - { name: description, line: 1, column: 68, length: 30 }
+        - { name: unit, line: 1, column: 100, length: 6 }
+        - { name: quantity, line: 1, column: 106, length: 12, type: number }
+        - { name: unitPrice, line: 1, column: 118, length: 14, type: number }
+        - { name: amount, line: 1, column: 132, length: 18, type: number }
+        - { name: shipDate, line: 1, column: 152, length: 10, type: date }
+        - { name: typeCode, line: 2, column: 16, length: 2 }
+        - { name: typeText, line: 2, column: 20, length: 30 }
+        - { name: message, line: 3, column: 19, length: 80 }
+output:
+  name: "order-report-{{ runDate }}"
+  title: Open order lines by customer

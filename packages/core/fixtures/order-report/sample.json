@@ -1,0 +1,661 @@
+{
+  "id": "SPDORDERR-000000-000033",
+  "version": 1,
+  "capturedAt": "2026-10-17T21:40:38Z",
+  "system": "ibmi.example.com",
+  "splf": {
+    "name": "SPDORDERR",
+    "number": 33,
+    "jobName": "QPRTJOB",
+    "jobUser": "DEMOUSER",
+    "jobNumber": "000000"
+  },
+  "attributes": {
+    "queue": {
+      "library": "MYLIB",
+      "name": "REPORTS"
+    },
+    "userData": "ORDERRPT",
+    "formType": "*STD",
+    "deviceType": "*SCS",
+    "pages": 4,
+    "pageWidth": 198,
+    "pageLength": 51,
+    "cpi": 15,
+    "lpi": 6,
+    "chrid": {
+      "charset": 697,
+      "codePage": 273
+    },
+    "jobCcsid": 273,
+    "created": "2026-10-17T21:40:38"
+  },
+  "codePage": 273,
+  "rawBase64": "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",
+  "pages": [
+    {
+      "no": 1,
+      "lines": [
+        {
+          "no": 1,
+          "text": "MYCO                                                                                OPEN ORDER LINES BY CUSTOMER                                               2026-10-17 21:40:38          SPDORDERR"
+        },
+        {
+          "no": 2,
+          "text": "User: DEMOUSER                                                                      WAREHOUSE 01 MAIN WAREHOUSE                                                                             Page 1"
+        },
+        {
+          "no": 3,
+          "text": "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 5,
+          "text": "         SELECTION CRITERIA"
+        },
+        {
+          "no": 7,
+          "text": "         Company...............: MYCO"
+        },
+        {
+          "no": 8,
+          "text": "         Warehouse.............: 01 MAIN WAREHOUSE"
+        },
+        {
+          "no": 9,
+          "text": "         Customer from.........: 10001"
+        },
+        {
+          "no": 10,
+          "text": "         Customer to...........: 10099"
+        },
+        {
+          "no": 11,
+          "text": "         Ship date from........: 2026-10-20"
+        },
+        {
+          "no": 12,
+          "text": "         Ship date to..........: 2026-11-30"
+        },
+        {
+          "no": 13,
+          "text": "         Order type............: *ALL"
+        },
+        {
+          "no": 14,
+          "text": "         Include backorders....: Y"
+        },
+        {
+          "no": 15,
+          "text": "         Sort sequence.........: CUSTOMER, ORDER, LINE"
+        },
+        {
+          "no": 16,
+          "text": "         Output queue..........: REPORTS"
+        },
+        {
+          "no": 51,
+          "text": "                                                                                    -=* https://pub400.com *=-"
+        }
+      ]
+    },
+    {
+      "no": 2,
+      "lines": [
+        {
+          "no": 1,
+          "text": "MYCO                                                                                OPEN ORDER LINES BY CUSTOMER                                               2026-10-17 21:40:38          SPDORDERR"
+        },
+        {
+          "no": 2,
+          "text": "User: DEMOUSER                                                                      WAREHOUSE 01 MAIN WAREHOUSE                                                                             Page 2"
+        },
+        {
+          "no": 3,
+          "text": "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 4,
+          "text": "Customer Customer name                   Order   Line  Item        Description                     Unit      Quantity    Unit price          Amount    Ship date"
+        },
+        {
+          "no": 6,
+          "text": "10001    NORTHERN SUPPLY CO              51011     10  B-2002      HEX NUT M8                      PCS           8.00          0.08            0.64    2026-10-25"
+        },
+        {
+          "no": 7,
+          "text": "         Type: BO  BACKORDER"
+        },
+        {
+          "no": 8,
+          "text": "         Message: READY FOR PICKING"
+        },
+        {
+          "no": 9,
+          "text": "10001    NORTHERN SUPPLY CO              51011     20  D-4001      HYDRAULIC HOSE DN12             M            15.00         12.40          186.00    2026-10-30"
+        },
+        {
+          "no": 10,
+          "text": "         Type: DS  DIRECT SHIPMENT"
+        },
+        {
+          "no": 11,
+          "text": "         Message: SHIP WITH NEXT ROUTE, NO PALLET EXCHANGE"
+        },
+        {
+          "no": 12,
+          "text": "10001    NORTHERN SUPPLY CO              51011     30  G-7001      KÖYSI 10 MM POLYESTER           M            22.00          1.15           25.30    2026-11-04"
+        },
+        {
+          "no": 13,
+          "text": "         Type: RO  RUSH ORDER"
+        },
+        {
+          "no": 14,
+          "text": "         Message: PRICE OVERRIDE APPROVED BY SALES DESK"
+        },
+        {
+          "no": 15,
+          "text": "10001    NORTHERN SUPPLY CO              51012     10  B-2001      HEX BOLT M8X40                  PCS          29.00          0.35           10.15    2026-11-09"
+        },
+        {
+          "no": 16,
+          "text": "         Type: SO  STANDARD ORDER"
+        },
+        {
+          "no": 17,
+          "text": "         Message: CUSTOMER REQUESTS PARTIAL DELIVERY"
+        },
+        {
+          "no": 18,
+          "text": "10001    NORTHERN SUPPLY CO              51012     20  C-3002      ANGLE BAR 40X40X4               M            36.00          7.90          284.40    2026-11-14"
+        },
+        {
+          "no": 19,
+          "text": "         Type: BO  BACKORDER"
+        },
+        {
+          "no": 20,
+          "text": "         Message: AWAITING STOCK, EXPECTED IN WAREHOUSE NEXT WEEK"
+        },
+        {
+          "no": 21,
+          "text": "10002    BAKER & SONS LTD                51021     10  F-6001      SÄÄTÖJALKA M10                  PCS          43.00          2.75          118.25    2026-10-20"
+        },
+        {
+          "no": 22,
+          "text": "         Type: DS  DIRECT SHIPMENT"
+        },
+        {
+          "no": 23,
+          "text": "         Message: CREDIT LIMIT CHECK PASSED"
+        },
+        {
+          "no": 24,
+          "text": "10002    BAKER & SONS LTD                51021     20  A-1002      BRACKET 60MM                    PCS          50.00          5.10          255.00    2026-10-25"
+        },
+        {
+          "no": 25,
+          "text": "         Type: RO  RUSH ORDER"
+        },
+        {
+          "no": 26,
+          "text": "         Message: READY FOR PICKING"
+        },
+        {
+          "no": 27,
+          "text": "10002    BAKER & SONS LTD                51021     30  C-3001      STEEL PLATE 2MM 1X2M            PCS           7.00         86.00          602.00    2026-10-30"
+        },
+        {
+          "no": 28,
+          "text": "         Type: SO  STANDARD ORDER"
+        },
+        {
+          "no": 29,
+          "text": "         Message: SHIP WITH NEXT ROUTE, NO PALLET EXCHANGE"
+        },
+        {
+          "no": 30,
+          "text": "10002    BAKER & SONS LTD                51022     10  E-5001      SAFETY GLOVES SIZE 10           PR           14.00          3.60           50.40    2026-11-04"
+        },
+        {
+          "no": 31,
+          "text": "         Type: BO  BACKORDER"
+        },
+        {
+          "no": 32,
+          "text": "         Message: PRICE OVERRIDE APPROVED BY SALES DESK"
+        },
+        {
+          "no": 33,
+          "text": "10002    BAKER & SONS LTD                51022     20  A-1001      BRACKET 40MM                    PCS          21.00          4.20           88.20    2026-11-09"
+        },
+        {
+          "no": 34,
+          "text": "         Type: DS  DIRECT SHIPMENT"
+        },
+        {
+          "no": 35,
+          "text": "         Message: CUSTOMER REQUESTS PARTIAL DELIVERY"
+        },
+        {
+          "no": 36,
+          "text": "10003    MÄKELÄ RAKENNUS OY              51031     10  B-2002      HEX NUT M8                      PCS          28.00          0.08            2.24    2026-11-14"
+        },
+        {
+          "no": 37,
+          "text": "         Type: RO  RUSH ORDER"
+        },
+        {
+          "no": 38,
+          "text": "         Message: AWAITING STOCK, EXPECTED IN WAREHOUSE NEXT WEEK"
+        },
+        {
+          "no": 39,
+          "text": "10003    MÄKELÄ RAKENNUS OY              51031     20  D-4001      HYDRAULIC HOSE DN12             M            35.00         12.40          434.00    2026-10-20"
+        },
+        {
+          "no": 40,
+          "text": "         Type: SO  STANDARD ORDER"
+        },
+        {
+          "no": 41,
+          "text": "         Message: CREDIT LIMIT CHECK PASSED"
+        },
+        {
+          "no": 42,
+          "text": "10003    MÄKELÄ RAKENNUS OY              51031     30  G-7001      KÖYSI 10 MM POLYESTER           M            42.00          1.15           48.30    2026-10-25"
+        },
+        {
+          "no": 43,
+          "text": "         Type: BO  BACKORDER"
+        },
+        {
+          "no": 44,
+          "text": "         Message: READY FOR PICKING"
+        },
+        {
+          "no": 45,
+          "text": "10003    MÄKELÄ RAKENNUS OY              51032     10  B-2001      HEX BOLT M8X40                  PCS          49.00          0.35           17.15    2026-10-30"
+        },
+        {
+          "no": 46,
+          "text": "         Type: DS  DIRECT SHIPMENT"
+        },
+        {
+          "no": 47,
+          "text": "         Message: SHIP WITH NEXT ROUTE, NO PALLET EXCHANGE"
+        },
+        {
+          "no": 51,
+          "text": "                                                                                    -=* https://pub400.com *=-"
+        }
+      ]
+    },
+    {
+      "no": 3,
+      "lines": [
+        {
+          "no": 1,
+          "text": "MYCO                                                                                OPEN ORDER LINES BY CUSTOMER                                               2026-10-17 21:40:38          SPDORDERR"
+        },
+        {
+          "no": 2,
+          "text": "User: DEMOUSER                                                                      WAREHOUSE 01 MAIN WAREHOUSE                                                                             Page 3"
+        },
+        {
+          "no": 3,
+          "text": "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 4,
+          "text": "Customer Customer name                   Order   Line  Item        Description                     Unit      Quantity    Unit price          Amount    Ship date"
+        },
+        {
+          "no": 6,
+          "text": "10003    MÄKELÄ RAKENNUS OY              51032     20  C-3002      ANGLE BAR 40X40X4               M             6.00          7.90           47.40    2026-11-04"
+        },
+        {
+          "no": 7,
+          "text": "         Type: RO  RUSH ORDER"
+        },
+        {
+          "no": 8,
+          "text": "         Message: PRICE OVERRIDE APPROVED BY SALES DESK"
+        },
+        {
+          "no": 9,
+          "text": "10004    SÖDERBERG MASKIN AB             51041     10  F-6001      SÄÄTÖJALKA M10                  PCS          13.00          2.75           35.75    2026-11-09"
+        },
+        {
+          "no": 10,
+          "text": "         Type: SO  STANDARD ORDER"
+        },
+        {
+          "no": 11,
+          "text": "         Message: CUSTOMER REQUESTS PARTIAL DELIVERY"
+        },
+        {
+          "no": 12,
+          "text": "10004    SÖDERBERG MASKIN AB             51041     20  A-1002      BRACKET 60MM                    PCS          20.00          5.10          102.00    2026-11-14"
+        },
+        {
+          "no": 13,
+          "text": "         Type: BO  BACKORDER"
+        },
+        {
+          "no": 14,
+          "text": "         Message: AWAITING STOCK, EXPECTED IN WAREHOUSE NEXT WEEK"
+        },
+        {
+          "no": 15,
+          "text": "10004    SÖDERBERG MASKIN AB             51041     30  C-3001      STEEL PLATE 2MM 1X2M            PCS          27.00         86.00        2,322.00    2026-10-20"
+        },
+        {
+          "no": 16,
+          "text": "         Type: DS  DIRECT SHIPMENT"
+        },
+        {
+          "no": 17,
+          "text": "         Message: CREDIT LIMIT CHECK PASSED"
+        },
+        {
+          "no": 18,
+          "text": "10004    SÖDERBERG MASKIN AB             51042     10  E-5001      SAFETY GLOVES SIZE 10           PR           34.00          3.60          122.40    2026-10-25"
+        },
+        {
+          "no": 19,
+          "text": "         Type: RO  RUSH ORDER"
+        },
+        {
+          "no": 20,
+          "text": "         Message: READY FOR PICKING"
+        },
+        {
+          "no": 21,
+          "text": "10004    SÖDERBERG MASKIN AB             51042     20  A-1001      BRACKET 40MM                    PCS          41.00          4.20          172.20    2026-10-30"
+        },
+        {
+          "no": 22,
+          "text": "         Type: SO  STANDARD ORDER"
+        },
+        {
+          "no": 23,
+          "text": "         Message: SHIP WITH NEXT ROUTE, NO PALLET EXCHANGE"
+        },
+        {
+          "no": 24,
+          "text": "10005    EASTERN TOOLS OY                51051     10  B-2002      HEX NUT M8                      PCS          48.00          0.08            3.84    2026-11-04"
+        },
+        {
+          "no": 25,
+          "text": "         Type: BO  BACKORDER"
+        },
+        {
+          "no": 26,
+          "text": "         Message: PRICE OVERRIDE APPROVED BY SALES DESK"
+        },
+        {
+          "no": 27,
+          "text": "10005    EASTERN TOOLS OY                51051     20  D-4001      HYDRAULIC HOSE DN12             M             5.00         12.40           62.00    2026-11-09"
+        },
+        {
+          "no": 28,
+          "text": "         Type: DS  DIRECT SHIPMENT"
+        },
+        {
+          "no": 29,
+          "text": "         Message: CUSTOMER REQUESTS PARTIAL DELIVERY"
+        },
+        {
+          "no": 30,
+          "text": "10005    EASTERN TOOLS OY                51051     30  G-7001      KÖYSI 10 MM POLYESTER           M            12.00          1.15           13.80    2026-11-14"
+        },
+        {
+          "no": 31,
+          "text": "         Type: RO  RUSH ORDER"
+        },
+        {
+          "no": 32,
+          "text": "         Message: AWAITING STOCK, EXPECTED IN WAREHOUSE NEXT WEEK"
+        },
+        {
+          "no": 33,
+          "text": "10005    EASTERN TOOLS OY                51052     10  B-2001      HEX BOLT M8X40                  PCS          19.00          0.35            6.65    2026-10-20"
+        },
+        {
+          "no": 34,
+          "text": "         Type: SO  STANDARD ORDER"
+        },
+        {
+          "no": 35,
+          "text": "         Message: CREDIT LIMIT CHECK PASSED"
+        },
+        {
+          "no": 36,
+          "text": "10005    EASTERN TOOLS OY                51052     20  C-3002      ANGLE BAR 40X40X4               M            26.00          7.90          205.40    2026-10-25"
+        },
+        {
+          "no": 37,
+          "text": "         Type: BO  BACKORDER"
+        },
+        {
+          "no": 38,
+          "text": "         Message: READY FOR PICKING"
+        },
+        {
+          "no": 39,
+          "text": "10006    COASTAL MARINE LTD              51061     10  F-6001      SÄÄTÖJALKA M10                  PCS          33.00          2.75           90.75    2026-10-30"
+        },
+        {
+          "no": 40,
+          "text": "         Type: DS  DIRECT SHIPMENT"
+        },
+        {
+          "no": 41,
+          "text": "         Message: SHIP WITH NEXT ROUTE, NO PALLET EXCHANGE"
+        },
+        {
+          "no": 42,
+          "text": "10006    COASTAL MARINE LTD              51061     20  A-1002      BRACKET 60MM                    PCS          40.00          5.10          204.00    2026-11-04"
+        },
+        {
+          "no": 43,
+          "text": "         Type: RO  RUSH ORDER"
+        },
+        {
+          "no": 44,
+          "text": "         Message: PRICE OVERRIDE APPROVED BY SALES DESK"
+        },
+        {
+          "no": 45,
+          "text": "10006    COASTAL MARINE LTD              51061     30  C-3001      STEEL PLATE 2MM 1X2M            PCS          47.00         86.00        4,042.00    2026-11-09"
+        },
+        {
+          "no": 46,
+          "text": "         Type: SO  STANDARD ORDER"
+        },
+        {
+          "no": 47,
+          "text": "         Message: CUSTOMER REQUESTS PARTIAL DELIVERY"
+        },
+        {
+          "no": 51,
+          "text": "                                                                                    -=* https://pub400.com *=-"
+        }
+      ]
+    },
+    {
+      "no": 4,
+      "lines": [
+        {
+          "no": 1,
+          "text": "MYCO                                                                                OPEN ORDER LINES BY CUSTOMER                                               2026-10-17 21:40:38          SPDORDERR"
+        },
+        {
+          "no": 2,
+          "text": "User: DEMOUSER                                                                      WAREHOUSE 01 MAIN WAREHOUSE                                                                             Page 4"
+        },
+        {
+          "no": 3,
+          "text": "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+        },
+        {
+          "no": 4,
+          "text": "Customer Customer name                   Order   Line  Item        Description                     Unit      Quantity    Unit price          Amount    Ship date"
+        },
+        {
+          "no": 6,
+          "text": "10006    COASTAL MARINE LTD              51062     10  E-5001      SAFETY GLOVES SIZE 10           PR            4.00          3.60           14.40    2026-11-14"
+        },
+        {
+          "no": 7,
+          "text": "         Type: BO  BACKORDER"
+        },
+        {
+          "no": 8,
+          "text": "         Message: AWAITING STOCK, EXPECTED IN WAREHOUSE NEXT WEEK"
+        },
+        {
+          "no": 9,
+          "text": "10006    COASTAL MARINE LTD              51062     20  A-1001      BRACKET 40MM                    PCS          11.00          4.20           46.20    2026-10-20"
+        },
+        {
+          "no": 10,
+          "text": "         Type: DS  DIRECT SHIPMENT"
+        },
+        {
+          "no": 11,
+          "text": "         Message: CREDIT LIMIT CHECK PASSED"
+        },
+        {
+          "no": 12,
+          "text": "10007    HIGHLAND FARMS CO               51071     10  B-2002      HEX NUT M8                      PCS          18.00          0.08            1.44    2026-10-25"
+        },
+        {
+          "no": 13,
+          "text": "         Type: RO  RUSH ORDER"
+        },
+        {
+          "no": 14,
+          "text": "         Message: READY FOR PICKING"
+        },
+        {
+          "no": 15,
+          "text": "10007    HIGHLAND FARMS CO               51071     20  D-4001      HYDRAULIC HOSE DN12             M            25.00         12.40          310.00    2026-10-30"
+        },
+        {
+          "no": 16,
+          "text": "         Type: SO  STANDARD ORDER"
+        },
+        {
+          "no": 17,
+          "text": "         Message: SHIP WITH NEXT ROUTE, NO PALLET EXCHANGE"
+        },
+        {
+          "no": 18,
+          "text": "10007    HIGHLAND FARMS CO               51071     30  G-7001      KÖYSI 10 MM POLYESTER           M            32.00          1.15           36.80    2026-11-04"
+        },
+        {
+          "no": 19,
+          "text": "         Type: BO  BACKORDER"
+        },
+        {
+          "no": 20,
+          "text": "         Message: PRICE OVERRIDE APPROVED BY SALES DESK"
+        },
+        {
+          "no": 21,
+          "text": "10007    HIGHLAND FARMS CO               51072     10  B-2001      HEX BOLT M8X40                  PCS          39.00          0.35           13.65    2026-11-09"
+        },
+        {
+          "no": 22,
+          "text": "         Type: DS  DIRECT SHIPMENT"
+        },
+        {
+          "no": 23,
+          "text": "         Message: CUSTOMER REQUESTS PARTIAL DELIVERY"
+        },
+        {
+          "no": 24,
+          "text": "10007    HIGHLAND FARMS CO               51072     20  C-3002      ANGLE BAR 40X40X4               M            46.00          7.90          363.40    2026-11-14"
+        },
+        {
+          "no": 25,
+          "text": "         Type: RO  RUSH ORDER"
+        },
+        {
+          "no": 26,
+          "text": "         Message: AWAITING STOCK, EXPECTED IN WAREHOUSE NEXT WEEK"
+        },
+        {
+          "no": 27,
+          "text": "10008    METRO BUILDERS INC              51081     10  F-6001      SÄÄTÖJALKA M10                  PCS           3.00          2.75            8.25    2026-10-20"
+        },
+        {
+          "no": 28,
+          "text": "         Type: SO  STANDARD ORDER"
+        },
+        {
+          "no": 29,
+          "text": "         Message: CREDIT LIMIT CHECK PASSED"
+        },
+        {
+          "no": 30,
+          "text": "10008    METRO BUILDERS INC              51081     20  A-1002      BRACKET 60MM                    PCS          10.00          5.10           51.00    2026-10-25"
+        },
+        {
+          "no": 31,
+          "text": "         Type: BO  BACKORDER"
+        },
+        {
+          "no": 32,
+          "text": "         Message: READY FOR PICKING"
+        },
+        {
+          "no": 33,
+          "text": "10008    METRO BUILDERS INC              51081     30  C-3001      STEEL PLATE 2MM 1X2M            PCS          17.00         86.00        1,462.00    2026-10-30"
+        },
+        {
+          "no": 34,
+          "text": "         Type: DS  DIRECT SHIPMENT"
+        },
+        {
+          "no": 35,
+          "text": "         Message: SHIP WITH NEXT ROUTE, NO PALLET EXCHANGE"
+        },
+        {
+          "no": 36,
+          "text": "10008    METRO BUILDERS INC              51082     10  E-5001      SAFETY GLOVES SIZE 10           PR           24.00          3.60           86.40    2026-11-04"
+        },
+        {
+          "no": 37,
+          "text": "         Type: RO  RUSH ORDER"
+        },
+        {
+          "no": 38,
+          "text": "         Message: PRICE OVERRIDE APPROVED BY SALES DESK"
+        },
+        {
+          "no": 39,
+          "text": "10008    METRO BUILDERS INC              51082     20  A-1001      BRACKET 40MM                    PCS          31.00          4.20          130.20    2026-11-09"
+        },
+        {
+          "no": 40,
+          "text": "         Type: SO  STANDARD ORDER"
+        },
+        {
+          "no": 41,
+          "text": "         Message: CUSTOMER REQUESTS PARTIAL DELIVERY"
+        },
+        {
+          "no": 43,
+          "text": "                                                                                         *** End ***"
+        },
+        {
+          "no": 51,
+          "text": "                                                                                    -=* https://pub400.com *=-"
+        }
+      ]
+    }
+  ]
+}

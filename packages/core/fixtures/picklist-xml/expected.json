@@ -1,0 +1,354 @@
+[
+  {
+    "title": "PICK LIST",
+    "picklistNo": "700001",
+    "orderNo": "51011",
+    "customerNo": "10001",
+    "shipTo": "NORTHERN SUPPLY CO\nHarbour Road 4\nBuilding C\nFI-90100 OULU",
+    "shipDate": "2026-10-21",
+    "outputName": "PICKLIST_700001",
+    "lines": [
+      {
+        "line": 10,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "warehouse": "01",
+        "bin": "A-01-03",
+        "quantity": 6,
+        "unit": "PCS"
+      },
+      {
+        "line": 20,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "warehouse": "01",
+        "bin": "D-01-01",
+        "quantity": 9,
+        "unit": "PR"
+      },
+      {
+        "line": 30,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "warehouse": "01",
+        "bin": "Y-10-01",
+        "quantity": 12,
+        "unit": "PCS"
+      },
+      {
+        "line": 40,
+        "item": "A-1002",
+        "description": "BRACKET 60MM",
+        "warehouse": "01",
+        "bin": "A-01-04",
+        "quantity": 15,
+        "unit": "PCS"
+      }
+    ]
+  },
+  {
+    "title": "PICK LIST",
+    "picklistNo": "700002",
+    "orderNo": "51021",
+    "customerNo": "10002",
+    "shipTo": "BAKER & SONS LTD\nMill Lane 12\nFI-33100 TAMPERE",
+    "shipDate": "2026-10-22",
+    "outputName": "PICKLIST_700002",
+    "lines": [
+      {
+        "line": 10,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "warehouse": "01",
+        "bin": "B-02-12",
+        "quantity": 8,
+        "unit": "PCS"
+      },
+      {
+        "line": 20,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "warehouse": "01",
+        "bin": "A-01-03",
+        "quantity": 11,
+        "unit": "PCS"
+      },
+      {
+        "line": 30,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "warehouse": "01",
+        "bin": "D-01-01",
+        "quantity": 14,
+        "unit": "PR"
+      },
+      {
+        "line": 40,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "warehouse": "01",
+        "bin": "Y-10-01",
+        "quantity": 17,
+        "unit": "PCS"
+      },
+      {
+        "line": 50,
+        "item": "A-1002",
+        "description": "BRACKET 60MM",
+        "warehouse": "01",
+        "bin": "A-01-04",
+        "quantity": 20,
+        "unit": "PCS"
+      },
+      {
+        "line": 60,
+        "item": "F-6001",
+        "description": "SÄÄTÖJALKA M10",
+        "warehouse": "01",
+        "bin": "B-03-05",
+        "quantity": 23,
+        "unit": "PCS"
+      },
+      {
+        "line": 70,
+        "item": "C-3002",
+        "description": "ANGLE BAR 40X40X4",
+        "warehouse": "01",
+        "bin": "Y-11-02",
+        "quantity": 2,
+        "unit": "M"
+      },
+      {
+        "line": 80,
+        "item": "B-2001",
+        "description": "HEX BOLT M8X40",
+        "warehouse": "01",
+        "bin": "B-02-11",
+        "quantity": 5,
+        "unit": "PCS"
+      },
+      {
+        "line": 90,
+        "item": "G-7001",
+        "description": "KÖYSI 10 MM POLYESTER",
+        "warehouse": "01",
+        "bin": "C-06-02",
+        "quantity": 8,
+        "unit": "M"
+      }
+    ]
+  },
+  {
+    "title": "PICK LIST",
+    "picklistNo": "700003",
+    "orderNo": "51031",
+    "customerNo": "10003",
+    "shipTo": "MÄKELÄ RAKENNUS OY\nTeollisuustie 7\nPL 45\nFI-40100 JYVÄSKYLÄ",
+    "shipDate": "2026-10-23",
+    "outputName": "PICKLIST_700003",
+    "lines": [
+      {
+        "line": 10,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "warehouse": "01",
+        "bin": "C-05-07",
+        "quantity": 10,
+        "unit": "M"
+      },
+      {
+        "line": 20,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "warehouse": "01",
+        "bin": "B-02-12",
+        "quantity": 13,
+        "unit": "PCS"
+      }
+    ]
+  },
+  {
+    "title": "PICK LIST",
+    "picklistNo": "700004",
+    "orderNo": "51051",
+    "customerNo": "10005",
+    "shipTo": "EASTERN TOOLS OY\nSatamakatu 2 B\nFI-53100 LAPPEENRANTA",
+    "shipDate": "2026-10-24",
+    "outputName": "PICKLIST_700004",
+    "lines": [
+      {
+        "line": 10,
+        "item": "G-7001",
+        "description": "KÖYSI 10 MM POLYESTER",
+        "warehouse": "01",
+        "bin": "C-06-02",
+        "quantity": 12,
+        "unit": "M"
+      },
+      {
+        "line": 20,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "warehouse": "01",
+        "bin": "C-05-07",
+        "quantity": 15,
+        "unit": "M"
+      },
+      {
+        "line": 30,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "warehouse": "01",
+        "bin": "B-02-12",
+        "quantity": 18,
+        "unit": "PCS"
+      },
+      {
+        "line": 40,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "warehouse": "01",
+        "bin": "A-01-03",
+        "quantity": 21,
+        "unit": "PCS"
+      },
+      {
+        "line": 50,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "warehouse": "01",
+        "bin": "D-01-01",
+        "quantity": 24,
+        "unit": "PR"
+      },
+      {
+        "line": 60,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "warehouse": "01",
+        "bin": "Y-10-01",
+        "quantity": 3,
+        "unit": "PCS"
+      },
+      {
+        "line": 70,
+        "item": "A-1002",
+        "description": "BRACKET 60MM",
+        "warehouse": "01",
+        "bin": "A-01-04",
+        "quantity": 6,
+        "unit": "PCS"
+      },
+      {
+        "line": 80,
+        "item": "F-6001",
+        "description": "SÄÄTÖJALKA M10",
+        "warehouse": "01",
+        "bin": "B-03-05",
+        "quantity": 9,
+        "unit": "PCS"
+      },
+      {
+        "line": 90,
+        "item": "C-3002",
+        "description": "ANGLE BAR 40X40X4",
+        "warehouse": "01",
+        "bin": "Y-11-02",
+        "quantity": 12,
+        "unit": "M"
+      },
+      {
+        "line": 100,
+        "item": "B-2001",
+        "description": "HEX BOLT M8X40",
+        "warehouse": "01",
+        "bin": "B-02-11",
+        "quantity": 15,
+        "unit": "PCS"
+      },
+      {
+        "line": 110,
+        "item": "G-7001",
+        "description": "KÖYSI 10 MM POLYESTER",
+        "warehouse": "01",
+        "bin": "C-06-02",
+        "quantity": 18,
+        "unit": "M"
+      },
+      {
+        "line": 120,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "warehouse": "01",
+        "bin": "C-05-07",
+        "quantity": 21,
+        "unit": "M"
+      }
+    ]
+  },
+  {
+    "title": "PICK LIST",
+    "picklistNo": "700005",
+    "orderNo": "51071",
+    "customerNo": "10007",
+    "shipTo": "HIGHLAND FARMS CO\nRural Route 8\nFI-60100 SEINÄJOKI",
+    "shipDate": "2026-10-25",
+    "outputName": "PICKLIST_700005",
+    "lines": [
+      {
+        "line": 10,
+        "item": "B-2001",
+        "description": "HEX BOLT M8X40",
+        "warehouse": "01",
+        "bin": "B-02-11",
+        "quantity": 14,
+        "unit": "PCS"
+      },
+      {
+        "line": 20,
+        "item": "G-7001",
+        "description": "KÖYSI 10 MM POLYESTER",
+        "warehouse": "01",
+        "bin": "C-06-02",
+        "quantity": 17,
+        "unit": "M"
+      },
+      {
+        "line": 30,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "warehouse": "01",
+        "bin": "C-05-07",
+        "quantity": 20,
+        "unit": "M"
+      },
+      {
+        "line": 40,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "warehouse": "01",
+        "bin": "B-02-12",
+        "quantity": 23,
+        "unit": "PCS"
+      },
+      {
+        "line": 50,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "warehouse": "01",
+        "bin": "A-01-03",
+        "quantity": 2,
+        "unit": "PCS"
+      },
+      {
+        "line": 60,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "warehouse": "01",
+        "bin": "D-01-01",
+        "quantity": 5,
+        "unit": "PR"
+      }
+    ]
+  }
+]

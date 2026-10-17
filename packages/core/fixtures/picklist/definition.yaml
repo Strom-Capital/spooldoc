@@ -1,0 +1,40 @@
+# Pick lists, one per page.
+type: picklist
+version: 1
+match:
+  splf: SPDPICK
+  userData: PICKLIST
+source: text
+text:
+  page: { width: 132, length: 66 }
+  header: { lines: 3 }
+  footer: { fromLine: 60 }
+  split: { field: picklistNo }
+  fields:
+    - { name: picklistNo, anchor: { after: "Pick list no....:" } }
+    - { name: orderNo, anchor: { after: "Order no........:" } }
+    - { name: customerNo, anchor: { after: "Customer no.....:" } }
+    - { name: route, anchor: { after: "Route...........:" } }
+    - { name: shipDate, anchor: { after: "Ship date.......:" }, type: date }
+    - { name: warehouse, anchor: { after: "Warehouse.......:" } }
+    - { name: deliverName, anchor: { line: 5, column: 60, length: 40 } }
+    - { name: deliverAddress1, anchor: { line: 6, column: 60, length: 40 } }
+    - { name: deliverAddress2, anchor: { line: 7, column: 60, length: 40 } }
+    - { name: deliverAddress3, anchor: { line: 8, column: 60, length: 40 } }
+    - { name: lineCount, anchor: { regex: "^Lines: (\\d+)" }, type: number }
+  tables:
+    - name: lines
+      header: { pattern: "^Line\\s+Item\\s+Description\\s+Bin" }
+      until: { pattern: "^Lines:" }
+      skip: { pattern: "^-{10,}" }
+      columns:
+        - { name: line, column: 1, length: 4, type: number }
+        - { name: item, column: 7, length: 10 }
+        - { name: description, column: 19, length: 32 }
+        - { name: bin, column: 52, length: 11 }
+        - { name: lot, column: 64, length: 12 }
+        - { name: quantity, column: 76, length: 10, type: number }
+        - { name: unit, column: 88, length: 6 }
+output:
+  name: "picklist-{{ picklistNo }}"
+  title: Pick list

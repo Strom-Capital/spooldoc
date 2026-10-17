@@ -1,0 +1,995 @@
+[
+  {
+    "invoiceNo": "260101",
+    "invoiceDate": "2026-10-15",
+    "dueDate": "2026-10-29",
+    "paymentTerms": "14 DAYS NET",
+    "reference": "J. SMITH",
+    "orderNo": "51011",
+    "currency": "EUR",
+    "customerNo": "10001",
+    "customerName": "NORTHERN SUPPLY CO",
+    "address1": "Harbour Road 4",
+    "address2": "Building C",
+    "address3": "FI-90100 OULU",
+    "netAmount": 241.16,
+    "vatRate": 25.5,
+    "vatAmount": 61.5,
+    "totalAmount": 302.66,
+    "lines": [
+      {
+        "line": 10,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "quantity": 7,
+        "unit": "PCS",
+        "unitPrice": 4.2,
+        "amount": 29.4
+      },
+      {
+        "line": 20,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "quantity": 12,
+        "unit": "PCS",
+        "unitPrice": 0.08,
+        "amount": 0.96
+      },
+      {
+        "line": 30,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "quantity": 17,
+        "unit": "M",
+        "unitPrice": 12.4,
+        "amount": 210.8
+      }
+    ]
+  },
+  {
+    "invoiceNo": "260102",
+    "invoiceDate": "2026-10-15",
+    "dueDate": "2026-10-29",
+    "paymentTerms": "14 DAYS NET",
+    "reference": "A. VIRTANEN",
+    "orderNo": "51031",
+    "currency": "EUR",
+    "customerNo": "10003",
+    "customerName": "MÄKELÄ RAKENNUS OY",
+    "address1": "Teollisuustie 7",
+    "address2": "PL 45",
+    "address3": "FI-40100 JYVÄSKYLÄ",
+    "netAmount": 2286.02,
+    "vatRate": 25.5,
+    "vatAmount": 582.94,
+    "totalAmount": 2868.96,
+    "lines": [
+      {
+        "line": 10,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "quantity": 8,
+        "unit": "PR",
+        "unitPrice": 3.6,
+        "amount": 28.8
+      },
+      {
+        "line": 20,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "quantity": 13,
+        "unit": "PCS",
+        "unitPrice": 4.2,
+        "amount": 54.6
+      },
+      {
+        "line": 30,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "quantity": 18,
+        "unit": "PCS",
+        "unitPrice": 0.08,
+        "amount": 1.44
+      },
+      {
+        "line": 40,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "quantity": 3,
+        "unit": "M",
+        "unitPrice": 12.4,
+        "amount": 37.2
+      },
+      {
+        "line": 50,
+        "item": "G-7001",
+        "description": "KÖYSI 10 MM POLYESTER",
+        "quantity": 8,
+        "unit": "M",
+        "unitPrice": 1.15,
+        "amount": 9.2
+      },
+      {
+        "line": 60,
+        "item": "B-2001",
+        "description": "HEX BOLT M8X40",
+        "quantity": 13,
+        "unit": "PCS",
+        "unitPrice": 0.35,
+        "amount": 4.55
+      },
+      {
+        "line": 70,
+        "item": "C-3002",
+        "description": "ANGLE BAR 40X40X4",
+        "quantity": 18,
+        "unit": "M",
+        "unitPrice": 7.9,
+        "amount": 142.2
+      },
+      {
+        "line": 80,
+        "item": "F-6001",
+        "description": "SÄÄTÖJALKA M10",
+        "quantity": 3,
+        "unit": "PCS",
+        "unitPrice": 2.75,
+        "amount": 8.25
+      },
+      {
+        "line": 90,
+        "item": "A-1002",
+        "description": "BRACKET 60MM",
+        "quantity": 8,
+        "unit": "PCS",
+        "unitPrice": 5.1,
+        "amount": 40.8
+      },
+      {
+        "line": 100,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "quantity": 13,
+        "unit": "PCS",
+        "unitPrice": 86,
+        "amount": 1118
+      },
+      {
+        "line": 110,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "quantity": 18,
+        "unit": "PR",
+        "unitPrice": 3.6,
+        "amount": 64.8
+      },
+      {
+        "line": 120,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "quantity": 3,
+        "unit": "PCS",
+        "unitPrice": 4.2,
+        "amount": 12.6
+      },
+      {
+        "line": 130,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "quantity": 8,
+        "unit": "PCS",
+        "unitPrice": 0.08,
+        "amount": 0.64
+      },
+      {
+        "line": 140,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "quantity": 13,
+        "unit": "M",
+        "unitPrice": 12.4,
+        "amount": 161.2
+      },
+      {
+        "line": 150,
+        "item": "G-7001",
+        "description": "KÖYSI 10 MM POLYESTER",
+        "quantity": 18,
+        "unit": "M",
+        "unitPrice": 1.15,
+        "amount": 20.7
+      },
+      {
+        "line": 160,
+        "item": "B-2001",
+        "description": "HEX BOLT M8X40",
+        "quantity": 3,
+        "unit": "PCS",
+        "unitPrice": 0.35,
+        "amount": 1.05
+      },
+      {
+        "line": 170,
+        "item": "C-3002",
+        "description": "ANGLE BAR 40X40X4",
+        "quantity": 8,
+        "unit": "M",
+        "unitPrice": 7.9,
+        "amount": 63.2
+      },
+      {
+        "line": 180,
+        "item": "F-6001",
+        "description": "SÄÄTÖJALKA M10",
+        "quantity": 13,
+        "unit": "PCS",
+        "unitPrice": 2.75,
+        "amount": 35.75
+      },
+      {
+        "line": 190,
+        "item": "A-1002",
+        "description": "BRACKET 60MM",
+        "quantity": 18,
+        "unit": "PCS",
+        "unitPrice": 5.1,
+        "amount": 91.8
+      },
+      {
+        "line": 200,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "quantity": 3,
+        "unit": "PCS",
+        "unitPrice": 86,
+        "amount": 258
+      },
+      {
+        "line": 210,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "quantity": 8,
+        "unit": "PR",
+        "unitPrice": 3.6,
+        "amount": 28.8
+      },
+      {
+        "line": 220,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "quantity": 13,
+        "unit": "PCS",
+        "unitPrice": 4.2,
+        "amount": 54.6
+      },
+      {
+        "line": 230,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "quantity": 18,
+        "unit": "PCS",
+        "unitPrice": 0.08,
+        "amount": 1.44
+      },
+      {
+        "line": 240,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "quantity": 3,
+        "unit": "M",
+        "unitPrice": 12.4,
+        "amount": 37.2
+      },
+      {
+        "line": 250,
+        "item": "G-7001",
+        "description": "KÖYSI 10 MM POLYESTER",
+        "quantity": 8,
+        "unit": "M",
+        "unitPrice": 1.15,
+        "amount": 9.2
+      }
+    ]
+  },
+  {
+    "invoiceNo": "260103",
+    "invoiceDate": "2026-10-15",
+    "dueDate": "2026-10-29",
+    "paymentTerms": "14 DAYS NET",
+    "reference": "ORDER 4471",
+    "orderNo": "51021",
+    "currency": "EUR",
+    "customerNo": "10002",
+    "customerName": "BAKER & SONS LTD",
+    "address1": "Mill Lane 12",
+    "address2": "",
+    "address3": "FI-33100 TAMPERE",
+    "netAmount": 1095.22,
+    "vatRate": 25.5,
+    "vatAmount": 279.28,
+    "totalAmount": 1374.5,
+    "lines": [
+      {
+        "line": 10,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "quantity": 9,
+        "unit": "PCS",
+        "unitPrice": 86,
+        "amount": 774
+      },
+      {
+        "line": 20,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "quantity": 14,
+        "unit": "PR",
+        "unitPrice": 3.6,
+        "amount": 50.4
+      },
+      {
+        "line": 30,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "quantity": 19,
+        "unit": "PCS",
+        "unitPrice": 4.2,
+        "amount": 79.8
+      },
+      {
+        "line": 40,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "quantity": 4,
+        "unit": "PCS",
+        "unitPrice": 0.08,
+        "amount": 0.32
+      },
+      {
+        "line": 50,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "quantity": 9,
+        "unit": "M",
+        "unitPrice": 12.4,
+        "amount": 111.6
+      },
+      {
+        "line": 60,
+        "item": "G-7001",
+        "description": "KÖYSI 10 MM POLYESTER",
+        "quantity": 14,
+        "unit": "M",
+        "unitPrice": 1.15,
+        "amount": 16.1
+      },
+      {
+        "line": 70,
+        "item": "B-2001",
+        "description": "HEX BOLT M8X40",
+        "quantity": 19,
+        "unit": "PCS",
+        "unitPrice": 0.35,
+        "amount": 6.65
+      },
+      {
+        "line": 80,
+        "item": "C-3002",
+        "description": "ANGLE BAR 40X40X4",
+        "quantity": 4,
+        "unit": "M",
+        "unitPrice": 7.9,
+        "amount": 31.6
+      },
+      {
+        "line": 90,
+        "item": "F-6001",
+        "description": "SÄÄTÖJALKA M10",
+        "quantity": 9,
+        "unit": "PCS",
+        "unitPrice": 2.75,
+        "amount": 24.75
+      }
+    ]
+  },
+  {
+    "invoiceNo": "260104",
+    "invoiceDate": "2026-10-15",
+    "dueDate": "2026-10-29",
+    "paymentTerms": "14 DAYS NET",
+    "reference": "B. LÖNNQVIST",
+    "orderNo": "51041",
+    "currency": "EUR",
+    "customerNo": "10004",
+    "customerName": "SÖDERBERG MASKIN AB",
+    "address1": "Östra Hamngatan 9",
+    "address2": "",
+    "address3": "SE-411 10 GÖTEBORG",
+    "netAmount": 3989.9,
+    "vatRate": 25.5,
+    "vatAmount": 1017.42,
+    "totalAmount": 5007.32,
+    "lines": [
+      {
+        "line": 10,
+        "item": "A-1002",
+        "description": "BRACKET 60MM",
+        "quantity": 10,
+        "unit": "PCS",
+        "unitPrice": 5.1,
+        "amount": 51
+      },
+      {
+        "line": 20,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "quantity": 15,
+        "unit": "PCS",
+        "unitPrice": 86,
+        "amount": 1290
+      },
+      {
+        "line": 30,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "quantity": 20,
+        "unit": "PR",
+        "unitPrice": 3.6,
+        "amount": 72
+      },
+      {
+        "line": 40,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "quantity": 5,
+        "unit": "PCS",
+        "unitPrice": 4.2,
+        "amount": 21
+      },
+      {
+        "line": 50,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "quantity": 10,
+        "unit": "PCS",
+        "unitPrice": 0.08,
+        "amount": 0.8
+      },
+      {
+        "line": 60,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "quantity": 15,
+        "unit": "M",
+        "unitPrice": 12.4,
+        "amount": 186
+      },
+      {
+        "line": 70,
+        "item": "G-7001",
+        "description": "KÖYSI 10 MM POLYESTER",
+        "quantity": 20,
+        "unit": "M",
+        "unitPrice": 1.15,
+        "amount": 23
+      },
+      {
+        "line": 80,
+        "item": "B-2001",
+        "description": "HEX BOLT M8X40",
+        "quantity": 5,
+        "unit": "PCS",
+        "unitPrice": 0.35,
+        "amount": 1.75
+      },
+      {
+        "line": 90,
+        "item": "C-3002",
+        "description": "ANGLE BAR 40X40X4",
+        "quantity": 10,
+        "unit": "M",
+        "unitPrice": 7.9,
+        "amount": 79
+      },
+      {
+        "line": 100,
+        "item": "F-6001",
+        "description": "SÄÄTÖJALKA M10",
+        "quantity": 15,
+        "unit": "PCS",
+        "unitPrice": 2.75,
+        "amount": 41.25
+      },
+      {
+        "line": 110,
+        "item": "A-1002",
+        "description": "BRACKET 60MM",
+        "quantity": 20,
+        "unit": "PCS",
+        "unitPrice": 5.1,
+        "amount": 102
+      },
+      {
+        "line": 120,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "quantity": 5,
+        "unit": "PCS",
+        "unitPrice": 86,
+        "amount": 430
+      },
+      {
+        "line": 130,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "quantity": 10,
+        "unit": "PR",
+        "unitPrice": 3.6,
+        "amount": 36
+      },
+      {
+        "line": 140,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "quantity": 15,
+        "unit": "PCS",
+        "unitPrice": 4.2,
+        "amount": 63
+      },
+      {
+        "line": 150,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "quantity": 20,
+        "unit": "PCS",
+        "unitPrice": 0.08,
+        "amount": 1.6
+      },
+      {
+        "line": 160,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "quantity": 5,
+        "unit": "M",
+        "unitPrice": 12.4,
+        "amount": 62
+      },
+      {
+        "line": 170,
+        "item": "G-7001",
+        "description": "KÖYSI 10 MM POLYESTER",
+        "quantity": 10,
+        "unit": "M",
+        "unitPrice": 1.15,
+        "amount": 11.5
+      },
+      {
+        "line": 180,
+        "item": "B-2001",
+        "description": "HEX BOLT M8X40",
+        "quantity": 15,
+        "unit": "PCS",
+        "unitPrice": 0.35,
+        "amount": 5.25
+      },
+      {
+        "line": 190,
+        "item": "C-3002",
+        "description": "ANGLE BAR 40X40X4",
+        "quantity": 20,
+        "unit": "M",
+        "unitPrice": 7.9,
+        "amount": 158
+      },
+      {
+        "line": 200,
+        "item": "F-6001",
+        "description": "SÄÄTÖJALKA M10",
+        "quantity": 5,
+        "unit": "PCS",
+        "unitPrice": 2.75,
+        "amount": 13.75
+      },
+      {
+        "line": 210,
+        "item": "A-1002",
+        "description": "BRACKET 60MM",
+        "quantity": 10,
+        "unit": "PCS",
+        "unitPrice": 5.1,
+        "amount": 51
+      },
+      {
+        "line": 220,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "quantity": 15,
+        "unit": "PCS",
+        "unitPrice": 86,
+        "amount": 1290
+      }
+    ]
+  },
+  {
+    "invoiceNo": "260105",
+    "invoiceDate": "2026-10-15",
+    "dueDate": "2026-10-29",
+    "paymentTerms": "14 DAYS NET",
+    "reference": "SITE 12 PROJECT",
+    "orderNo": "51081",
+    "currency": "EUR",
+    "customerNo": "10008",
+    "customerName": "METRO BUILDERS INC",
+    "address1": "Ring Road 101",
+    "address2": "Unit 5",
+    "address3": "FI-00100 HELSINKI",
+    "netAmount": 1453.43,
+    "vatRate": 25.5,
+    "vatAmount": 370.62,
+    "totalAmount": 1824.05,
+    "lines": [
+      {
+        "line": 10,
+        "item": "F-6001",
+        "description": "SÄÄTÖJALKA M10",
+        "quantity": 11,
+        "unit": "PCS",
+        "unitPrice": 2.75,
+        "amount": 30.25
+      },
+      {
+        "line": 20,
+        "item": "A-1002",
+        "description": "BRACKET 60MM",
+        "quantity": 16,
+        "unit": "PCS",
+        "unitPrice": 5.1,
+        "amount": 81.6
+      },
+      {
+        "line": 30,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "quantity": 1,
+        "unit": "PCS",
+        "unitPrice": 86,
+        "amount": 86
+      },
+      {
+        "line": 40,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "quantity": 6,
+        "unit": "PR",
+        "unitPrice": 3.6,
+        "amount": 21.6
+      },
+      {
+        "line": 50,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "quantity": 11,
+        "unit": "PCS",
+        "unitPrice": 4.2,
+        "amount": 46.2
+      },
+      {
+        "line": 60,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "quantity": 16,
+        "unit": "PCS",
+        "unitPrice": 0.08,
+        "amount": 1.28
+      },
+      {
+        "line": 70,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "quantity": 1,
+        "unit": "M",
+        "unitPrice": 12.4,
+        "amount": 12.4
+      },
+      {
+        "line": 80,
+        "item": "G-7001",
+        "description": "KÖYSI 10 MM POLYESTER",
+        "quantity": 6,
+        "unit": "M",
+        "unitPrice": 1.15,
+        "amount": 6.9
+      },
+      {
+        "line": 90,
+        "item": "B-2001",
+        "description": "HEX BOLT M8X40",
+        "quantity": 11,
+        "unit": "PCS",
+        "unitPrice": 0.35,
+        "amount": 3.85
+      },
+      {
+        "line": 100,
+        "item": "C-3002",
+        "description": "ANGLE BAR 40X40X4",
+        "quantity": 16,
+        "unit": "M",
+        "unitPrice": 7.9,
+        "amount": 126.4
+      },
+      {
+        "line": 110,
+        "item": "F-6001",
+        "description": "SÄÄTÖJALKA M10",
+        "quantity": 1,
+        "unit": "PCS",
+        "unitPrice": 2.75,
+        "amount": 2.75
+      },
+      {
+        "line": 120,
+        "item": "A-1002",
+        "description": "BRACKET 60MM",
+        "quantity": 6,
+        "unit": "PCS",
+        "unitPrice": 5.1,
+        "amount": 30.6
+      },
+      {
+        "line": 130,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "quantity": 11,
+        "unit": "PCS",
+        "unitPrice": 86,
+        "amount": 946
+      },
+      {
+        "line": 140,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "quantity": 16,
+        "unit": "PR",
+        "unitPrice": 3.6,
+        "amount": 57.6
+      }
+    ]
+  },
+  {
+    "invoiceNo": "260106",
+    "invoiceDate": "2026-10-15",
+    "dueDate": "2026-10-29",
+    "paymentTerms": "14 DAYS NET",
+    "reference": "P. JÄRVINEN",
+    "orderNo": "51061",
+    "currency": "EUR",
+    "customerNo": "10006",
+    "customerName": "COASTAL MARINE LTD",
+    "address1": "Pier 3",
+    "address2": "Dock Road",
+    "address3": "FI-20100 TURKU",
+    "netAmount": 3540.17,
+    "vatRate": 25.5,
+    "vatAmount": 902.74,
+    "totalAmount": 4442.91,
+    "lines": [
+      {
+        "line": 10,
+        "item": "C-3002",
+        "description": "ANGLE BAR 40X40X4",
+        "quantity": 12,
+        "unit": "M",
+        "unitPrice": 7.9,
+        "amount": 94.8
+      },
+      {
+        "line": 20,
+        "item": "F-6001",
+        "description": "SÄÄTÖJALKA M10",
+        "quantity": 17,
+        "unit": "PCS",
+        "unitPrice": 2.75,
+        "amount": 46.75
+      },
+      {
+        "line": 30,
+        "item": "A-1002",
+        "description": "BRACKET 60MM",
+        "quantity": 2,
+        "unit": "PCS",
+        "unitPrice": 5.1,
+        "amount": 10.2
+      },
+      {
+        "line": 40,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "quantity": 7,
+        "unit": "PCS",
+        "unitPrice": 86,
+        "amount": 602
+      },
+      {
+        "line": 50,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "quantity": 12,
+        "unit": "PR",
+        "unitPrice": 3.6,
+        "amount": 43.2
+      },
+      {
+        "line": 60,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "quantity": 17,
+        "unit": "PCS",
+        "unitPrice": 4.2,
+        "amount": 71.4
+      },
+      {
+        "line": 70,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "quantity": 2,
+        "unit": "PCS",
+        "unitPrice": 0.08,
+        "amount": 0.16
+      },
+      {
+        "line": 80,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "quantity": 7,
+        "unit": "M",
+        "unitPrice": 12.4,
+        "amount": 86.8
+      },
+      {
+        "line": 90,
+        "item": "G-7001",
+        "description": "KÖYSI 10 MM POLYESTER",
+        "quantity": 12,
+        "unit": "M",
+        "unitPrice": 1.15,
+        "amount": 13.8
+      },
+      {
+        "line": 100,
+        "item": "B-2001",
+        "description": "HEX BOLT M8X40",
+        "quantity": 17,
+        "unit": "PCS",
+        "unitPrice": 0.35,
+        "amount": 5.95
+      },
+      {
+        "line": 110,
+        "item": "C-3002",
+        "description": "ANGLE BAR 40X40X4",
+        "quantity": 2,
+        "unit": "M",
+        "unitPrice": 7.9,
+        "amount": 15.8
+      },
+      {
+        "line": 120,
+        "item": "F-6001",
+        "description": "SÄÄTÖJALKA M10",
+        "quantity": 7,
+        "unit": "PCS",
+        "unitPrice": 2.75,
+        "amount": 19.25
+      },
+      {
+        "line": 130,
+        "item": "A-1002",
+        "description": "BRACKET 60MM",
+        "quantity": 12,
+        "unit": "PCS",
+        "unitPrice": 5.1,
+        "amount": 61.2
+      },
+      {
+        "line": 140,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "quantity": 17,
+        "unit": "PCS",
+        "unitPrice": 86,
+        "amount": 1462
+      },
+      {
+        "line": 150,
+        "item": "E-5001",
+        "description": "SAFETY GLOVES SIZE 10",
+        "quantity": 2,
+        "unit": "PR",
+        "unitPrice": 3.6,
+        "amount": 7.2
+      },
+      {
+        "line": 160,
+        "item": "A-1001",
+        "description": "BRACKET 40MM",
+        "quantity": 7,
+        "unit": "PCS",
+        "unitPrice": 4.2,
+        "amount": 29.4
+      },
+      {
+        "line": 170,
+        "item": "B-2002",
+        "description": "HEX NUT M8",
+        "quantity": 12,
+        "unit": "PCS",
+        "unitPrice": 0.08,
+        "amount": 0.96
+      },
+      {
+        "line": 180,
+        "item": "D-4001",
+        "description": "HYDRAULIC HOSE DN12",
+        "quantity": 17,
+        "unit": "M",
+        "unitPrice": 12.4,
+        "amount": 210.8
+      },
+      {
+        "line": 190,
+        "item": "G-7001",
+        "description": "KÖYSI 10 MM POLYESTER",
+        "quantity": 2,
+        "unit": "M",
+        "unitPrice": 1.15,
+        "amount": 2.3
+      },
+      {
+        "line": 200,
+        "item": "B-2001",
+        "description": "HEX BOLT M8X40",
+        "quantity": 7,
+        "unit": "PCS",
+        "unitPrice": 0.35,
+        "amount": 2.45
+      },
+      {
+        "line": 210,
+        "item": "C-3002",
+        "description": "ANGLE BAR 40X40X4",
+        "quantity": 12,
+        "unit": "M",
+        "unitPrice": 7.9,
+        "amount": 94.8
+      },
+      {
+        "line": 220,
+        "item": "F-6001",
+        "description": "SÄÄTÖJALKA M10",
+        "quantity": 17,
+        "unit": "PCS",
+        "unitPrice": 2.75,
+        "amount": 46.75
+      },
+      {
+        "line": 230,
+        "item": "A-1002",
+        "description": "BRACKET 60MM",
+        "quantity": 2,
+        "unit": "PCS",
+        "unitPrice": 5.1,
+        "amount": 10.2
+      },
+      {
+        "line": 240,
+        "item": "C-3001",
+        "description": "STEEL PLATE 2MM 1X2M",
+        "quantity": 7,
+        "unit": "PCS",
+        "unitPrice": 86,
+        "amount": 602
+      }
+    ]
+  }
+]
