@@ -1,0 +1,76 @@
+/* SPDPRINTC: processing program of the SPDPRINT command.             */
+/*   MYLIB/SPDPRINT QUEUE(*ALL) COUNT(1) LIB(MYLIB)                    */
+/* Prints the demo documents as held, saved spooled files:            */
+/*   REPORTS  SPDORDERR   198 col, 15 cpi, 51 lines  USRDTA ORDERRPT  */
+/*   EMAIL    SPDINVOICE  132 col, 10 cpi, 66 lines  USRDTA INVOICE   */
+/*   FORMS    SPDPICK     132 col, 10 cpi, 66 lines  USRDTA PICKLIST  */
+/*   FORMS    SPDXML      300 col, 15 cpi, 66 lines  USRDTA PICKXML   */
+/* Each printer program writes to QSYSPRT; the override sets the      */
+/* queue, page size, spooled file name and user data. CHRID(*JOBCCSID)   */
+/* tags the data with the job CCSID, which is also the CCSID of SPDSRC. */
+             PGM        PARM(&QUEUE &COUNT &LIB)
+             DCL        VAR(&QUEUE) TYPE(*CHAR) LEN(10)
+             DCL        VAR(&COUNT) TYPE(*DEC) LEN(3 0)
+             DCL        VAR(&LIB) TYPE(*CHAR) LEN(10)
+             DCL        VAR(&RUN) TYPE(*DEC) LEN(3 0) VALUE(0)
+
+             IF         COND(&LIB *EQ '*CURLIB') THEN(DO)
+                RTVJOBA    CURLIB(&LIB)
+                IF         COND(&LIB *EQ '*NONE') THEN(DO)
+                   SNDPGMMSG  MSGID(CPF9898) MSGF(QCPFMSG) +
+                                MSGDTA('No current library. Use LIB(name).') +
+                                MSGTYPE(*ESCAPE)
+                ENDDO
+             ENDDO
+
+ LOOP:       CHGVAR     VAR(&RUN) VALUE(&RUN + 1)
+
+/* Operational report to REPORTS.                                     */
+             IF         COND((&QUEUE *EQ '*ALL') *OR +
+                          (&QUEUE *EQ 'REPORTS')) THEN(DO)
+                OVRPRTF    FILE(QSYSPRT) DEVTYPE(*SCS) PAGESIZE(51 198) +
+                             LPI(6) CPI(15) OVRFLW(51) CHRID(*JOBCCSID) +
+                             OUTQ(&LIB/REPORTS) HOLD(*YES) SAVE(*YES) +
+                             USRDTA(ORDERRPT) SPLFNAME(SPDORDERR) +
+                             OVRSCOPE(*CALLLVL)
+                CALL       PGM(&LIB/SPDORDERR)
+                DLTOVR     FILE(QSYSPRT)
+             ENDDO
+
+/* Invoices to EMAIL.                                                 */
+             IF         COND((&QUEUE *EQ '*ALL') *OR +
+                          (&QUEUE *EQ 'EMAIL')) THEN(DO)
+                OVRPRTF    FILE(QSYSPRT) DEVTYPE(*SCS) PAGESIZE(66 132) +
+                             LPI(6) CPI(10) OVRFLW(66) CHRID(*JOBCCSID) +
+                             OUTQ(&LIB/EMAIL) HOLD(*YES) SAVE(*YES) +
+                             USRDTA(INVOICE) SPLFNAME(SPDINVOICE) +
+                             OVRSCOPE(*CALLLVL)
+                CALL       PGM(&LIB/SPDINVOICE)
+                DLTOVR     FILE(QSYSPRT)
+             ENDDO
+
+/* Pick lists, as text and as XML, to FORMS.                          */
+             IF         COND((&QUEUE *EQ '*ALL') *OR +
+                          (&QUEUE *EQ 'FORMS')) THEN(DO)
+                OVRPRTF    FILE(QSYSPRT) DEVTYPE(*SCS) PAGESIZE(66 132) +
+                             LPI(6) CPI(10) OVRFLW(66) CHRID(*JOBCCSID) +
+                             OUTQ(&LIB/FORMS) HOLD(*YES) SAVE(*YES) +
+                             USRDTA(PICKLIST) SPLFNAME(SPDPICK) +
+                             OVRSCOPE(*CALLLVL)
+                CALL       PGM(&LIB/SPDPICK)
+                DLTOVR     FILE(QSYSPRT)
+
+                OVRPRTF    FILE(QSYSPRT) DEVTYPE(*SCS) PAGESIZE(66 300) +
+                             LPI(6) CPI(15) OVRFLW(66) CHRID(*JOBCCSID) +
+                             OUTQ(&LIB/FORMS) HOLD(*YES) SAVE(*YES) +
+                             USRDTA(PICKXML) SPLFNAME(SPDXML) +
+                             OVRSCOPE(*CALLLVL)
+                CALL       PGM(&LIB/SPDXML)
+                DLTOVR     FILE(QSYSPRT)
+             ENDDO
+
+             IF         COND(&RUN *LT &COUNT) THEN(GOTO CMDLBL(LOOP))
+
+             SNDPGMMSG  MSG('Demo documents printed to the output +
+                          queues in' *BCAT &LIB) MSGTYPE(*COMP)
+             ENDPGM

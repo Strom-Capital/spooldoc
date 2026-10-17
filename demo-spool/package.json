@@ -1,0 +1,19 @@
+{
+  "name": "demo-spool",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Output queues and invented demo spooled files for IBM i (written for a PUB400 account)",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "deploy": "node deploy/deploy.mjs",
+    "print": "node deploy/print.mjs",
+    "show": "node deploy/show.mjs"
+  },
+  "dependencies": {
+    "odbc": "^2.6.0"
+  }
+}

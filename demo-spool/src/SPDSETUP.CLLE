@@ -1,0 +1,33 @@
+/* SPDSETUP: create the demo output queues and the data queue.        */
+/*   CALL PGM(MYLIB/SPDSETUP) PARM(MYLIB)                              */
+/* Creates in library &LIB: output queues FORMS, EMAIL and REPORTS,   */
+/* and data queue SPLFDTAQ attached to FORMS. The system sends an     */
+/* entry to SPLFDTAQ when a spooled file on FORMS becomes ready.      */
+/* Objects that already exist are kept. Safe to run again.            */
+             PGM        PARM(&LIB)
+             DCL        VAR(&LIB) TYPE(*CHAR) LEN(10)
+
+/* Data queue first: CHGOUTQ DTAQ() needs it. Min length is 128.      */
+             CHKOBJ     OBJ(&LIB/SPLFDTAQ) OBJTYPE(*DTAQ)
+             MONMSG     MSGID(CPF9801) EXEC(CRTDTAQ DTAQ(&LIB/SPLFDTAQ) +
+                          MAXLEN(128) TEXT('Demo: entries for FORMS'))
+
+             CHKOBJ     OBJ(&LIB/FORMS) OBJTYPE(*OUTQ)
+             MONMSG     MSGID(CPF9801) EXEC(CRTOUTQ OUTQ(&LIB/FORMS) +
+                          TEXT('Demo: forms (pick lists, XML)'))
+
+             CHKOBJ     OBJ(&LIB/EMAIL) OBJTYPE(*OUTQ)
+             MONMSG     MSGID(CPF9801) EXEC(CRTOUTQ OUTQ(&LIB/EMAIL) +
+                          TEXT('Demo: documents to email (invoices)'))
+
+             CHKOBJ     OBJ(&LIB/REPORTS) OBJTYPE(*OUTQ)
+             MONMSG     MSGID(CPF9801) EXEC(CRTOUTQ OUTQ(&LIB/REPORTS) +
+                          TEXT('Demo: operational reports'))
+
+/* Attach the data queue to FORMS so a queue watcher can be shown.    */
+             CHGOUTQ    OUTQ(&LIB/FORMS) DTAQ(&LIB/SPLFDTAQ)
+
+             SNDPGMMSG  MSG('Demo output queues FORMS, EMAIL, REPORTS +
+                          and data queue SPLFDTAQ are ready in' *BCAT &LIB) +
+                          MSGTYPE(*COMP)
+             ENDPGM

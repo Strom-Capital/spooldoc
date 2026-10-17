@@ -1,4 +1,4 @@
-# Spoolpage
+# Spooldoc
 
 Spooled files into documents, for IBM i. Open output management.
 
@@ -23,7 +23,7 @@ repository for now.
   preview, refine.
 - `packages/cli`: capture a sample, render a definition locally, run
   sample-based tests.
-- `demo-spool`: CL, DDS and RPG sources that create output queues and
+- `demo-spool`: CL and RPG sources that create output queues and
   print invented documents on any IBM i, for demos and end-to-end tests.
   Written for a PUB400 account.
 - `samples/`: captured spooled files with their expected JSON, used as
@@ -35,4 +35,4 @@ repository for now.
   libraries, tables, columns, users, hosts, document numbers. Use
   `MYLIB`, `ORDERS`, `CUSTOMERS`, `ibmi.example.com` and invented values.
 - `local/` is ignored and holds credentials, notes and anything real.
-- Apache 2.0.
+- MIT licence, like mcp-server-db2i.
