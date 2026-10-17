@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { maskPages } from "../src/mask.js";
+import { maskPages, maskText } from "../src/mask.js";
 import type { SamplePage } from "../src/sample.js";
 import { loadFixture } from "./helpers/fixtures.js";
 
@@ -31,5 +31,11 @@ describe("maskPages", () => {
     expect(all).toContain("Net amount");
     expect(all).not.toContain("MÄKELÄ");
     expect(all).not.toContain("260102");
+  });
+});
+
+describe("maskText", () => {
+  it("masks digits and letters and keeps punctuation and spaces", () => {
+    expect(maskText("Mäkelä Oy 1,234.50 -")).toBe("Xxxxxx Xx 9,999.99 -");
   });
 });

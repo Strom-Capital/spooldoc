@@ -14,7 +14,7 @@ export function DocumentSelect() {
       value={Math.min(documentIndex, documents.length - 1)}
       onChange={(event) => setDocumentIndex(Number(event.target.value))}
       aria-label="Document"
-      className="h-7 max-w-56 rounded-md border bg-background px-1.5 text-sm"
+      className="h-7 min-w-0 max-w-56 rounded-md border bg-background px-1.5 text-sm"
     >
       {documents.map((doc, index) => (
         <option key={index} value={index}>

@@ -22,11 +22,13 @@ package and its Java bridge, so a JDK is needed to install it): it lists
 output queues and spooled files with SQL services and captures a spooled
 file as a sample.
 
-`apps/web` is the design-time web app without the AI part: connect to an
-IBM i, browse output queues, capture a spooled file, then check the
-extracted JSON next to the page with every field highlighted, edit the
-definition and the template, and preview the rendered HTML or PDF. The
-model proposals and the chat come next.
+`apps/web` is the design-time web app: connect to an IBM i, browse output
+queues, capture a spooled file, then check the extracted JSON next to the
+page with every field highlighted, edit the definition and the template,
+and preview the rendered HTML or PDF. A chat panel in the workbench lets a
+model propose the definition and the template: it writes them through
+tools, reads the extraction report, fixes missing fields and renders the
+result, while the page view, JSON and preview update as it works.
 
 ```sh
 pnpm install
@@ -47,6 +49,34 @@ pnpm dev                                       # core and ibmi in watch mode, Ne
 
 Open http://localhost:3002. PDF export needs `SPOOLDOC_CHROMIUM_PATH`
 pointing at a Chromium or Chrome executable.
+
+### Model
+
+The chat needs a model on the server. Set it in `apps/web/.env.local` and
+restart:
+
+- `ANTHROPIC_API_KEY`, and optionally `SPOOLDOC_MODEL` (default
+  `claude-sonnet-5-5`).
+- Or an OpenAI-compatible endpoint, such as a local model server:
+  `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_MODEL` and, when it
+  needs one, `OPENAI_COMPATIBLE_API_KEY`.
+
+Without either, the workbench works as before and the chat panel says how
+to set one up. Keys stay on the server; no request can supply one.
+
+Masking is on by default (`SPOOLDOC_MASK=true`): digits in values become 9
+and letters X or x before page text goes to the model, while labels that
+repeat across pages, positions and lengths stay as printed. Values in tool
+results (the extracted fields and the rendered text) are masked the same
+way; the files the model writes and the workbench itself use the real
+values.
+
+The model receives the page text of the sample (the first pages in the
+instructions, any other page on request), its metadata (spooled file name,
+queue, user data, page size, code page) and the current definition and
+template. It never receives credentials, the session or the IBM i
+connection. Its four tools only read the sample and write
+`definitions/<type>.yaml` and `templates/<type>.html` in the workspace.
 
 ### Trust
 

@@ -1,14 +1,19 @@
 'use client';
 
 import { FileDownIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useSession } from '@/components/session-provider';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { DocumentSelect } from './document-select';
 import { useWorkbench } from './workbench-provider';
 
-/** The rendered HTML of the current document in a sandboxed iframe (no scripts), and a PDF link. */
-export function HtmlPreview() {
+/**
+ * The rendered HTML of the current document in a sandboxed iframe (no scripts), and a PDF link.
+ *
+ * @param header - Controls for the start of the pane header (the Preview and Chat tabs)
+ */
+export function HtmlPreview({ header }: { header?: ReactNode }) {
   const { render, sampleId, documentIndex, drafts } = useWorkbench();
   const { session } = useSession();
   const pdf = session?.pdf === true;
@@ -23,7 +28,7 @@ export function HtmlPreview() {
   return (
     <section className="flex h-full min-h-0 flex-col" aria-label="HTML preview">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b px-2 text-sm">
-        <span className="font-medium">Preview</span>
+        {header ?? <span className="font-medium">Preview</span>}
         <DocumentSelect />
         <Tooltip>
           <TooltipTrigger asChild>

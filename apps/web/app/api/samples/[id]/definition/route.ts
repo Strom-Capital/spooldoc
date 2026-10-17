@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { checkOrigin, errorResponse, json, readJson, workspaceErrorResponse } from '@/lib/server/http';
-import { getWorkspace, TYPE_NAME } from '@/lib/server/workspace';
+import { linkDefinition } from '@/lib/server/samples';
+import { TYPE_NAME } from '@/lib/server/workspace';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,12 +21,9 @@ export async function POST(request: Request, ctx: RouteContext<'/api/samples/[id
   }
   const { id } = await ctx.params;
   try {
-    const ws = getWorkspace();
-    const sample = await ws.readSample(id);
-    if (!sample) {
+    if (!(await linkDefinition(id, body.data.type))) {
       return errorResponse(404, `Sample ${id} not found.`);
     }
-    await ws.writeSample({ ...sample, definition: body.data.type });
     return json({ ok: true });
   } catch (error) {
     return workspaceErrorResponse(error);

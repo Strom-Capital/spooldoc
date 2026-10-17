@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { SpooledFileId } from '@spooldoc/core';
+import type { SpooledFileId, Workspace } from '@spooldoc/core';
 import { getWorkspace } from './workspace';
 
 /** One row of the samples list. */
@@ -41,4 +41,24 @@ export async function listSamples(): Promise<SampleSummary[]> {
   return rows
     .filter((row): row is SampleSummary => row !== null)
     .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt) || a.id.localeCompare(b.id));
+}
+
+/**
+ * Link a sample to a definition type. The definition file does not have to exist yet.
+ *
+ * @param id - Sample id
+ * @param type - Definition type name
+ * @param ws - The workspace (default: the configured one)
+ * @returns False when there is no such sample
+ * @throws WorkspaceError for an invalid id
+ */
+export async function linkDefinition(id: string, type: string, ws: Workspace = getWorkspace()): Promise<boolean> {
+  const sample = await ws.readSample(id);
+  if (!sample) {
+    return false;
+  }
+  if (sample.definition !== type) {
+    await ws.writeSample({ ...sample, definition: type });
+  }
+  return true;
 }

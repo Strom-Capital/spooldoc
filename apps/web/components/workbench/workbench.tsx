@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useSession } from '@/components/session-provider';
 import { cn } from '@/lib/utils';
+import { ChatPanel } from './chat-panel';
 import { DefinitionEditor } from './definition-editor';
 import { HtmlPreview } from './html-preview';
 import { JsonView } from './json-view';
@@ -16,10 +18,17 @@ const TABS: { id: WorkbenchTab; label: string }[] = [
   { id: 'template', label: 'Template' },
 ];
 
+type RightTab = 'preview' | 'chat';
+
+const RIGHT_TABS: { id: RightTab; label: string }[] = [
+  { id: 'preview', label: 'Preview' },
+  { id: 'chat', label: 'Chat' },
+];
+
 /** Smallest pane width, in percent of the workbench. */
 const MIN = 15;
 
-/** The workbench for one sample: top bar and three resizable panes. */
+/** The workbench for one sample: top bar and three resizable panes; the right one holds the preview and the chat. */
 export function Workbench({ sampleId }: { sampleId: string }) {
   return (
     <WorkbenchProvider sampleId={sampleId}>
@@ -30,8 +39,12 @@ export function Workbench({ sampleId }: { sampleId: string }) {
 
 function WorkbenchLayout() {
   const { error, tab, setTab } = useWorkbench();
-  // Pane widths in percent; the last pane takes the rest. A fourth pane (chat) can be added here.
-  const [widths, setWidths] = useState<[number, number]>([42, 30]);
+  const { session } = useSession();
+  // Pane widths in percent; the last pane takes the rest.
+  const [widths, setWidths] = useState<[number, number]>([40, 28]);
+  // The chat opens first when a model is configured, until the user picks a tab.
+  const [rightChoice, setRightChoice] = useState<RightTab | null>(null);
+  const right: RightTab = rightChoice ?? (session?.model ? 'chat' : 'preview');
   const container = useRef<HTMLDivElement>(null);
 
   const startDrag = useCallback((divider: 0 | 1, event: ReactPointerEvent<HTMLDivElement>) => {
@@ -120,10 +133,39 @@ function WorkbenchLayout() {
           </div>
         </div>
         {divider(1)}
-        <div className="min-w-0 flex-1">
-          <HtmlPreview />
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* Both stay mounted so a running chat keeps streaming while the preview is shown. */}
+          <div className={cn('min-h-0 flex-1', right !== 'preview' && 'hidden')}>
+            <HtmlPreview header={<RightTabs value={right} onChange={setRightChoice} />} />
+          </div>
+          <div className={cn('min-h-0 flex-1', right !== 'chat' && 'hidden')}>
+            <ChatPanel header={<RightTabs value={right} onChange={setRightChoice} />} />
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** The Preview and Chat tabs at the start of the right pane's header. */
+function RightTabs({ value, onChange }: { value: RightTab; onChange: (tab: RightTab) => void }) {
+  return (
+    <div role="tablist" aria-label="Preview and chat" className="flex shrink-0 items-center gap-0.5 rounded-md bg-muted p-0.5">
+      {RIGHT_TABS.map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          role="tab"
+          aria-selected={value === item.id}
+          onClick={() => onChange(item.id)}
+          className={cn(
+            'rounded px-2.5 py-0.5 text-sm',
+            value === item.id ? 'bg-background font-medium text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {item.label}
+        </button>
+      ))}
     </div>
   );
 }

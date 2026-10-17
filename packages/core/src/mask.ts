@@ -19,8 +19,12 @@ function tokens(line: string): Token[] {
   return out;
 }
 
-const maskToken = (t: string): string =>
-  t.replace(/\p{Nd}|\p{L}/gu, (c) => (/\p{Nd}/u.test(c) ? "9" : /\p{Lu}/u.test(c) ? "X" : "x"));
+/** Masks one value the way `maskPages` masks a token: digits become 9, letters X or x. */
+export function maskText(text: string): string {
+  return text.replace(/\p{Nd}|\p{L}/gu, (c) => (/\p{Nd}/u.test(c) ? "9" : /\p{Lu}/u.test(c) ? "X" : "x"));
+}
+
+const maskToken = maskText;
 
 /**
  * Masks the values on pages so the layout can be shown to a model without real data.
