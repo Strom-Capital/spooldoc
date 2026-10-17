@@ -1,6 +1,6 @@
-# ibmi-output
+# Spoolpage
 
-Open output management for IBM i. Working name, not final.
+Spooled files into documents, for IBM i. Open output management.
 
 Turn a spooled file into a JSON document, then render it with ordinary
 DOCX, XLSX, HTML or PDF templates and deliver it. The first experience is
