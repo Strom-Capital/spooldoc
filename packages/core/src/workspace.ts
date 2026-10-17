@@ -86,7 +86,8 @@ export function openWorkspace(root: string): Workspace {
     async listSamples() {
       let names: string[];
       try {
-        names = await readdir(paths.samples);
+        // The comment keeps Next.js from tracing the whole project when it bundles this module.
+        names = await readdir(/* turbopackIgnore: true */ paths.samples);
       } catch (err) {
         if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
         throw err;

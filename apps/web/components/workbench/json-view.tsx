@@ -1,0 +1,99 @@
+'use client';
+
+import { useEffect, useMemo, useRef } from 'react';
+import { CodeBlock, CodeBlockCopyButton } from '@/components/ai-elements/code-block';
+import { cn } from '@/lib/utils';
+import { hitKey } from '@/lib/client/render';
+import { DocumentSelect } from './document-select';
+import { useWorkbench } from './workbench-provider';
+
+const STATUS_CLASS = {
+  found: 'bg-primary/15 text-primary',
+  empty: 'bg-yellow-500/20 text-yellow-800 dark:text-yellow-300',
+  missing: 'bg-destructive/15 text-destructive',
+} as const;
+
+/** The extracted documents as JSON, with warnings and the field hits of the current document. */
+export function JsonView() {
+  const { render, documentIndex, selectedHit, setSelectedHit } = useWorkbench();
+  const listRef = useRef<HTMLUListElement>(null);
+  const extract = render?.extract;
+  const doc = extract?.documents[documentIndex] ?? extract?.documents[0];
+  const code = useMemo(() => (doc ? JSON.stringify(doc, null, 2) : ''), [doc]);
+  const hits = useMemo(() => (extract?.hits ?? []).filter((hit) => hit.document === documentIndex), [extract, documentIndex]);
+  const selectedKey = selectedHit ? hitKey(selectedHit) : null;
+
+  useEffect(() => {
+    if (!selectedKey) return;
+    const el = listRef.current?.querySelector(`[data-key="${CSS.escape(selectedKey)}"]`);
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [selectedKey, hits]);
+
+  if (!extract) {
+    return (
+      <p className="p-4 text-muted-foreground text-sm">
+        {render?.definition?.error
+          ? 'The definition has errors; fix them in the Definition tab.'
+          : 'No definition yet. Link a definition type above, or paste one into the Definition tab and preview it.'}
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b px-2 text-sm">
+        <DocumentSelect />
+        <span className="ml-auto text-muted-foreground text-xs">
+          {extract.documents.length} {extract.documents.length === 1 ? 'document' : 'documents'}
+        </span>
+      </div>
+      <div className="min-h-0 flex-1 overflow-auto p-2">
+        {extract.warnings.length > 0 && (
+          <ul className="mb-2 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-sm">
+            {extract.warnings.map((warning, index) => (
+              <li key={index}>{warning}</li>
+            ))}
+          </ul>
+        )}
+        {doc ? (
+          <CodeBlock code={code} language="json" className="text-xs">
+            <div className="absolute top-1 right-1">
+              <CodeBlockCopyButton />
+            </div>
+          </CodeBlock>
+        ) : (
+          <p className="text-muted-foreground text-sm">No documents found.</p>
+        )}
+        <h3 className="mt-4 mb-1 font-medium text-sm">Fields</h3>
+        <ul ref={listRef} className="divide-y rounded-md border text-xs">
+          {hits.map((hit) => {
+            const key = hitKey(hit);
+            return (
+              <li key={key} data-key={key}>
+                <button
+                  type="button"
+                  onClick={() => setSelectedHit(hit)}
+                  className={cn(
+                    'flex w-full items-center gap-2 px-2 py-1 text-left hover:bg-muted/50',
+                    key === selectedKey && 'bg-primary/10',
+                  )}
+                >
+                  <span className="min-w-0 flex-1 truncate font-mono">{hit.name}</span>
+                  <span className={cn('rounded px-1.5 py-0.5 text-[10px] uppercase', STATUS_CLASS[hit.status])}>
+                    {hit.status}
+                  </span>
+                  <span className="max-w-[35%] truncate text-right font-mono text-muted-foreground" title={hit.value}>
+                    {hit.value}
+                  </span>
+                  <span className="tabular w-16 shrink-0 text-right text-muted-foreground">
+                    p{hit.page} {hit.line}:{hit.column}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+}
