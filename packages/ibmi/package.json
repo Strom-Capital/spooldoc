@@ -1,0 +1,42 @@
+{
+  "name": "@spooldoc/ibmi",
+  "version": "0.1.0",
+  "description": "Spooldoc IBM i connection: list output queues and capture spooled files as samples",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./jt400": {
+      "types": "./dist/jt400/index.d.ts",
+      "import": "./dist/jt400/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint --max-warnings 0 src tests scripts",
+    "test": "vitest run",
+    "capture": "tsx scripts/capture.ts"
+  },
+  "dependencies": {
+    "@spooldoc/core": "workspace:*",
+    "node-jt400": "^7.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5"
+  }
+}
