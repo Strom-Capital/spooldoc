@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
-import { CodeBlock, CodeBlockCopyButton } from '@/components/ai-elements/code-block';
+import { CheckIcon, CopyIcon } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { hitKey } from '@/lib/client/render';
+import { CodeEditor } from './code-editor';
 import { DocumentSelect } from './document-select';
 import { useWorkbench } from './workbench-provider';
 
@@ -56,11 +58,10 @@ export function JsonView() {
           </ul>
         )}
         {doc ? (
-          <CodeBlock code={code} language="json" className="text-xs">
-            <div className="absolute top-1 right-1">
-              <CodeBlockCopyButton />
-            </div>
-          </CodeBlock>
+          <div className="relative overflow-hidden rounded-md border">
+            <CodeEditor value={code} label="Document JSON" language="json" readOnly autoHeight />
+            <CopyButton text={code} />
+          </div>
         ) : (
           <p className="text-muted-foreground text-sm">No documents found.</p>
         )}
@@ -95,5 +96,24 @@ export function JsonView() {
         </ul>
       </div>
     </div>
+  );
+}
+
+/** Copies the JSON; the icon turns into a check for two seconds. */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard blocked (insecure origin or denied): nothing to show.
+    }
+  }
+  return (
+    <Button variant="ghost" size="icon-sm" onClick={copy} aria-label="Copy JSON" title="Copy JSON" className="absolute top-1 right-1 bg-background/80">
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </Button>
   );
 }

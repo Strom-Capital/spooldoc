@@ -76,6 +76,7 @@ export function TemplateEditor() {
         value={value}
         onChange={(next) => setDraft('html', next)}
         label="Template HTML"
+        language="html"
         placeholder="<!doctype html> ... {{ doc.invoiceNo }} ..."
       />
     </div>

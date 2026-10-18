@@ -65,6 +65,7 @@ export function DefinitionEditor() {
         value={value}
         onChange={(next) => setDraft('yaml', next)}
         label="Definition YAML"
+        language="yaml"
         placeholder={'type: invoice\nversion: 1\nsource: text\ntext:\n  page: { width: 132, length: 66 }\n  fields: []'}
       />
     </div>
