@@ -5,8 +5,15 @@ description: "Every run of every job: what was read, what was delivered, what fa
 
 The Job log lists every run of every job, newest first: the job and the
 version it used, the spooled file, what started it (Run now or the
-watcher), when it started, its status, and the files it delivered. Filter
-by job or status. Open a run to see its steps.
+watcher), when it started, its status, and the files it delivered.
+Filter by job, status and date. Open a run to see its steps.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/job-log-dark.png">
+    <img src="assets/job-log-light.png" alt="A run opened from the job log: status, the spooled file, the five steps with their timings, and the five delivered PDFs" width="900">
+  </picture>
+</p>
 
 ## Statuses
 

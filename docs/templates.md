@@ -8,6 +8,13 @@ tags (Jinja syntax). Each document the definition extracts is rendered
 through it once, to an HTML file, a PDF, or both, as the job's render step
 says. Until you write one, the starter template renders the fields in a
 header block and a table for each table, record or group.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/template-preview-dark.png">
+    <img src="assets/template-preview-light.png" alt="The render step: the HTML template in an editor on the left and the rendered invoice preview on the right, with PDF and HTML output switches" width="900">
+  </picture>
+</p>
 "Start from job" in the template editor's bar copies another job's
 template, and on request its definition, into the draft; the
 [AI assistant](ai-assistant.md) does the same when asked.

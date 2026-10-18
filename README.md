@@ -83,6 +83,13 @@ graph LR
 - **One image**: web app, Java runtime and Chromium in one container, amd64
   and arm64.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ai-assistant-dark.png">
+    <img src="docs/assets/ai-assistant-light.png" alt="The job builder: the pipeline from source to finish across the top, the sample invoice page with every extracted field highlighted, the YAML definition beside it, and the AI assistant panel on the right" width="900">
+  </picture>
+</p>
+
 ## Quick start
 
 With Docker:

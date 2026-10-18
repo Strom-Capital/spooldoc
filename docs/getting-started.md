@@ -75,6 +75,13 @@ port 3000, or on the next free port when 3000 is taken. PDF export needs
 8. **Check the job log.** Every run shows its steps, errors and the
    delivered files. See [Job log](job-log.md).
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/home-dark.png">
+    <img src="assets/home-light.png" alt="The Home page: counts of servers, output queues, jobs and runs, a chart of runs per day by status, and a Needs attention list" width="900">
+  </picture>
+</p>
+
 ## Next steps
 
 - [Configuration](configuration.md): masking, the default code page, allowed hosts.

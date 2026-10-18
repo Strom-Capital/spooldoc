@@ -7,6 +7,13 @@ A job is a pipeline from one output queue to a destination. The Jobs page
 lists them with their server, queue, trigger and last run. The job builder
 shows the pipeline as six steps, and each step opens an inspector.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/job-builder-dark.png">
+    <img src="assets/job-builder-light.png" alt="The job builder with the extract step open: six pipeline steps across the top, the sample page with field hits highlighted on the left and the definition editor on the right" width="900">
+  </picture>
+</p>
+
 | Step | What you set |
 |------|--------------|
 | Source | The server, the output queue, and filters on spooled file name, user data, job name, job user and form type. Each filter is a "contains" match; empty means any file on the queue. |
