@@ -37,7 +37,7 @@ jobs:
       # Pull requests opened with the default GITHUB_TOKEN do not start other
       # workflows, so CI skips the release pull request. Add a RELEASE_PLEASE_TOKEN
       # secret (a fine-grained token with contents and pull requests write) to run it.
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         id: release
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
