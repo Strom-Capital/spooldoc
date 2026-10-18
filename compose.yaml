@@ -1,4 +1,7 @@
-# Example: docker compose up --build, then open http://localhost:3000.
+# Example: docker compose up -d, then open http://localhost:3000. This pulls the
+# published image (ghcr.io/strom-capital/spooldoc); SPOOLDOC_VERSION in .env pins a
+# release such as 0.1.0, latest otherwise. docker compose up --build -d builds the
+# image from this checkout instead and tags it with the same name.
 # .env next to this file holds the settings (see apps/web/.env.example);
 # BETTER_AUTH_SECRET and SPOOLDOC_SECRET_KEY are required; the chat model is set
 # in the app under Settings. Chromium is set by the image.
@@ -26,8 +29,8 @@ services:
     restart: unless-stopped
 
   web:
+    image: ghcr.io/strom-capital/spooldoc:${SPOOLDOC_VERSION:-latest}
     build: .
-    image: spooldoc
     ports:
       - "3000:3000"
     env_file: .env
