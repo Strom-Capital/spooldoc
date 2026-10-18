@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { api, errorText } from '@/lib/client/api';
-import { splfKey } from '@/lib/job-spec';
+import { filterParams, splfKey } from '@/lib/job-spec';
 import type { RunView, SpooledFileView } from '@/lib/types';
 import { useJob } from './job-provider';
 
@@ -115,13 +115,13 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<RunView[] | null>(null);
   const source = activeSpec?.source;
+  const filterKey = source ? filterParams(source.filter).toString() : '';
 
   useEffect(() => {
     if (!open || !source?.serverId) return;
     let cancelled = false;
-    const params = new URLSearchParams({ job: job.id, limit: '200' });
-    if (source.filter.splf) params.set('name', source.filter.splf);
-    if (source.filter.userData) params.set('userData', source.filter.userData);
+    const params = new URLSearchParams({ forJob: job.id, limit: '200' });
+    filterParams(source.filter, params);
     api<{ files: SpooledFileView[] }>(
       `/api/servers/${source.serverId}/queues/${encodeURIComponent(source.library)}/${encodeURIComponent(source.queue)}/files?${params}`,
     ).then(
@@ -131,7 +131,9 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
     return () => {
       cancelled = true;
     };
-  }, [open, job.id, source?.serverId, source?.library, source?.queue, source?.filter.splf, source?.filter.userData]);
+    // The filters are compared by value through filterKey.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, job.id, source?.serverId, source?.library, source?.queue, filterKey]);
 
   const shown = (files ?? []).filter((file) => showAll || (file.status === 'READY' && !file.processedBy));
   const finish = activeSpec?.finish.action ?? 'none';

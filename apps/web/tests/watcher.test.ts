@@ -27,10 +27,10 @@ let watcher: InstanceType<typeof Watcher>;
 const fake = (): FakeConnection => connections.get('ibmi.example.com|DEMOUSER')!;
 
 /** A job watching the invoice queue, with an active version. */
-async function watchingJob(overrides: { paused?: boolean } = {}): Promise<string> {
+async function watchingJob(overrides: { paused?: boolean; backlog?: boolean } = {}): Promise<string> {
   const spec = {
     ...emptySpec({ serverId, library, queue, destinationId: await builtinDestination() }),
-    trigger: { mode: 'watch' as const },
+    trigger: { mode: 'watch' as const, backlog: overrides.backlog ?? false },
     extract: { definition: fixtureText('invoice', 'definition.yaml') },
   };
   const [job] = await db()
@@ -75,6 +75,37 @@ describe('watcher', () => {
     expect(job!.lastWatchAt).toBeInstanceOf(Date);
   });
 
+  it('with the backlog on, runs the ready files already on the queue, once', async () => {
+    await watchingJob({ backlog: true });
+    const conn = new FakeConnection();
+    connections.set('ibmi.example.com|DEMOUSER', conn);
+    conn.status.set(key, 'READY');
+
+    await watcher.tick();
+    const [run] = await runRows();
+    expect(run).toMatchObject({ status: 'success', trigger: 'watch' });
+    clock += 31_000;
+    await watcher.tick();
+    expect(await runRows()).toHaveLength(1);
+  });
+
+  it('runs files an earlier stock-taking set aside once the backlog is turned on', async () => {
+    const jobId = await watchingJob();
+    const conn = new FakeConnection();
+    connections.set('ibmi.example.com|DEMOUSER', conn);
+    conn.status.set(key, 'READY');
+    await watcher.tick();
+    expect(await runRows()).toEqual([]);
+
+    // A new active version with the backlog on (what activating it does to the job).
+    const [version] = await db().select().from(jobVersions).where(eq(jobVersions.jobId, jobId));
+    const spec = { ...version!.spec, trigger: { mode: 'watch' as const, backlog: true } };
+    await db().insert(jobVersions).values({ jobId, number: 2, spec });
+    await db().update(jobs).set({ activeVersion: 2, lastWatchAt: null }).where(eq(jobs.id, jobId));
+    await watcher.tick();
+    expect(await runRows()).toHaveLength(1);
+  });
+
   it('runs a file that becomes ready after watching started, holds it and does not run it again', async () => {
     await watchingJob();
     await watcher.tick(); // takes stock: nothing ready yet
@@ -92,10 +123,15 @@ describe('watcher', () => {
   });
 
   it('asks the IBM i only for ready files with the job filters', async () => {
-    await watchingJob();
+    const jobId = await watchingJob();
+    const [version] = await db().select().from(jobVersions).where(eq(jobVersions.jobId, jobId));
+    const filter = { splf: 'SPD', userData: '', jobName: 'QPRTJOB', jobUser: 'DEMOUSER', formType: '' };
+    await db().insert(jobVersions).values({ jobId, number: 2, spec: { ...version!.spec, source: { ...version!.spec.source, filter } } });
+    await db().update(jobs).set({ activeVersion: 2 }).where(eq(jobs.id, jobId));
     await watcher.tick();
     const call = fake().calls.find((c) => c.method === 'listSpooledFiles');
-    expect(call?.args[1]).toMatchObject({ status: ['READY'] });
+    expect(call?.args[1]).toMatchObject({ status: ['READY'], name: 'SPD', jobName: 'QPRTJOB', jobUser: 'DEMOUSER' });
+    expect(call?.args[1]).not.toHaveProperty('formType', '');
   });
 
   it('leaves paused jobs alone', async () => {

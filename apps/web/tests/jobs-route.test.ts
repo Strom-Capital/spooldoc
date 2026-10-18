@@ -119,6 +119,19 @@ describe('jobs', () => {
     expect((await broken.json()).templateErrors.length).toBeGreaterThan(0);
   });
 
+  it('takes stock again when a watching job gets a version with the backlog on', async () => {
+    const id = await readyJob();
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { trigger: { mode: 'watch', backlog: false } } }), params({ id }));
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    await db().update(jobs).set({ lastWatchAt: new Date() }).where(eq(jobs.id, id));
+
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { trigger: { mode: 'watch', backlog: true } } }), params({ id }));
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    const [row] = await db().select().from(jobs).where(eq(jobs.id, id));
+    expect(row!.activeVersion).toBe(2);
+    expect(row!.lastWatchAt).toBeNull();
+  });
+
   it('refuses to save an incomplete version and lists what is missing', async () => {
     const id = await newJob();
     const response = await versions.POST(post(`/api/jobs/${id}/versions`, { note: 'first' }), params({ id }));

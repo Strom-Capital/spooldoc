@@ -13,9 +13,10 @@ export const dynamic = 'force-dynamic';
 const OBJECT_NAME = /^[A-Za-z0-9$#@_.]{1,10}$/;
 
 /**
- * Spooled files of one output queue, newest first, filtered by `name` and `userData`
- * ("contains") and `status` (comma-separated). With `job`, each file says which run of
- * that job already processed it.
+ * Spooled files of one output queue, newest first, filtered by `name`, `userData`,
+ * `job` (the qualified IBM i job), `jobName`, `jobUser` and `formType` ("contains") and
+ * `status` (comma-separated). With `forJob` (a Spooldoc job id), each file says which
+ * run of that job already processed it.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string; lib: string; name: string }> }): Promise<Response> {
   const auth = await guard(request);
@@ -28,10 +29,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
   const search = new URL(request.url).searchParams;
   const limit = Number(search.get('limit') ?? '');
-  const jobId = search.get('job');
+  const jobId = search.get('forJob');
   const filter = {
     name: search.get('name')?.slice(0, 10) || undefined,
     userData: search.get('userData')?.slice(0, 10) || undefined,
+    job: search.get('job')?.slice(0, 28) || undefined,
+    jobName: search.get('jobName')?.slice(0, 10) || undefined,
+    jobUser: search.get('jobUser')?.slice(0, 10) || undefined,
+    formType: search.get('formType')?.slice(0, 10) || undefined,
     status: search.get('status')?.split(',').filter(Boolean).slice(0, 10),
     limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : undefined,
   };

@@ -177,15 +177,21 @@ export async function saveVersion(job: JobRow, input: { note: string; activate: 
 /**
  * Make a version the active one. Turning watching on (from a manual or no version)
  * starts it from now: the watcher first records the files already on the queue and
- * leaves them for Run now.
+ * leaves them for Run now, unless the version's trigger has `backlog`, which runs them.
  */
 async function activate(tx: Tx, job: JobRow, number: number, spec: JobSpec): Promise<void> {
   const before = await activeSpec(job, tx);
   const startsWatching = spec.trigger.mode === 'watch' && before?.trigger.mode !== 'watch';
+  // Turning the backlog on while watching takes stock again, so the waiting files are run.
+  const startsBacklog = spec.trigger.mode === 'watch' && spec.trigger.backlog && !before?.trigger.backlog;
   await tx
     .update(jobs)
     // lastWatchAt null makes the watcher take stock of the queue before it runs anything.
-    .set({ activeVersion: number, ...(startsWatching ? { watchSince: new Date(), lastWatchAt: null, lastWatchError: null } : {}) })
+    .set({
+      activeVersion: number,
+      ...(startsWatching ? { watchSince: new Date(), lastWatchAt: null, lastWatchError: null } : {}),
+      ...(startsBacklog && !startsWatching ? { lastWatchAt: null } : {}),
+    })
     .where(eq(jobs.id, job.id));
 }
 

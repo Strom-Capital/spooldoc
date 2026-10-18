@@ -17,6 +17,34 @@ export type QueueRefSpec = z.infer<typeof queueRefSchema>;
 export const OUTPUT_FORMATS = ['pdf', 'html'] as const;
 export type OutputFormat = (typeof OUTPUT_FORMATS)[number];
 
+/** Which spooled files of the queue a job takes. Each is a "contains" match; empty means any. */
+const sourceFilterSchema = z.object({
+  splf: z.string().max(10).default(''),
+  userData: z.string().max(10).default(''),
+  jobName: z.string().max(10).default(''),
+  jobUser: z.string().max(10).default(''),
+  formType: z.string().max(10).default(''),
+});
+export type SourceFilter = z.infer<typeof sourceFilterSchema>;
+const EMPTY_FILTER: SourceFilter = { splf: '', userData: '', jobName: '', jobUser: '', formType: '' };
+
+/** A job's filters as the files API's query parameters. */
+export function filterParams(filter: SourceFilter, params = new URLSearchParams()): URLSearchParams {
+  const add = (key: string, value: string) => value.trim() && params.set(key, value.trim());
+  add('name', filter.splf);
+  add('userData', filter.userData);
+  add('jobName', filter.jobName);
+  add('jobUser', filter.jobUser);
+  add('formType', filter.formType);
+  return params;
+}
+
+/** A job's filters as the IBM i spooled file filter. */
+export function ibmiFilter(filter: SourceFilter): { name?: string; userData?: string; jobName?: string; jobUser?: string; formType?: string } {
+  const value = (text: string) => text.trim() || undefined;
+  return { name: value(filter.splf), userData: value(filter.userData), jobName: value(filter.jobName), jobUser: value(filter.jobUser), formType: value(filter.formType) };
+}
+
 /** What happens to a spooled file after every document was delivered. */
 export const FINISH_ACTIONS = ['hold', 'move', 'delete', 'none'] as const;
 export type FinishAction = (typeof FINISH_ACTIONS)[number];
@@ -28,12 +56,16 @@ export const jobSpecSchema = z.object({
       serverId: z.string().uuid().nullable().default(null),
       library: z.string().default(''),
       queue: z.string().default(''),
-      filter: z
-        .object({ splf: z.string().max(10).default(''), userData: z.string().max(10).default('') })
-        .default({ splf: '', userData: '' }),
+      filter: sourceFilterSchema.default(EMPTY_FILTER),
     })
-    .default({ serverId: null, library: '', queue: '', filter: { splf: '', userData: '' } }),
-  trigger: z.object({ mode: z.enum(['manual', 'watch']).default('manual') }).default({ mode: 'manual' }),
+    .default({ serverId: null, library: '', queue: '', filter: EMPTY_FILTER }),
+  trigger: z
+    .object({
+      mode: z.enum(['manual', 'watch']).default('manual'),
+      /** When watching starts, also run the files already ready on the queue (else they are left for Run now). */
+      backlog: z.boolean().default(false),
+    })
+    .default({ mode: 'manual', backlog: false }),
   extract: z.object({ definition: z.string().max(200_000).default('') }).default({ definition: '' }),
   render: z
     .preprocess(

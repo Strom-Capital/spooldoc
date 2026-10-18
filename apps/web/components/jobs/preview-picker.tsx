@@ -7,7 +7,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Spinner } from '@/components/ui/spinner';
 import { api, errorText } from '@/lib/client/api';
-import { splfKey } from '@/lib/job-spec';
+import { filterParams, splfKey } from '@/lib/job-spec';
 import type { SampleView } from '@/lib/client/render';
 import type { SpooledFileView } from '@/lib/types';
 import { useJob } from './job-provider';
@@ -27,12 +27,11 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const ready = !!serverId && !!library && !!queue;
-  const sourceKey = `${serverId}/${library}/${queue}/${filter.splf}/${filter.userData}`;
+  const sourceKey = `${serverId}/${library}/${queue}?${filterParams(filter)}`;
 
   async function list(limit: number): Promise<SpooledFileView[]> {
     const params = new URLSearchParams({ limit: String(limit) });
-    if (filter.splf) params.set('name', filter.splf);
-    if (filter.userData) params.set('userData', filter.userData);
+    filterParams(filter, params);
     const data = await api<{ files: SpooledFileView[] }>(
       `/api/servers/${serverId}/queues/${encodeURIComponent(library)}/${encodeURIComponent(queue)}/files?${params}`,
     );

@@ -2,8 +2,8 @@ import 'server-only';
 
 import { parseSpooledFileEntry, type Connection, type OutputQueue, type QueueRef, type SpooledFileEntry } from '@spooldoc/ibmi';
 import type { SpooledFileId } from '@spooldoc/core';
-import { and, eq, inArray, isNotNull } from 'drizzle-orm';
-import { jobSpecSchema, splfKey, type JobSpec } from '@/lib/job-spec';
+import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
+import { ibmiFilter, jobSpecSchema, splfKey, type JobSpec } from '@/lib/job-spec';
 import { getDb, getLocks } from './db';
 import { jobs, jobVersions, watchSeen } from './db/schema';
 import { redact } from './http';
@@ -179,7 +179,8 @@ export class Watcher {
   /**
    * Run every new ready file of a queue for each job watching it. With `entry`, only that
    * file (it just became ready). A job that has not taken stock since watching started
-   * first records the files already there, without running them.
+   * first records the files already there, without running them, unless its trigger
+   * has `backlog`: then those files are run too.
    */
   async dispatch(opened: ServerConnection, queue: QueueRef, list: WatchedJob[], entry: SpooledFileId | null): Promise<void> {
     for (const job of list) {
@@ -188,13 +189,18 @@ export class Watcher {
       try {
         const filter = job.spec.source.filter;
         let files: SpooledFileEntry[] = await opened.conn.listSpooledFiles(queue, {
-          name: filter.splf || undefined,
-          userData: filter.userData || undefined,
+          ...ibmiFilter(filter),
           status: ['READY'],
           limit: 500,
         });
         const db = getDb();
-        if (job.lastWatchAt === null) {
+        if (job.lastWatchAt === null && job.spec.trigger.backlog) {
+          // Taking stock with the backlog on: every ready file no run of this job has
+          // processed is run below, including files earlier stock-takings set aside.
+          await db.delete(watchSeen).where(and(eq(watchSeen.jobId, job.jobId), isNull(watchSeen.runId)));
+          job.lastWatchAt = new Date(this.deps.now());
+          await db.update(jobs).set({ lastWatchAt: job.lastWatchAt }).where(eq(jobs.id, job.jobId));
+        } else if (job.lastWatchAt === null) {
           const existing = files.filter((f) => !entry || !sameFile(f, entry));
           if (existing.length > 0) {
             await db

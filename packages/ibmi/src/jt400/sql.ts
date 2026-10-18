@@ -66,6 +66,23 @@ export function spooledFilesQuery(queue: QueueRef, filter: SpooledFileFilter = {
     where.push(likeClause("COALESCE(USER_DATA, '')"));
     params.push(containsPattern(filter.userData));
   }
+  if (filter.job?.trim()) {
+    where.push(likeClause("JOB_NAME"));
+    params.push(containsPattern(filter.job));
+  }
+  if (filter.jobName?.trim()) {
+    // JOB_NAME is number/user/name and the name has no slash: text after the second slash is in the name.
+    where.push(likeClause("JOB_NAME"));
+    params.push(`%/%/${containsPattern(filter.jobName).slice(1)}`);
+  }
+  if (filter.jobUser?.trim()) {
+    where.push(likeClause("USER_NAME"));
+    params.push(containsPattern(filter.jobUser));
+  }
+  if (filter.formType?.trim()) {
+    where.push(likeClause("COALESCE(FORM_TYPE, '')"));
+    params.push(containsPattern(filter.formType));
+  }
   const statuses = [...new Set((filter.status ?? []).map((s) => s.trim().toUpperCase()).filter(Boolean))];
   if (statuses.length > 0) {
     where.push(`STATUS IN (${statuses.map(() => "?").join(", ")})`);

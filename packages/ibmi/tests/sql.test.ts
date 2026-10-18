@@ -61,6 +61,17 @@ describe("spooledFilesQuery", () => {
     expect(params).toEqual(["MYLIB", "FORMS", "%SPD\\_%", "%PICK%"]);
   });
 
+  it("filters by job, job name, job user and form type", () => {
+    const { sql, params } = spooledFilesQuery(
+      { library: "MYLIB", name: "FORMS" },
+      { job: "123456/demo", jobName: "inv_prt", jobUser: "demo", formType: "*std" },
+    );
+    expect(sql).toContain(
+      "WHERE UPPER(JOB_NAME) LIKE ? ESCAPE '\\' AND UPPER(JOB_NAME) LIKE ? ESCAPE '\\' AND UPPER(USER_NAME) LIKE ? ESCAPE '\\' AND UPPER(COALESCE(FORM_TYPE, '')) LIKE ? ESCAPE '\\'",
+    );
+    expect(params).toEqual(["MYLIB", "FORMS", "%123456/DEMO%", "%/%/INV\\_PRT%", "%DEMO%", "%*STD%"]);
+  });
+
   it("filters by status", () => {
     const { sql, params } = spooledFilesQuery({ library: "MYLIB", name: "FORMS" }, { status: ["ready", "READY"] });
     expect(sql).toContain("WHERE STATUS IN (?)");

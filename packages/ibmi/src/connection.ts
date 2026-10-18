@@ -39,10 +39,17 @@ export interface OutputQueueFilter {
   libraries?: string[];
 }
 
-/** Filter for `listSpooledFiles`. `name` and `userData` are case-insensitive "contains" matches. */
+/** Filter for `listSpooledFiles`. The text filters are case-insensitive "contains" matches. */
 export interface SpooledFileFilter {
   name?: string;
   userData?: string;
+  /** Anywhere in the qualified job, `number/user/name`. */
+  job?: string;
+  /** In the job name (the last part of the qualified job). */
+  jobName?: string;
+  /** In the user the job ran under. */
+  jobUser?: string;
+  formType?: string;
   /** Only files with one of these statuses, such as `READY` or `HELD`. */
   status?: string[];
   /** Maximum number of entries, newest first. Default 200. */
