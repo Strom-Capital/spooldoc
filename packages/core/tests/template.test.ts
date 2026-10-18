@@ -24,6 +24,23 @@ describe("templates", () => {
     expect(r.html).toContain("15.10.2026");
   });
 
+  it.each([
+    `{{ range.constructor("return process.pid")() }}`,
+    `{{ range["constr" + "uctor"]("return process.pid")() }}`,
+    `{{ "".__proto__ }}`,
+    `{% set f = cycler %}{{ f.prototype }}`,
+  ])("refuses template code that reaches Function: %s", (template) => {
+    const r = renderTemplate(template, { doc: {} });
+    expect(r.html).toBe("");
+    expect(r.errors[0]).toMatch(/Templates cannot use/);
+  });
+
+  it("refuses Function in output.name as well", () => {
+    const { definition } = loadFixture("invoice");
+    const def = { ...definition, output: { name: `{{ range.constructor("return 'pwned'")() }}` } };
+    expect(documentName(def, {}, 0)).toBe(`${definition.type}-1`);
+  });
+
   it("formats with the filters", () => {
     expect(formatMoney(1234.5)).toBe("1,234.50");
     expect(formatMoney(-0.5, "EUR")).toBe("-0.50 EUR");

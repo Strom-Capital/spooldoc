@@ -46,30 +46,56 @@ function open(): DbState {
   const db = drizzle(client, { schema }) as unknown as Db;
   return {
     db,
-    // Session-level advisory locks belong to one connection, so each holder reserves one.
-    locks: {
-      async tryLock(key) {
-        const reserved = await client.reserve();
-        try {
-          const [row] = await reserved<{ ok: boolean }[]>`select pg_try_advisory_lock(hashtext(${key})) as ok`;
-          if (!row?.ok) {
-            reserved.release();
-            return null;
-          }
-        } catch (error) {
-          reserved.release();
-          throw error;
-        }
-        return async () => {
-          try {
-            await reserved`select pg_advisory_unlock(hashtext(${key}))`;
-          } finally {
-            reserved.release();
-          }
-        };
-      },
-    },
+    locks: sessionLocks(client),
     close: () => client.end({ timeout: 5 }),
+  };
+}
+
+/**
+ * Advisory locks held on one reserved connection for the whole process, so holders
+ * never take connections from the pool: a reader that keeps its lock for good, or a
+ * run that holds a job lock while it queries, cannot starve the pool. A session may
+ * take its own advisory lock again, so keys this process holds are refused here first.
+ */
+export function sessionLocks(client: postgres.Sql): LockProvider {
+  const held = new Set<string>();
+  let session: Promise<postgres.ReservedSql> | null = null;
+  const connection = () => (session ??= client.reserve());
+  // A failed query may mean a lost connection, whose locks are gone: start over on the next call.
+  const drop = () => {
+    const lost = session;
+    session = null;
+    void lost?.then((reserved) => reserved.release()).catch(() => undefined);
+  };
+  return {
+    async tryLock(key) {
+      if (held.has(key)) return null;
+      held.add(key);
+      try {
+        const reserved = await connection();
+        const [row] = await reserved<{ ok: boolean }[]>`select pg_try_advisory_lock(hashtext(${key})) as ok`;
+        if (!row?.ok) {
+          held.delete(key);
+          return null;
+        }
+      } catch (error) {
+        held.delete(key);
+        drop();
+        throw error;
+      }
+      let released = false;
+      return async () => {
+        if (released) return;
+        released = true;
+        try {
+          await (await connection())`select pg_advisory_unlock(hashtext(${key}))`;
+        } catch {
+          drop();
+        } finally {
+          held.delete(key);
+        }
+      };
+    },
   };
 }
 

@@ -80,6 +80,16 @@ describe('/api/servers', () => {
     expect(response.status).toBe(422);
   });
 
+  it('refuses a new host or user without the password, so the saved one is never sent elsewhere', async () => {
+    const { id } = await (await addServer()).json();
+    for (const body of [{ host: 'elsewhere.example.com' }, { user: 'other' }]) {
+      const response = await one.PATCH(appRequest(`/api/servers/${id}`, { method: 'PATCH', body, headers: auth }), params({ id }));
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toMatch(/^password:/);
+    }
+    expect((await db().select().from(servers))[0]).toMatchObject({ host: 'ibmi.example.com', user: 'DEMOUSER' });
+  });
+
   it('tests the sign-on and records the result', async () => {
     const { id } = await (await addServer()).json();
     const response = await test.POST(appRequest(`/api/servers/${id}/test`, { method: 'POST', headers: auth }), params({ id }));

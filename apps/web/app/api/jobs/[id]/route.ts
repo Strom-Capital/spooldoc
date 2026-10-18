@@ -5,6 +5,7 @@ import { guard } from '@/lib/server/auth';
 import { getDb } from '@/lib/server/db';
 import { jobs } from '@/lib/server/db/schema';
 import { errorResponse, json, readJson } from '@/lib/server/http';
+import { lockJobRow } from '@/lib/server/draft-store';
 import { getJobRow, jobDetail } from '@/lib/server/jobs';
 
 export const dynamic = 'force-dynamic';
@@ -37,8 +38,8 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
   if ('response' in auth) {
     return auth.response;
   }
-  const row = await getJobRow((await params).id);
-  if (!row) {
+  const id = (await params).id;
+  if (!(await getJobRow(id))) {
     return errorResponse(404, 'Job not found.');
   }
   const body = await readJson(request, patchSchema);
@@ -46,22 +47,28 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
     return body.response;
   }
   const change = body.data;
-  if (Object.keys(change).length === 0) {
-    return json(await jobDetail(row));
-  }
-  const { draft: patch, ...rest } = change;
-  const values: Partial<typeof jobs.$inferInsert> = { ...rest };
-  if (patch) {
-    values.draft = jobSpecSchema.parse({ ...jobSpecSchema.parse(row.draft), ...patch });
-  }
-  // Resuming starts from now: files that arrived while paused are left for Run now.
-  if (change.paused === false && row.paused) {
-    values.watchSince = new Date();
-    values.lastWatchAt = null;
-    values.lastWatchError = null;
-  }
-  const [updated] = await getDb().update(jobs).set(values).where(eq(jobs.id, row.id)).returning();
-  return json(await jobDetail(updated!));
+  // The row stays locked while the draft parts are merged, so concurrent saves of
+  // different parts (an editor and a chat tool) both land.
+  const updated = await getDb().transaction(async (tx) => {
+    const row = await lockJobRow(tx, id);
+    if (!row || Object.keys(change).length === 0) {
+      return row;
+    }
+    const { draft: patch, ...rest } = change;
+    const values: Partial<typeof jobs.$inferInsert> = { ...rest };
+    if (patch) {
+      values.draft = jobSpecSchema.parse({ ...jobSpecSchema.parse(row.draft), ...patch });
+    }
+    // Resuming starts from now: files that arrived while paused are left for Run now.
+    if (change.paused === false && row.paused) {
+      values.watchSince = new Date();
+      values.lastWatchAt = null;
+      values.lastWatchError = null;
+    }
+    const [next] = await tx.update(jobs).set(values).where(eq(jobs.id, row.id)).returning();
+    return next ?? null;
+  });
+  return updated ? json(await jobDetail(updated)) : errorResponse(404, 'Job not found.');
 }
 
 /** Delete a job with its versions, runs and outputs. */

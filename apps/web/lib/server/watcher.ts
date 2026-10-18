@@ -36,6 +36,14 @@ const defaultDeps: WatcherDeps = { connect: connectServer, run: runJob, now: Dat
 const QUEUE_INFO_MS = 60_000;
 /** How often the watcher looks at the jobs. */
 export const TICK_MS = 10_000;
+/** Files a job looks at per pass, newest first. */
+const LIST_LIMIT = 500;
+/**
+ * Files listed when a job takes stock without the backlog: every one must be recorded,
+ * or an older file that was past the list would count as new once newer ones are gone.
+ * This is the most the driver lists.
+ */
+const STOCK_TAKE_LIMIT = 10_000;
 /** How often old runs and samples are deleted (see `cleanUp`). */
 export const CLEANUP_MS = 60 * 60_000;
 
@@ -84,9 +92,11 @@ export class Watcher {
   /** Start ticking. */
   start(): void {
     if (this.timer) return;
-    this.timer = setInterval(() => void this.tick(), TICK_MS);
+    // A tick that fails (the database is down) is tried again on the next one.
+    const tick = () => void this.tick().catch(() => undefined);
+    this.timer = setInterval(tick, TICK_MS);
     this.timer.unref?.();
-    void this.tick();
+    tick();
   }
 
   /** Stop ticking and stop the readers. */
@@ -191,7 +201,7 @@ export class Watcher {
         let files: SpooledFileEntry[] = await opened.conn.listSpooledFiles(queue, {
           ...ibmiFilter(filter),
           status: watchedStatuses(job.spec.trigger),
-          limit: 500,
+          limit: job.lastWatchAt === null && !job.spec.trigger.backlog ? STOCK_TAKE_LIMIT : LIST_LIMIT,
         });
         const db = getDb();
         if (job.lastWatchAt === null && job.spec.trigger.backlog) {
@@ -321,9 +331,19 @@ export async function watchedJobs(): Promise<WatchedJob[]> {
     .from(jobs)
     .innerJoin(jobVersions, and(eq(jobVersions.jobId, jobs.id), eq(jobVersions.number, jobs.activeVersion)))
     .where(and(eq(jobs.paused, false), isNotNull(jobs.activeVersion)));
-  return rows
-    .map((row) => ({ jobId: row.jobId, version: row.version!, spec: jobSpecSchema.parse(row.spec), lastWatchAt: row.lastWatchAt }))
-    .filter((job) => job.spec.trigger.mode === 'watch' && job.spec.source.serverId && job.spec.source.library && job.spec.source.queue);
+  // A version that no longer reads as a spec stops only its own job, with the reason on the job.
+  const broken: string[] = [];
+  const watched: WatchedJob[] = [];
+  for (const row of rows) {
+    const spec = jobSpecSchema.safeParse(row.spec);
+    if (!spec.success) {
+      broken.push(row.jobId);
+      continue;
+    }
+    watched.push({ jobId: row.jobId, version: row.version!, spec: spec.data, lastWatchAt: row.lastWatchAt });
+  }
+  await markError(broken, 'The active version cannot be read. Save the job as a new version.');
+  return watched.filter((job) => job.spec.trigger.mode === 'watch' && job.spec.source.serverId && job.spec.source.library && job.spec.source.queue);
 }
 
 const KEY = Symbol.for('spooldoc.watcher');

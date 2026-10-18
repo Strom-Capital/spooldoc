@@ -183,6 +183,16 @@ describe('runs', () => {
     expect(response.status).toBe(409);
   });
 
+  it('lists no runs for a job id that is not a UUID, not every job\'s', async () => {
+    const id = await readyJob();
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }));
+    const mine = await (await runsRoute.GET(get(`/api/jobs/${id}/runs`), params({ id }))).json();
+    expect(mine.runs).toHaveLength(1);
+    const other = await (await runsRoute.GET(get('/api/jobs/foo/runs'), params({ id: 'foo' }))).json();
+    expect(other).toEqual({ runs: [], next: null });
+  });
+
   it('runs a file: captures it, delivers one PDF per document, holds it and logs every step', async () => {
     const spies = spyConsole();
     const id = await readyJob();

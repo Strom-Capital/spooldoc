@@ -28,7 +28,30 @@ export function pad(value: unknown, width: number, side: "left" | "right" = "lef
   return side === "right" ? s.padEnd(width, c) : s.padStart(width, c);
 }
 
+/** Property names that lead from a template value to `Function`, and from there to code in this process. */
+const BLOCKED_MEMBERS = new Set(["constructor", "prototype", "__proto__", "__defineGetter__", "__defineSetter__", "__lookupGetter__", "__lookupSetter__"]);
+
+type MemberLookup = ((obj: unknown, val: unknown) => unknown) & { guarded?: true };
+
+/**
+ * Nunjucks has no sandbox: `{{ range.constructor("...")() }}` would run any code on the
+ * server. Every `a.b` and `a["b"]` in a compiled template goes through
+ * `runtime.memberLookup`, so the names that reach `Function` are refused there.
+ */
+function guardMemberLookup(): void {
+  const runtime = nunjucks.runtime as unknown as { memberLookup: MemberLookup };
+  const lookup = runtime.memberLookup;
+  if (lookup.guarded) return;
+  const guarded: MemberLookup = (obj, val) => {
+    if (BLOCKED_MEMBERS.has(String(val))) throw new Error(`Templates cannot use ${JSON.stringify(String(val))}.`);
+    return lookup(obj, val);
+  };
+  guarded.guarded = true;
+  runtime.memberLookup = guarded;
+}
+
 function environment(autoescape: boolean): nunjucks.Environment {
+  guardMemberLookup();
   const env = new nunjucks.Environment([], { autoescape, throwOnUndefined: false, trimBlocks: true, lstripBlocks: true });
   env.addFilter("money", (v: unknown, currency?: string) => formatMoney(v, currency));
   env.addFilter("date", (v: unknown, format?: string) => formatDate(v, format));

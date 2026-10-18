@@ -57,7 +57,11 @@ export interface RunFilter {
 /** A page of the job log, newest first, and the cursor of the next page. */
 export async function listRuns(filter: RunFilter): Promise<{ runs: RunView[]; next: number | null }> {
   const where: SQL[] = [];
-  if (filter.jobId && UUID.test(filter.jobId)) where.push(eq(runs.jobId, filter.jobId));
+  if (filter.jobId) {
+    // An id that is not a UUID is no job: no runs, rather than every job's.
+    if (!UUID.test(filter.jobId)) return { runs: [], next: null };
+    where.push(eq(runs.jobId, filter.jobId));
+  }
   if (filter.status) where.push(eq(runs.status, filter.status));
   if (filter.from) where.push(gte(runs.startedAt, filter.from));
   if (filter.to) where.push(lte(runs.startedAt, filter.to));

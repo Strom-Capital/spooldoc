@@ -5,16 +5,17 @@
 #
 # For development, start only the database (docker compose up -d db) and set
 # DATABASE_URL=postgres://spooldoc:spooldoc@localhost:5433/spooldoc in
-# apps/web/.env.local.
+# apps/web/.env.local. The database port is published on this machine only; set
+# POSTGRES_PASSWORD (URL-safe characters) in .env for anything but local development.
 services:
   db:
     image: postgres:18
     environment:
       POSTGRES_USER: spooldoc
-      POSTGRES_PASSWORD: spooldoc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-spooldoc}
       POSTGRES_DB: spooldoc
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql
     healthcheck:
@@ -31,7 +32,7 @@ services:
       - "3002:3000"
     env_file: .env
     environment:
-      DATABASE_URL: postgres://spooldoc:spooldoc@db:5432/spooldoc
+      DATABASE_URL: postgres://spooldoc:${POSTGRES_PASSWORD:-spooldoc}@db:5432/spooldoc
     depends_on:
       db:
         condition: service_healthy

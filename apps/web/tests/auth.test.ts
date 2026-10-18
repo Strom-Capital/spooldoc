@@ -21,6 +21,12 @@ describe('app login', () => {
     expect(await userCount()).toBe(1);
   });
 
+  it('lets only one of two sign-ups at the same time through', async () => {
+    const responses = await Promise.all([signUp('a@example.com'), signUp('b@example.com')]);
+    expect(responses.map((r) => r.status).sort()).toEqual([200, 429]);
+    expect(await userCount()).toBe(1);
+  });
+
   it('finds the user from the session cookie and answers 401 without one', async () => {
     const cookie = sessionCookie(await signUp());
     const user = await currentUser(appRequest('/api/jobs', { headers: { cookie } }));

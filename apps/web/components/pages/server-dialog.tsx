@@ -17,7 +17,7 @@ const selectClass =
 /**
  * Add a server (`server` null) or edit one. Saving signs on first, so a wrong password
  * or an unreachable host is reported here. When editing, an empty password keeps the
- * saved one.
+ * saved one, unless the host or user changes: the saved password is never sent elsewhere.
  */
 export function ServerDialog({
   server,
@@ -111,7 +111,7 @@ export function ServerDialog({
                 type="password"
                 required={!server}
                 autoComplete="new-password"
-                placeholder={server ? 'Unchanged' : undefined}
+                placeholder={server ? 'Unchanged (enter it for a new host or user)' : undefined}
               />
             </div>
           </div>

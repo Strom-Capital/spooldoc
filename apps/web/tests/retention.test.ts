@@ -98,11 +98,14 @@ describe('cleanUp', () => {
     expect(seen.find((s) => s.splfKey === splfKey({ ...sample.splf, number: 1 }))).toMatchObject({ jobId, runId: null });
   });
 
-  it('keeps runs that are still running, however old', async () => {
-    const running = await insertRun({ startedAt: daysAgo(400), finishedAt: null, number: 1 });
+  it('keeps runs that are still running, and fails the ones a restart cut off', async () => {
+    const cutOff = await insertRun({ startedAt: daysAgo(400), finishedAt: null, number: 1 });
+    const running = await insertRun({ startedAt: new Date(NOW.getTime() - 60_000), finishedAt: null, number: 2 });
 
     expect(await cleanUp(30, NOW)).toEqual({ runs: 0, samples: 0 });
-    expect(await ids(db().select({ id: runs.id }).from(runs))).toEqual([running.runId]);
+    const rows = await db().select().from(runs);
+    expect(rows.find((r) => r.id === cutOff.runId)).toMatchObject({ status: 'failed', finishedAt: NOW, error: expect.stringMatching(/cut off/) });
+    expect(rows.find((r) => r.id === running.runId)).toMatchObject({ status: 'running', finishedAt: null });
   });
 
   it('deletes samples of runs that are gone, such as those of a deleted job', async () => {

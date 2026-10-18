@@ -134,6 +134,32 @@ describe('watcher', () => {
     expect(call?.args[1]).not.toHaveProperty('formType', '');
   });
 
+  it('lists every file when taking stock, and the usual page after that', async () => {
+    await watchingJob();
+    await watcher.tick();
+    clock += 31_000;
+    await watcher.tick();
+    const limits = fake()
+      .calls.filter((c) => c.method === 'listSpooledFiles')
+      .map((c) => (c.args[1] as { limit?: number }).limit);
+    expect(limits).toEqual([10_000, 500]);
+  });
+
+  it('keeps watching other jobs when one active version cannot be read', async () => {
+    const good = await watchingJob({ backlog: true });
+    const [broken] = await db().insert(jobs).values({ name: 'Broken', draft: emptySpec({}), activeVersion: 1 }).returning();
+    // A spec from before a schema change, say: it no longer reads as one.
+    await db().insert(jobVersions).values({ jobId: broken!.id, number: 1, spec: { source: 'not a spec' } as never });
+    const conn = new FakeConnection();
+    connections.set('ibmi.example.com|DEMOUSER', conn);
+    conn.status.set(key, 'READY');
+
+    await watcher.tick();
+    expect(await runRows()).toEqual([expect.objectContaining({ jobId: good, status: 'success' })]);
+    const [row] = await db().select().from(jobs).where(eq(jobs.id, broken!.id));
+    expect(row!.lastWatchError).toMatch(/cannot be read/);
+  });
+
   it('takes held files too when the trigger says so', async () => {
     await watchingJob({ backlog: true, includeHeld: true });
     const conn = new FakeConnection();

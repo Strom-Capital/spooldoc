@@ -55,7 +55,12 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
     values.dtaqName = change.dataQueue?.name ?? null;
     values.dtaqOwned = false;
   }
-  const signOnChanged = (change.host !== undefined && change.host !== row.host) || (change.user !== undefined && change.user !== row.user) || change.password !== undefined;
+  const targetChanged = (change.host !== undefined && change.host !== row.host) || (change.user !== undefined && change.user !== row.user);
+  // The saved password is only ever sent to the host and user it was entered for.
+  if (targetChanged && change.password === undefined) {
+    return errorResponse(400, 'password: Enter the password again for the new host or user.');
+  }
+  const signOnChanged = targetChanged || change.password !== undefined;
   if (signOnChanged) {
     let old;
     try {
