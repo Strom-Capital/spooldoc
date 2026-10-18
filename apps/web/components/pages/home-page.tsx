@@ -27,6 +27,13 @@ function plural(n: number, one: string, many: string): string {
   return `${n.toLocaleString()} ${n === 1 ? one : many}`;
 }
 
+function queueDetail({ total, realtime, polled, unwatched }: DashboardView['outputQueues']): string {
+  if (total === 0) return 'No job reads a queue yet';
+  const parts = [`${realtime} real time`, `${polled} polled`];
+  if (unwatched) parts.push(`${unwatched} on demand`);
+  return parts.join(', ');
+}
+
 /** Setup progress while something is missing, then what is configured and how the runs went. */
 export function HomePage() {
   // Null on the server and while hydrating, so the page does not load the default range first.
@@ -83,11 +90,11 @@ export function HomePage() {
             detail={data ? (data.servers.failing ? plural(data.servers.failing, 'with an error', 'with errors') : data.servers.total ? 'All reachable' : 'None added yet') : ''}
           />
           <KpiTile
-            label="Data queues"
+            label="Output queues"
             icon={InboxIcon}
             href="/queues"
-            value={data?.dataQueues.total ?? null}
-            detail={data ? `${data.dataQueues.realtime} real time, ${data.dataQueues.polled} polled` : ''}
+            value={data?.outputQueues.total ?? null}
+            detail={data ? queueDetail(data.outputQueues) : ''}
           />
           <KpiTile
             label="Jobs"

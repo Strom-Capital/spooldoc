@@ -1,11 +1,12 @@
 import 'server-only';
 
 import { and, count, desc, eq, gte, type SQL, sql } from 'drizzle-orm';
-import type { DashboardRange, DashboardView, RunBucket } from '@/lib/types';
+import type { DashboardRange, DashboardView, JobSummary, RunBucket } from '@/lib/types';
 import { getDb } from './db';
 import { jobs, runs, servers } from './db/schema';
+import { listJobs } from './jobs';
 import { describeModel } from './models';
-import { watchedJobs, watchStatus } from './watcher';
+import { watchStatus } from './watcher';
 
 /** The ranges of the runs chart: how many buckets of which unit. */
 export const RANGES: Record<DashboardRange, { unit: 'hour' | 'day'; buckets: number }> = {
@@ -67,13 +68,12 @@ export async function runSeries(range: DashboardRange, tz: string): Promise<RunB
 /** Everything the Home page shows. */
 export async function dashboard(range: DashboardRange, tz: string): Promise<DashboardView> {
   const db = getDb();
-  const [serverRows, jobRows, [logged], [anyRun], model, watched, series] = await Promise.all([
-    db.select({ id: servers.id, name: servers.name, dataQueue: servers.dtaqName, lastCheckedAt: servers.lastCheckedAt, lastError: servers.lastError }).from(servers).orderBy(servers.name),
-    db.select({ id: jobs.id, name: jobs.name, paused: jobs.paused, lastWatchError: jobs.lastWatchError }).from(jobs).orderBy(jobs.name),
+  const [serverRows, jobRows, [logged], [anyRun], model, series] = await Promise.all([
+    db.select({ id: servers.id, name: servers.name, lastCheckedAt: servers.lastCheckedAt, lastError: servers.lastError }).from(servers).orderBy(servers.name),
+    listJobs(),
     db.select({ n: count() }).from(runs),
     db.select({ id: runs.id }).from(runs).limit(1),
     describeModel(),
-    watchedJobs(),
     runSeries(range, tz),
   ]);
   const failed = await db
@@ -83,6 +83,12 @@ export async function dashboard(range: DashboardRange, tz: string): Promise<Dash
     .where(and(eq(runs.status, 'failed'), gte(runs.startedAt, since(range, tz))))
     .orderBy(desc(runs.startedAt))
     .limit(5);
+
+  // The output queues jobs read from, by their active version (else the draft), and those a job watches.
+  const queueKey = (job: JobSummary) => (job.source.serverId && job.source.library && job.source.queue ? `${job.source.serverId}/${job.source.library}/${job.source.queue}` : null);
+  const watching = jobRows.filter((j) => j.mode === 'watch' && !j.paused);
+  const queues = new Set(jobRows.map(queueKey).filter(Boolean));
+  const watchedQueues = new Set(watching.map(queueKey).filter(Boolean));
 
   const totals = series.reduce(
     (sum, b) => ({ success: sum.success + b.success, warning: sum.warning + b.warning, failed: sum.failed + b.failed, skipped: sum.skipped + b.skipped }),
@@ -96,8 +102,8 @@ export async function dashboard(range: DashboardRange, tz: string): Promise<Dash
       run: !!anyRun,
     },
     servers: { total: serverRows.length, failing: serverRows.filter((s) => s.lastError).length },
-    dataQueues: { total: serverRows.filter((s) => s.dataQueue).length, ...watchStatus() },
-    jobs: { total: jobRows.length, watching: watched.length, paused: jobRows.filter((j) => j.paused).length },
+    outputQueues: { total: queues.size, ...watchStatus(), unwatched: queues.size - watchedQueues.size },
+    jobs: { total: jobRows.length, watching: watching.length, paused: jobRows.filter((j) => j.paused).length },
     runs: { ...totals, logged: logged?.n ?? 0 },
     series,
     attention: {

@@ -151,8 +151,8 @@ export interface DashboardView {
   /** Which getting-started steps are done. */
   setup: { server: boolean; ai: boolean; job: boolean; run: boolean };
   servers: { total: number; failing: number };
-  /** Servers with a data queue, and the queues this process watches in real time or by polling. */
-  dataQueues: { total: number; realtime: number; polled: number };
+  /** Output queues jobs read from: watched in real time (through a data queue) or by polling, and read only on demand. */
+  outputQueues: { total: number; realtime: number; polled: number; unwatched: number };
   jobs: { total: number; watching: number; paused: number };
   /** Runs in the range by status, and every run still in the log. */
   runs: { success: number; warning: number; failed: number; skipped: number; logged: number };

@@ -1,10 +1,11 @@
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { aiProviders, jobs, runs, settings } from '@/lib/server/db/schema';
+import { aiProviders, jobs, jobVersions, runs, settings } from '@/lib/server/db/schema';
 import type { DashboardView, RunStatus } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
-import { db, insertJob, insertServer } from './helpers/fixtures';
+import { builtinDestination, db, insertJob, insertServer } from './helpers/fixtures';
+import { emptySpec } from '@/lib/job-spec';
 import { appRequest } from './helpers/mocks';
 
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
@@ -43,7 +44,7 @@ describe('GET /api/dashboard', () => {
     const view = await load('?tz=UTC');
     expect(view.setup).toEqual({ server: false, ai: false, job: false, run: false });
     expect(view.servers).toEqual({ total: 0, failing: 0 });
-    expect(view.dataQueues).toEqual({ total: 0, realtime: 0, polled: 0 });
+    expect(view.outputQueues).toEqual({ total: 0, realtime: 0, polled: 0, unwatched: 0 });
     expect(view.jobs).toEqual({ total: 0, watching: 0, paused: 0 });
     expect(view.runs).toEqual({ success: 0, warning: 0, failed: 0, skipped: 0, logged: 0 });
     expect(view.series).toHaveLength(7);
@@ -52,11 +53,16 @@ describe('GET /api/dashboard', () => {
   });
 
   it('counts what is configured and the runs of the range by status', async () => {
-    const serverId = await insertServer({ lastCheckedAt: new Date(), dtaqLibrary: 'SPOOLDOC', dtaqName: 'SPLFQ' });
+    const serverId = await insertServer({ lastCheckedAt: new Date() });
     await insertServer({ name: 'Broken', lastCheckedAt: new Date(), lastError: 'Connection refused' });
     const jobId = await insertJob(serverId);
     const paused = await insertJob(serverId);
     await db().update(jobs).set({ paused: true, lastWatchError: 'Queue not found' }).where(eq(jobs.id, paused));
+    // A third job watches another queue through its active version.
+    const watcher = await insertJob(serverId);
+    const base = emptySpec({ serverId, library: 'MYLIB', queue: 'FORMS', destinationId: await builtinDestination() });
+    await db().insert(jobVersions).values({ jobId: watcher, number: 1, spec: { ...base, trigger: { ...base.trigger, mode: 'watch' } } });
+    await db().update(jobs).set({ activeVersion: 1 }).where(eq(jobs.id, watcher));
     await db().update(settings).set({ aiProvider: 'anthropic' });
     await db().insert(aiProviders).values({ provider: 'anthropic', apiKeyEnc: encryptSecret('sk-test') });
 
@@ -70,8 +76,8 @@ describe('GET /api/dashboard', () => {
     const view = await load('?range=7d&tz=UTC');
     expect(view.setup).toEqual({ server: true, ai: true, job: true, run: true });
     expect(view.servers).toEqual({ total: 2, failing: 1 });
-    expect(view.dataQueues.total).toBe(1);
-    expect(view.jobs).toEqual({ total: 2, watching: 0, paused: 1 });
+    expect(view.outputQueues).toEqual({ total: 2, realtime: 0, polled: 0, unwatched: 1 });
+    expect(view.jobs).toEqual({ total: 3, watching: 1, paused: 1 });
     expect(view.runs).toEqual({ success: 2, warning: 1, failed: 2, skipped: 1, logged: 8 });
     expect(view.series.find((b) => b.at === `${localDay(new Date(now - HOUR), 'UTC')}T00:00`)).toMatchObject({ success: 2, warning: 1, skipped: 1 });
     expect(view.attention.servers.map((s) => s.name)).toEqual(['Broken']);
