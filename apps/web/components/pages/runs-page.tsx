@@ -4,6 +4,7 @@ import { CheckIcon, DownloadIcon, RotateCcwIcon, ScrollTextIcon, XIcon } from 'l
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { EmptyNote, ErrorNote, Page } from '@/components/page';
 import { RunStatusBadge } from '@/components/run-status';
 import { Button } from '@/components/ui/button';
@@ -13,12 +14,14 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { Spinner } from '@/components/ui/spinner';
 import { api, errorText } from '@/lib/client/api';
 import { bytes, dateTime, duration, splfLabel } from '@/lib/client/format';
-import type { JobSummary, RunView } from '@/lib/types';
+import type { JobSummary, RunStatus, RunView } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 const selectClass = 'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30';
 
 const STEP_LABEL: Record<string, string> = { capture: 'Capture', extract: 'Extract', render: 'Render', deliver: 'Deliver', finish: 'Finish' };
+
+const RETRIED: Record<RunStatus, string> = { running: 'started', success: 'succeeded', warning: 'done with warnings', failed: 'failed', skipped: 'skipped' };
 
 function runDuration(run: RunView): string {
   return run.finishedAt ? duration(new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) : '';
@@ -102,10 +105,14 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
   async function retry(run: RunView) {
     try {
       const fresh = await api<RunView>(`/api/runs/${run.id}/retry`, { method: 'POST' });
+      const text = `Run #${fresh.seq}: ${RETRIED[fresh.status]}`;
+      if (fresh.status === 'failed') toast.error(text, { description: fresh.error ?? undefined });
+      else if (fresh.status === 'warning') toast.warning(text);
+      else toast.success(text);
       setOpen(fresh);
       await load();
     } catch (err) {
-      setError(errorText(err));
+      toast.error(`Could not retry run #${run.seq}`, { description: errorText(err) });
     }
   }
 

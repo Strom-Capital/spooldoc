@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const info = await signOn(creds);
     const [updated] = await db
       .update(servers)
-      .set({ ccsid: info.jobCcsid, vrm: info.vrm, lastCheckedAt: new Date(), lastError: null })
+      .set({ ccsid: info.jobCcsid, vrm: info.vrm, lastCheckedAt: new Date(), lastError: null, errorDismissed: null })
       .where(eq(servers.id, row.id))
       .returning();
     return json(serverView(updated!));

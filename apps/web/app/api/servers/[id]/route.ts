@@ -69,7 +69,7 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
     }
     try {
       const info = await signOn(creds);
-      Object.assign(values, { host: creds.host, user: creds.user, ccsid: info.jobCcsid, vrm: info.vrm, lastCheckedAt: new Date(), lastError: null });
+      Object.assign(values, { host: creds.host, user: creds.user, ccsid: info.jobCcsid, vrm: info.vrm, lastCheckedAt: new Date(), lastError: null, errorDismissed: null });
     } catch (error) {
       return connectionErrorResponse(error, [creds.password]);
     }

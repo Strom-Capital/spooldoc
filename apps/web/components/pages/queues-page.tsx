@@ -16,6 +16,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import { EmptyNote, ErrorNote, Page } from '@/components/page';
 import { ServerSelect } from '@/components/server-select';
 import { Button } from '@/components/ui/button';
@@ -121,22 +122,28 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   const hiddenCount = queues?.filter((queue) => queue.hidden).length ?? 0;
 
   const setHidden = useCallback(
-    async (targets: QueueView[], hidden: boolean) => {
-      if (!server || targets.length === 0) {
-        return;
-      }
+    (targets: QueueView[], hidden: boolean): Promise<void> => {
       const keys = new Set(targets.map(queueKey));
-      setQueues((current) => current?.map((queue) => (keys.has(queueKey(queue)) ? { ...queue, hidden } : queue)) ?? null);
-      setSelected(new Set());
-      try {
-        await api(`/api/servers/${server.id}/queue-prefs`, {
-          method: 'PUT',
-          body: { queues: targets.map((queue) => ({ library: queue.library, name: queue.name, hidden })) },
-        });
-      } catch (err) {
-        setError(errorText(err));
-        setQueues((current) => current?.map((queue) => (keys.has(queueKey(queue)) ? { ...queue, hidden: !hidden } : queue)) ?? null);
+      const what = targets.length === 1 ? `${targets[0]!.library}/${targets[0]!.name}` : `${targets.length} queues`;
+      // Undo applies the opposite once, without offering to undo that.
+      async function apply(hide: boolean, undoable: boolean): Promise<void> {
+        if (!server || targets.length === 0) {
+          return;
+        }
+        setQueues((current) => current?.map((queue) => (keys.has(queueKey(queue)) ? { ...queue, hidden: hide } : queue)) ?? null);
+        setSelected(new Set());
+        try {
+          await api(`/api/servers/${server.id}/queue-prefs`, {
+            method: 'PUT',
+            body: { queues: targets.map((queue) => ({ library: queue.library, name: queue.name, hidden: hide })) },
+          });
+          toast.success(hide ? `Hid ${what}` : `Showing ${what} again`, undoable ? { action: { label: 'Undo', onClick: () => void apply(!hide, false) } } : undefined);
+        } catch (err) {
+          toast.error(hide ? `Could not hide ${what}` : `Could not show ${what}`, { description: errorText(err) });
+          setQueues((current) => current?.map((queue) => (keys.has(queueKey(queue)) ? { ...queue, hidden: !hide } : queue)) ?? null);
+        }
       }
+      return apply(hidden, true);
     },
     [server, setQueues],
   );

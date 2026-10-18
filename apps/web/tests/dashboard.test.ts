@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { aiProviders, jobs, jobVersions, runs, settings } from '@/lib/server/db/schema';
+import { aiProviders, jobs, jobVersions, runs, servers, settings } from '@/lib/server/db/schema';
 import type { DashboardView, RunStatus } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
@@ -11,6 +11,7 @@ import { appRequest } from './helpers/mocks';
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
 
 const route = await import('@/app/api/dashboard/route');
+const attention = await import('@/app/api/attention/route');
 const { encryptSecret } = await import('@/lib/server/secrets');
 
 const HOUR = 60 * 60 * 1000;
@@ -24,9 +25,17 @@ async function load(query = ''): Promise<DashboardView> {
   return response.json();
 }
 
-async function insertRun(jobId: string, status: RunStatus, startedAt: Date): Promise<void> {
+async function insertRun(jobId: string, status: RunStatus, startedAt: Date): Promise<string> {
   const splf = { name: 'QPRINT', number: 1, jobName: 'J', jobUser: 'U', jobNumber: '000001' };
-  await db().insert(runs).values({ jobId, version: 1, trigger: 'watch', splf, status, startedAt, finishedAt: status === 'running' ? null : startedAt });
+  const [row] = await db()
+    .insert(runs)
+    .values({ jobId, version: 1, trigger: 'watch', splf, status, startedAt, finishedAt: status === 'running' ? null : startedAt })
+    .returning({ id: runs.id });
+  return row!.id;
+}
+
+async function dismiss(items: { kind: string; id: string }[], dismissed = true): Promise<Response> {
+  return attention.POST(appRequest('/api/attention', { method: 'POST', body: { items, dismissed }, headers: auth }));
 }
 
 /** The local day of an instant in a time zone, `YYYY-MM-DD`. */
@@ -118,6 +127,33 @@ describe('GET /api/dashboard', () => {
     expect(view.series.at(-1)!.at).toBe(`${localDay(new Date(), 'UTC')}T00:00`);
     const response = await route.GET(appRequest('/api/dashboard?range=1y', { headers: auth }));
     expect(response.status).toBe(400);
+  });
+
+  it('dismisses items until the error changes, and brings them back', async () => {
+    const serverId = await insertServer({ name: 'Broken', lastCheckedAt: new Date(), lastError: 'Connection refused' });
+    const jobId = await insertJob(serverId);
+    await db().update(jobs).set({ lastWatchError: 'Queue not found' }).where(eq(jobs.id, jobId));
+    const runId = await insertRun(jobId, 'failed', new Date(Date.now() - HOUR));
+    const items = [
+      { kind: 'server', id: serverId },
+      { kind: 'job', id: jobId },
+      { kind: 'run', id: runId },
+    ];
+    expect((await dismiss(items)).status).toBe(204);
+    let view = await load('?tz=UTC');
+    expect(view.attention).toEqual({ servers: [], jobs: [], runs: [] });
+    expect(view.servers.failing).toBe(1);
+
+    await db().update(servers).set({ lastError: 'Password expired' }).where(eq(servers.id, serverId));
+    view = await load('?tz=UTC');
+    expect(view.attention.servers.map((s) => s.error)).toEqual(['Password expired']);
+
+    expect((await dismiss([{ kind: 'run', id: runId }, { kind: 'job', id: jobId }], false)).status).toBe(204);
+    view = await load('?tz=UTC');
+    expect(view.attention.runs.map((r) => r.id)).toEqual([runId]);
+    expect(view.attention.jobs.map((j) => j.error)).toEqual(['Queue not found']);
+
+    expect((await dismiss([{ kind: 'queue', id: runId }])).status).toBe(400);
   });
 
   it('needs a session', async () => {

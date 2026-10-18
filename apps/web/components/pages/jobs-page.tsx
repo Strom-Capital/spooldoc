@@ -3,6 +3,7 @@
 import { PauseIcon, PlayIcon, RadioIcon, WorkflowIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { EmptyNote, ErrorNote, Page } from '@/components/page';
 import { RunStatusBadge } from '@/components/run-status';
 import { Button } from '@/components/ui/button';
@@ -44,9 +45,10 @@ export function JobsPage() {
   async function setPaused(job: JobSummary, paused: boolean) {
     try {
       await api(`/api/jobs/${job.id}`, { method: 'PATCH', body: { paused } });
+      toast.success(paused ? `Paused ${job.name}` : `Resumed ${job.name}`);
       await load();
     } catch (err) {
-      setError(errorText(err));
+      toast.error(paused ? `Could not pause ${job.name}` : `Could not resume ${job.name}`, { description: errorText(err) });
     }
   }
 

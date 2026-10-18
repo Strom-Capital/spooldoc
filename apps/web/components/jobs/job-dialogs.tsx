@@ -3,6 +3,7 @@
 import { CheckCircle2Icon, CircleAlertIcon, CircleSlashIcon, PlayIcon, SaveIcon, XCircleIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { ErrorNote } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -45,6 +46,7 @@ export function SaveVersionDialog({ open, onClose, onSaved }: { open: boolean; o
       }
       await refresh();
       setNote('');
+      toast.success(activate ? `Saved version ${data.number ?? next} and made it active` : `Saved version ${data.number ?? next}`);
       onSaved?.(data.number ?? next);
       onClose();
     } catch (err) {

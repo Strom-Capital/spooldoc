@@ -230,7 +230,7 @@ export class Watcher {
             );
           }
         }
-        await db.update(jobs).set({ lastWatchAt: new Date(this.deps.now()), lastWatchError: null }).where(eq(jobs.id, job.jobId));
+        await db.update(jobs).set({ lastWatchAt: new Date(this.deps.now()), lastWatchError: null, watchErrorDismissed: null }).where(eq(jobs.id, job.jobId));
       } catch (error) {
         await markError([job.jobId], redact(error, [opened.password]));
       } finally {

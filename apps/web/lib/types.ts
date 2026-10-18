@@ -134,6 +134,12 @@ export interface SettingsView {
   ai: AiSettingsView;
 }
 
+/** An item of Needs attention on Home, to dismiss or bring back. */
+export interface AttentionItem {
+  kind: 'server' | 'job' | 'run';
+  id: string;
+}
+
 /** The time range of the Home page's runs chart. */
 export type DashboardRange = '24h' | '7d' | '30d' | '90d';
 

@@ -14,6 +14,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
+import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -115,6 +116,7 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
   async function onDelete() {
     try {
       await api(`/api/jobs/${job.id}`, { method: 'DELETE' });
+      toast.success(`Deleted ${job.name}`);
       router.push('/jobs');
     } catch (err) {
       setError(errorText(err));
@@ -230,6 +232,7 @@ function VersionBanner() {
     setError(null);
     try {
       await api(`/api/jobs/${job.id}/versions/${viewing}/${path}`, { method: 'POST' });
+      toast.success(path === 'activate' ? `Version ${viewing} is now active` : `Version ${viewing} copied to the draft`);
       await refresh();
       if (path === 'restore') await setViewing('draft');
     } catch (err) {

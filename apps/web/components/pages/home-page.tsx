@@ -2,13 +2,14 @@
 
 import { ActivityIcon, InboxIcon, ServerIcon, WorkflowIcon } from 'lucide-react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { toast } from 'sonner';
 import { AttentionList } from '@/components/home/attention-list';
 import { GettingStarted } from '@/components/home/getting-started';
 import { KpiTile } from '@/components/home/kpi-tile';
 import { RANGES, RunsChart } from '@/components/home/runs-chart';
 import { ErrorNote, Page } from '@/components/page';
 import { api, errorText } from '@/lib/client/api';
-import type { DashboardRange, DashboardView } from '@/lib/types';
+import type { AttentionItem, DashboardRange, DashboardView } from '@/lib/types';
 
 const RANGE_KEY = 'spooldoc.home.range';
 
@@ -43,6 +44,7 @@ export function HomePage() {
   const range = saved ?? '7d';
   const [view, setView] = useState<{ range: DashboardRange; data: DashboardView } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloads, setReloads] = useState(0);
 
   useEffect(() => {
     if (!saved) return;
@@ -59,7 +61,41 @@ export function HomePage() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [saved]);
+  }, [saved, reloads]);
+
+  /** Hide the items at once, then save; Undo in the toast brings them back. */
+  async function dismiss(items: AttentionItem[]) {
+    const gone = new Set(items.map((item) => item.id));
+    setView((current) =>
+      current && {
+        ...current,
+        data: {
+          ...current.data,
+          attention: {
+            servers: current.data.attention.servers.filter((s) => !gone.has(s.id)),
+            jobs: current.data.attention.jobs.filter((j) => !gone.has(j.id)),
+            runs: current.data.attention.runs.filter((r) => !gone.has(r.id)),
+          },
+        },
+      },
+    );
+    try {
+      await api('/api/attention', { method: 'POST', body: { items } });
+      toast.success(items.length === 1 ? 'Dismissed' : `Dismissed ${items.length} items`, {
+        action: {
+          label: 'Undo',
+          onClick: () =>
+            void api('/api/attention', { method: 'POST', body: { items, dismissed: false } }).then(
+              () => setReloads((n) => n + 1),
+              (err) => toast.error('Could not undo', { description: errorText(err) }),
+            ),
+        },
+      });
+    } catch (err) {
+      toast.error('Could not dismiss', { description: errorText(err) });
+      setReloads((n) => n + 1);
+    }
+  }
 
   function chooseRange(next: DashboardRange) {
     setChoice(next);
@@ -112,7 +148,7 @@ export function HomePage() {
           />
         </div>
         <RunsChart series={view?.range === range ? view.data.series : null} range={range} onRange={chooseRange} />
-        {data && <AttentionList attention={data.attention} />}
+        {data && <AttentionList attention={data.attention} onDismiss={(items) => void dismiss(items)} />}
       </div>
     </Page>
   );

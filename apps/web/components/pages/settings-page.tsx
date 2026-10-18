@@ -3,6 +3,7 @@
 import { SaveIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
+import { toast } from 'sonner';
 import { ErrorNote, Page } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -229,7 +230,6 @@ export function SettingsPage() {
   const [ai, setAi] = useState<AiDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     api<SettingsView>('/api/settings').then(
@@ -247,16 +247,15 @@ export function SettingsPage() {
     if (!draft || !ai) return;
     setBusy(true);
     setError(null);
-    setSaved(false);
     try {
       const data = await api<SettingsView>('/api/settings', { method: 'PUT', body: { ...draft, ai: aiChange(ai) } });
       setSettings(data);
       setAi(aiDraft(data.ai, data.ai.provider));
-      setSaved(true);
+      toast.success('Settings saved', { description: 'The watcher uses them from its next check, the chat from its next message.' });
       // The layout tells the chat panel which model is set up.
       router.refresh();
     } catch (err) {
-      setError(errorText(err));
+      toast.error('Settings not saved', { description: errorText(err) });
     } finally {
       setBusy(false);
     }
@@ -327,7 +326,6 @@ export function SettingsPage() {
               {busy ? <Spinner /> : <SaveIcon />}
               Save
             </Button>
-            {saved && <span className="text-muted-foreground text-sm">Saved. The watcher uses the new settings from its next check, the chat from its next message.</span>}
           </div>
         </form>
       )}

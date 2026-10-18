@@ -3,6 +3,7 @@
 import { CheckCircle2Icon, InboxIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, RefreshCwIcon, ServerIcon, Trash2Icon, XCircleIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { EmptyNote, ErrorNote, Page } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import {
@@ -50,8 +51,10 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
     setTesting(server.id);
     try {
       await api(`/api/servers/${server.id}/test`, { method: 'POST' });
-    } catch {
-      // The error is recorded on the server and shown in the row.
+      toast.success(`Connected to ${server.name}`);
+    } catch (err) {
+      // The error is also recorded on the server and shown in the row.
+      toast.error(`Could not connect to ${server.name}`, { description: errorText(err) });
     }
     setTesting(null);
     await load();
@@ -61,10 +64,11 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
     try {
       await api(`/api/servers/${server.id}`, { method: 'DELETE' });
       setDeleting(null);
+      toast.success(`Deleted ${server.name}`);
       await load();
     } catch (err) {
       setDeleting(null);
-      setError(errorText(err));
+      toast.error(`Could not delete ${server.name}`, { description: errorText(err) });
     }
   }
 
@@ -194,7 +198,8 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
           server={editing === 'new' ? null : editing}
           allowedHosts={allowedHosts}
           onClose={() => setEditing(null)}
-          onSaved={async () => {
+          onSaved={async (saved) => {
+            toast.success(editing === 'new' ? `Added ${saved.name}` : `Saved ${saved.name}`);
             setEditing(null);
             await load();
           }}

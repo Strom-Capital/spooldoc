@@ -114,6 +114,8 @@ export const servers = pgTable('servers', {
   vrm: text('vrm'),
   lastCheckedAt: timestamp('last_checked_at', { withTimezone: true }),
   lastError: text('last_error'),
+  /** The error dismissed on Home; it shows again when the error changes or clears and comes back. */
+  errorDismissed: text('error_dismissed'),
   ...timestamps,
 });
 
@@ -157,6 +159,8 @@ export const jobs = pgTable('jobs', {
   watchSince: timestamp('watch_since', { withTimezone: true }),
   lastWatchAt: timestamp('last_watch_at', { withTimezone: true }),
   lastWatchError: text('last_watch_error'),
+  /** The watch error dismissed on Home; it shows again when the error changes or clears and comes back. */
+  watchErrorDismissed: text('watch_error_dismissed'),
   createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
   ...timestamps,
 });
@@ -235,6 +239,8 @@ export const runs = pgTable(
     createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp('finished_at', { withTimezone: true }),
+    /** When a failed run was dismissed from Needs attention on Home. */
+    dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
   },
   (t) => [
     index('runs_job_started_idx').on(t.jobId, t.startedAt),

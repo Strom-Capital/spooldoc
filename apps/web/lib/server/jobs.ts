@@ -193,7 +193,7 @@ async function activate(tx: Tx, job: JobRow, number: number, spec: JobSpec): Pro
     // lastWatchAt null makes the watcher take stock of the queue before it runs anything.
     .set({
       activeVersion: number,
-      ...(startsWatching ? { watchSince: new Date(), lastWatchAt: null, lastWatchError: null } : {}),
+      ...(startsWatching ? { watchSince: new Date(), lastWatchAt: null, lastWatchError: null, watchErrorDismissed: null } : {}),
       ...(retakes && !startsWatching ? { lastWatchAt: null } : {}),
     })
     .where(eq(jobs.id, job.id));
