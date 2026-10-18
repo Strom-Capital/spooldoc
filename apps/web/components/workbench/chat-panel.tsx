@@ -20,7 +20,8 @@ import { Suggestion } from '@/components/ai-elements/suggestion';
 import { useAppInfo } from '@/components/app-info';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { chatErrorText } from '@/lib/client/chat';
+import { Spinner } from '@/components/ui/spinner';
+import { chatActivity, chatErrorText } from '@/lib/client/chat';
 import { ToolSummary } from './tool-summary';
 import { useWorkbenchSync } from './use-workbench-sync';
 import { useWorkbench } from './workbench-provider';
@@ -72,6 +73,7 @@ function ChatConversation({ modelId }: { modelId: string }) {
   const { messages, sendMessage, status, stop, error, clearError } = useChat({ transport });
   const [draft, setDraft] = useState('');
   const busy = status === 'submitted' || status === 'streaming';
+  const activity = chatActivity(messages, status);
   useWorkbenchSync(messages, status);
 
   function send(text: string) {
@@ -130,7 +132,12 @@ function ChatConversation({ modelId }: { modelId: string }) {
               </MessageContent>
             </Message>
           ))}
-          {status === 'submitted' && <Shimmer className="text-sm">Thinking</Shimmer>}
+          {activity && (
+            <div role="status" aria-live="polite" className="flex items-center gap-2 px-1 text-muted-foreground text-sm">
+              <Spinner className="size-3.5" />
+              <Shimmer className="text-sm" duration={1.5}>{`${activity}...`}</Shimmer>
+            </div>
+          )}
           {error && (
             <div role="alert" className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm">
               <p className="min-w-0 flex-1 break-words text-destructive">{chatErrorText(error)}</p>

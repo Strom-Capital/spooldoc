@@ -94,3 +94,41 @@ export function chatErrorText(error: Error): string {
   }
   return error.message || 'The chat request failed.';
 }
+
+/** The parts of a chat message `chatActivity` looks at. */
+export interface MessageLike {
+  role: string;
+  parts: { type: string; state?: string; text?: string }[];
+}
+
+/**
+ * What to say while the chat is busy but nothing on screen is moving: before the first
+ * token, between steps (after a tool returned, while the model decides what is next) and
+ * while hidden reasoning runs. Null when the user can already see progress (a tool
+ * running, text or reasoning streaming in) or the chat is idle.
+ *
+ * @param messages - The chat messages
+ * @param status - The chat status from useChat
+ */
+export function chatActivity(messages: MessageLike[], status: string): string | null {
+  if (status === 'submitted') {
+    return 'Thinking';
+  }
+  if (status !== 'streaming') {
+    return null;
+  }
+  const last = messages.at(-1);
+  const part = last?.role === 'assistant' ? last.parts.at(-1) : undefined;
+  if (!part || part.type === 'step-start') {
+    return 'Thinking';
+  }
+  if (part.type.startsWith('tool-') || part.type === 'dynamic-tool') {
+    // A running tool shows its own spinner; once it returned, the model reads the result.
+    return part.state === 'input-streaming' || part.state === 'input-available' ? null : 'Reading the result';
+  }
+  if (part.type === 'text' || part.type === 'reasoning') {
+    // Streaming text is visible progress; empty (hidden) reasoning is not.
+    return part.state === 'streaming' && part.text?.trim() ? null : 'Thinking';
+  }
+  return 'Working';
+}
