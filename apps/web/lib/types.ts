@@ -133,3 +133,33 @@ export interface SettingsView {
   cleanup: { at: string; runs: number; samples: number; error?: string } | null;
   ai: AiSettingsView;
 }
+
+/** The time range of the Home page's runs chart. */
+export type DashboardRange = '24h' | '7d' | '30d' | '90d';
+
+/** Runs of one hour or day by status. `at` is the bucket's local start, `YYYY-MM-DDTHH:00`. */
+export interface RunBucket {
+  at: string;
+  success: number;
+  warning: number;
+  failed: number;
+  skipped: number;
+}
+
+/** The Home page: setup progress, what is configured, and runs over the chosen range. */
+export interface DashboardView {
+  /** Which getting-started steps are done. */
+  setup: { server: boolean; ai: boolean; job: boolean; run: boolean };
+  servers: { total: number; failing: number };
+  /** Servers with a data queue, and the queues this process watches in real time or by polling. */
+  dataQueues: { total: number; realtime: number; polled: number };
+  jobs: { total: number; watching: number; paused: number };
+  /** Runs in the range by status, and every run still in the log. */
+  runs: { success: number; warning: number; failed: number; skipped: number; logged: number };
+  series: RunBucket[];
+  attention: {
+    servers: { id: string; name: string; error: string }[];
+    jobs: { id: string; name: string; error: string }[];
+    runs: { id: string; seq: number; jobId: string; jobName: string; error: string | null; startedAt: string }[];
+  };
+}

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  HomeIcon,
   InboxIcon,
   LogOutIcon,
   PanelLeftIcon,
@@ -42,6 +43,7 @@ import { Logo } from './logo';
 import { ThemeMenu } from './theme-menu';
 
 const PAGES = [
+  { href: '/', label: 'Home', icon: HomeIcon },
   { href: '/servers', label: 'Servers', icon: ServerIcon },
   { href: '/queues', label: 'Queues', icon: InboxIcon },
   { href: '/jobs', label: 'Jobs', icon: WorkflowIcon },
@@ -89,7 +91,7 @@ export function AppSidebar() {
             <SidebarMenu>
               {PAGES.map((page) => (
                 <SidebarMenuItem key={page.href}>
-                  <SidebarMenuButton asChild isActive={pathname.startsWith(page.href)} tooltip={page.label}>
+                  <SidebarMenuButton asChild isActive={page.href === '/' ? pathname === '/' : pathname.startsWith(page.href)} tooltip={page.label}>
                     <Link href={page.href} onClick={close}>
                       <page.icon />
                       <span>{page.label}</span>
