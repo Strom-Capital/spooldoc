@@ -8,6 +8,7 @@ import { getDb, getLocks } from './db';
 import { jobs, jobVersions, watchSeen } from './db/schema';
 import { redact } from './http';
 import { connectServer, type ServerConnection } from './ibmi';
+import { cleanUp } from './retention';
 import { runJob } from './runner';
 import { getSettings } from './settings';
 
@@ -35,6 +36,16 @@ const defaultDeps: WatcherDeps = { connect: connectServer, run: runJob, now: Dat
 const QUEUE_INFO_MS = 60_000;
 /** How often the watcher looks at the jobs. */
 export const TICK_MS = 10_000;
+/** How often old runs and samples are deleted (see `cleanUp`). */
+export const CLEANUP_MS = 60 * 60_000;
+
+/** The last cleanup this process did. */
+export interface CleanupStatus {
+  at: string;
+  runs: number;
+  samples: number;
+  error?: string;
+}
 
 const queueKey = (serverId: string, q: QueueRef) => `${serverId}/${q.library}/${q.name}`;
 const sameQueue = (a: QueueRef | null | undefined, b: QueueRef | null | undefined) => !!a && !!b && a.library === b.library && a.name === b.name;
@@ -62,7 +73,9 @@ export class Watcher {
   private readonly readers = new Map<string, Reader>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private ticking: Promise<void> | null = null;
+  private lastCleanup: number | null = null;
   status = { realtime: 0, polled: 0 };
+  cleanup: CleanupStatus | null = null;
 
   constructor(deps: Partial<WatcherDeps> = {}) {
     this.deps = { ...defaultDeps, ...deps };
@@ -138,6 +151,20 @@ export class Watcher {
       if (!byServer.has(serverId)) this.stopReader(serverId);
     }
     this.status = { realtime, polled };
+    await this.cleanUpWhenDue(settings.retentionDays);
+  }
+
+  /** Delete old runs and samples, at most once every `CLEANUP_MS`. */
+  private async cleanUpWhenDue(retentionDays: number): Promise<void> {
+    const now = this.deps.now();
+    if (this.lastCleanup !== null && now - this.lastCleanup < CLEANUP_MS) return;
+    this.lastCleanup = now;
+    try {
+      const deleted = await cleanUp(retentionDays, new Date(now));
+      if (deleted) this.cleanup = { at: new Date(now).toISOString(), ...deleted };
+    } catch (error) {
+      this.cleanup = { at: new Date(now).toISOString(), runs: 0, samples: 0, error: redact(error) };
+    }
   }
 
   private async queues(serverId: string, conn: Connection, queues: QueueRef[]): Promise<OutputQueue[]> {
@@ -302,6 +329,11 @@ export function startWatcher(): Watcher {
   holder[KEY] ??= new Watcher();
   holder[KEY].start();
   return holder[KEY];
+}
+
+/** The last cleanup of old runs this process did, if any. */
+export function cleanupStatus(): CleanupStatus | null {
+  return (globalThis as Holder)[KEY]?.cleanup ?? null;
 }
 
 /** How many queues this process watches in real time and by polling. */

@@ -236,6 +236,7 @@ export const runs = pgTable(
   (t) => [
     index('runs_job_started_idx').on(t.jobId, t.startedAt),
     index('runs_status_started_idx').on(t.status, t.startedAt),
+    index('runs_finished_idx').on(t.finishedAt),
     check('runs_trigger_check', sql`${t.trigger} in ('manual', 'watch')`),
     check('runs_status_check', sql`${t.status} in ('running', 'success', 'warning', 'failed')`),
   ],
@@ -266,12 +267,15 @@ export const settings = pgTable(
     id: integer('id').primaryKey().default(1),
     pollSeconds: integer('poll_seconds').notNull().default(30),
     safetyCheckSeconds: integer('safety_check_seconds').notNull().default(300),
+    /** Runs, their files and unused preview samples older than this are deleted. */
+    retentionDays: integer('retention_days').notNull().default(90),
     ...timestamps,
   },
   (t) => [
     check('settings_single_row', sql`${t.id} = 1`),
     check('settings_poll_check', sql`${t.pollSeconds} between 5 and 3600`),
     check('settings_safety_check', sql`${t.safetyCheckSeconds} between 60 and 86400`),
+    check('settings_retention_check', sql`${t.retentionDays} between 1 and 3650`),
   ],
 );
 

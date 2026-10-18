@@ -12,7 +12,7 @@ the queue. Every run is logged.
 
 ## Status
 
-The web app has five pages:
+The web app has six pages:
 
 - **Servers**: the IBM i systems, each with optional libraries to list
   queues from. Passwords are stored encrypted.
@@ -28,13 +28,17 @@ The web app has five pages:
   deleted or left as it is.
 - **Destinations**: for now PDFs kept in Spooldoc for download.
 - **Job log**: every run with its steps, errors and files.
+- **Settings**: how often the watcher polls queues and checks real-time
+  queues, and how long runs are kept. Runs are deleted 90 days (1 to 3650)
+  after they finish, with their captured spooled files and PDFs, as are
+  preview samples no job uses; Spooldoc still remembers which spooled files
+  it processed. The watcher cleans up once an hour.
 
 Next:
 
 - More destinations: SFTP, S3, IFS, email and webhooks.
 - More users and roles.
 - DOCX and XLSX renderers next to HTML and PDF.
-- Retention for old runs.
 
 ## Packages
 

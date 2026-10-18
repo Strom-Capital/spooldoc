@@ -109,5 +109,8 @@ export interface RunView {
 export interface SettingsView {
   pollSeconds: number;
   safetyCheckSeconds: number;
+  retentionDays: number;
   watching: { realtime: number; polled: number };
+  /** The last cleanup of old runs by this server process, if it did one. */
+  cleanup: { at: string; runs: number; samples: number; error?: string } | null;
 }
