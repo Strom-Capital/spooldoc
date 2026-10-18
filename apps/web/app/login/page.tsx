@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
   const { next } = await searchParams;
   // Only paths on this site, never another origin.
-  const target = next?.startsWith('/') && !next.startsWith('//') ? next : '/servers';
+  const target = next?.startsWith('/') && !next.startsWith('//') ? next : '/';
   if (await currentUser()) {
     redirect(target);
   }
