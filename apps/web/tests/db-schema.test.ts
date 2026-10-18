@@ -11,7 +11,7 @@ describe('database rules', () => {
 
   it('seeds the Spooldoc destination and the settings row', async () => {
     const rows = await db().select().from(destinations);
-    expect(rows).toEqual([expect.objectContaining({ kind: 'spooldoc', name: 'Spooldoc PDF download', builtin: true })]);
+    expect(rows).toEqual([expect.objectContaining({ kind: 'spooldoc', name: 'Spooldoc download', builtin: true })]);
     expect(
       await db().select({ poll: settings.pollSeconds, safety: settings.safetyCheckSeconds, retention: settings.retentionDays }).from(settings),
     ).toEqual([{ poll: 30, safety: 300, retention: 90 }]);
