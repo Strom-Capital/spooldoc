@@ -23,11 +23,12 @@ IBM i, including a free PUB400 account.
 ```sh
 git clone https://github.com/Strom-Capital/spooldoc.git && cd spooldoc
 printf 'BETTER_AUTH_SECRET=%s\nSPOOLDOC_SECRET_KEY=%s\n' "$(openssl rand -base64 32)" "$(openssl rand -base64 32)" > .env
-docker compose up --build -d
+docker compose up -d
 ```
 
-This builds the image (web app, Java runtime and Chromium) and starts it
-with a Postgres database. Keep the `.env` file: `SPOOLDOC_SECRET_KEY`
+This pulls the published image (web app, Java runtime and Chromium) and
+starts it with a Postgres database; `docker compose up --build -d` builds
+it from the clone instead. Keep the `.env` file: `SPOOLDOC_SECRET_KEY`
 encrypts the saved IBM i passwords and model keys, and with another key
 they must be entered again. See [Deployment](deployment.md) for the
 variables, a prebuilt database, backups and upgrades.

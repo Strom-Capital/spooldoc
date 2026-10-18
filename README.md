@@ -69,13 +69,25 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 
 ## Quick start
 
-With Docker:
+Every release publishes the image to
+`ghcr.io/strom-capital/spooldoc` for amd64 and arm64, tagged `X.Y.Z`,
+`X.Y` and `latest`. Compose pulls it and starts Postgres next to it:
 
 ```sh
 git clone https://github.com/Strom-Capital/spooldoc.git && cd spooldoc
 printf 'BETTER_AUTH_SECRET=%s\nSPOOLDOC_SECRET_KEY=%s\n' "$(openssl rand -base64 32)" "$(openssl rand -base64 32)" > .env
-docker compose up --build -d
+docker compose up -d
 ```
+
+With a Postgres of your own, run the image alone, with a version from the
+[releases](https://github.com/Strom-Capital/spooldoc/releases):
+
+```sh
+docker run -d -p 3000:3000 --env-file .env -e DATABASE_URL=postgres://... ghcr.io/strom-capital/spooldoc:<version>
+```
+
+To build the image from source instead, run `docker compose up --build -d`
+in the clone.
 
 Open http://localhost:3000 and create the first account. Add a server,
 open its queues, start a job from one, and let the assistant propose a

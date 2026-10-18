@@ -7,19 +7,25 @@ The container image holds the web app, a Java runtime for jt400 and
 Chromium for PDFs, and runs on amd64 and arm64. It needs a Postgres
 database and three environment variables.
 
+Every release publishes the image to `ghcr.io/strom-capital/spooldoc`,
+tagged with its version (`0.1.0`), its minor line (`0.1`) and `latest`.
+Pin a version in production so an upgrade happens when you choose it.
+
 ## Docker Compose
 
-`compose.yaml` at the repository root starts the app and a Postgres 18
-database with a named volume:
+`compose.yaml` at the repository root starts the published image and a
+Postgres 18 database with a named volume:
 
 ```sh
 printf 'BETTER_AUTH_SECRET=%s\nSPOOLDOC_SECRET_KEY=%s\n' "$(openssl rand -base64 32)" "$(openssl rand -base64 32)" > .env
-docker compose up --build -d
+docker compose up -d
 ```
 
 Open http://localhost:3000. The `.env` file next to `compose.yaml` holds
 the settings of `apps/web/.env.example`; `DATABASE_URL` is set by the
-Compose file. Set `POSTGRES_PASSWORD` (URL-safe characters) for anything
+Compose file. `SPOOLDOC_VERSION` in `.env` pins the image version, `latest`
+otherwise. `docker compose up --build -d` builds the image from the
+checkout instead. Set `POSTGRES_PASSWORD` (URL-safe characters) for anything
 but a local trial. The database port is published on this machine only, on
 5433, so a local Postgres on 5432 is not in the way.
 
@@ -28,13 +34,15 @@ but a local trial. The database port is published on this machine only, on
 With your own database:
 
 ```sh
-docker build -t spooldoc .
 docker run -p 3000:3000 \
   -e DATABASE_URL=postgres://... \
   -e BETTER_AUTH_SECRET="$(openssl rand -base64 32)" \
   -e SPOOLDOC_SECRET_KEY="$(openssl rand -base64 32)" \
-  spooldoc
+  ghcr.io/strom-capital/spooldoc:<version>
 ```
+
+To build the image from source, run `docker build -t spooldoc .` in the
+repository and run `spooldoc` in place of the published name.
 
 Passing secrets with `-e` shows them in `docker inspect` and the shell
 history; use `--env-file` or your orchestrator's secrets. The image runs as
@@ -90,7 +98,8 @@ themselves.
 ## Upgrades
 
 Pull or build the new image and start it; the server applies the
-migrations. Take a `pg_dump` first. What changed in each release is on
+migrations. With Compose, set the new `SPOOLDOC_VERSION` (or leave it at
+`latest`) and run `docker compose pull && docker compose up -d`. Take a `pg_dump` first. What changed in each release is on
 the GitHub releases page.
 
 ## Sizing
