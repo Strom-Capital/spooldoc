@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { servers } from '@/lib/server/db/schema';
+import { samples, servers } from '@/lib/server/db/schema';
 import type { QueueView, SpooledFileView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
@@ -12,6 +12,7 @@ vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fa
 const queuesRoute = await import('@/app/api/servers/[id]/queues/route');
 const prefsRoute = await import('@/app/api/servers/[id]/queue-prefs/route');
 const filesRoute = await import('@/app/api/servers/[id]/queues/[lib]/[name]/files/route');
+const viewRoute = await import('@/app/api/servers/[id]/queues/[lib]/[name]/files/view/route');
 const realtimeRoute = await import('@/app/api/servers/[id]/queues/[lib]/[name]/realtime/route');
 const pollingRoute = await import('@/app/api/servers/[id]/queues/[lib]/[name]/polling/route');
 const { getServerRow } = await import('@/lib/server/servers');
@@ -73,6 +74,31 @@ describe('queues', () => {
       ).files;
     expect((await files('')).length).toBeGreaterThan(0);
     expect(await files('?status=READY')).toEqual([]);
+  });
+});
+
+describe('viewing a spooled file', () => {
+  const view = (lib: string, name: string, query: Record<string, string | number>) =>
+    viewRoute.GET(
+      appRequest(`/api/servers/${serverId}/queues/${lib}/${name}/files/view?${new URLSearchParams(Object.entries(query).map(([k, v]) => [k, String(v)]))}`, { headers: auth }),
+      params({ id: serverId, lib, name }),
+    );
+  const id = { splf: sample.splf.name, number: sample.splf.number, jobName: sample.splf.jobName, jobUser: sample.splf.jobUser, jobNumber: sample.splf.jobNumber };
+
+  it('reads the pages without storing or changing anything', async () => {
+    const response = await view(library, queue, id);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { sample: { pages: unknown[]; splf: { name: string } } };
+    expect(body.sample.pages.length).toBe(sample.pages.length);
+    expect(body.sample.splf.name).toBe(sample.splf.name);
+    expect(await db().select().from(samples)).toEqual([]);
+    expect(conn.actions()).toEqual([]);
+  });
+
+  it('refuses a file of another queue, a missing file and a bad request', async () => {
+    expect((await view(library, 'OTHERQ', id)).status).toBe(404);
+    expect((await view(library, queue, { ...id, number: 999 })).status).toBe(404);
+    expect((await view(library, queue, { splf: 'X' })).status).toBe(400);
   });
 });
 
