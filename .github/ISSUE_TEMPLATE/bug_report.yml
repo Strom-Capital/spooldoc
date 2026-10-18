@@ -1,0 +1,83 @@
+name: Bug report
+description: Something in Spooldoc does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Questions about setup go to [Discussions Q&A](https://github.com/Strom-Capital/spooldoc/discussions/categories/q-a), and security problems to a [private report](https://github.com/Strom-Capital/spooldoc/security/advisories/new).
+
+        This repository is public. Replace customer, site and ERP names, hosts, libraries, user profiles and document numbers with invented values before you paste anything.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Add a server and open the queue MYLIB/MYOUTQ
+        2. Start a job from the spooled file INVOICE
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Spooldoc version
+      description: The release, image tag or commit.
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How Spooldoc runs
+      options:
+        - Docker image
+        - Docker Compose
+        - From source (pnpm)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: ibmi
+    attributes:
+      label: IBM i release
+      placeholder: "7.5"
+
+  - type: dropdown
+    id: spool-type
+    attributes:
+      label: Spooled file type
+      description: The device type of the spooled file, if the problem is with one.
+      options:
+        - "*SCS"
+        - XML in a spooled file
+        - "*AFPDS"
+        - "*USERASCII"
+        - Other or not related
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and errors
+      description: The run's error from the Job log, or the server output. Scrub real names first.
+      render: text
+
+  - type: checkboxes
+    id: no-real-names
+    attributes:
+      label: Before you submit
+      options:
+        - label: I have replaced real customer, host, library and user names in this report, its logs and attachments.
+          required: true
