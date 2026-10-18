@@ -10,16 +10,22 @@ import { useWorkbench } from './workbench-provider';
  * Keep the workbench in step with the chat: when a write_definition or write_template
  * call finishes, fetch the job's draft again (the tool changed it on the server); after
  * any sync tool, render again, once per tool call. Reload again when a response ends.
+ * The tool calls of the stored thread, there when the chat mounts, are already in the
+ * draft the workbench loaded, so they trigger nothing.
  *
  * @param messages - The chat messages
  * @param status - The chat status
  */
 export function useWorkbenchSync(messages: UIMessage[], status: ChatStatus): void {
   const { reload, onDraftWritten } = useWorkbench();
-  const seen = useRef(new Set<string>());
+  const seen = useRef<Set<string> | null>(null);
   const previous = useRef<ChatStatus>(status);
 
   useEffect(() => {
+    if (seen.current === null) {
+      seen.current = new Set(messages.flatMap((message) => message.parts.filter(isToolUIPart).map((part) => part.toolCallId)));
+      return;
+    }
     let changed = false;
     let written = false;
     for (const message of messages) {

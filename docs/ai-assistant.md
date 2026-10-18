@@ -74,6 +74,18 @@ What the model receives:
 What it never receives: IBM i credentials, the login session, the IBM i
 connection, other spooled files, or the job log.
 
+## The conversation
+
+Each job keeps one conversation with the assistant, stored with the job
+and shown again when you come back to the job builder; it is deleted with
+the job. New chat in the panel header forgets it and starts another, while
+the definition and template it wrote stay in the draft. Only the recent
+part of a long conversation goes to the model with each message (the last
+20 messages, within a character budget, older tool results dropped first);
+the model's instructions carry the current definition, template and
+sample pages, so nothing it needs is lost. The stored messages hold what
+the model saw: with masking on, the tool results are masked too.
+
 ## Masking
 
 Masking is on by default (`SPOOLDOC_MASK=true`): before page text or a

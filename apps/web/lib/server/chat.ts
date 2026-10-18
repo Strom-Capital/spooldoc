@@ -15,7 +15,7 @@ import {
   type Sample,
   type SamplePage,
 } from '@spooldoc/core';
-import { tool } from 'ai';
+import { tool, type UIMessage } from 'ai';
 import { z } from 'zod';
 import type {
   FieldReport,
@@ -218,6 +218,62 @@ ${definitionYaml ? fence('yaml', definitionYaml) : 'None yet.'}`,
 
 ${templateHtml ? fence('html', templateHtml) : 'None yet.'}`,
   ].join('\n\n');
+}
+
+/** How much of the thread goes to the model. The rest stays in the stored thread only. */
+export interface HistoryLimits {
+  /** Most messages, counted from the newest. Default 20. */
+  maxMessages?: number;
+  /** Most characters of those messages as JSON. Default 60 000. */
+  maxChars?: number;
+}
+
+type Part = UIMessage['parts'][number];
+
+const isToolPart = (part: Part): boolean => part.type.startsWith('tool-') || part.type === 'dynamic-tool';
+
+/**
+ * True when a message says something: a tool call, a file, or text or reasoning that
+ * is not blank. An answer that failed before its first token has no such part.
+ *
+ * @param message - A UI message
+ */
+export function hasContent(message: UIMessage): boolean {
+  return message.parts.some((part) => {
+    if (isToolPart(part) || part.type === 'file') {
+      return true;
+    }
+    return (part.type === 'text' || part.type === 'reasoning') && part.text.trim().length > 0;
+  });
+}
+
+/**
+ * The part of the thread the model gets: the newest messages, within the limits. The
+ * instructions carry the current definition, template and pages, so an old tool result
+ * says nothing the model cannot see there. Over the character budget, the oldest tool
+ * calls and results go first (the words around them stay), then whole messages. Empty
+ * messages are dropped, and the result starts with a user message as the providers want.
+ *
+ * @param messages - The whole thread, oldest first
+ * @param limits - The message and character limits
+ * @returns The messages to convert for the model
+ */
+export function trimHistory<M extends UIMessage>(messages: M[], limits: HistoryLimits = {}): M[] {
+  const maxMessages = limits.maxMessages ?? 20;
+  const maxChars = limits.maxChars ?? 60_000;
+  let kept = messages.filter(hasContent).slice(-maxMessages);
+  const size = (): number => kept.reduce((total, message) => total + JSON.stringify(message).length, 0);
+  while (kept.length > 1 && size() > maxChars) {
+    const index = kept.findIndex((message, i) => i < kept.length - 1 && message.parts.some(isToolPart));
+    if (index < 0) {
+      kept = kept.slice(1);
+      continue;
+    }
+    const stripped = { ...kept[index]!, parts: kept[index]!.parts.filter((part) => !isToolPart(part)) };
+    kept = [...kept.slice(0, index), ...(hasContent(stripped) ? [stripped] : []), ...kept.slice(index + 1)];
+  }
+  const first = kept.findIndex((message) => message.role === 'user');
+  return first > 0 ? kept.slice(first) : kept;
 }
 
 /** Where the tools read and write the definition and template: the job's draft. */

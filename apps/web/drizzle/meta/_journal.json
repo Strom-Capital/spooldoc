@@ -64,6 +64,13 @@
       "when": 1792359702698,
       "tag": "0008_assets",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792362999090,
+      "tag": "0009_job_chats",
+      "breakpoints": true
     }
   ]
 }

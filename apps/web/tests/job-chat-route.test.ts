@@ -1,7 +1,8 @@
+import type { UIMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { jobs, jobVersions } from '@/lib/server/db/schema';
+import { jobChats, jobs, jobVersions } from '@/lib/server/db/schema';
 import { jobSpecSchema, versionSpec } from '@/lib/job-spec';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
@@ -15,7 +16,7 @@ vi.mock('@/lib/server/models', async (importOriginal) => ({
   createModel: () => createModel(),
 }));
 
-const { POST } = await import('@/app/api/jobs/[id]/chat/route');
+const { GET, POST, DELETE } = await import('@/app/api/jobs/[id]/chat/route');
 const { storeSample } = await import('@/lib/server/samples');
 
 /** One part of a model stream, taken from the mock model's own types. */
@@ -74,6 +75,16 @@ const messages = [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Propo
 
 const chat = (body: unknown = { messages }, headers?: Record<string, string>, id = jobId) =>
   POST(appRequest(`/api/jobs/${id}/chat`, { method: 'POST', body, headers: { ...auth, ...headers } }), params({ id }));
+
+/** The stored thread, as the panel loads it. */
+async function storedThread(id = jobId): Promise<UIMessage[]> {
+  const response = await GET(appRequest(`/api/jobs/${id}/chat`, { headers: auth }), params({ id }));
+  expect(response.status).toBe(200);
+  return ((await response.json()) as { messages: UIMessage[] }).messages;
+}
+
+const clear = (headers: Record<string, string> = auth, id = jobId) =>
+  DELETE(appRequest(`/api/jobs/${id}/chat`, { method: 'DELETE', headers }), params({ id }));
 
 /** The UI message stream chunks of a response. */
 async function chunks(response: Response): Promise<{ text: string; parts: Record<string, unknown>[] }> {
@@ -217,5 +228,80 @@ describe('POST /api/jobs/[id]/chat', () => {
     const unreadable = await chat();
     expect(unreadable.status).toBe(503);
     expect(((await unreadable.json()) as { error: string }).error).toMatch(/cannot be decrypted/);
+  });
+});
+
+describe('the stored thread (GET and DELETE /api/jobs/[id]/chat)', () => {
+  it('is empty for a job that has none, and answers 404, 401 and 403 like the chat', async () => {
+    expect(await storedThread()).toEqual([]);
+    const missing = '00000000-0000-4000-8000-000000000000';
+    expect((await GET(appRequest(`/api/jobs/${missing}/chat`, { headers: auth }), params({ id: missing }))).status).toBe(404);
+    expect((await clear(auth, missing)).status).toBe(404);
+    expect((await GET(appRequest(`/api/jobs/${jobId}/chat`), params({ id: jobId }))).status).toBe(401);
+    expect((await GET(appRequest(`/api/jobs/${jobId}/chat`, { headers: { ...auth, 'sec-fetch-site': 'cross-site' } }), params({ id: jobId }))).status).toBe(403);
+    expect((await clear({})).status).toBe(401);
+    expect((await clear({ ...auth, origin: 'https://evil.example.com' })).status).toBe(403);
+  });
+
+  it('keeps each finished turn with its tool calls, masked, and gives the thread back to the model', async () => {
+    const first = scriptedModel(toolStep('write_definition', { yaml }), textStep('Saved the invoice definition.'));
+    createModel.mockResolvedValue(withKey(first));
+    await chunks(await chat());
+
+    const thread = await storedThread();
+    expect(thread).toHaveLength(2);
+    expect(thread[0]).toEqual(messages[0]);
+    const answer = thread[1]!;
+    expect(answer.role).toBe('assistant');
+    expect(answer.id).toBeTruthy();
+    const toolPart = answer.parts.find((p) => p.type === 'tool-write_definition') as { state: string; output: { ok: boolean; documents: number } };
+    expect(toolPart).toMatchObject({ state: 'output-available', output: { ok: true, documents: 6 } });
+    expect(answer.parts).toContainEqual(expect.objectContaining({ type: 'text', text: 'Saved the invoice definition.' }));
+    // The stored results are the masked ones the model saw.
+    expect(JSON.stringify(thread)).not.toContain('260101');
+    expect(JSON.stringify(thread)).not.toContain(FAKE_KEY);
+
+    // The next turn sends the thread back; the model sees the earlier tool result and the whole thread is stored again.
+    const second = scriptedModel(textStep('You are welcome.'));
+    createModel.mockResolvedValue(withKey(second));
+    const next = [...thread, { id: 'm2', role: 'user', parts: [{ type: 'text', text: 'Thanks' }] }];
+    await chunks(await chat({ messages: next }));
+    const prompt = JSON.stringify(second.doStreamCalls[0]?.prompt);
+    expect(prompt).toContain('Saved the invoice definition.');
+    expect(prompt).toContain('"toolName":"write_definition"');
+    const longer = await storedThread();
+    expect(longer).toHaveLength(4);
+    expect(longer.slice(0, 3)).toEqual(next.slice(0, 3));
+    expect(longer[3]?.parts).toContainEqual(expect.objectContaining({ type: 'text', text: 'You are welcome.' }));
+
+    // New chat forgets it; the job's draft stays.
+    expect((await clear()).status).toBe(204);
+    expect(await storedThread()).toEqual([]);
+    expect((await draft()).extract.definition).toBe(yaml);
+  });
+
+  it('leaves the thread as it was when the answer fails before its first token', async () => {
+    createModel.mockResolvedValue(withKey(scriptedModel(textStep('First answer.'))));
+    await chunks(await chat());
+    expect(await storedThread()).toHaveLength(2);
+
+    createModel.mockResolvedValue(
+      withKey(
+        new MockLanguageModelV4({
+          doStream: async () => {
+            throw new Error('503 overloaded');
+          },
+        }),
+      ),
+    );
+    const next = [...(await storedThread()), { id: 'm2', role: 'user', parts: [{ type: 'text', text: 'Again' }] }];
+    await chunks(await chat({ messages: next }));
+    expect(await storedThread()).toHaveLength(2);
+  });
+
+  it('goes with the job', async () => {
+    await db().insert(jobChats).values({ jobId, messages: messages as UIMessage[] });
+    await db().delete(jobs).where(eq(jobs.id, jobId));
+    expect(await db().select().from(jobChats)).toEqual([]);
   });
 });
