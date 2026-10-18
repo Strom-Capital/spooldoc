@@ -1,6 +1,18 @@
 'use client';
 
-import { ArrowDownIcon, ArrowUpIcon, EyeIcon, EyeOffIcon, FileStackIcon, RadioIcon, SearchIcon, ServerIcon } from 'lucide-react';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  EyeIcon,
+  EyeOffIcon,
+  FileStackIcon,
+  InboxIcon,
+  RadioIcon,
+  SearchIcon,
+  SearchXIcon,
+  ServerIcon,
+  XIcon,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -10,11 +22,13 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
+import { SkeletonRows } from '@/components/skeleton-rows';
+import { TableEmpty } from '@/components/table-empty';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api, errorText, isAbort } from '@/lib/client/api';
 import type { QueueView, ServerView } from '@/lib/types';
+import { cn } from '@/lib/utils';
 import { NewJobButton } from './new-job-button';
 
 type SortKey = 'library' | 'name' | 'files' | 'text';
@@ -32,7 +46,8 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   const router = useRouter();
   const [servers, setServers] = useState<ServerView[] | null>(null);
   const [q, setQ] = useState('');
-  const [queues, setQueues] = useState<QueueView[] | null>(null);
+  // The rows and the server they belong to, so another server's rows are never shown.
+  const [loaded, setLoaded] = useState<{ serverId: string; queues: QueueView[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -47,6 +62,15 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   }, []);
 
   const server = servers?.find((s) => s.id === serverId) ?? null;
+  const queues = loaded && server && loaded.serverId === server.id ? loaded.queues : null;
+  const setQueues = useCallback(
+    (update: (current: QueueView[] | null) => QueueView[] | null) =>
+      setLoaded((prev) => {
+        const next = update(prev?.queues ?? null);
+        return prev && next ? { ...prev, queues: next } : prev;
+      }),
+    [],
+  );
 
   // Without a server in the URL, open the first one.
   useEffect(() => {
@@ -66,12 +90,12 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
         const data = await api<{ queues: QueueView[] }>(`/api/servers/${server.id}/queues?q=${encodeURIComponent(q.trim())}`, {
           signal: controller.signal,
         });
-        setQueues(data.queues);
+        setLoaded({ serverId: server.id, queues: data.queues });
         setError(null);
       } catch (err) {
         if (!isAbort(err)) {
           setError(errorText(err));
-          setQueues(null);
+          setLoaded(null);
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -114,7 +138,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
         setQueues((current) => current?.map((queue) => (keys.has(queueKey(queue)) ? { ...queue, hidden: !hidden } : queue)) ?? null);
       }
     },
-    [server],
+    [server, setQueues],
   );
 
   const selectedRows = shown.filter((queue) => selected.has(queueKey(queue)));
@@ -215,7 +239,8 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody aria-busy={loading} className={cn(loading && queues && 'opacity-60 transition-opacity')}>
+            {!queues && !error && <SkeletonRows widths={['w-4', 'w-16', 'w-24', 'ml-auto w-6', 'w-48', 'ml-auto w-40']} />}
             {server &&
               shown.map((queue) => (
                 <tr key={queueKey(queue)} className={`border-t hover:bg-muted/40 ${queue.hidden ? 'text-muted-foreground' : ''}`}>
@@ -279,20 +304,49 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
                   </td>
                 </tr>
               ))}
-            {queues && shown.length === 0 && !loading && (
-              <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">
-                  {queues.length > 0 ? 'Every matching queue is hidden. Turn on Show hidden to see them.' : 'No output queues match.'}
-                </td>
-              </tr>
-            )}
+            {queues &&
+              shown.length === 0 &&
+              !loading &&
+              (queues.length > 0 ? (
+                <TableEmpty
+                  colSpan={6}
+                  icon={EyeOffIcon}
+                  title="Every queue here is hidden"
+                  description={q.trim() ? 'The queues that match the search are all hidden.' : 'You have hidden all the queues of this server.'}
+                >
+                  <Button variant="outline" onClick={() => setShowHidden(true)}>
+                    <EyeIcon />
+                    Show hidden queues
+                  </Button>
+                </TableEmpty>
+              ) : q.trim() ? (
+                <TableEmpty colSpan={6} icon={SearchXIcon} title="No output queues match" description={`Nothing matches "${q.trim()}". Search by library, queue name, or LIB/QUEUE.`}>
+                  <Button variant="outline" onClick={() => setQ('')}>
+                    <XIcon />
+                    Clear search
+                  </Button>
+                </TableEmpty>
+              ) : (
+                <TableEmpty
+                  colSpan={6}
+                  icon={InboxIcon}
+                  title="No output queues"
+                  description={
+                    server?.libraries.length
+                      ? `There are no output queues in ${server.libraries.join(', ')}. Check the server's libraries.`
+                      : 'This server has no output queues Spooldoc can list.'
+                  }
+                >
+                  <Button asChild variant="outline">
+                    <Link href="/servers">
+                      <ServerIcon />
+                      Edit libraries on Servers
+                    </Link>
+                  </Button>
+                </TableEmpty>
+              ))}
           </tbody>
         </table>
-        {(loading || servers === null) && (
-          <div className="flex items-center gap-2 border-t px-3 py-3 text-muted-foreground text-sm">
-            <Spinner /> Loading queues...
-          </div>
-        )}
       </div>
     </Page>
   );

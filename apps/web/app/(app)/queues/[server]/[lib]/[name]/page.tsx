@@ -1,9 +1,6 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { NewJobButton } from '@/components/pages/new-job-button';
-import { SpooledFileTable } from '@/components/pages/spooled-file-table';
-import { Page } from '@/components/page';
+import { QueueFilesPage } from '@/components/pages/queue-files-page';
 import { getServerRow } from '@/lib/server/servers';
 
 type Params = { server: string; lib: string; name: string };
@@ -20,28 +17,12 @@ export default async function QueuePage({ params }: { params: Promise<Params> })
   if (!server) {
     notFound();
   }
-  const library = decodeURIComponent(lib).toUpperCase();
-  const queue = decodeURIComponent(name).toUpperCase();
   return (
-    <Page
-      back={{ href: `/queues?server=${server.id}`, label: 'Queues' }}
-      title={
-        <>
-          <span className="font-mono">{library}/{queue}</span>
-        </>
-      }
-      description={
-        <>
-          Spooled files on{' '}
-          <Link href="/servers" className="hover:underline">
-            {server.name}
-          </Link>
-          , newest first.
-        </>
-      }
-      actions={<NewJobButton source={{ serverId: server.id, library, queue }} label="New job from this queue" />}
-    >
-      <SpooledFileTable serverId={server.id} library={library} queue={queue} />
-    </Page>
+    <QueueFilesPage
+      serverId={server.id}
+      serverName={server.name}
+      library={decodeURIComponent(lib).toUpperCase()}
+      queue={decodeURIComponent(name).toUpperCase()}
+    />
   );
 }
