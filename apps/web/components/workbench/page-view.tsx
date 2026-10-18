@@ -1,18 +1,28 @@
 'use client';
 
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { useEffect, useMemo, useRef } from 'react';
+import { ChevronLeftIcon, ChevronRightIcon, MoveHorizontalIcon } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { hitKey, hitLabel, pageLines } from '@/lib/client/render';
 import { useWorkbench } from './workbench-provider';
 
+/** Smallest and largest font size when fitting the page width, in pixels. */
+const FIT_MIN = 7;
+const FIT_MAX = 12;
+/** Horizontal padding and borders around the grid: the scroller's and the paper's. */
+const FRAME_PX = 12 * 2 + 12 * 2 + 2;
+
 /**
  * One page of the sample as a monospace grid, with a highlight for every field hit on
  * it: found (accent), empty (yellow) and missing (red outline where the anchor is known).
+ * By default the text shrinks so the whole page width fits the pane.
  */
 export function PageView() {
   const { render, page, setPage, selectedHit, setSelectedHit, setTab, documentIndex, setDocumentIndex } = useWorkbench();
   const scroller = useRef<HTMLDivElement>(null);
+  const grid = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState(true);
+  const [fontSize, setFontSize] = useState<number | null>(null);
   const pages = useMemo(() => render?.sample.pages ?? [], [render]);
   const width = render?.sample.attributes.pageWidth ?? 132;
   const current = pages.find((p) => p.no === page) ?? pages[0];
@@ -37,6 +47,27 @@ export function PageView() {
     const el = scroller.current?.querySelector(`[data-key="${CSS.escape(selectedKey)}"]`);
     el?.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
   }, [selectedKey, page]);
+
+  // Scale the font so `width` columns fit the pane, between FIT_MIN and the 12px of .spool-page.
+  useEffect(() => {
+    const box = scroller.current;
+    if (!fit || !box) {
+      setFontSize(null);
+      return;
+    }
+    const measure = () => {
+      const el = grid.current;
+      if (!el || box.clientWidth === 0) return;
+      const size = parseFloat(getComputedStyle(el).fontSize);
+      const columnPx = el.offsetWidth / width / size;
+      const available = box.clientWidth - FRAME_PX;
+      setFontSize(Math.min(Math.max(available / (width * columnPx), FIT_MIN), FIT_MAX));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [fit, width, current]);
 
   const index = current ? pages.indexOf(current) : -1;
   const go = (delta: number) => {
@@ -72,14 +103,24 @@ export function PageView() {
         >
           <ChevronRightIcon />
         </Button>
-        <span className="ml-auto text-muted-foreground text-xs">
-          {hits.length} {hits.length === 1 ? 'field' : 'fields'} on this page
+        <span className="ml-auto truncate text-muted-foreground text-xs">
+          {hits.length} {hits.length === 1 ? 'field' : 'fields'}
         </span>
+        <Button
+          variant={fit ? 'secondary' : 'ghost'}
+          size="icon-sm"
+          onClick={() => setFit((value) => !value)}
+          aria-pressed={fit}
+          aria-label="Fit page width"
+          title={fit ? 'Fitting the page width; click for actual size' : 'Fit the page width to the pane'}
+        >
+          <MoveHorizontalIcon />
+        </Button>
       </div>
       <div ref={scroller} className="min-h-0 flex-1 overflow-auto bg-muted/30 p-3">
         {current ? (
-          <div className="spool-page inline-block rounded border p-3 shadow-sm">
-            <div className="relative" style={{ width: `${width}ch` }}>
+          <div className="spool-page inline-block rounded border p-3 shadow-sm" style={fontSize ? { fontSize } : undefined}>
+            <div ref={grid} className="relative" style={{ width: `${width}ch` }}>
               {lines.join('\n') || ' '}
               {hits.map((hit) => {
                 const key = hitKey(hit);

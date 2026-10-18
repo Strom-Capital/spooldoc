@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono, Montserrat } from 'next/font/google';
+import { cookies } from 'next/headers';
 import { ThemeProvider } from 'next-themes';
 import type { ReactNode } from 'react';
 import { AppShell } from '@/components/app-shell';
@@ -22,14 +23,16 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // The sidebar starts as an icon rail until the user expands it (the sidebar keeps the choice in this cookie).
+  const sidebarOpen = (await cookies()).get('sidebar_state')?.value === 'true';
   return (
     <html lang="en" className={`${geist.variable} ${geistMono.variable} ${montserrat.variable}`} suppressHydrationWarning>
       <body className="antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <TooltipProvider>
             <SessionProvider>
-              <AppShell>{children}</AppShell>
+              <AppShell sidebarOpen={sidebarOpen}>{children}</AppShell>
             </SessionProvider>
           </TooltipProvider>
         </ThemeProvider>

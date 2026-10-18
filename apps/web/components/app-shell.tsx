@@ -5,9 +5,9 @@ import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/s
 import { AppSidebar } from './app-sidebar';
 
 /** The sidebar and the page. */
-export function AppShell({ children }: { children: ReactNode }) {
+export function AppShell({ children, sidebarOpen }: { children: ReactNode; sidebarOpen: boolean }) {
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={sidebarOpen}>
       <AppSidebar />
       <SidebarInset className="h-svh min-w-0 overflow-hidden">
         <header className="flex h-10 shrink-0 items-center gap-1 px-2 md:hidden">

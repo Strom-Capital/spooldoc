@@ -1,7 +1,9 @@
 'use client';
 
-import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { BracesIcon, FileTextIcon, PanelRightIcon, type LucideIcon } from 'lucide-react';
+import { useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent } from 'react';
 import { useSession } from '@/components/session-provider';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { ChatPanel } from './chat-panel';
 import { DefinitionEditor } from './definition-editor';
@@ -25,10 +27,23 @@ const RIGHT_TABS: { id: RightTab; label: string }[] = [
   { id: 'chat', label: 'Chat' },
 ];
 
-/** Smallest pane width, in percent of the workbench. */
-const MIN = 15;
+type Pane = 'page' | 'data' | 'output';
 
-/** The workbench for one sample: top bar and three resizable panes; the right one holds the preview and the chat. */
+const PANES: { id: Pane; label: string; icon: LucideIcon }[] = [
+  { id: 'page', label: 'Spooled page', icon: FileTextIcon },
+  { id: 'data', label: 'JSON, definition and template', icon: BracesIcon },
+  { id: 'output', label: 'Preview and chat', icon: PanelRightIcon },
+];
+
+/** Smallest pane width while dragging, in pixels. */
+const MIN_PX = 240;
+/** Below this viewport width only one pane shows at a time. */
+const SINGLE_PANE = 768;
+/** Below this viewport width the workbench starts with two panes. */
+const TWO_PANES = 1440;
+const STORAGE_KEY = 'spooldoc.workbench.panes';
+
+/** The workbench for one sample: top bar and up to three resizable panes; the right one holds the preview and the chat. */
 export function Workbench({ sampleId }: { sampleId: string }) {
   return (
     <WorkbenchProvider sampleId={sampleId}>
@@ -37,31 +52,106 @@ export function Workbench({ sampleId }: { sampleId: string }) {
   );
 }
 
+const subscribeNothing = () => () => undefined;
+
+function subscribeMedia(query: string) {
+  return (onChange: () => void) => {
+    const media = window.matchMedia(query);
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  };
+}
+
+const PHONE = `(max-width: ${SINGLE_PANE - 1}px)`;
+const WIDE = `(min-width: ${TWO_PANES}px)`;
+const subscribePhone = subscribeMedia(PHONE);
+const subscribeWide = subscribeMedia(WIDE);
+
+function readSaved(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function parsePanes(saved: string | null): Record<Pane, boolean> | null {
+  try {
+    const panes = JSON.parse(saved ?? 'null') as Record<Pane, boolean> | null;
+    return panes && PANES.some((pane) => panes[pane.id]) ? panes : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePanes(panes: Record<Pane, boolean>) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(panes));
+  } catch {
+    // Private mode or blocked storage: the choice lasts for this page only.
+  }
+}
+
 function WorkbenchLayout() {
-  const { error, tab, setTab } = useWorkbench();
+  const { error, tab, setTab, selectedHit } = useWorkbench();
   const { session } = useSession();
-  // Pane widths in percent; the last pane takes the rest.
-  const [widths, setWidths] = useState<[number, number]>([40, 28]);
+  // Relative pane widths (flex-grow), so hiding a pane gives its room to the others.
+  const [weights, setWeights] = useState<Record<Pane, number>>({ page: 36, data: 32, output: 32 });
+  // On a phone one pane shows at a time; elsewhere the user's choice, else the saved one,
+  // else all three on a wide screen and the page and data on a laptop.
+  const single = useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE).matches, () => false);
+  const wide = useSyncExternalStore(subscribeWide, () => window.matchMedia(WIDE).matches, () => true);
+  const saved = useSyncExternalStore(subscribeNothing, readSaved, () => null);
+  const [choice, setChoice] = useState<Record<Pane, boolean> | null>(null);
+  const [singlePane, setSinglePane] = useState<Pane>('data');
+  const shown: Record<Pane, boolean> = single
+    ? { page: false, data: false, output: false, [singlePane]: true }
+    : (choice ?? parsePanes(saved) ?? { page: true, data: true, output: wide });
   // The chat opens first when a model is configured, until the user picks a tab.
   const [rightChoice, setRightChoice] = useState<RightTab | null>(null);
   const right: RightTab = rightChoice ?? (session?.model ? 'chat' : 'preview');
-  const container = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const dataRef = useRef<HTMLDivElement>(null);
+  const outputRef = useRef<HTMLDivElement>(null);
+  const refs = { page: pageRef, data: dataRef, output: outputRef };
 
-  const startDrag = useCallback((divider: 0 | 1, event: ReactPointerEvent<HTMLDivElement>) => {
+  const show = (next: Record<Pane, boolean>) => {
+    setChoice(next);
+    writePanes(next);
+  };
+  const toggle = (pane: Pane) => {
+    if (single) {
+      setSinglePane(pane);
+      return;
+    }
+    const next = { ...shown, [pane]: !shown[pane] };
+    if (PANES.some((p) => next[p.id])) show(next);
+  };
+
+  // A field picked on the page, or a tab switched by the chat, needs the data pane.
+  const [last, setLast] = useState({ tab, selectedHit });
+  if (tab !== last.tab || selectedHit !== last.selectedHit) {
+    setLast({ tab, selectedHit });
+    if (single) setSinglePane('data');
+    else if (!shown.data) setChoice({ ...shown, data: true });
+  }
+
+  const visible = PANES.filter((pane) => shown[pane.id]).map((pane) => pane.id);
+
+  const startDrag = (a: Pane, b: Pane, event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
-    const box = container.current?.getBoundingClientRect();
-    if (!box) return;
+    const left = refs[a].current?.getBoundingClientRect();
+    const rightBox = refs[b].current?.getBoundingClientRect();
+    if (!left || !rightBox) return;
+    const span = rightBox.right - left.left;
+    const min = Math.min(0.45, MIN_PX / span);
     const target = event.currentTarget;
     target.setPointerCapture(event.pointerId);
     const move = (e: PointerEvent) => {
-      const pct = ((e.clientX - box.left) / box.width) * 100;
-      setWidths(([a, b]) => {
-        if (divider === 0) {
-          const left = Math.min(Math.max(pct, MIN), 100 - b - MIN);
-          return [left, b];
-        }
-        const middle = Math.min(Math.max(pct - a, MIN), 100 - a - MIN);
-        return [a, middle];
+      const frac = Math.min(Math.max((e.clientX - left.left) / span, min), 1 - min);
+      setWeights((w) => {
+        const sum = w[a] + w[b];
+        return { ...w, [a]: sum * frac, [b]: sum * (1 - frac) };
       });
     };
     const up = () => {
@@ -70,45 +160,57 @@ function WorkbenchLayout() {
     };
     target.addEventListener('pointermove', move);
     target.addEventListener('pointerup', up);
-  }, []);
+  };
 
-  const nudge = (divider: 0 | 1, delta: number) =>
-    setWidths(([a, b]) =>
-      divider === 0
-        ? [Math.min(Math.max(a + delta, MIN), 100 - b - MIN), b]
-        : [a, Math.min(Math.max(b + delta, MIN), 100 - a - MIN)],
+  const nudge = (a: Pane, b: Pane, delta: number) =>
+    setWeights((w) => {
+      const sum = w[a] + w[b];
+      const frac = Math.min(Math.max(w[a] / sum + delta, 0.15), 0.85);
+      return { ...w, [a]: sum * frac, [b]: sum * (1 - frac) };
+    });
+
+  /** The divider before `pane`, when a shown pane sits to its left. */
+  const divider = (pane: Pane) => {
+    const index = visible.indexOf(pane);
+    if (index <= 0) return null;
+    const a = visible[index - 1]!;
+    return (
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize panes"
+        aria-valuenow={Math.round((weights[a] / (weights[a] + weights[pane])) * 100)}
+        tabIndex={0}
+        onPointerDown={(event) => startDrag(a, pane, event)}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowLeft') nudge(a, pane, -0.02);
+          if (event.key === 'ArrowRight') nudge(a, pane, 0.02);
+        }}
+        className="w-1.5 shrink-0 cursor-col-resize bg-border/60 transition-colors hover:bg-primary/40 focus-visible:bg-primary/60 focus-visible:outline-none"
+      />
     );
+  };
 
-  const divider = (index: 0 | 1) => (
-    <div
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize panes"
-      aria-valuenow={Math.round(index === 0 ? widths[0] : widths[0] + widths[1])}
-      tabIndex={0}
-      onPointerDown={(event) => startDrag(index, event)}
-      onKeyDown={(event) => {
-        if (event.key === 'ArrowLeft') nudge(index, -2);
-        if (event.key === 'ArrowRight') nudge(index, 2);
-      }}
-      className="w-1.5 shrink-0 cursor-col-resize bg-border/60 transition-colors hover:bg-primary/40 focus-visible:bg-primary/60 focus-visible:outline-none"
-    />
-  );
+  // Every pane stays mounted, so a running chat keeps streaming and scroll positions hold while hidden.
+  const paneProps = (pane: Pane) => ({
+    style: { flex: `${weights[pane]} 1 0` },
+    hidden: !shown[pane],
+  });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <TopBar />
+      <TopBar controls={<PaneToggles shown={shown} onToggle={toggle} single={single} />} />
       {error && (
         <p role="alert" className="border-b bg-destructive/10 px-4 py-2 text-destructive text-sm">
           {error}
         </p>
       )}
-      <div ref={container} className="flex min-h-0 flex-1">
-        <div className="min-w-0" style={{ width: `${widths[0]}%` }}>
+      <div className="flex min-h-0 flex-1">
+        <div ref={pageRef} className="min-w-0" {...paneProps('page')}>
           <PageView />
         </div>
-        {divider(0)}
-        <div className="flex min-w-0 flex-col" style={{ width: `${widths[1]}%` }}>
+        {divider('data')}
+        <div ref={dataRef} className={cn('min-w-0 flex-col', shown.data && 'flex')} {...paneProps('data')}>
           <div role="tablist" aria-label="Data and files" className="flex h-10 shrink-0 items-end gap-1 border-b px-2">
             {TABS.map((item) => (
               <button
@@ -132,9 +234,8 @@ function WorkbenchLayout() {
             {tab === 'template' && <TemplateEditor />}
           </div>
         </div>
-        {divider(1)}
-        <div className="flex min-w-0 flex-1 flex-col">
-          {/* Both stay mounted so a running chat keeps streaming while the preview is shown. */}
+        {divider('output')}
+        <div ref={outputRef} className={cn('min-w-0 flex-col', shown.output && 'flex')} {...paneProps('output')}>
           <div className={cn('min-h-0 flex-1', right !== 'preview' && 'hidden')}>
             <HtmlPreview header={<RightTabs value={right} onChange={setRightChoice} />} />
           </div>
@@ -143,6 +244,33 @@ function WorkbenchLayout() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Icon toggles that show and hide the three panes; on a phone they pick the one pane. */
+function PaneToggles({ shown, onToggle, single }: { shown: Record<Pane, boolean>; onToggle: (pane: Pane) => void; single: boolean }) {
+  return (
+    <div role="group" aria-label="Panes" className="flex shrink-0 items-center gap-0.5 rounded-md bg-muted p-0.5">
+      {PANES.map((pane) => (
+        <Tooltip key={pane.id}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-pressed={shown[pane.id]}
+              aria-label={`${single ? 'Show' : shown[pane.id] ? 'Hide' : 'Show'} ${pane.label.toLowerCase()}`}
+              onClick={() => onToggle(pane.id)}
+              className={cn(
+                'flex size-7 items-center justify-center rounded [&_svg]:size-4',
+                shown[pane.id] ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <pane.icon />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">{pane.label}</TooltipContent>
+        </Tooltip>
+      ))}
     </div>
   );
 }

@@ -5,11 +5,18 @@ import { cn } from '@/lib/utils';
  * The horizontal Spooldoc logo (public/brand/spooldoc-horizontal-*.svg) drawn inline,
  * so the wordmark uses the Montserrat 600 loaded by the page and the ink follows the
  * theme through `currentColor`. The folded corner keeps the brand accent.
+ *
+ * @param mark - Draw only the mark, cropped square, for the collapsed sidebar
  */
-export function Logo({ className }: { className?: string }) {
+export function Logo({ className, mark = false }: { className?: string; mark?: boolean }) {
   const mask = `perforations-${useId().replace(/:/g, '')}`;
   return (
-    <svg viewBox="0 0 455 104" role="img" aria-label="Spooldoc" className={cn('w-auto text-foreground', className)}>
+    <svg
+      viewBox={mark ? '18 8 84 84' : '0 0 455 104'}
+      role="img"
+      aria-label="Spooldoc"
+      className={cn('w-auto text-foreground', className)}
+    >
       <g transform="translate(16 8) scale(0.68)">
         <defs>
           <mask id={mask} maskUnits="userSpaceOnUse" x="0" y="0" width="128" height="128">
@@ -28,17 +35,19 @@ export function Logo({ className }: { className?: string }) {
         </g>
         <path fill="#3159E8" d="M 98,9 L 119,30 L 100,30 Q 98,30 98,27 Z" />
       </g>
-      <text
-        x="112"
-        y="83"
-        fill="currentColor"
-        fontFamily="var(--font-montserrat), Montserrat, sans-serif"
-        fontSize="64"
-        fontWeight="600"
-        letterSpacing="-2.8"
-      >
-        Spooldoc
-      </text>
+      {!mark && (
+        <text
+          x="112"
+          y="83"
+          fill="currentColor"
+          fontFamily="var(--font-montserrat), Montserrat, sans-serif"
+          fontSize="64"
+          fontWeight="600"
+          letterSpacing="-2.8"
+        >
+          Spooldoc
+        </text>
+      )}
     </svg>
   );
 }
