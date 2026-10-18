@@ -1,4 +1,4 @@
-# Example: docker compose up --build, then open http://localhost:3002.
+# Example: docker compose up --build, then open http://localhost:3000.
 # .env next to this file holds the settings (see apps/web/.env.example);
 # BETTER_AUTH_SECRET and SPOOLDOC_SECRET_KEY are required; the chat model is set
 # in the app under Settings. Chromium is set by the image.
@@ -29,7 +29,7 @@ services:
     build: .
     image: spooldoc
     ports:
-      - "3002:3000"
+      - "3000:3000"
     env_file: .env
     environment:
       DATABASE_URL: postgres://spooldoc:${POSTGRES_PASSWORD:-spooldoc}@db:5432/spooldoc

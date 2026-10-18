@@ -171,9 +171,9 @@ describe('POST /api/jobs/[id]/chat', () => {
     expect(
       (
         await POST(
-          new Request(`http://localhost:3002/api/jobs/${jobId}/chat`, {
+          new Request(`http://localhost:3000/api/jobs/${jobId}/chat`, {
             method: 'POST',
-            headers: { origin: 'http://localhost:3002', host: 'localhost:3002', ...auth },
+            headers: { origin: 'http://localhost:3000', host: 'localhost:3000', ...auth },
             body: 'not json',
           }),
           params({ id: jobId }),

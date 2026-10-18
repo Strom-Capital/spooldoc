@@ -16,9 +16,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "UV_THREADPOOL_SIZE=16 next dev -p 3002",
+    "dev": "UV_THREADPOOL_SIZE=16 next dev",
     "build": "next build",
-    "start": "UV_THREADPOOL_SIZE=16 next start -p 3002",
+    "start": "UV_THREADPOOL_SIZE=16 next start",
     "lint": "eslint --max-warnings 0 .",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",

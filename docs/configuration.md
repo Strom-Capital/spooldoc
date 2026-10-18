@@ -1,0 +1,49 @@
+---
+title: "Configuration"
+description: "The environment variables the server reads, and the settings that live in the app."
+---
+
+Spooldoc reads a few settings from the environment when it starts, and
+keeps the rest in the database under Settings, where they change without a
+restart. `apps/web/.env.example` lists the variables with comments; copy it
+to `apps/web/.env.local` for development, or put the same variables in the
+`.env` file next to `compose.yaml` for Docker.
+
+## Environment variables
+
+| Variable | Required | Default | What it is |
+|----------|----------|---------|------------|
+| `DATABASE_URL` | Yes | | The Postgres connection string. `docker compose up -d db` starts one at `postgres://spooldoc:spooldoc@localhost:5433/spooldoc`. |
+| `BETTER_AUTH_SECRET` | Yes | | Signs the login sessions. At least 32 characters; `openssl rand -base64 32` makes one. |
+| `SPOOLDOC_SECRET_KEY` | Yes | | Encrypts the IBM i passwords of saved servers and the model keys (AES-256-GCM). 32 bytes in base64; `openssl rand -base64 32` makes one. Keep it: with another key the saved passwords cannot be read and must be entered again. |
+| `PORT` | No | `3000` | The port the server listens on. |
+| `APP_URL` | No | | The address users reach the app at, such as `https://spooldoc.example.com`. Origin checks accept it and the request's own host, and cookies are marked secure when it is https. Set it behind a reverse proxy. |
+| `SPOOLDOC_WATCHER` | No | `on` | Run the queue watcher in this process. Turn it off on every instance but one; the watcher also takes database locks, so two instances never read the same data queue or run the same job at once. |
+| `SPOOLDOC_MIGRATE` | No | `on` | Apply the database migrations when the server starts. With it off, run `pnpm --filter @spooldoc/web db:migrate` yourself. |
+| `SPOOLDOC_MASK` | No | `true` | Mask values (digits to 9, letters to X or x) in page text and tool results before they go to the model. See [AI assistant](ai-assistant.md#masking). |
+| `SPOOLDOC_DEFAULT_CCSID` | No | | The code page for spooled files that have no CHRID when the job CCSID is not supported, for example `273` or `37`. |
+| `SPOOLDOC_CHROMIUM_PATH` | No | | A Chrome or Chromium executable for PDF rendering. The container image sets `/usr/bin/chromium`. Without it, HTML output works and PDF reports that it is unavailable. |
+| `SPOOLDOC_ALLOWED_HOSTS` | No | | Comma-separated hosts servers may use. When set, the server form shows a list instead of a free text field. |
+
+The server refuses to start with a missing or malformed required variable
+and says which one. The chat model, its key and effort are not environment
+variables: they are set in the app. A version that read `ANTHROPIC_API_KEY`,
+`SPOOLDOC_MODEL` or `OPENAI_COMPATIBLE_*` no longer does; enter the key and
+model under Settings once.
+
+## Settings in the app
+
+Under Settings, for the whole app:
+
+| Setting | Default | What it is |
+|---------|---------|------------|
+| Poll interval | 30 seconds | How often the watcher lists a polled queue. |
+| Safety check | 5 minutes | How often a real-time queue is listed anyway, in case a data queue entry was missed. |
+| Keep runs for | 90 days | How long runs are kept, 1 to 3650 days. See [Retention](job-log.md#retention). |
+| AI model | None | The provider, key, model and effort of the assistant. See [AI assistant](ai-assistant.md#choosing-a-model). |
+
+## Per server and per job
+
+The libraries a server lists queues from are on the server; see
+[Servers](servers.md). The filters, trigger, formats, destination and
+finish action are on each job; see [Jobs](jobs.md).

@@ -20,7 +20,7 @@ function multipart(path: string, method: 'POST' | 'PUT', fields: { name?: string
   const form = new FormData();
   if (fields.name !== undefined) form.set('name', fields.name);
   if (fields.file) form.set('file', new Blob([new Uint8Array(fields.file)]), fields.fileName ?? 'upload.bin');
-  return new Request(`http://localhost:3002${path}`, { method, body: form, headers: { host: 'localhost:3002', origin: 'http://localhost:3002', ...auth } });
+  return new Request(`http://localhost:3000${path}`, { method, body: form, headers: { host: 'localhost:3000', origin: 'http://localhost:3000', ...auth } });
 }
 
 async function create(name: string, file: Buffer): Promise<Response> {
@@ -134,7 +134,7 @@ describe('assets', () => {
 
   it('needs a session and a same-origin request', async () => {
     expect((await listRoute.GET(appRequest('/api/assets'))).status).toBe(401);
-    const foreign = new Request('http://localhost:3002/api/assets', { method: 'POST', body: new FormData(), headers: { host: 'localhost:3002', origin: 'https://evil.example', ...auth } });
+    const foreign = new Request('http://localhost:3000/api/assets', { method: 'POST', body: new FormData(), headers: { host: 'localhost:3000', origin: 'https://evil.example', ...auth } });
     expect((await listRoute.POST(foreign)).status).toBe(403);
   });
 });

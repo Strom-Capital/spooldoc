@@ -5,7 +5,7 @@ import { openTestDb } from './helpers/db';
 // Every test file gets its own migrated database and known secrets.
 process.env.BETTER_AUTH_SECRET = 'test-auth-secret-that-is-at-least-32-characters';
 process.env.SPOOLDOC_SECRET_KEY = Buffer.alloc(32, 7).toString('base64');
-process.env.APP_URL = 'http://localhost:3002';
+process.env.APP_URL = 'http://localhost:3000';
 process.env.SPOOLDOC_WATCHER = 'off';
 delete process.env.DATABASE_URL;
 delete process.env.SPOOLDOC_ALLOWED_HOSTS;

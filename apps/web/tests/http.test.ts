@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { checkFetchSite, checkOrigin, redact } from '@/lib/server/http';
 
 const request = (method: string, headers: Record<string, string>) =>
-  new Request('http://localhost:3002/api/x', { method, headers: { host: 'localhost:3002', ...headers } });
+  new Request('http://localhost:3000/api/x', { method, headers: { host: 'localhost:3000', ...headers } });
 
 describe('checkOrigin', () => {
   it('lets GET through', () => {
@@ -10,12 +10,12 @@ describe('checkOrigin', () => {
   });
 
   it('accepts APP_URL and the request host', () => {
-    expect(checkOrigin(request('POST', { origin: 'http://localhost:3002' }))).toBeUndefined();
-    expect(checkOrigin(new Request('http://127.0.0.1:3002/api/x', { method: 'PUT', headers: { host: '127.0.0.1:3002', origin: 'http://127.0.0.1:3002' } }))).toBeUndefined();
+    expect(checkOrigin(request('POST', { origin: 'http://localhost:3000' }))).toBeUndefined();
+    expect(checkOrigin(new Request('http://127.0.0.1:3000/api/x', { method: 'PUT', headers: { host: '127.0.0.1:3000', origin: 'http://127.0.0.1:3000' } }))).toBeUndefined();
   });
 
   it('falls back to the Referer', () => {
-    expect(checkOrigin(request('DELETE', { referer: 'http://localhost:3002/samples/X' }))).toBeUndefined();
+    expect(checkOrigin(request('DELETE', { referer: 'http://localhost:3000/samples/X' }))).toBeUndefined();
     expect(checkOrigin(request('DELETE', { referer: 'https://evil.example.com/' }))?.status).toBe(403);
   });
 

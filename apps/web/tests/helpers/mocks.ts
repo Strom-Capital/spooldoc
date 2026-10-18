@@ -51,11 +51,11 @@ export const fakeJt400 = {
 /** A request to the app with the Origin of the app, as a browser would send it. */
 export function appRequest(path: string, init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}): Request {
   const method = init.method ?? 'GET';
-  return new Request(`http://localhost:3002${path}`, {
+  return new Request(`http://localhost:3000${path}`, {
     method,
     headers: {
-      host: 'localhost:3002',
-      ...(method === 'GET' ? { 'sec-fetch-site': 'same-origin' } : { origin: 'http://localhost:3002', 'content-type': 'application/json' }),
+      host: 'localhost:3000',
+      ...(method === 'GET' ? { 'sec-fetch-site': 'same-origin' } : { origin: 'http://localhost:3000', 'content-type': 'application/json' }),
       ...init.headers,
     },
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
