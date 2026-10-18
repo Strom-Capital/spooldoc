@@ -28,6 +28,7 @@ describe('/api/render/[id]', () => {
     expect(body.definition.type).toBe('invoice');
     expect(body.extract.documents).toHaveLength(6);
     expect(body.extract.documents[0].invoiceNo).toBe('260101');
+    expect(body.names).toEqual(['invoice-260101', 'invoice-260102', 'invoice-260103', 'invoice-260104', 'invoice-260105', 'invoice-260106']);
     expect(body.extract.hits.length).toBeGreaterThan(0);
     expect(body.extract.hits.some((hit: { status: string }) => hit.status === 'missing')).toBe(false);
     expect(body.html).toContain('260101');

@@ -11,6 +11,8 @@ export interface RenderResult {
   definition?: { type: string; yaml: string; error?: string };
   template?: { html: string; error?: string; generated?: boolean };
   extract?: ExtractResult;
+  /** One name per extracted document, from the definition output name. */
+  names?: string[];
   html?: string;
   document: number;
   errors: string[];

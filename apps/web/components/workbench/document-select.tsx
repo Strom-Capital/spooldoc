@@ -6,6 +6,7 @@ import { useWorkbench } from './workbench-provider';
 export function DocumentSelect() {
   const { render, documentIndex, setDocumentIndex } = useWorkbench();
   const documents = render?.extract?.documents ?? [];
+  const names = render?.names ?? [];
   if (documents.length === 0) {
     return null;
   }
@@ -19,15 +20,18 @@ export function DocumentSelect() {
       {documents.map((doc, index) => (
         <option key={index} value={index}>
           Document {index + 1} of {documents.length}
-          {documentTitle(doc)}
+          {documentTitle(names[index], doc)}
         </option>
       ))}
     </select>
   );
 }
 
-/** The first short string value of a document, as a hint in the selector. */
-function documentTitle(doc: Record<string, unknown>): string {
+/** The document's output name, else its first short string value, as a hint in the selector. */
+function documentTitle(name: string | undefined, doc: Record<string, unknown>): string {
+  if (name) {
+    return `: ${name.slice(0, 24)}`;
+  }
   for (const value of Object.values(doc)) {
     if ((typeof value === 'string' || typeof value === 'number') && String(value).trim()) {
       return `: ${String(value).trim().slice(0, 24)}`;

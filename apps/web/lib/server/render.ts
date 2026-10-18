@@ -1,6 +1,7 @@
 import 'server-only';
 
 import {
+  documentName,
   extract,
   parseDefinition,
   renderTemplate,
@@ -23,6 +24,8 @@ export interface RenderResult {
   definition?: { type: string; yaml: string; error?: string };
   template?: { html: string; error?: string; generated?: boolean };
   extract?: ExtractResult;
+  /** One name per extracted document, from the definition's `output.name`. */
+  names?: string[];
   /** The rendered HTML of document `document`. */
   html?: string;
   /** 0-based index of the rendered document. */
@@ -139,6 +142,7 @@ export async function renderSample(id: string, overrides: RenderOverrides = {}):
     return result;
   }
   const documents = result.extract.documents;
+  result.names = documents.map((doc, i) => documentName(def, doc, i));
   const index = Math.min(Math.max(0, Math.trunc(overrides.document ?? 0)), Math.max(0, documents.length - 1));
   result.document = index;
   const doc = documents[index];
