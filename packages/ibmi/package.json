@@ -1,8 +1,15 @@
 {
   "name": "@spooldoc/ibmi",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Spooldoc IBM i connection: list output queues and capture spooled files as samples",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Strom-Capital/spooldoc.git",
+    "directory": "packages/ibmi"
+  },
+  "homepage": "https://github.com/Strom-Capital/spooldoc#readme",
+  "bugs": "https://github.com/Strom-Capital/spooldoc/issues",
   "type": "module",
   "engines": {
     "node": ">=22"

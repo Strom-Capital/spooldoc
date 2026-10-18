@@ -1,9 +1,16 @@
 {
   "name": "@spooldoc/web",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "private": true,
   "description": "Spooldoc web app: servers, queues, jobs that turn spooled files into documents, and the job log",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Strom-Capital/spooldoc.git",
+    "directory": "apps/web"
+  },
+  "homepage": "https://github.com/Strom-Capital/spooldoc#readme",
+  "bugs": "https://github.com/Strom-Capital/spooldoc/issues",
   "type": "module",
   "engines": {
     "node": ">=22"

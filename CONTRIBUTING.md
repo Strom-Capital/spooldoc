@@ -34,6 +34,16 @@ Schema changes go in `apps/web/lib/server/db/schema.ts`; then run
 - Conventional Commits: `feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `test:`,
   with a scope when it helps (`feat(web): ...`).
 - Branch from `main`; keep a pull request to one change.
+- Pull requests are squash merged, so the pull request title is the commit
+  message on `main` and must follow the same format.
+
+## Releases
+
+Release Please keeps a release pull request open on `main`. It collects the
+`feat:` and `fix:` commits since the last release into `CHANGELOG.md` and
+bumps the version in every `package.json`. Merging it tags `vX.Y.Z` and
+publishes the GitHub release. Before 1.0.0 a `feat:` bumps the minor version
+and a breaking change (`feat!:`) does too; a `fix:` bumps the patch.
 
 ## No real names
 

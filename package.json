@@ -1,8 +1,15 @@
 {
   "name": "spooldoc",
+  "version": "0.0.0",
   "private": true,
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Strom-Capital/spooldoc.git"
+  },
+  "homepage": "https://github.com/Strom-Capital/spooldoc#readme",
+  "bugs": "https://github.com/Strom-Capital/spooldoc/issues",
   "author": "Ström Capital Oy",
   "engines": {
     "node": ">=22"
