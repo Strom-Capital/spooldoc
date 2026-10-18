@@ -1,6 +1,6 @@
 'use client';
 
-import { FileDownIcon } from 'lucide-react';
+import { FileCodeIcon, FileDownIcon } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { useAppInfo } from '@/components/app-info';
 import { Button } from '@/components/ui/button';
@@ -23,8 +23,8 @@ async function download(response: Response, fallback: string): Promise<void> {
 }
 
 /**
- * The rendered HTML of the current document in a sandboxed iframe (no scripts), and a
- * Download PDF button that renders the same document with the text in the editors.
+ * The rendered HTML of the current document in a sandboxed iframe (no scripts), and
+ * buttons that download it as HTML or as a PDF rendered from the text in the editors.
  *
  * @param header - Controls for the start of the pane header
  */
@@ -39,6 +39,13 @@ export function HtmlPreview({ header }: { header?: ReactNode }) {
     : !render?.html
       ? 'Nothing to print yet: fix the definition or the template first.'
       : 'Download this document as a PDF';
+
+  /** The rendered HTML of this document as a file, named like the PDF. */
+  function onHtml() {
+    if (!render?.html) return;
+    const name = render.names?.[documentIndex] ?? `document-${documentIndex + 1}`;
+    void download(new Response(render.html, { headers: { 'content-disposition': `attachment; filename="${name}.html"` } }), `${name}.html`);
+  }
 
   async function onPdf() {
     setBusy(true);
@@ -66,12 +73,16 @@ export function HtmlPreview({ header }: { header?: ReactNode }) {
       <div className="flex h-10 shrink-0 items-center gap-2 border-b px-2 text-sm">
         {header ?? <span className="font-medium">Preview</span>}
         <DocumentSelect />
+        <Button size="sm" variant="outline" className="ml-auto" disabled={!render?.html} onClick={onHtml} title="Download this document as HTML">
+          <FileCodeIcon />
+          HTML
+        </Button>
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="ml-auto" tabIndex={ready ? undefined : 0}>
+            <span tabIndex={ready ? undefined : 0}>
               <Button size="sm" variant="outline" disabled={!ready || busy} onClick={onPdf}>
                 {busy ? <Spinner /> : <FileDownIcon />}
-                Download PDF
+                PDF
               </Button>
             </span>
           </TooltipTrigger>

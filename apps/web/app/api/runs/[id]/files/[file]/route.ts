@@ -7,7 +7,7 @@ import { UUID } from '@/lib/server/servers';
 
 export const dynamic = 'force-dynamic';
 
-/** Download a file a run delivered to Spooldoc. */
+/** Download a file a run delivered to Spooldoc (`?inline=1` opens it in the browser). */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string; file: string }> }): Promise<Response> {
   const auth = await guard(request);
   if ('response' in auth) {
@@ -31,6 +31,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       'Content-Length': String(row.size),
       'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${row.name.replace(/["\\\r\n]/g, '_')}"`,
       'Cache-Control': 'private, no-store',
+      // HTML outputs come from templates: opened here they may not run scripts or load anything.
+      'Content-Security-Policy': "sandbox; default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'",
+      'X-Content-Type-Options': 'nosniff',
     },
   });
 }

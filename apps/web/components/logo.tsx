@@ -4,7 +4,9 @@ import { cn } from '@/lib/utils';
 /**
  * The horizontal Spooldoc logo (public/brand/spooldoc-horizontal-*.svg) drawn inline,
  * so the wordmark uses the Montserrat 600 loaded by the page and the ink follows the
- * theme through `currentColor`. The folded corner keeps the brand accent.
+ * theme through `currentColor`. The folded corner keeps the brand accent. The
+ * wordmark's capitals are centred on the mark, with the descender of the "p" level
+ * with the mark's bottom edge.
  *
  * @param mark - Draw only the mark, cropped square, for the collapsed sidebar
  */
@@ -38,7 +40,7 @@ export function Logo({ className, mark = false }: { className?: string; mark?: b
       {!mark && (
         <text
           x="112"
-          y="83"
+          y="71"
           fill="currentColor"
           fontFamily="var(--font-montserrat), Montserrat, sans-serif"
           fontSize="64"

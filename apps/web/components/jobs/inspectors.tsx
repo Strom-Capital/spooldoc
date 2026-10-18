@@ -305,7 +305,7 @@ export function DestinationInspector() {
             onSelect={() => updateDraft({ destination: { destinationId: destination.id } }, { debounce: false })}
             title={destination.name}
           >
-            PDFs are kept in Spooldoc and can be downloaded from the Job log.
+            Files (PDF and HTML) are kept in Spooldoc and can be downloaded from the Job log.
           </Choice>
         ))}
       </div>
@@ -369,7 +369,7 @@ export function FinishInspector() {
       {finish.action === 'delete' && (
         <p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive text-sm">
           <Trash2Icon className="mt-0.5 size-4 shrink-0" />
-          Spooled files are deleted from the IBM i after their PDFs are delivered. Keep this only when the PDFs are the record.
+          Spooled files are deleted from the IBM i after their documents are delivered. Keep this only when the delivered files are the record.
         </p>
       )}
     </Panel>

@@ -9,7 +9,9 @@ import { PageView } from '@/components/workbench/page-view';
 import { PaneTabs, SplitPanes } from '@/components/workbench/split-panes';
 import { TemplateEditor } from '@/components/workbench/template-editor';
 import { useWorkbench, WorkbenchProvider } from '@/components/workbench/workbench-provider';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Spinner } from '@/components/ui/spinner';
+import { OUTPUT_FORMATS, type OutputFormat } from '@/lib/job-spec';
 import { useJob } from './job-provider';
 import { PreviewPicker } from './preview-picker';
 
@@ -37,15 +39,16 @@ export function JobWorkbench({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** The bar above the Extract and Render panes: the preview spooled file and problems. */
-function StepHeader() {
+/** The bar above the Extract and Render panes: the preview spooled file, problems and extra controls. */
+function StepHeader({ end }: { end?: React.ReactNode }) {
   const { render, loading, error } = useWorkbench();
   return (
     <div className="shrink-0 border-b">
       <div className="flex min-h-11 flex-wrap items-center gap-2 px-3 py-1.5">
         <span className="text-muted-foreground text-xs">Try on</span>
         <PreviewPicker sample={render?.sample ?? null} />
-        {loading && <Spinner className="ml-auto shrink-0 text-muted-foreground" />}
+        {loading && <Spinner className="shrink-0 text-muted-foreground" />}
+        {end && <div className="ml-auto flex items-center gap-3">{end}</div>}
       </div>
       {error && <p className="truncate px-3 pb-1.5 text-destructive text-xs">{error}</p>}
       {render && render.errors.length > 0 && (
@@ -98,13 +101,44 @@ export function ExtractStep() {
   );
 }
 
-/** Render: the template (and the JSON for field names) next to the HTML preview and PDF. */
+const FORMAT_LABEL: Record<OutputFormat, string> = { pdf: 'PDF', html: 'HTML' };
+
+/** Which files each document becomes: PDF, HTML or both (at least one). */
+function OutputFormats() {
+  const { spec, readOnly, updateDraft } = useJob();
+  const formats = spec.render.formats;
+  const toggle = (format: OutputFormat, on: boolean) => {
+    const next = on ? [...formats, format] : formats.filter((f) => f !== format);
+    if (next.length > 0) updateDraft({ render: { ...spec.render, formats: OUTPUT_FORMATS.filter((f) => next.includes(f)) } }, { debounce: false });
+  };
+  return (
+    <div role="group" aria-label="Output formats" className="flex items-center gap-3 text-sm">
+      <span className="text-muted-foreground text-xs">Output</span>
+      {OUTPUT_FORMATS.map((format) => {
+        const checked = formats.includes(format);
+        return (
+          <label key={format} className="flex items-center gap-1.5">
+            <Checkbox
+              checked={checked}
+              disabled={readOnly || (checked && formats.length === 1)}
+              onCheckedChange={(on) => toggle(format, on === true)}
+              aria-label={`Make ${FORMAT_LABEL[format]} files`}
+            />
+            {FORMAT_LABEL[format]}
+          </label>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Render: the template (and the JSON for field names) next to the HTML preview, with PDF and HTML downloads. */
 export function RenderStep() {
   const { tab, setTab } = useWorkbench();
   const current = tab === 'definition' ? 'template' : tab;
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <StepHeader />
+      <StepHeader end={<OutputFormats />} />
       <div className="min-h-0 flex-1">
         <SplitPanes
           labels={['Template and JSON', 'Preview']}

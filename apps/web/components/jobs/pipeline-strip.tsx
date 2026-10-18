@@ -56,7 +56,8 @@ function StepCard({ data }: NodeProps<StepNode>) {
       aria-pressed={data.selected}
       aria-label={`${data.title}: ${data.detail}. ${STATUS_LABEL[data.status]}`}
       className={cn(
-        'nodrag nopan flex w-[184px] cursor-pointer flex-col gap-1 rounded-lg border bg-card px-3 py-2 text-left shadow-xs transition-colors hover:border-primary/60',
+        // One height for every step, so the handles line up and the connectors stay level.
+        'nodrag nopan flex h-[76px] w-[184px] cursor-pointer flex-col justify-start gap-1 rounded-lg border bg-card px-3 py-2 text-left shadow-xs transition-colors hover:border-primary/60',
         data.selected && 'border-primary ring-2 ring-primary/25',
       )}
     >
@@ -152,7 +153,7 @@ function useSteps(): StepInfo[] {
       title: 'Render',
       icon: FileTextIcon,
       detail: spec.render.template === null ? 'Starter template' : 'Custom template',
-      sub: render?.template?.error ? 'Template has errors' : render?.html ? 'HTML and PDF' : undefined,
+      sub: render?.template?.error ? 'Template has errors' : spec.render.formats.map((f) => f.toUpperCase()).join(' and '),
       status: render?.template?.error ? 'error' : render?.html ? 'ok' : 'unset',
     },
     {
@@ -211,7 +212,7 @@ export function PipelineStrip() {
         id: `${steps[index]!.step}-${data.step}`,
         source: steps[index]!.step,
         target: data.step,
-        type: 'smoothstep',
+        type: 'straight',
         style: { strokeWidth: 1.5 },
       })),
     [steps],

@@ -46,7 +46,7 @@ export function DestinationsPage() {
               {destination.builtin && <Badge variant="secondary">Built in</Badge>}
             </div>
             <p className="mt-2 text-muted-foreground text-sm">
-              PDFs are stored in Spooldoc&apos;s database. Download them from the Job log, or from Run now.
+              PDF and HTML files are stored in Spooldoc&apos;s database. Download them from the Job log, or from Run now.
             </p>
             <div className="mt-3 text-sm">
               {destination.jobs.length === 0 ? (

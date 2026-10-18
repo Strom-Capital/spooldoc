@@ -185,6 +185,32 @@ describe('runs', () => {
     for (const spy of spies) expect(spy).not.toHaveBeenCalled();
   });
 
+  it('makes HTML files next to the PDFs, and serves them sandboxed', async () => {
+    const id = await readyJob();
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { template, formats: ['html', 'pdf'] } } }), params({ id }));
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
+
+    expect(run!.status).toBe('success');
+    expect(run!.outputs).toHaveLength(12);
+    expect(run!.outputs.slice(0, 2).map((o) => o.name)).toEqual(['invoice-260101.pdf', 'invoice-260101.html']);
+    expect(run!.steps.find((s) => s.step === 'render')?.note).toBe('6 PDFs and 6 HTML files');
+    const html = run!.outputs.find((o) => o.name === 'invoice-260101.html')!;
+    const file = await fileRoute.GET(get(`/api/runs/${run!.id}/files/${html.id}?inline=1`), params({ id: run!.id, file: html.id }));
+    expect(file.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(file.headers.get('content-security-policy')).toMatch(/^sandbox;/);
+    expect(await file.text()).toContain('260101');
+  });
+
+  it('makes only HTML when PDF is off', async () => {
+    const id = await readyJob();
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { template, formats: ['html'] } } }), params({ id }));
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
+    expect(run!.outputs.map((o) => o.contentType)).toEqual(Array(6).fill('text/html; charset=utf-8'));
+    expect(renderPdf).not.toHaveBeenCalled();
+  });
+
   it('moves or deletes the file, or leaves it, as the version says', async () => {
     for (const [finish, expected] of [
       [{ action: 'move', queue: { library: 'MYLIB', name: 'ARCHIVE' } }, ['moveSpooledFile']],

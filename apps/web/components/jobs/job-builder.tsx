@@ -199,7 +199,7 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {job.name}?</AlertDialogTitle>
             <AlertDialogDescription>
-              The job, its versions, its runs and their PDFs are deleted. Nothing changes on the IBM i.
+              The job, its versions, its runs and their files are deleted. Nothing changes on the IBM i.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

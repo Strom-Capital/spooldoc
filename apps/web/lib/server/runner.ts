@@ -63,7 +63,7 @@ export async function startRun(request: RunRequest): Promise<{ id: string; seq: 
 
 /**
  * Process one spooled file with a job version: capture, extract, render every document
- * to PDF, deliver, then hold, move or delete the file as the version says. Every step is
+ * to the version's formats (PDF, HTML or both), deliver, then hold, move or delete the file as the version says. Every step is
  * recorded on the run; a failure stops the run and is stored, never thrown. The finish
  * step runs only after everything was delivered, and a failure there gives `warning`.
  *
@@ -138,16 +138,25 @@ export async function executeRun(runId: string, request: RunRequest, connection?
         const html = spec.render.template ?? starterTemplate(def);
         const rendered = renderDocuments(def, html, docs, sample);
         const names = new Set<string>();
+        const unique = (base: string, ext: string) => {
+          let name = `${base}.${ext}`;
+          for (let n = 2; names.has(name); n++) name = `${base}-${n}.${ext}`;
+          names.add(name);
+          return name;
+        };
         const out: OutputFile[] = [];
         for (const doc of rendered) {
-          let name = `${doc.name}.pdf`;
-          for (let n = 2; names.has(name); n++) name = `${doc.name}-${n}.pdf`;
-          names.add(name);
-          out.push({ documentIndex: doc.index, name, contentType: 'application/pdf', content: await pdfRenderer(doc.html, sample.attributes.pageWidth) });
+          for (const format of spec.render.formats) {
+            out.push(
+              format === 'pdf'
+                ? { documentIndex: doc.index, name: unique(doc.name, 'pdf'), contentType: 'application/pdf', content: await pdfRenderer(doc.html, sample.attributes.pageWidth) }
+                : { documentIndex: doc.index, name: unique(doc.name, 'html'), contentType: 'text/html; charset=utf-8', content: new TextEncoder().encode(doc.html) },
+            );
+          }
         }
         return out;
       },
-      (out) => `${out.length} PDF${out.length === 1 ? '' : 's'}`,
+      (out) => fileCount(out),
     );
 
     await step('deliver', async () => {
@@ -186,6 +195,14 @@ export async function executeRun(runId: string, request: RunRequest, connection?
 
   mergeCapture(steps);
   await db.update(runs).set({ status, error, steps, documents, finishedAt: new Date() }).where(eq(runs.id, runId));
+}
+
+/** "6 PDFs and 6 HTML files". */
+function fileCount(files: OutputFile[]): string {
+  const pdf = files.filter((f) => f.contentType === 'application/pdf').length;
+  const html = files.length - pdf;
+  const parts = [pdf ? `${pdf} PDF${pdf === 1 ? '' : 's'}` : '', html ? `${html} HTML file${html === 1 ? '' : 's'}` : ''].filter(Boolean);
+  return parts.join(' and ') || 'No files';
 }
 
 /** Two capture entries (connect, read) become one. */

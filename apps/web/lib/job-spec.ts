@@ -13,6 +13,10 @@ export const ibmiName = z
 export const queueRefSchema = z.object({ library: ibmiName, name: ibmiName });
 export type QueueRefSpec = z.infer<typeof queueRefSchema>;
 
+/** The files a job makes from each document. */
+export const OUTPUT_FORMATS = ['pdf', 'html'] as const;
+export type OutputFormat = (typeof OUTPUT_FORMATS)[number];
+
 /** What happens to a spooled file after every document was delivered. */
 export const FINISH_ACTIONS = ['hold', 'move', 'delete', 'none'] as const;
 export type FinishAction = (typeof FINISH_ACTIONS)[number];
@@ -32,8 +36,25 @@ export const jobSpecSchema = z.object({
   trigger: z.object({ mode: z.enum(['manual', 'watch']).default('manual') }).default({ mode: 'manual' }),
   extract: z.object({ definition: z.string().max(200_000).default('') }).default({ definition: '' }),
   render: z
-    .object({ template: z.string().max(500_000).nullable().default(null), format: z.literal('pdf').default('pdf') })
-    .default({ template: null, format: 'pdf' }),
+    .preprocess(
+      // Specs saved before HTML output have `format: 'pdf'`.
+      (value) => {
+        if (value && typeof value === 'object' && 'format' in value && !('formats' in value)) {
+          const { format, ...rest } = value as { format: unknown };
+          return { ...rest, formats: [format] };
+        }
+        return value;
+      },
+      z.object({
+        template: z.string().max(500_000).nullable().default(null),
+        formats: z
+          .array(z.enum(OUTPUT_FORMATS))
+          .min(1, 'Pick at least one output format')
+          .transform((formats) => OUTPUT_FORMATS.filter((f) => formats.includes(f)))
+          .default(['pdf']),
+      }),
+    )
+    .default({ template: null, formats: ['pdf'] }),
   destination: z.object({ destinationId: z.string().uuid().nullable().default(null) }).default({ destinationId: null }),
   finish: z
     .object({ action: z.enum(FINISH_ACTIONS).default('hold'), queue: queueRefSchema.nullable().default(null) })
