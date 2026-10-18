@@ -31,17 +31,60 @@ export function redact(text: string, secrets: readonly string[]): string {
   return out;
 }
 
+type JavaThrowable = { toStringSync(): string; getCauseSync?(): unknown };
+
+function isJavaThrowable(value: unknown): value is JavaThrowable {
+  return typeof value === "object" && value !== null && typeof (value as JavaThrowable).toStringSync === "function";
+}
+
+/** The message of one link in a cause chain and the next link: a JS `Error` or a Java `Throwable` proxy. */
+function causeLink(cause: unknown): [string, unknown] {
+  if (cause instanceof Error) return [cause.message, (cause as { cause?: unknown }).cause];
+  if (isJavaThrowable(cause)) {
+    try {
+      return [cause.toStringSync(), cause.getCauseSync?.()];
+    } catch {
+      return ["", undefined];
+    }
+  }
+  return [typeof cause === "object" ? "" : String(cause), undefined];
+}
+
 function errorText(err: unknown): string {
   if (err instanceof Error) {
     const parts = [err.message];
     let cause: unknown = (err as { cause?: unknown }).cause;
     for (let i = 0; i < 4 && cause; i++) {
-      parts.push(cause instanceof Error ? cause.message : typeof cause === "object" ? "" : String(cause));
-      cause = cause instanceof Error ? (cause as { cause?: unknown }).cause : undefined;
+      const [text, next] = causeLink(cause);
+      parts.push(text);
+      cause = next;
     }
     return parts.filter(Boolean).join("\n");
   }
   return String(err);
+}
+
+const HOST_REASONS: [string, RegExp][] = [
+  ["connection refused", /Connection refused|ConnectException/i],
+  ["no route to host", /NoRouteToHost|No route to host/i],
+  ["connection timed out", /SocketTimeoutException|timed out/i],
+  ["unknown host", /UnknownHostException|nodename nor servname|Name or service not known|cannot establish the connection\. \([^()\s]+\)/i],
+];
+
+/**
+ * A readable message for an unreachable system, such as "Cannot reach
+ * ibmi.example.com: unknown host", from the Java exception text. The host comes from
+ * an `UnknownHostException` or from the JDBC driver's "(host)" detail; without one
+ * the message names "the system". Undefined when no reason is recognized.
+ */
+export function hostMessage(text: string): string | undefined {
+  const reason = HOST_REASONS.find(([, re]) => re.test(text))?.[0];
+  if (!reason) return undefined;
+  const host =
+    /UnknownHostException:\s*([^\s:]+)/.exec(text)?.[1] ??
+    /cannot establish the connection\. \(([^()\s]+)\)/i.exec(text)?.[1] ??
+    "the system";
+  return `Cannot reach ${host}: ${reason}`;
 }
 
 /**
@@ -72,5 +115,7 @@ export function toConnectionError(err: unknown, secrets: readonly string[], cont
   const prefix = context ? `${context}: ` : "";
   if (err instanceof ConnectionError) return new ConnectionError(err.code, redact(prefix + err.message, secrets));
   const full = redact(errorText(err), secrets);
-  return new ConnectionError(classifyError(full), redact(prefix + summarize(full), secrets));
+  const code = classifyError(full);
+  const message = (code === "host" && hostMessage(full)) || summarize(full);
+  return new ConnectionError(code, redact(prefix + message, secrets));
 }

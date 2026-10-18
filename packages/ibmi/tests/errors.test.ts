@@ -60,6 +60,56 @@ describe("toConnectionError", () => {
     expect(err.message).toBe("plain string with ***");
   });
 
+  const hostCases: [string, unknown, string][] = [
+    [
+      "an UnknownHostException",
+      javaError("java.net.UnknownHostException: ibmi.example.com: nodename nor servname provided, or not known"),
+      "Cannot reach ibmi.example.com: unknown host",
+    ],
+    [
+      "the JDBC driver's host detail",
+      javaError("java.sql.SQLException: The application requester cannot establish the connection. (ibmi.example.com)"),
+      "Cannot reach ibmi.example.com: unknown host",
+    ],
+    [
+      "a refused JDBC connection",
+      javaError("java.sql.SQLException: The application requester cannot establish the connection. (Connection refused)"),
+      "Cannot reach the system: connection refused",
+    ],
+    [
+      "a ConnectException",
+      javaError("java.net.ConnectException: Connection refused"),
+      "Cannot reach the system: connection refused",
+    ],
+    [
+      "a timeout",
+      javaError("java.net.SocketTimeoutException: Connect timed out"),
+      "Cannot reach the system: connection timed out",
+    ],
+  ];
+
+  it.each(hostCases)("reads the host and reason from %s", (_label, err, message) => {
+    const out = toConnectionError(err, [PASSWORD]);
+    expect(out.code).toBe("host");
+    expect(out.message).toBe(message);
+  });
+
+  it("reads the detail from a Java cause when the bridge message has none", () => {
+    const javaCause = {
+      toStringSync: () => "java.sql.SQLException: The application requester cannot establish the connection. (ibmi.example.com)",
+      getCauseSync: () => null,
+    };
+    const err = toConnectionError(new Error("Error running static method", { cause: javaCause }), [PASSWORD]);
+    expect(err.code).toBe("host");
+    expect(err.message).toBe("Cannot reach ibmi.example.com: unknown host");
+  });
+
+  it("redacts the password from a host message", () => {
+    const err = toConnectionError(javaError(`java.net.UnknownHostException: ${PASSWORD}.example.com`), [PASSWORD]);
+    expect(err.code).toBe("host");
+    expect(err.message).toBe("Cannot reach ***.example.com: unknown host");
+  });
+
   it("prefixes a context", () => {
     const err = toConnectionError(new Error("com.ibm.as400.access.AS400Exception: CPF3C40 not found."), [PASSWORD], "Spooled file X");
     expect(err.message).toBe("Spooled file X: CPF3C40 not found.");
