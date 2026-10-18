@@ -12,14 +12,16 @@ describe('database rules', () => {
   it('seeds the Spooldoc destination and the settings row', async () => {
     const rows = await db().select().from(destinations);
     expect(rows).toEqual([expect.objectContaining({ kind: 'spooldoc', name: 'Spooldoc PDF download', builtin: true })]);
-    expect(await db().select({ poll: settings.pollSeconds, safety: settings.safetyCheckSeconds }).from(settings)).toEqual([
-      { poll: 30, safety: 300 },
-    ]);
+    expect(
+      await db().select({ poll: settings.pollSeconds, safety: settings.safetyCheckSeconds, retention: settings.retentionDays }).from(settings),
+    ).toEqual([{ poll: 30, safety: 300, retention: 90 }]);
   });
 
   it('refuses settings outside the ranges and a second settings row', async () => {
     await expect(db().update(settings).set({ pollSeconds: 1 })).rejects.toThrow();
     await expect(db().update(settings).set({ safetyCheckSeconds: 10 })).rejects.toThrow();
+    await expect(db().update(settings).set({ retentionDays: 0 })).rejects.toThrow();
+    await expect(db().update(settings).set({ retentionDays: 3651 })).rejects.toThrow();
     await expect(db().insert(settings).values({ id: 2 })).rejects.toThrow();
   });
 

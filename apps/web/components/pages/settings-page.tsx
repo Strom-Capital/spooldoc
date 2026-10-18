@@ -55,10 +55,21 @@ function Interval({
   );
 }
 
-/** App-wide settings. For now the watcher intervals. */
+type Draft = Pick<SettingsView, 'pollSeconds' | 'safetyCheckSeconds' | 'retentionDays'>;
+
+/** What the last cleanup did, in a sentence. */
+function cleanupText(cleanup: NonNullable<SettingsView['cleanup']>): string {
+  const at = new Date(cleanup.at).toLocaleString();
+  if (cleanup.error) return `The last cleanup, at ${at}, failed: ${cleanup.error}`;
+  const runs = `${cleanup.runs} ${cleanup.runs === 1 ? 'run' : 'runs'}`;
+  const samples = `${cleanup.samples} ${cleanup.samples === 1 ? 'spooled file' : 'spooled files'}`;
+  return `The last cleanup, at ${at}, deleted ${runs} and ${samples}.`;
+}
+
+/** App-wide settings: the watcher intervals and how long runs are kept. */
 export function SettingsPage() {
   const [settings, setSettings] = useState<SettingsView | null>(null);
-  const [draft, setDraft] = useState<{ pollSeconds: number; safetyCheckSeconds: number } | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -67,7 +78,7 @@ export function SettingsPage() {
     api<SettingsView>('/api/settings').then(
       (data) => {
         setSettings(data);
-        setDraft({ pollSeconds: data.pollSeconds, safetyCheckSeconds: data.safetyCheckSeconds });
+        setDraft({ pollSeconds: data.pollSeconds, safetyCheckSeconds: data.safetyCheckSeconds, retentionDays: data.retentionDays });
       },
       (err) => setError(errorText(err)),
     );
@@ -123,12 +134,38 @@ export function SettingsPage() {
               />
             </div>
           </section>
+          <section className="rounded-lg border p-5">
+            <h2 className="font-semibold">Retention</h2>
+            <p className="mt-0.5 mb-5 text-muted-foreground text-sm">
+              Runs are deleted this long after they finish, with their captured spooled files and delivered PDFs. Spooldoc still remembers which
+              spooled files it processed, so none is processed again.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="retention">Keep runs for</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="retention"
+                  type="number"
+                  min={1}
+                  max={3650}
+                  value={draft.retentionDays}
+                  onChange={(event) => setDraft({ ...draft, retentionDays: Number(event.target.value) })}
+                  className="w-28"
+                />
+                <span className="text-sm">days</span>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                1 to 3650 days. Preview samples no job uses are deleted after the same time. Old runs are cleaned up once an hour.
+              </p>
+              {settings.cleanup && <p className="text-muted-foreground text-xs">{cleanupText(settings.cleanup)}</p>}
+            </div>
+          </section>
           <div className="flex items-center gap-3">
             <Button type="submit" disabled={busy}>
               {busy ? <Spinner /> : <SaveIcon />}
               Save
             </Button>
-            {saved && <span className="text-muted-foreground text-sm">Saved. The watcher uses the new intervals from its next check.</span>}
+            {saved && <span className="text-muted-foreground text-sm">Saved. The watcher uses the new settings from its next check.</span>}
           </div>
         </form>
       )}
