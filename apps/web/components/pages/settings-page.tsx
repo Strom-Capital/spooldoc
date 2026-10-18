@@ -137,7 +137,7 @@ export function SettingsPage() {
           <section className="rounded-lg border p-5">
             <h2 className="font-semibold">Retention</h2>
             <p className="mt-0.5 mb-5 text-muted-foreground text-sm">
-              Runs are deleted this long after they finish, with their captured spooled files and delivered PDFs. Spooldoc still remembers which
+              Runs are deleted this long after they finish, with their captured spooled files and delivered files. Spooldoc still remembers which
               spooled files it processed, so none is processed again.
             </p>
             <div className="flex flex-col gap-1.5">

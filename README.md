@@ -3,7 +3,7 @@
 Spooled files into documents, for IBM i. Open output management.
 
 Turn a spooled file into a JSON document, then render it with ordinary
-HTML or PDF templates (DOCX and XLSX later) and deliver it. Add your IBM i
+HTML templates into PDF or HTML files (DOCX and XLSX later) and deliver it. Add your IBM i
 servers, pick the output queues that matter, and build a job for a queue:
 let an AI model propose a document definition and a first template from a
 sample spooled file, check the extracted fields next to the page, refine by
@@ -26,11 +26,12 @@ The web app has six pages:
   the queue: in real time through a data queue on the output queue, else by
   polling. After delivery a spooled file is held by default, or moved,
   deleted or left as it is.
-- **Destinations**: for now PDFs kept in Spooldoc for download.
+- **Destinations**: for now Spooldoc download, which keeps the PDF and HTML
+  files in Spooldoc.
 - **Job log**: every run with its steps, errors and files.
 - **Settings**: how often the watcher polls queues and checks real-time
   queues, and how long runs are kept. Runs are deleted 90 days (1 to 3650)
-  after they finish, with their captured spooled files and PDFs, as are
+  after they finish, with their captured spooled files and delivered files, as are
   preview samples no job uses; Spooldoc still remembers which spooled files
   it processed. The watcher cleans up once an hour.
 
@@ -105,7 +106,7 @@ docker run -p 3002:3000 \
 Or `docker compose up --build` with the settings in a `.env` file next to
 `compose.yaml` (the variables of `apps/web/.env.example`); it starts
 Postgres too. Everything Spooldoc keeps is in the database: servers, jobs
-and their versions, captured spooled files, runs and their PDFs, so one
+and their versions, captured spooled files, runs and their files, so one
 `pg_dump` is the whole backup. Keep `SPOOLDOC_SECRET_KEY` the same across
 restarts, or the saved IBM i passwords must be entered again.
 
@@ -150,7 +151,7 @@ tools read the preview file and write the definition and template of the
 job's draft. What the model writes and the job builder itself use the real
 values.
 
-The database holds captured spool data and the delivered PDFs in clear
+The database holds captured spool data and the delivered files in clear
 text. Protect it like the spooled files themselves: access, backups and
 the volume included.
 
