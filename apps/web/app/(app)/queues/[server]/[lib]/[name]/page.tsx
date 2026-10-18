@@ -24,7 +24,7 @@ export default async function QueuePage({ params }: { params: Promise<Params> })
   const queue = decodeURIComponent(name).toUpperCase();
   return (
     <Page
-      className="max-w-7xl"
+      back={{ href: `/queues?server=${server.id}`, label: 'Queues' }}
       title={
         <>
           <span className="font-mono">{library}/{queue}</span>
@@ -32,13 +32,11 @@ export default async function QueuePage({ params }: { params: Promise<Params> })
       }
       description={
         <>
+          Spooled files on{' '}
           <Link href="/servers" className="hover:underline">
             {server.name}
           </Link>
-          {' / '}
-          <Link href={`/queues?server=${server.id}`} className="hover:underline">
-            Queues
-          </Link>
+          , newest first.
         </>
       }
       actions={<NewJobButton source={{ serverId: server.id, library, queue }} label="New job from this queue" />}
