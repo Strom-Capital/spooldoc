@@ -1,0 +1,38 @@
+name: Feature request
+description: A change or addition to Spooldoc that you have a clear case for.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas that need talking through first fit better in [Discussions Ideas](https://github.com/Strom-Capital/spooldoc/discussions/categories/ideas).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do and what gets in the way today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+      description: How Spooldoc could solve it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Workarounds you use now, or other ways to solve it.
+
+  - type: checkboxes
+    id: no-real-names
+    attributes:
+      label: Before you submit
+      options:
+        - label: I have replaced real customer, host, library and user names in this request and its attachments.
+          required: true

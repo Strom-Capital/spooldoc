@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or setup help
+    url: https://github.com/Strom-Capital/spooldoc/discussions/categories/q-a
+    about: Ask in Discussions Q&A.
+  - name: Idea to discuss
+    url: https://github.com/Strom-Capital/spooldoc/discussions/categories/ideas
+    about: Talk through an idea before it becomes a feature request.
+  - name: Security problem
+    url: https://github.com/Strom-Capital/spooldoc/security/advisories/new
+    about: Report it privately, not in a public issue.
