@@ -28,8 +28,8 @@ request can read one back.
 
 ## What it can do
 
-The assistant works through four tools, all on the job's draft and its
-preview sample:
+The assistant works through six tools: four on the job's draft and its
+preview sample, two that read other jobs' files:
 
 | Tool | What it does |
 |------|--------------|
@@ -37,6 +37,13 @@ preview sample:
 | `write_definition` | Saves the definition YAML to the draft, runs the extraction on the sample and returns the report: documents found, each field with its status, missing fields, warnings and the first document as JSON. |
 | `write_template` | Saves the HTML template to the draft, renders the first document and returns any errors and its visible text. |
 | `render_preview` | Renders a document again after a change to the definition. |
+| `list_jobs` | Lists the other jobs with their definition type and whether they have a template. |
+| `read_job_files` | Reads another job's definition YAML and template HTML, from its active version or else its draft, so a new job can start from them. |
+
+The model uses the last two only when you ask it to start from or reuse
+another job ("start from the Invoices job's template"); it adapts what it
+takes to the sample and saves it with the write tools. The same copy
+without a model is "Start from job" in the template editor's bar.
 
 No tool reaches the IBM i, the job log or any other spooled file, and
 nothing it writes is a version: save one yourself when the result is
@@ -53,6 +60,9 @@ What the model receives:
 - The job's current definition and template, and the names of the
   uploaded assets.
 - Tool results: the extraction report and the rendered text.
+- On request, other jobs' definitions and templates: layout, not
+  customer data. Nothing else of a job (its server, destination, finish
+  settings, runs or samples) is readable.
 
 What it never receives: IBM i credentials, the login session, the IBM i
 connection, other spooled files, or the job log.

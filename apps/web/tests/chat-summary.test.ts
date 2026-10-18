@@ -17,6 +17,17 @@ describe('toolSummary', () => {
         done('render_preview', { ok: true, document: 0, documents: 6, template: 'saved', hits: { found: 37, missing: 0, empty: 2 }, missing: [], templateErrors: [], textPreview: '' }),
       ),
     ).toEqual({ text: 'Rendered: 37 found, 0 missing', tone: 'ok' });
+    expect(toolSummary(done('list_jobs', { ok: true, jobs: [{ id: 'a', name: 'A', type: 'invoice', hasTemplate: true }] }))).toEqual({
+      text: 'Listed 1 other job',
+      tone: 'ok',
+    });
+    expect(toolSummary(done('read_job_files', { ok: true, id: 'a', name: 'Invoices', definitionYaml: 'type: invoice', templateHtml: null })).text).toBe(
+      'Read job Invoices: definition',
+    );
+    expect(toolSummary(done('read_job_files', { ok: false, error: 'There is no job x. Find the id with list_jobs.' }))).toEqual({
+      text: 'There is no job x. Find the id with list_jobs.',
+      tone: 'warn',
+    });
   });
 
   it('shows running, rejected and failed calls', () => {

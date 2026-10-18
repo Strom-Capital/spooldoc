@@ -1,4 +1,11 @@
-import type { ReadPageResult, RenderPreviewResult, WriteDefinitionResult, WriteTemplateResult } from '@/lib/chat-types';
+import type {
+  ListJobsResult,
+  ReadJobFilesResult,
+  ReadPageResult,
+  RenderPreviewResult,
+  WriteDefinitionResult,
+  WriteTemplateResult,
+} from '@/lib/chat-types';
 
 /** What `toolSummary` reads from a tool part. */
 export interface ToolPartLike {
@@ -67,6 +74,19 @@ export function toolSummary(part: ToolPartLike): ToolSummary {
         text: `Rendered: ${out.hits.found} found, ${out.hits.missing} missing${errors}`,
         tone: out.hits.missing > 0 || errors ? 'warn' : 'ok',
       };
+    }
+    case 'list_jobs': {
+      if (!done(part.state)) return { text: 'Listing jobs', tone: 'running' };
+      const out = part.output as ListJobsResult;
+      if (!out.ok) return { text: firstLine(out.error), tone: 'warn' };
+      return { text: `Listed ${plural(out.jobs.length, 'other job')}`, tone: 'ok' };
+    }
+    case 'read_job_files': {
+      if (!done(part.state)) return { text: 'Reading another job', tone: 'running' };
+      const out = part.output as ReadJobFilesResult;
+      if (!out.ok) return { text: firstLine(out.error), tone: 'warn' };
+      const files = [out.definitionYaml !== null && 'definition', out.templateHtml !== null && 'template'].filter(Boolean);
+      return { text: `Read job ${out.name}: ${files.length > 0 ? files.join(' and ') : 'no files yet'}`, tone: 'ok' };
     }
     default:
       return { text: done(part.state) ? part.toolName : `Running ${part.toolName}`, tone: done(part.state) ? 'ok' : 'running' };

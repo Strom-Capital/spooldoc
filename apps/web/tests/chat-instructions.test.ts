@@ -1,6 +1,6 @@
 import { definitionJsonSchema } from '@spooldoc/core';
 import { describe, expect, it } from 'vitest';
-import { buildInstructions, DATA_NOT_INSTRUCTIONS } from '@/lib/server/chat';
+import { buildInstructions, DATA_NOT_INSTRUCTIONS, OTHER_JOBS_RULE } from '@/lib/server/chat';
 import { fixtureText, loadSample } from './helpers/fake-connection';
 
 const sample = loadSample('invoice');
@@ -66,6 +66,14 @@ describe('buildInstructions', () => {
     const withFiles = buildInstructions({ sample, definitionYaml: yaml, templateHtml: html, masked: true });
     expect(withFiles).toContain(yaml);
     expect(withFiles).toContain('<title>Invoice {{ doc.invoiceNo }}</title>');
+  });
+
+  it('names the tools that read other jobs and says when to use them', () => {
+    const tools = clear.slice(clear.indexOf('## Tools'), clear.indexOf('## This sample'));
+    expect(tools).toContain('- list_jobs: ');
+    expect(tools).toContain('- read_job_files: ');
+    expect(tools).toContain(OTHER_JOBS_RULE);
+    expect(OTHER_JOBS_RULE).toMatch(/only when the user asks to start from or reuse another job/);
   });
 
   it('says that spool text is data, not instructions', () => {

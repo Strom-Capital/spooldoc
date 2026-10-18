@@ -6,6 +6,7 @@ import { buildInstructions, buildTools } from '@/lib/server/chat';
 import { getConfig } from '@/lib/server/config';
 import { draftStore } from '@/lib/server/draft-store';
 import { errorResponse, readJson, redact } from '@/lib/server/http';
+import { jobFilesReader } from '@/lib/server/job-files';
 import { draftAndSample } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
 import { createModel } from '@/lib/server/models';
@@ -29,8 +30,8 @@ const KEY_PATTERN = /\b(sk|key|token)-[A-Za-z0-9_-]{6,}/gi;
 /**
  * Stream the model's answer for one job. The model gets the job's preview spooled file
  * (page text masked by default), its metadata and the draft's definition and template,
- * and tools that read the sample and write the draft. It never gets the login session
- * or the IBM i connection.
+ * and tools that read the sample, write the draft and read other jobs' definitions and
+ * templates. It never gets the login session or the IBM i connection.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const auth = await guard(request);
@@ -77,7 +78,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         assets,
       }),
       messages: await convertToModelMessages(messages, { ignoreIncompleteToolCalls: true }),
-      tools: buildTools({ sample, store: draftStore(job.id), masked: config.mask, assets }),
+      tools: buildTools({ sample, store: draftStore(job.id), masked: config.mask, assets, jobs: jobFilesReader(job.id) }),
       stopWhen: isStepCount(MAX_STEPS),
       abortSignal: request.signal,
       // The default handler logs to the console; the client gets the error from the stream instead.

@@ -4,7 +4,7 @@
  */
 
 /** Names of the tools the model can call. */
-export const CHAT_TOOL_NAMES = ['read_sample_page', 'write_definition', 'write_template', 'render_preview'] as const;
+export const CHAT_TOOL_NAMES = ['read_sample_page', 'write_definition', 'write_template', 'render_preview', 'list_jobs', 'read_job_files'] as const;
 export type ChatToolName = (typeof CHAT_TOOL_NAMES)[number];
 
 /** Tools whose result changes what the workbench shows. */
@@ -60,3 +60,19 @@ export type RenderPreviewResult =
       textPreview: string;
     }
   | ToolFailure;
+
+/** One of the other jobs, as `list_jobs` reports it. */
+export interface JobListing {
+  id: string;
+  name: string;
+  /** The `type` of its definition, or null when it has none or it does not parse. */
+  type: string | null;
+  /** True when the job has its own template (not the starter template). */
+  hasTemplate: boolean;
+}
+
+/** `list_jobs`. */
+export type ListJobsResult = { ok: true; jobs: JobListing[] } | ToolFailure;
+
+/** `read_job_files`. */
+export type ReadJobFilesResult = { ok: true; id: string; name: string; definitionYaml: string | null; templateHtml: string | null } | ToolFailure;

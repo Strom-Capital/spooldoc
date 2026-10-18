@@ -1,8 +1,8 @@
 import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { jobs } from '@/lib/server/db/schema';
-import { jobSpecSchema } from '@/lib/job-spec';
+import { jobs, jobVersions } from '@/lib/server/db/schema';
+import { jobSpecSchema, versionSpec } from '@/lib/job-spec';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
 import { fixtureText, loadSample } from './helpers/fake-connection';
@@ -126,6 +126,8 @@ describe('POST /api/jobs/[id]/chat', () => {
     expect(instructions).toContain('Invoice no');
     expect(instructions).not.toContain('260101');
     expect(model.doStreamCalls[0]?.tools?.map((t) => t.name).sort()).toEqual([
+      'list_jobs',
+      'read_job_files',
       'read_sample_page',
       'render_preview',
       'write_definition',
@@ -142,6 +144,25 @@ describe('POST /api/jobs/[id]/chat', () => {
     expect((await draft()).render.template).toBe(html);
     const output = parts.find((p) => p.type === 'tool-output-available')?.output as { ok: boolean; path: string; errors: string[] };
     expect(output).toMatchObject({ ok: true, path: 'template', errors: [] });
+  });
+
+  it("reads another job's active version through read_job_files, never the job itself", async () => {
+    const serverId = (await draft()).source.serverId!;
+    const otherId = await insertJob(serverId, { extract: { definition: yaml }, render: { template: html, formats: ['pdf'] } });
+    const [other] = await db().select().from(jobs).where(eq(jobs.id, otherId));
+    await db().insert(jobVersions).values({ jobId: otherId, number: 1, spec: versionSpec(jobSpecSchema.parse(other!.draft)) });
+    // The draft changes after the version: the tools read the version, not the draft.
+    const changed = { ...jobSpecSchema.parse(other!.draft), extract: { definition: 'type: draft-only\nversion: 1\nsource: text\ntext:\n  page: { width: 1, length: 1 }\n  fields: []\n' } };
+    await db().update(jobs).set({ activeVersion: 1, draft: changed }).where(eq(jobs.id, otherId));
+
+    const model = scriptedModel(toolStep('list_jobs', {}), toolStep('read_job_files', { id: otherId }), textStep('Copied.'));
+    createModel.mockResolvedValue(withKey(model));
+    const { parts } = await chunks(await chat());
+
+    const outputs = parts.filter((p) => p.type === 'tool-output-available').map((p) => p.output as Record<string, unknown>);
+    expect(outputs[0]).toEqual({ ok: true, jobs: [{ id: otherId, name: 'Invoices', type: 'invoice', hasTemplate: true }] });
+    expect(outputs[1]).toEqual({ ok: true, id: otherId, name: 'Invoices', definitionYaml: yaml, templateHtml: html });
+    expect((await draft()).extract.definition).toBe('');
   });
 
   it('keeps the API key out of the stream when the provider fails', async () => {

@@ -27,6 +27,7 @@ const versions = await import('@/app/api/jobs/[id]/versions/route');
 const restore = await import('@/app/api/jobs/[id]/versions/[n]/restore/route');
 const activate = await import('@/app/api/jobs/[id]/versions/[n]/activate/route');
 const runsRoute = await import('@/app/api/jobs/[id]/runs/route');
+const filesRoute = await import('@/app/api/jobs/[id]/files/route');
 const runLog = await import('@/app/api/runs/route');
 const fileRoute = await import('@/app/api/runs/[id]/files/[file]/route');
 
@@ -173,6 +174,22 @@ describe('jobs', () => {
     expect(restored.draft.preview.sampleId).toBeTruthy();
     expect(restored.versions.map((v) => v.number)).toEqual([2, 1]);
     expect((await restore.POST(post(`/api/jobs/${id}/versions/9/restore`), params({ id, n: '9' }))).status).toBe(404);
+  });
+});
+
+describe('files', () => {
+  it("serves a job's definition and template from its active version, else its draft, and nothing else", async () => {
+    const id = await readyJob();
+    const fromDraft = await (await filesRoute.GET(get(`/api/jobs/${id}/files`), params({ id }))).json();
+    expect(fromDraft).toEqual({ id, name: `${library}/${queue}`, definitionYaml: yaml, templateHtml: template });
+
+    expect((await versions.POST(post(`/api/jobs/${id}/versions`, { note: 'v1' }), params({ id }))).status).toBe(201);
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { template: '<p>draft</p>', formats: ['pdf'] } } }), params({ id }));
+    const fromVersion = await (await filesRoute.GET(get(`/api/jobs/${id}/files`), params({ id }))).json();
+    expect(fromVersion.templateHtml).toBe(template);
+
+    expect((await filesRoute.GET(get('/api/jobs/not-a-job/files'), params({ id: 'not-a-job' }))).status).toBe(404);
+    expect((await filesRoute.GET(appRequest(`/api/jobs/${id}/files`), params({ id }))).status).toBe(401);
   });
 });
 

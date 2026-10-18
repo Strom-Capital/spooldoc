@@ -1,7 +1,14 @@
 import { extract, parseDefinition } from '@spooldoc/core';
 import { beforeEach, describe, expect, it } from 'vitest';
-import type { ReadPageResult, RenderPreviewResult, WriteDefinitionResult, WriteTemplateResult } from '@/lib/chat-types';
-import { buildTools, visibleText, type DraftStore } from '@/lib/server/chat';
+import type {
+  ListJobsResult,
+  ReadJobFilesResult,
+  ReadPageResult,
+  RenderPreviewResult,
+  WriteDefinitionResult,
+  WriteTemplateResult,
+} from '@/lib/chat-types';
+import { buildTools, visibleText, type DraftStore, type JobFiles, type JobFilesReader } from '@/lib/server/chat';
 import { fixtureText, loadSample } from './helpers/fake-connection';
 
 const sample = loadSample('invoice');
@@ -33,7 +40,26 @@ beforeEach(() => {
   store = new MemoryDraft();
 });
 
-const tools = (masked = false) => buildTools({ sample, store, masked });
+/** Two other jobs: one with a definition and a template, one with only a draft definition. */
+const OTHER_JOBS: JobFiles[] = [
+  { id: 'job-a', name: 'Invoices', definitionYaml: yaml, templateHtml: template },
+  { id: 'job-b', name: 'Reminders', definitionYaml: 'type: reminder\nversion: 1\nsource: text\ntext:\n  page: { width: 132, length: 66 }\n  fields: []\n', templateHtml: null },
+];
+
+/** The other jobs' files in memory, as the chat route's reader hands them over. */
+class MemoryJobs implements JobFilesReader {
+  readonly reads: string[] = [];
+  constructor(private readonly jobs: JobFiles[] = OTHER_JOBS) {}
+  async list() {
+    return this.jobs;
+  }
+  async read(id: string) {
+    this.reads.push(id);
+    return this.jobs.find((job) => job.id === id) ?? null;
+  }
+}
+
+const tools = (masked = false, jobs?: JobFilesReader) => buildTools({ sample, store, masked, jobs });
 
 async function call<T>(t: { execute?: (input: never, opts: never) => unknown }, input: unknown): Promise<T> {
   return (await t.execute?.(input as never, options as never)) as T;
@@ -170,5 +196,67 @@ describe('visibleText', () => {
       '<html><head><title>T</title><style>p{}</style></head><body><h1>A &amp; B</h1><table><tr><td>1</td><td>2</td></tr></table></body></html>',
     );
     expect(text).toBe('A & B\n1 | 2');
+  });
+});
+
+describe('list_jobs', () => {
+  it('lists every other job with its definition type and whether it has a template', async () => {
+    const result = await call<ListJobsResult>(tools(false, new MemoryJobs()).list_jobs, {});
+    expect(result).toEqual({
+      ok: true,
+      jobs: [
+        { id: 'job-a', name: 'Invoices', type: 'invoice', hasTemplate: true },
+        { id: 'job-b', name: 'Reminders', type: 'reminder', hasTemplate: false },
+      ],
+    });
+  });
+
+  it('reports no type for a job whose definition is empty or does not parse, and nothing else of a job', async () => {
+    const reader = new MemoryJobs([{ id: 'job-c', name: 'Blank', definitionYaml: '', templateHtml: null }]);
+    const result = await call<ListJobsResult>(tools(false, reader).list_jobs, {});
+    if (!result.ok) throw new Error(result.error);
+    expect(result.jobs).toEqual([{ id: 'job-c', name: 'Blank', type: null, hasTemplate: false }]);
+    expect(Object.keys(result.jobs[0]!).sort()).toEqual(['hasTemplate', 'id', 'name', 'type']);
+  });
+
+  it('lists no jobs without a reader, and reports a reader that fails', async () => {
+    expect(await call<ListJobsResult>(tools().list_jobs, {})).toEqual({ ok: true, jobs: [] });
+    const broken: JobFilesReader = {
+      list: async () => {
+        throw new Error('database gone');
+      },
+      read: async () => null,
+    };
+    const result = await call<ListJobsResult>(tools(false, broken).list_jobs, {});
+    expect(result).toEqual({ ok: false, error: 'Could not list the jobs: database gone' });
+  });
+});
+
+describe('read_job_files', () => {
+  it("returns a job's definition and template, and only those", async () => {
+    const reader = new MemoryJobs();
+    const result = await call<ReadJobFilesResult>(tools(false, reader).read_job_files, { id: 'job-a' });
+    expect(result).toEqual({ ok: true, id: 'job-a', name: 'Invoices', definitionYaml: yaml, templateHtml: template });
+    expect(reader.reads).toEqual(['job-a']);
+  });
+
+  it('answers null for a missing template or definition', async () => {
+    const result = await call<ReadJobFilesResult>(tools(false, new MemoryJobs()).read_job_files, { id: 'job-b' });
+    if (!result.ok) throw new Error(result.error);
+    expect(result.templateHtml).toBeNull();
+    expect(result.definitionYaml).toContain('type: reminder');
+
+    const blank = new MemoryJobs([{ id: 'job-c', name: 'Blank', definitionYaml: '  \n', templateHtml: null }]);
+    const empty = await call<ReadJobFilesResult>(tools(false, blank).read_job_files, { id: 'job-c' });
+    expect(empty).toEqual({ ok: true, id: 'job-c', name: 'Blank', definitionYaml: null, templateHtml: null });
+  });
+
+  it('fails for an unknown job and without a reader, and writes nothing', async () => {
+    const unknown = await call<ReadJobFilesResult>(tools(false, new MemoryJobs()).read_job_files, { id: 'nope' });
+    expect(unknown).toEqual({ ok: false, error: 'There is no job nope. Find the id with list_jobs.' });
+    const none = await call<ReadJobFilesResult>(tools().read_job_files, { id: 'job-a' });
+    expect(none).toEqual({ ok: false, error: 'There are no other jobs to read.' });
+    expect(store.yaml).toBe('');
+    expect(store.html).toBeNull();
   });
 });
