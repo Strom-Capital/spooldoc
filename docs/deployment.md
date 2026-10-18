@@ -99,8 +99,11 @@ themselves.
 
 Pull or build the new image and start it; the server applies the
 migrations. With Compose, set the new `SPOOLDOC_VERSION` (or leave it at
-`latest`) and run `docker compose pull && docker compose up -d`. Take a `pg_dump` first. What changed in each release is on
-the GitHub releases page.
+`latest`) and run `docker compose pull && docker compose up -d`. Take a
+`pg_dump` first. What changed in each release is in the
+[release notes](https://github.com/Strom-Capital/spooldoc/releases). Until
+1.0, a minor release (0.1 to 0.2) can include breaking changes, so read
+them before you upgrade, and pin `X.Y.Z` rather than following `latest`.
 
 ## Sizing
 

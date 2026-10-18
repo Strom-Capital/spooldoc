@@ -8,11 +8,12 @@
 # Spooldoc
 
 [![CI](https://github.com/Strom-Capital/spooldoc/actions/workflows/ci.yml/badge.svg)](https://github.com/Strom-Capital/spooldoc/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Strom-Capital/spooldoc)](https://github.com/Strom-Capital/spooldoc/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![IBM i](https://img.shields.io/badge/IBM%20i-7.4+-green?logo=ibm&logoColor=white)](https://www.ibm.com/products/ibm-i)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6-blue?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A522-green?logo=node.js&logoColor=white)](https://nodejs.org/)
-[![Docker](https://img.shields.io/badge/Docker-supported-blue?logo=docker&logoColor=white)](docs/deployment.md)
+[![Docker image](https://img.shields.io/badge/ghcr.io-spooldoc-blue?logo=docker&logoColor=white)](https://github.com/Strom-Capital/spooldoc/pkgs/container/spooldoc)
 
 Spooled files into documents, for IBM i. Open output management.
 
@@ -124,6 +125,20 @@ HTML and PDF output and the Spooldoc download destination work and are
 tested against demo spooled files captured from PUB400. Next: SFTP, S3,
 IFS, email and webhook destinations, more users and roles, and DOCX and
 XLSX output.
+
+Until 1.0, a minor release (0.1 to 0.2) can include breaking changes. Read
+the [release notes](https://github.com/Strom-Capital/spooldoc/releases)
+before you upgrade.
+
+## Help
+
+- **Questions** about setup and use: [Discussions Q&A](https://github.com/Strom-Capital/spooldoc/discussions/categories/q-a).
+- **Ideas** to talk through: [Discussions Ideas](https://github.com/Strom-Capital/spooldoc/discussions/categories/ideas).
+- **Bugs and feature requests**: [issues](https://github.com/Strom-Capital/spooldoc/issues/new/choose).
+- **Security problems**: report them privately, see [SECURITY.md](SECURITY.md).
+
+The repository is public: replace customer, host, library and user names
+with invented ones before you paste a spooled file, a log or a screenshot.
 
 ## License
 

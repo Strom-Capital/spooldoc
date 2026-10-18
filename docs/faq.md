@@ -113,3 +113,12 @@ Chromium for PDFs. See [Contributing](contributing.md).
 
 SFTP, S3, IFS, email and webhook destinations, more users and roles, and
 DOCX and XLSX output. See the roadmap in the [README](../README.md#status).
+
+## Where do I ask a question?
+
+In [Discussions Q&A](https://github.com/Strom-Capital/spooldoc/discussions/categories/q-a).
+Bugs and feature requests go to the
+[issues](https://github.com/Strom-Capital/spooldoc/issues/new/choose), and
+security problems to a private report (see [SECURITY.md](../SECURITY.md)).
+Replace real customer, host, library and user names before you paste a
+spooled file or a log.
