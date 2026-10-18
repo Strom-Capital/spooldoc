@@ -1,8 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
-import { useSession } from '@/components/session-provider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,8 +9,6 @@ import { api, errorText } from '@/lib/client/api';
 
 /** Host, user, password and an optional library; POSTs `/api/session`. */
 export function ConnectForm({ allowedHosts }: { allowedHosts: string[] }) {
-  const router = useRouter();
-  const { refresh } = useSession();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -27,8 +23,8 @@ export function ConnectForm({ allowedHosts }: { allowedHosts: string[] }) {
         method: 'POST',
         body: { host: value('host'), user: value('user'), password: value('password'), library: value('library') },
       });
-      await refresh();
-      router.push('/queues');
+      // A full page load: the router may hold a /queues prefetched before sign-on, which redirected to /connect.
+      window.location.assign(new URL('/queues', window.location.href));
     } catch (err) {
       setError(errorText(err));
       setBusy(false);

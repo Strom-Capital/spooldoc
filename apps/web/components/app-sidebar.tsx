@@ -2,7 +2,7 @@
 
 import { FileTextIcon, InboxIcon, LogInIcon, LogOutIcon, PanelLeftIcon, ServerIcon } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
   Sidebar,
@@ -33,7 +33,6 @@ const PAGES = [
  */
 export function AppSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const { session, disconnect } = useSession();
   const { setOpenMobile, state, isMobile, toggleSidebar } = useSidebar();
   const collapsed = state === 'collapsed' && !isMobile;
@@ -41,7 +40,8 @@ export function AppSidebar() {
 
   async function onDisconnect() {
     await disconnect();
-    router.push('/connect');
+    // A full page load drops pages the router fetched while signed on.
+    window.location.assign(new URL('/connect', window.location.href));
   }
 
   return (
