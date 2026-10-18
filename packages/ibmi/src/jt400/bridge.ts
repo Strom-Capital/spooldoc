@@ -31,10 +31,17 @@ export function loadJava(): JavaModule {
   return javaModule;
 }
 
+/**
+ * Seconds jt400 waits for each connect and sign-on attempt. Without it a host that drops
+ * packets blocks for the OS TCP timeout, twice (the port mapper on 449, then 8471).
+ */
+export const LOGIN_TIMEOUT_SECONDS = 15;
+
 /** Opens a JDBC connection through node-jt400. This starts the JVM on first use. */
 export async function openJdbc(host: string, user: string, password: string): Promise<Jt400Db> {
   const { connect } = await import("node-jt400");
-  const db = await connect({ host, user, password, naming: "sql" });
+  // Every key is passed to the jt400 JDBC driver as a property, whose values must be strings.
+  const db = await connect({ host, user, password, naming: "sql", "login timeout": String(LOGIN_TIMEOUT_SECONDS) });
   return db as unknown as Jt400Db;
 }
 

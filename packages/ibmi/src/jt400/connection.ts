@@ -10,7 +10,7 @@ import {
 } from "../attributes.js";
 import { ConnectionError, type Connection, type Credentials, type SystemInfo } from "../connection.js";
 import { toConnectionError } from "../errors.js";
-import { loadJava, openJdbc, plain, readAllSync, type JavaObject, type Jt400Db } from "./bridge.js";
+import { LOGIN_TIMEOUT_SECONDS, loadJava, openJdbc, plain, readAllSync, type JavaObject, type Jt400Db } from "./bridge.js";
 import { mapQueueRow, mapSpooledFileRow, outputQueuesQuery, spooledFilesQuery, type Row } from "./sql.js";
 
 type AttrKind = "int" | "float" | "string";
@@ -56,6 +56,9 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
     const AS400 = java.import("com.ibm.as400.access.AS400");
     system = new AS400(creds.host, creds.user, creds.password);
     system.setGuiAvailableSync(false);
+    const socketProperties = new (java.import("com.ibm.as400.access.SocketProperties"))();
+    socketProperties.setLoginTimeoutSync(LOGIN_TIMEOUT_SECONDS * 1000);
+    system.setSocketPropertiesSync(socketProperties);
     classes = {
       SpooledFile: java.import("com.ibm.as400.access.SpooledFile"),
       PrintObject: java.import("com.ibm.as400.access.PrintObject"),

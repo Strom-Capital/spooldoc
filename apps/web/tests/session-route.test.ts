@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { GOOD_PASSWORD } from './helpers/fake-connection';
-import { appRequest, connections, jar, spyConsole } from './helpers/mocks';
+import { FakeConnection, GOOD_PASSWORD } from './helpers/fake-connection';
+import { appRequest, connections, fakeJt400, jar, spyConsole } from './helpers/mocks';
 
 vi.mock('next/headers', async () => ({ cookies: async () => (await import('./helpers/mocks')).jar }));
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
 
 const { DELETE, GET, POST } = await import('@/app/api/session/route');
 const { resetConfig } = await import('@/lib/server/config');
+const { SIGN_ON_TIMEOUT_MS } = await import('@/lib/server/ibmi');
 
 const signOn = (password: string) =>
   POST(appRequest('/api/session', { method: 'POST', body: { host: 'ibmi.example.com', user: 'demouser', password, library: 'mylib' } }));
@@ -93,6 +94,27 @@ describe('/api/session', () => {
       expect(body.pdf).toBe(true);
     } finally {
       delete process.env.SPOOLDOC_CHROMIUM_PATH;
+    }
+  });
+
+  it('answers a system that does not answer with 502 after the sign-on timeout and drops the connection', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const stuck = new FakeConnection();
+      const describe = vi.spyOn(stuck, 'describe').mockReturnValue(new Promise(() => undefined));
+      fakeJt400.getConnection.mockResolvedValueOnce(stuck);
+
+      const pending = signOn(GOOD_PASSWORD);
+      await vi.waitFor(() => expect(describe).toHaveBeenCalled());
+      await vi.advanceTimersByTimeAsync(SIGN_ON_TIMEOUT_MS);
+      const response = await pending;
+
+      expect(response.status).toBe(502);
+      expect((await response.json()).error).toMatch(/^No answer from ibmi\.example\.com within 60 seconds/);
+      expect(fakeJt400.closeConnection).toHaveBeenCalledWith('ibmi.example.com|DEMOUSER');
+      expect(jar.has('spooldoc')).toBe(false);
+    } finally {
+      vi.useRealTimers();
     }
   });
 

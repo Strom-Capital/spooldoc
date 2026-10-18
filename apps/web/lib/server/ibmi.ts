@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { Connection, ConnectionErrorCode, Credentials } from '@spooldoc/ibmi';
+import { noAnswerError, withDeadline, type Connection, type ConnectionErrorCode, type Credentials, type SystemInfo } from '@spooldoc/ibmi';
 import { errorResponse, redact } from './http';
 import { getSession, type IbmiSession } from './session';
 
@@ -61,6 +61,26 @@ function credentials(ibmi: IbmiSession): Credentials {
 export async function openConnection(creds: Credentials): Promise<Connection> {
   const { getConnection } = await jt400();
   return getConnection(creds);
+}
+
+/** How long a sign-on (opening the connection and reading the system info) may take. */
+export const SIGN_ON_TIMEOUT_MS = 60 * 1000;
+
+/**
+ * Sign on: open (or reuse) the cached connection and read the system info, within
+ * `SIGN_ON_TIMEOUT_MS`. When the system does not answer in time the cached connection
+ * is dropped, so the next attempt starts over, and a host error says so.
+ *
+ * @param creds - Host, user and password
+ * @returns The system info; throws ConnectionError when the sign-on fails or times out
+ */
+export async function signOn(creds: Credentials): Promise<SystemInfo> {
+  const { getConnection, closeConnection, connectionKey } = await jt400();
+  const info = getConnection(creds).then((conn) => conn.describe());
+  return withDeadline(info, SIGN_ON_TIMEOUT_MS, () => {
+    void closeConnection(connectionKey(creds)).catch(() => undefined);
+    return noAnswerError(creds.host, SIGN_ON_TIMEOUT_MS);
+  });
 }
 
 /**

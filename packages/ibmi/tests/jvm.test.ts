@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
-import { describe, expect, it } from "vitest";
-import { closeConnection, connectionKey, IDLE_MS } from "../src/jt400/index.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { Connection } from "../src/connection.js";
+import { closeConnection, connectionKey, CONNECT_TIMEOUT_MS, getConnection, IDLE_MS } from "../src/jt400/index.js";
+
+const opens = vi.hoisted(() => [] as { resolve(conn: Connection): void }[]);
+vi.mock("../src/jt400/connection.js", () => ({
+  openJt400Connection: () => new Promise<Connection>((resolve) => opens.push({ resolve })),
+}));
 
 const creds = { host: "ibmi.example.com", user: "demouser", password: "s3cret!Pw" };
 
@@ -17,6 +23,36 @@ describe("jt400 connection cache", () => {
 
   it("closes idle connections after ten minutes", () => {
     expect(IDLE_MS).toBe(10 * 60 * 1000);
+  });
+
+  describe("a connection that does not open", () => {
+    afterEach(async () => {
+      vi.useRealTimers();
+      for (const open of opens) open.resolve({ close: async () => undefined } as unknown as Connection);
+      await closeConnection(connectionKey(creds));
+      opens.length = 0;
+    });
+
+    it("fails with a host error after the connect timeout and starts over on the next call", async () => {
+      vi.useFakeTimers();
+      const first = getConnection(creds);
+      const failed = expect(first).rejects.toMatchObject({
+        name: "ConnectionError",
+        code: "host",
+        message: expect.stringMatching(/^No answer from ibmi\.example\.com within 45 seconds/),
+      });
+      await vi.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS);
+      await failed;
+
+      void getConnection(creds);
+      expect(opens).toHaveLength(2);
+
+      // The first attempt answering late is closed, not handed out.
+      const late = { close: vi.fn(async () => undefined) } as unknown as Connection;
+      opens[0]?.resolve(late);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(late.close).toHaveBeenCalled();
+    });
   });
 
   it("ignores an unknown key on close", async () => {

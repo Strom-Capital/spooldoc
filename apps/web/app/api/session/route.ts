@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { getConfig } from '@/lib/server/config';
 import { checkFetchSite, checkOrigin, errorResponse, json, readJson } from '@/lib/server/http';
-import { closeSessionConnection, connectionErrorResponse, openConnection } from '@/lib/server/ibmi';
+import { closeSessionConnection, connectionErrorResponse, signOn } from '@/lib/server/ibmi';
 import { describeModel } from '@/lib/server/models';
 import { pdfAvailable } from '@/lib/server/pdf';
 import { getSession } from '@/lib/server/session';
@@ -40,8 +40,7 @@ export async function POST(request: Request): Promise<Response> {
     await closeSessionConnection().catch(() => undefined);
   }
   try {
-    const conn = await openConnection({ host, user: user.toUpperCase(), password });
-    const info = await conn.describe();
+    const info = await signOn({ host, user: user.toUpperCase(), password });
     session.ibmi = { host, user: user.toUpperCase(), password, library, connectedAt: new Date().toISOString() };
     await session.save();
     return json({ host: info.host, user: info.user, jobCcsid: info.jobCcsid, vrm: info.vrm }, { status: 201 });

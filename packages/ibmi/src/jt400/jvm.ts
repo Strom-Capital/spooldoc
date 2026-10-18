@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Connection, Credentials } from "../connection.js";
+import { noAnswerError, withDeadline } from "../deadline.js";
 import { openJt400Connection } from "./connection.js";
 
 /**
@@ -15,6 +16,12 @@ import { openJt400Connection } from "./connection.js";
  * A connection unused for `IDLE_MS` is closed by an unref'd timer.
  */
 export const IDLE_MS = 10 * 60 * 1000;
+
+/**
+ * How long a caller waits for a connection to open. jt400's own login timeout normally
+ * ends a stuck attempt first; this also covers a sign-on that stalls after connecting.
+ */
+export const CONNECT_TIMEOUT_MS = 45 * 1000;
 
 interface Entry {
   /** The jt400 connection itself. */
@@ -73,7 +80,11 @@ function tracked(key: string, entry: Entry, conn: Connection): Connection {
   };
 }
 
-/** Returns the open connection for these credentials, opening one when there is none. */
+/**
+ * Returns the open connection for these credentials, opening one when there is none.
+ * An open that takes longer than `CONNECT_TIMEOUT_MS` fails with a host error and is
+ * dropped from the cache, so the next call starts a new attempt instead of joining it.
+ */
 export async function getConnection(creds: Credentials): Promise<Connection> {
   const c = cache();
   const key = connectionKey(creds);
@@ -90,7 +101,11 @@ export async function getConnection(creds: Credentials): Promise<Connection> {
     startSweeper(c);
   }
   entry.lastUsed = Date.now();
-  return entry.connection;
+  const opening = entry;
+  return withDeadline(entry.connection, CONNECT_TIMEOUT_MS, () => {
+    if (c.entries.get(key) === opening) void closeConnection(key);
+    return noAnswerError(creds.host, CONNECT_TIMEOUT_MS);
+  });
 }
 
 /** Closes and forgets the cached connection with this key. Unknown keys are ignored. */
