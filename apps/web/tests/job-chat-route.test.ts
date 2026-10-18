@@ -16,13 +16,15 @@ vi.mock('@/lib/server/models', async (importOriginal) => ({
 }));
 
 const { POST } = await import('@/app/api/jobs/[id]/chat/route');
-const { resetConfig } = await import('@/lib/server/config');
 const { storeSample } = await import('@/lib/server/samples');
 
 /** One part of a model stream, taken from the mock model's own types. */
 type LanguageModelV4StreamPart = Awaited<ReturnType<MockLanguageModelV4['doStream']>>['stream'] extends ReadableStream<infer T> ? T : never;
 
 const FAKE_KEY = 'sk-ant-fake-0123456789abcdef-do-not-leak';
+
+/** What `createModel` returns: the model, the effort from Settings and the key to redact. */
+const withKey = (model: MockLanguageModelV4, reasoning = 'provider-default') => ({ model, reasoning, secrets: [FAKE_KEY] });
 const sample = loadSample('invoice');
 const yaml = fixtureText('invoice', 'definition.yaml');
 const html = fixtureText('invoice', 'template.html');
@@ -93,8 +95,6 @@ beforeEach(async () => {
   jobId = await insertJob(serverId);
   const current = await draft();
   await db().update(jobs).set({ draft: { ...current, preview: { sampleId: stored.id } } }).where(eq(jobs.id, jobId));
-  process.env.ANTHROPIC_API_KEY = FAKE_KEY;
-  resetConfig();
   consoleSpies = spyConsole();
 });
 
@@ -102,14 +102,12 @@ afterEach(() => {
   for (const spy of consoleSpies) expect(spy).not.toHaveBeenCalled();
   vi.restoreAllMocks();
   createModel.mockReset();
-  delete process.env.ANTHROPIC_API_KEY;
-  resetConfig();
 });
 
 describe('POST /api/jobs/[id]/chat', () => {
   it("runs write_definition from the model: writes the job's draft and streams the report", async () => {
     const model = scriptedModel(toolStep('write_definition', { yaml }), textStep('Saved the invoice definition.'));
-    createModel.mockReturnValue(model);
+    createModel.mockResolvedValue(withKey(model, 'high'));
 
     const response = await chat();
     const { text, parts } = await chunks(response);
@@ -123,6 +121,7 @@ describe('POST /api/jobs/[id]/chat', () => {
 
     // The instructions carry the masked pages and the tools; the second step sees the tool result.
     expect(model.doStreamCalls).toHaveLength(2);
+    expect(model.doStreamCalls[0]?.reasoning).toBe('high');
     const instructions = JSON.stringify(model.doStreamCalls[0]?.prompt);
     expect(instructions).toContain('Invoice no');
     expect(instructions).not.toContain('260101');
@@ -136,7 +135,7 @@ describe('POST /api/jobs/[id]/chat', () => {
 
   it('runs write_template from the model and writes the template', async () => {
     await setDefinition(yaml);
-    createModel.mockReturnValue(scriptedModel(toolStep('write_template', { html }), textStep('Template saved.')));
+    createModel.mockResolvedValue(withKey(scriptedModel(toolStep('write_template', { html }), textStep('Template saved.'))));
 
     const { parts } = await chunks(await chat());
 
@@ -146,12 +145,14 @@ describe('POST /api/jobs/[id]/chat', () => {
   });
 
   it('keeps the API key out of the stream when the provider fails', async () => {
-    createModel.mockReturnValue(
-      new MockLanguageModelV4({
-        doStream: async () => {
-          throw new Error(`401 invalid x-api-key ${FAKE_KEY}\n    at secret (/srv/app/node_modules/provider.js:1:1)`);
-        },
-      }),
+    createModel.mockResolvedValue(
+      withKey(
+        new MockLanguageModelV4({
+          doStream: async () => {
+            throw new Error(`401 invalid x-api-key ${FAKE_KEY}\n    at secret (/srv/app/node_modules/provider.js:1:1)`);
+          },
+        }),
+      ),
     );
 
     const response = await chat();
@@ -164,7 +165,7 @@ describe('POST /api/jobs/[id]/chat', () => {
   });
 
   it('answers 404 for a missing job, 400 for a bad body or no preview file, 401 signed out, 503 without a model and 403 across origins', async () => {
-    createModel.mockReturnValue(scriptedModel());
+    createModel.mockResolvedValue(withKey(scriptedModel()));
     expect((await chat({ messages }, {}, '00000000-0000-4000-8000-000000000000')).status).toBe(404);
     expect((await chat({ messages: [] })).status).toBe(400);
     expect(
@@ -186,9 +187,14 @@ describe('POST /api/jobs/[id]/chat', () => {
     expect((await chat()).status).toBe(400);
     await db().update(jobs).set({ draft: current }).where(eq(jobs.id, jobId));
 
-    createModel.mockReturnValue(null);
+    createModel.mockResolvedValue(null);
     const none = await chat();
     expect(none.status).toBe(503);
-    expect(await none.json()).toEqual({ error: 'No model configured' });
+    expect(await none.json()).toEqual({ error: 'No model set up. Choose one in Settings.' });
+
+    createModel.mockRejectedValue(new Error('The stored API key cannot be decrypted. Was SPOOLDOC_SECRET_KEY changed? Enter the API key again.'));
+    const unreadable = await chat();
+    expect(unreadable.status).toBe(503);
+    expect(((await unreadable.json()) as { error: string }).error).toMatch(/cannot be decrypted/);
   });
 });

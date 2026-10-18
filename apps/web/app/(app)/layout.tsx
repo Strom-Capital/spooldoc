@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }
   // The sidebar starts as an icon rail until the user expands it (the sidebar keeps the choice in this cookie).
   const sidebarOpen = (await cookies()).get('sidebar_state')?.value === 'true';
-  const info = { user, model: describeModel(), masking: getConfig().mask, pdf: await pdfAvailable() };
+  const info = { user, model: await describeModel(), masking: getConfig().mask, pdf: await pdfAvailable() };
   return (
     <AppInfoProvider value={info}>
       <AppShell sidebarOpen={sidebarOpen}>{children}</AppShell>

@@ -1,6 +1,7 @@
 // Shapes the API returns, shared by the server routes and the pages.
 
 import type { SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
+import type { AiProviderId, Effort } from './ai-providers';
 import type { JobSpec } from './job-spec';
 
 /** A saved IBM i server. Never carries the password. */
@@ -108,6 +109,20 @@ export interface RunView {
   finishedAt: string | null;
 }
 
+/** One chat model provider's saved settings. The key itself is never sent. */
+export interface AiProviderView {
+  model: string | null;
+  effort: Effort;
+  baseUrl: string | null;
+  hasKey: boolean;
+}
+
+/** The chat model: the chosen provider (null when the chat is off) and every provider's settings. */
+export interface AiSettingsView {
+  provider: AiProviderId | null;
+  providers: Record<AiProviderId, AiProviderView>;
+}
+
 /** App-wide watcher settings. */
 export interface SettingsView {
   pollSeconds: number;
@@ -116,4 +131,5 @@ export interface SettingsView {
   watching: { realtime: number; polled: number };
   /** The last cleanup of old runs by this server process, if it did one. */
   cleanup: { at: string; runs: number; samples: number; error?: string } | null;
+  ai: AiSettingsView;
 }

@@ -18,6 +18,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { AI_PROVIDER_IDS, EFFORT_IDS } from '../../ai-providers';
 import type { JobSpec } from '../../job-spec';
 
 const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
@@ -262,6 +263,8 @@ export const runOutputs = pgTable(
   (t) => [uniqueIndex('run_outputs_name_idx').on(t.runId, t.name)],
 );
 
+const providerList = sql.raw(AI_PROVIDER_IDS.map((id) => `'${id}'`).join(', '));
+
 /** App-wide settings: a single row with id 1. */
 export const settings = pgTable(
   'settings',
@@ -271,13 +274,34 @@ export const settings = pgTable(
     safetyCheckSeconds: integer('safety_check_seconds').notNull().default(300),
     /** Runs, their files and unused preview samples older than this are deleted. */
     retentionDays: integer('retention_days').notNull().default(90),
+    /** The provider the chat uses. Null turns the chat off. */
+    aiProvider: text('ai_provider'),
     ...timestamps,
   },
   (t) => [
     check('settings_single_row', sql`${t.id} = 1`),
+    check('settings_ai_provider_check', sql`${t.aiProvider} in (${providerList})`),
     check('settings_poll_check', sql`${t.pollSeconds} between 5 and 3600`),
     check('settings_safety_check', sql`${t.safetyCheckSeconds} between 60 and 86400`),
     check('settings_retention_check', sql`${t.retentionDays} between 1 and 3650`),
+  ],
+);
+
+/** Each chat model provider's key (encrypted with SPOOLDOC_SECRET_KEY, see secrets.ts), model and effort. */
+export const aiProviders = pgTable(
+  'ai_providers',
+  {
+    provider: text('provider').primaryKey(),
+    apiKeyEnc: text('api_key_enc'),
+    model: text('model'),
+    effort: text('effort').notNull().default('provider-default'),
+    /** The OpenAI-compatible endpoint of a local model. */
+    baseUrl: text('base_url'),
+    ...timestamps,
+  },
+  (t) => [
+    check('ai_providers_provider_check', sql`${t.provider} in (${providerList})`),
+    check('ai_providers_effort_check', sql`${t.effort} in (${sql.raw(EFFORT_IDS.map((id) => `'${id}'`).join(', '))})`),
   ],
 );
 

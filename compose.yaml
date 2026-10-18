@@ -1,7 +1,7 @@
 # Example: docker compose up --build, then open http://localhost:3002.
 # .env next to this file holds the settings (see apps/web/.env.example);
-# BETTER_AUTH_SECRET and SPOOLDOC_SECRET_KEY are required, ANTHROPIC_API_KEY or
-# the OpenAI-compatible variables enable the chat. Chromium is set by the image.
+# BETTER_AUTH_SECRET and SPOOLDOC_SECRET_KEY are required; the chat model is set
+# in the app under Settings. Chromium is set by the image.
 #
 # For development, start only the database (docker compose up -d db) and set
 # DATABASE_URL=postgres://spooldoc:spooldoc@localhost:5433/spooldoc in

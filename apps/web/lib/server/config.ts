@@ -10,14 +10,10 @@ export interface AppConfig {
   authSecret: string;
   /** Origin users reach this app at, when set. Origin checks also accept the request's own host. */
   appUrl?: URL;
-  /** 32-byte key that encrypts the IBM i passwords of saved servers. */
+  /** 32-byte key that encrypts the IBM i passwords of saved servers and the model keys. */
   secretKey: Buffer;
   /** Run the queue watcher in this process. */
   watcher: boolean;
-  anthropicApiKey?: string;
-  /** Anthropic model ID. */
-  model: string;
-  openaiCompatible?: { baseUrl: string; apiKey?: string; model?: string };
   /** Mask values before page text goes to a model. */
   mask: boolean;
   /** Code page used when a spooled file has no CHRID and the job CCSID is not supported. */
@@ -63,11 +59,6 @@ const envSchema = z.object({
     .refine((value) => Buffer.from(value, 'base64').length === 32, 'SPOOLDOC_SECRET_KEY must be 32 bytes in base64. Generate one with: openssl rand -base64 32'),
   APP_URL: url('APP_URL'),
   SPOOLDOC_WATCHER: flag('SPOOLDOC_WATCHER'),
-  ANTHROPIC_API_KEY: optional,
-  SPOOLDOC_MODEL: optional,
-  OPENAI_COMPATIBLE_BASE_URL: url('OPENAI_COMPATIBLE_BASE_URL'),
-  OPENAI_COMPATIBLE_API_KEY: optional,
-  OPENAI_COMPATIBLE_MODEL: optional,
   SPOOLDOC_MASK: flag('SPOOLDOC_MASK'),
   SPOOLDOC_DEFAULT_CCSID: optional.pipe(
     z.string().regex(/^\d+$/, 'SPOOLDOC_DEFAULT_CCSID must be a number such as 273 or 37').optional(),
@@ -75,9 +66,6 @@ const envSchema = z.object({
   SPOOLDOC_CHROMIUM_PATH: optional,
   SPOOLDOC_ALLOWED_HOSTS: optional,
 });
-
-/** Default Anthropic model when SPOOLDOC_MODEL is not set. */
-export const DEFAULT_MODEL = 'claude-sonnet-5-5';
 
 let cached: AppConfig | undefined;
 
@@ -103,15 +91,6 @@ export function getConfig(): AppConfig {
     appUrl: env.APP_URL ? new URL(new URL(env.APP_URL).origin) : undefined,
     secretKey: Buffer.from(env.SPOOLDOC_SECRET_KEY, 'base64'),
     watcher: isTrue(env.SPOOLDOC_WATCHER, true),
-    anthropicApiKey: env.ANTHROPIC_API_KEY,
-    model: env.SPOOLDOC_MODEL ?? DEFAULT_MODEL,
-    openaiCompatible: env.OPENAI_COMPATIBLE_BASE_URL
-      ? {
-          baseUrl: env.OPENAI_COMPATIBLE_BASE_URL.replace(/\/+$/, ''),
-          apiKey: env.OPENAI_COMPATIBLE_API_KEY,
-          model: env.OPENAI_COMPATIBLE_MODEL,
-        }
-      : undefined,
     mask: isTrue(env.SPOOLDOC_MASK, true),
     defaultCcsid: env.SPOOLDOC_DEFAULT_CCSID ? Number(env.SPOOLDOC_DEFAULT_CCSID) : undefined,
     chromiumPath: env.SPOOLDOC_CHROMIUM_PATH,

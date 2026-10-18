@@ -99,7 +99,6 @@ docker run -p 3002:3000 \
   -e DATABASE_URL=postgres://... \
   -e BETTER_AUTH_SECRET="$(openssl rand -base64 32)" \
   -e SPOOLDOC_SECRET_KEY="$(openssl rand -base64 32)" \
-  -e ANTHROPIC_API_KEY=... \
   spooldoc
 ```
 
@@ -108,7 +107,8 @@ Or `docker compose up --build` with the settings in a `.env` file next to
 Postgres too. Everything Spooldoc keeps is in the database: servers, jobs
 and their versions, captured spooled files, runs and their files, so one
 `pg_dump` is the whole backup. Keep `SPOOLDOC_SECRET_KEY` the same across
-restarts, or the saved IBM i passwords must be entered again.
+restarts, or the saved IBM i passwords and model keys must be entered
+again.
 
 The container needs network access to the IBM i on the host server ports
 jt400 uses: 449 (port mapper) and 8470 to 8476 (central, database on 8471
@@ -117,17 +117,25 @@ for JDBC, network print, remote command and sign-on). Set
 
 ### Model
 
-The chat needs a model on the server. Set it in `apps/web/.env.local` and
+The chat needs a model. Choose it under Settings, AI model, with no
 restart:
 
-- `ANTHROPIC_API_KEY`, and optionally `SPOOLDOC_MODEL` (default
-  `claude-sonnet-5-5`).
-- Or an OpenAI-compatible endpoint, such as a local model server:
-  `OPENAI_COMPATIBLE_BASE_URL`, `OPENAI_COMPATIBLE_MODEL` and, when it
-  needs one, `OPENAI_COMPATIBLE_API_KEY`.
+- The provider: Anthropic, Google, OpenAI, OpenRouter, Vercel AI Gateway,
+  or a local model behind an OpenAI-compatible endpoint (Ollama, LM Studio,
+  vLLM) with its base URL.
+- Its API key (optional for a local model).
+- The model: one of the suggested models, or any model id the provider
+  offers.
+- The effort: how much the model reasons before it answers, from None to
+  Max, or the provider's default.
 
-Without either, the job builder works as before and the AI assistant says
-how to set one up. Keys stay on the server; no request can supply one.
+Each provider keeps its own key, model and effort, so switching back is
+one click. Without a model, the job builder works as before and the AI
+assistant points to Settings.
+
+Upgrading from a version that read `ANTHROPIC_API_KEY`, `SPOOLDOC_MODEL` or
+`OPENAI_COMPATIBLE_*`: those variables are no longer read. Enter the key
+and model in Settings once.
 
 Masking is on by default (`SPOOLDOC_MASK=true`): digits in values become 9
 and letters X or x before page text goes to the model, while labels that
@@ -163,8 +171,12 @@ account can be created on the login page; after that, sign-up is closed.
 IBM i passwords of saved servers are stored encrypted with AES-256-GCM
 under `SPOOLDOC_SECRET_KEY`, decrypted only to sign on (by the pages and by
 the queue watcher, which runs without anyone signed in), kept in the
-server's connection cache, and never logged or returned by the API. The
-model key is server configuration only: no request can supply or read one.
+server's connection cache, and never logged or returned by the API.
+Model keys are stored the same way and decrypted only to call the
+provider. Any signed-in user can set or replace a key in Settings, but no
+request can read one back, and keys are removed from error messages. A
+local model's base URL is called by the server, so only enter one you
+trust.
 
 After a run delivered every document, the job's finish step holds the
 spooled file by default (or moves or deletes it, or leaves it as it is).

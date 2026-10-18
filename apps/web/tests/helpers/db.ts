@@ -63,7 +63,7 @@ export async function openTestDb(): Promise<TestDb> {
 
 /** Empty every table the tests write to, keeping the seeded destination and settings. */
 export async function resetTables(db: Db): Promise<void> {
-  await db.execute(sql`truncate table "user", servers, jobs, samples, runs, run_outputs, watch_seen, queue_prefs cascade`);
+  await db.execute(sql`truncate table "user", servers, jobs, samples, runs, run_outputs, watch_seen, queue_prefs, ai_providers cascade`);
   await db.execute(sql`delete from destinations where builtin = false`);
-  await db.execute(sql`update settings set poll_seconds = 30, safety_check_seconds = 300, retention_days = 90`);
+  await db.execute(sql`update settings set poll_seconds = 30, safety_check_seconds = 300, retention_days = 90, ai_provider = null`);
 }

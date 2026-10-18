@@ -51,16 +51,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return errorResponse(400, 'Pick a spooled file to work on first.');
   }
 
-  const model = createModel();
-  if (!model) {
-    return errorResponse(503, 'No model configured');
+  let chat;
+  try {
+    chat = await createModel();
+  } catch (error) {
+    return errorResponse(503, error instanceof Error ? error.message : 'The model key cannot be read.');
   }
-  const secrets = [config.anthropicApiKey, config.openaiCompatible?.apiKey].filter((key): key is string => !!key);
+  if (!chat) {
+    return errorResponse(503, 'No model set up. Choose one in Settings.');
+  }
+  const { model, reasoning, secrets } = chat;
   const safe = (error: unknown): string => redact(error, secrets).replace(KEY_PATTERN, '***');
 
   try {
     const result = streamText({
       model,
+      reasoning,
       instructions: buildInstructions({
         sample,
         definitionYaml: draft.extract.definition.trim() ? draft.extract.definition : null,

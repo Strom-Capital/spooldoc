@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { DEFAULT_MODEL, getConfig, resetConfig } from '@/lib/server/config';
+import { getConfig, resetConfig } from '@/lib/server/config';
 
 const saved = { ...process.env };
 
@@ -40,17 +40,15 @@ describe('getConfig', () => {
   });
 
   it('has defaults', () => {
-    withEnv({ APP_URL: undefined, SPOOLDOC_MASK: undefined, SPOOLDOC_MODEL: undefined, SPOOLDOC_WATCHER: undefined, DATABASE_URL: undefined });
+    withEnv({ APP_URL: undefined, SPOOLDOC_MASK: undefined, SPOOLDOC_WATCHER: undefined, DATABASE_URL: undefined });
     const config = getConfig();
     expect(config.databaseUrl).toBeUndefined();
     expect(config.secretKey).toHaveLength(32);
     expect(config.watcher).toBe(true);
     expect(config.appUrl).toBeUndefined();
     expect(config.mask).toBe(true);
-    expect(config.model).toBe(DEFAULT_MODEL);
     expect(config.allowedHosts).toEqual([]);
     expect(config.defaultCcsid).toBeUndefined();
-    expect(config.openaiCompatible).toBeUndefined();
   });
 
   it('reads the optional settings', () => {
@@ -60,8 +58,6 @@ describe('getConfig', () => {
       SPOOLDOC_MASK: 'false',
       SPOOLDOC_DEFAULT_CCSID: '37',
       SPOOLDOC_ALLOWED_HOSTS: ' IBMI.example.com, other.example.com ,',
-      OPENAI_COMPATIBLE_BASE_URL: 'http://localhost:11434/v1/',
-      OPENAI_COMPATIBLE_MODEL: 'local-model',
     });
     const config = getConfig();
     expect(config.databaseUrl).toBe('postgres://localhost/spooldoc');
@@ -69,6 +65,5 @@ describe('getConfig', () => {
     expect(config.mask).toBe(false);
     expect(config.defaultCcsid).toBe(37);
     expect(config.allowedHosts).toEqual(['ibmi.example.com', 'other.example.com']);
-    expect(config.openaiCompatible).toEqual({ baseUrl: 'http://localhost:11434/v1', apiKey: undefined, model: 'local-model' });
   });
 });

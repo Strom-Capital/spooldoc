@@ -3,6 +3,7 @@
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, isToolUIPart } from 'ai';
 import { EyeOffIcon, EyeIcon } from 'lucide-react';
+import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
@@ -60,7 +61,11 @@ export function ChatPanel({ header }: { header?: ReactNode }) {
         <ChatConversation modelId={session.model.id} />
       ) : (
         <p role="note" className="m-3 rounded-md border bg-muted/40 p-3 text-muted-foreground text-sm">
-          No model configured. Set ANTHROPIC_API_KEY or the OpenAI-compatible variables in apps/web/.env.local and restart.
+          No model set up. Choose a provider and model in{' '}
+          <Link href="/settings" className="underline underline-offset-2 hover:text-foreground">
+            Settings
+          </Link>
+          .
         </p>
       )}
     </section>
