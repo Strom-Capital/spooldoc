@@ -14,6 +14,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { api, errorText } from '@/lib/client/api';
 import { bytes, dateTime, duration, splfLabel } from '@/lib/client/format';
 import type { JobSummary, RunView } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 const selectClass = 'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30';
 
@@ -135,6 +136,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
             <option value="success">Success</option>
             <option value="warning">Warning</option>
             <option value="failed">Failed</option>
+            <option value="skipped">Skipped</option>
             <option value="running">Running</option>
           </select>
         </div>
@@ -207,7 +209,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                     <RunStatusBadge status={run.status} />
                     <div className="text-muted-foreground text-xs">{runDuration(run)}</div>
                     {run.error && (
-                      <div className="max-w-xs truncate text-destructive text-xs" title={run.error}>
+                      <div className={cn('max-w-xs truncate text-xs', run.status === 'skipped' ? 'text-muted-foreground' : 'text-destructive')} title={run.error}>
                         {run.error}
                       </div>
                     )}
@@ -259,7 +261,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
               <div className="flex flex-col gap-5 px-4 pb-6">
                 <div className="flex items-center justify-between gap-2">
                   <RunStatusBadge status={open.status} />
-                  {(open.status === 'failed' || open.status === 'warning') && (
+                  {(open.status === 'failed' || open.status === 'warning' || open.status === 'skipped') && (
                     <Button variant="outline" size="sm" onClick={() => retry(open)}>
                       <RotateCcwIcon />
                       Retry
@@ -270,7 +272,12 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                   <h3 className="mb-1 font-medium text-sm">Spooled file</h3>
                   <p className="font-mono text-xs">{splfLabel(open.splf)}</p>
                 </div>
-                {open.error && <ErrorNote>{open.error}</ErrorNote>}
+                {open.error &&
+                  (open.status === 'skipped' ? (
+                    <p className="rounded-md border bg-muted/40 px-3 py-2 text-muted-foreground text-sm">{open.error}</p>
+                  ) : (
+                    <ErrorNote>{open.error}</ErrorNote>
+                  ))}
                 <div>
                   <h3 className="mb-2 font-medium text-sm">Steps</h3>
                   <ol className="flex flex-col gap-1.5">

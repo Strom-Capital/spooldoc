@@ -51,6 +51,12 @@ function StepHeader({ end }: { end?: React.ReactNode }) {
         {end && <div className="ml-auto flex items-center gap-3">{end}</div>}
       </div>
       {error && <p className="truncate px-3 pb-1.5 text-destructive text-xs">{error}</p>}
+      {render?.mismatch && (
+        <p className="px-3 pb-1.5 text-amber-700 text-xs dark:text-amber-400" title={render.mismatch.join('\n')}>
+          The definition is not for this file ({render.mismatch.join('; ')}). Runs skip such files; change the match section or pick
+          another file.
+        </p>
+      )}
       {render && render.errors.length > 0 && (
         <p className="truncate px-3 pb-1.5 text-destructive text-xs" title={render.errors.join('\n\n')}>
           {render.errors.length === 1 ? '1 problem' : `${render.errors.length} problems`}: {render.errors[0]?.split('\n')[0]}

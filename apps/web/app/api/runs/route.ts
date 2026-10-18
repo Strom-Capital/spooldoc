@@ -5,7 +5,7 @@ import type { RunStatus } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-const STATUSES = new Set<RunStatus>(['running', 'success', 'warning', 'failed']);
+const STATUSES = new Set<RunStatus>(['running', 'success', 'warning', 'failed', 'skipped']);
 
 const date = (value: string | null): Date | undefined => {
   if (!value) return undefined;

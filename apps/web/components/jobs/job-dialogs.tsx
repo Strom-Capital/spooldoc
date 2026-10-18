@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2Icon, CircleAlertIcon, PlayIcon, SaveIcon, XCircleIcon } from 'lucide-react';
+import { CheckCircle2Icon, CircleAlertIcon, CircleSlashIcon, PlayIcon, SaveIcon, XCircleIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ErrorNote } from '@/components/page';
@@ -193,6 +193,8 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
                 <li key={run.id} className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
                   {run.status === 'success' ? (
                     <CheckCircle2Icon className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                  ) : run.status === 'skipped' ? (
+                    <CircleSlashIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                   ) : run.status === 'running' ? (
                     <Spinner className="mt-0.5" />
                   ) : run.status === 'warning' ? (

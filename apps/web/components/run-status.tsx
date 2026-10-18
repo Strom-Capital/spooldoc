@@ -1,12 +1,21 @@
-import { CheckCircle2Icon, CircleAlertIcon, LoaderCircleIcon, XCircleIcon } from 'lucide-react';
+import { CheckCircle2Icon, CircleAlertIcon, CircleSlashIcon, LoaderCircleIcon, XCircleIcon } from 'lucide-react';
 import type { RunStatus } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-const LABEL: Record<RunStatus, string> = { running: 'Running', success: 'Success', warning: 'Warning', failed: 'Failed' };
+const LABEL: Record<RunStatus, string> = { running: 'Running', success: 'Success', warning: 'Warning', failed: 'Failed', skipped: 'Skipped' };
 
 /** A run status as an icon and a word. */
 export function RunStatusBadge({ status, className }: { status: RunStatus; className?: string }) {
-  const Icon = status === 'success' ? CheckCircle2Icon : status === 'warning' ? CircleAlertIcon : status === 'failed' ? XCircleIcon : LoaderCircleIcon;
+  const Icon =
+    status === 'success'
+      ? CheckCircle2Icon
+      : status === 'warning'
+        ? CircleAlertIcon
+        : status === 'failed'
+          ? XCircleIcon
+          : status === 'skipped'
+            ? CircleSlashIcon
+            : LoaderCircleIcon;
   return (
     <span
       className={cn(
@@ -14,7 +23,7 @@ export function RunStatusBadge({ status, className }: { status: RunStatus; class
         status === 'success' && 'text-emerald-700 dark:text-emerald-400',
         status === 'warning' && 'text-amber-700 dark:text-amber-400',
         status === 'failed' && 'text-destructive',
-        status === 'running' && 'text-muted-foreground',
+        (status === 'running' || status === 'skipped') && 'text-muted-foreground',
         className,
       )}
     >

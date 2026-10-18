@@ -221,17 +221,33 @@ export function extract(def: Definition, sample: Sample): ExtractResult {
   return { documents, hits: c.hits, warnings: c.warnings };
 }
 
-/** True when a definition's `match` rules accept the sample (no rules accepts everything). */
-export function matchesSample(def: Definition, sample: Sample): boolean {
+/**
+ * Why a definition's `match` rules do not accept the sample, one line per rule that
+ * fails, such as `spooled file name is SPDPICK, not SPDXML`. Empty when it matches (no
+ * rules accept everything).
+ */
+export function matchProblems(def: Definition, sample: Sample): string[] {
   const m = def.match;
-  if (!m) return true;
-  if (m.splf !== undefined && m.splf !== sample.splf.name) return false;
-  if (m.queue !== undefined && m.queue !== sample.attributes.queue.name) return false;
-  if (m.userData !== undefined && m.userData !== sample.attributes.userData) return false;
+  if (!m) return [];
+  const problems: string[] = [];
+  if (m.splf !== undefined && m.splf !== sample.splf.name) {
+    problems.push(`spooled file name is ${sample.splf.name}, not ${m.splf}`);
+  }
+  if (m.queue !== undefined && m.queue !== sample.attributes.queue.name) {
+    problems.push(`output queue is ${sample.attributes.queue.name}, not ${m.queue}`);
+  }
+  if (m.userData !== undefined && m.userData !== sample.attributes.userData) {
+    problems.push(`user data is ${sample.attributes.userData || "empty"}, not ${m.userData}`);
+  }
   if (m.page1 !== undefined) {
     const first = sample.pages[0];
     const t = first ? first.lines.map((l) => l.text).join("\n") : "";
-    if (!new RegExp(m.page1, "m").test(t)) return false;
+    if (!new RegExp(m.page1, "m").test(t)) problems.push(`page 1 does not match /${m.page1}/`);
   }
-  return true;
+  return problems;
+}
+
+/** True when a definition's `match` rules accept the sample (no rules accepts everything). */
+export function matchesSample(def: Definition, sample: Sample): boolean {
+  return matchProblems(def, sample).length === 0;
 }

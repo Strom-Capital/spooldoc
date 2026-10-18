@@ -48,7 +48,7 @@ export interface DestinationView {
   jobs: { id: string; name: string }[];
 }
 
-export type RunStatus = 'running' | 'success' | 'warning' | 'failed';
+export type RunStatus = 'running' | 'success' | 'warning' | 'failed' | 'skipped';
 
 /** A row of the jobs list. */
 export interface JobSummary {

@@ -262,6 +262,28 @@ describe('runs', () => {
     expect(fake().actions()).toEqual([]);
   });
 
+  it('skips a file the definition is not for, without touching it, and remembers it', async () => {
+    const id = await readyJob();
+    const other = yaml.replace(/^match:\n(?:  .*\n)*/m, '').replace(/^source: text$/m, 'match:\n  splf: OTHERFILE\nsource: text');
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { extract: { definition: other } } }), params({ id }));
+    const preview = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, {}), params({ id }))).json();
+    expect(preview.mismatch).toEqual([`spooled file name is ${sample.splf.name}, not OTHERFILE`]);
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
+
+    expect(run!.status).toBe('skipped');
+    expect(run!.error).toBe(`Skipped: the definition is not for this file (spooled file name is ${sample.splf.name}, not OTHERFILE).`);
+    expect(run!.steps.map((s) => [s.step, s.ok, s.note])).toEqual([
+      ['capture', true, `${sample.pages.length} pages`],
+      ['extract', true, 'Not for this definition'],
+    ]);
+    expect(run!.outputs).toEqual([]);
+    expect(fake().actions()).toEqual([]);
+    expect(await db().select().from(watchSeen)).toHaveLength(1);
+    const skipped = await (await runLog.GET(get('/api/runs?status=skipped'))).json();
+    expect(skipped.runs).toHaveLength(1);
+  });
+
   it('gives a warning when the file cannot be held after delivery', async () => {
     const id = await readyJob();
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));

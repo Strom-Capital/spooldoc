@@ -240,7 +240,7 @@ export const runs = pgTable(
     index('runs_status_started_idx').on(t.status, t.startedAt),
     index('runs_finished_idx').on(t.finishedAt),
     check('runs_trigger_check', sql`${t.trigger} in ('manual', 'watch')`),
-    check('runs_status_check', sql`${t.status} in ('running', 'success', 'warning', 'failed')`),
+    check('runs_status_check', sql`${t.status} in ('running', 'success', 'warning', 'failed', 'skipped')`),
   ],
 );
 

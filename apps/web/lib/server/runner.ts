@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { extract, parseDefinition, starterTemplate, type Definition, type Sample, type SpooledFileId } from '@spooldoc/core';
+import { extract, matchProblems, parseDefinition, starterTemplate, type Definition, type Sample, type SpooledFileId } from '@spooldoc/core';
 import type { Connection } from '@spooldoc/ibmi';
 import { and, eq } from 'drizzle-orm';
 import { jobSpecSchema, splfKey, type JobSpec } from '@/lib/job-spec';
@@ -30,6 +30,9 @@ let pdfRenderer: PdfRenderer = htmlToPdf;
 export function setPdfRenderer(next: PdfRenderer | null): void {
   pdfRenderer = next ?? htmlToPdf;
 }
+
+/** Ends a run as skipped: the file is not one the definition is for. The file is left alone. */
+class SkipRun extends Error {}
 
 class StepError extends Error {
   constructor(
@@ -64,8 +67,9 @@ export async function startRun(request: RunRequest): Promise<{ id: string; seq: 
 /**
  * Process one spooled file with a job version: capture, extract, render every document
  * to the version's formats (PDF, HTML or both), deliver, then hold, move or delete the file as the version says. Every step is
- * recorded on the run; a failure stops the run and is stored, never thrown. The finish
- * step runs only after everything was delivered, and a failure there gives `warning`.
+ * recorded on the run; a failure stops the run and is stored, never thrown. A file the
+ * definition's `match` rules do not accept ends the run as `skipped`, untouched. The
+ * finish step runs only after everything was delivered, and a failure there gives `warning`.
  *
  * @param runId - The run from `startRun`
  * @param request - The job, version and spooled file
@@ -76,7 +80,7 @@ export async function executeRun(runId: string, request: RunRequest, connection?
   const steps: RunStep[] = [];
   const secrets: string[] = connection ? [connection.password] : [];
   let documents = 0;
-  let status: 'success' | 'warning' | 'failed' = 'success';
+  let status: 'success' | 'warning' | 'failed' | 'skipped' = 'success';
   let error: string | null = null;
 
   const step = async <T>(name: RunStep['step'], fn: () => Promise<T>, note?: (value: T) => string | undefined): Promise<T> => {
@@ -120,16 +124,24 @@ export async function executeRun(runId: string, request: RunRequest, connection?
       },
       (s) => `${s.pages.length} ${s.pages.length === 1 ? 'page' : 'pages'}`,
     );
-    const { def, docs } = await step(
+    const extracted = await step(
       'extract',
       async () => {
         const def: Definition = parseDefinition(spec.extract.definition);
+        // A file the definition is not for (its `match` rules) is skipped, not failed.
+        const mismatch = matchProblems(def, sample);
+        if (mismatch.length > 0) return { def, docs: [], mismatch };
         const result = extract(def, sample);
         if (result.documents.length === 0) throw new Error('The definition finds no documents in this spooled file.');
-        return { def, docs: result.documents };
+        return { def, docs: result.documents, mismatch };
       },
-      ({ docs }) => `${docs.length} ${docs.length === 1 ? 'document' : 'documents'}`,
+      ({ docs, mismatch }) =>
+        mismatch.length > 0 ? 'Not for this definition' : `${docs.length} ${docs.length === 1 ? 'document' : 'documents'}`,
     );
+    if (extracted.mismatch.length > 0) {
+      throw new SkipRun(`Skipped: the definition is not for this file (${extracted.mismatch.join('; ')}).`);
+    }
+    const { def, docs } = extracted;
     documents = docs.length;
 
     const files: OutputFile[] = await step(
@@ -189,7 +201,7 @@ export async function executeRun(runId: string, request: RunRequest, connection?
       error = `Delivered, but the spooled file was not handled: ${err instanceof Error ? err.message : String(err)}`;
     }
   } catch (err) {
-    status = 'failed';
+    status = err instanceof SkipRun ? 'skipped' : 'failed';
     error = err instanceof Error ? err.message : String(err);
   }
 

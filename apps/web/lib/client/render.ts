@@ -15,6 +15,8 @@ export interface RenderResult {
   names?: string[];
   html?: string;
   document: number;
+  /** Why the definition's `match` rules do not accept this file (runs skip such files). */
+  mismatch?: string[];
   errors: string[];
 }
 

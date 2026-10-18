@@ -3,6 +3,7 @@ import 'server-only';
 import {
   documentName,
   extract,
+  matchProblems,
   parseDefinition,
   renderTemplate,
   resolveCodePage,
@@ -29,6 +30,8 @@ export interface RenderResult {
   html?: string;
   /** 0-based index of the rendered document. */
   document: number;
+  /** Why the definition's `match` rules do not accept this file (runs skip such files). */
+  mismatch?: string[];
   errors: string[];
 }
 
@@ -99,6 +102,10 @@ export function renderSample(sample: Sample, input: RenderInput): RenderResult {
     return result;
   }
 
+  const mismatch = matchProblems(def, sample);
+  if (mismatch.length > 0) {
+    result.mismatch = mismatch;
+  }
   try {
     result.extract = extract(def, sample);
   } catch (error) {
