@@ -1,6 +1,6 @@
 {
   "name": "@spooldoc/ibmi",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Spooldoc IBM i connection: list output queues and capture spooled files as samples",
   "license": "MIT",
   "repository": {
