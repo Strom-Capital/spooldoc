@@ -2,7 +2,7 @@
 
 import '@xyflow/react/dist/style.css';
 
-import { Handle, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps } from '@xyflow/react';
+import { Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps } from '@xyflow/react';
 import {
   CheckCheckIcon,
   FileJsonIcon,
@@ -79,7 +79,7 @@ function StepCard({ data }: NodeProps<StepNode>) {
         data.selected && 'border-primary ring-2 ring-primary/25',
       )}
     >
-      <Handle type="target" position={Position.Left} className="!size-1.5 !min-h-0 !min-w-0 !border-0 !bg-border" isConnectable={false} />
+      <Handle type="target" position={Position.Left} className="!size-1.5 !min-h-0 !min-w-0 !border-0 !bg-transparent" isConnectable={false} />
       <span className="flex items-center gap-1.5 font-medium text-sm">
         <Icon className="size-4 text-primary" aria-hidden />
         {data.title}
@@ -93,7 +93,7 @@ function StepCard({ data }: NodeProps<StepNode>) {
           {data.sub}
         </span>
       )}
-      <Handle type="source" position={Position.Right} className="!size-1.5 !min-h-0 !min-w-0 !border-0 !bg-border" isConnectable={false} />
+      <Handle type="source" position={Position.Right} className="!size-1.5 !min-h-0 !min-w-0 !border-0 !bg-transparent" isConnectable={false} />
     </button>
   );
 }
@@ -248,7 +248,8 @@ export function PipelineStrip() {
         source: steps[index]!.step,
         target: data.step,
         type: 'straight',
-        style: { strokeWidth: 1.5 },
+        style: { strokeWidth: 1.5, stroke: 'var(--muted-foreground)' },
+        markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16, color: 'var(--muted-foreground)' },
       })),
     [steps],
   );
