@@ -34,35 +34,12 @@ polling. A run reads the spooled file, parses the *SCS data, extracts the
 documents, renders each one and delivers the files, then holds, moves,
 deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 
-```mermaid
-graph LR
-    subgraph ibmi ["IBM i"]
-        outq[("Output queue")]
-        dtaq["Data queue"]
-        outq -.->|new file| dtaq
-    end
-
-    subgraph app ["Spooldoc"]
-        builder["Job builder"]
-        assistant["AI assistant"]
-        watcher["Queue watcher"]
-        runner["Job runner"]
-        pipeline["Parse, extract, render"]
-        chromium["Chromium PDF"]
-        db[("Postgres")]
-    end
-
-    user("Browser") --> builder
-    builder --> assistant
-    assistant -.->|masked page text| model("Model provider")
-    dtaq -->|real time| watcher
-    outq -->|polling| watcher
-    watcher --> runner
-    outq <-->|jt400| runner
-    runner --> pipeline --> chromium --> dest["Destination"]
-    builder --> db
-    runner --> db
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.svg">
+    <img src="docs/assets/architecture-light.svg" alt="Architecture: programs on the IBM i print to an output queue, optionally with a data queue; Spooldoc's watcher picks up new spooled files by polling or in real time, and a run captures, extracts, renders, delivers and finishes each one, reading and then holding, moving or deleting the file through jt400; the job builder and the AI assistant, which sends masked page text to a model provider, write to the same Postgres database that holds servers, jobs, versions, samples, runs, files and assets; delivered files go to a destination" width="1000">
+  </picture>
+</p>
 
 ## Features
 

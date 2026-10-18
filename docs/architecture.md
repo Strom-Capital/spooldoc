@@ -9,33 +9,23 @@ in a headless Chromium on the same host. The container image holds all
 three.
 
 ```mermaid
-graph LR
-    subgraph ibmi ["IBM i"]
-        outq[("Output queue")]
-        dtaq["Data queue"]
-        outq -.->|new file| dtaq
+flowchart LR
+    subgraph ibmi [IBM i]
+        direction TB
+        programs[Programs] --> outq[(Output queue)]
+        outq -.-> dtaq[Data queue]
     end
-
-    subgraph app ["Spooldoc"]
-        builder["Job builder"]
-        assistant["AI assistant"]
-        watcher["Queue watcher"]
-        runner["Job runner"]
-        pipeline["Parse, extract, render"]
-        chromium["Chromium PDF"]
-        db[("Postgres")]
+    subgraph app [Spooldoc]
+        direction TB
+        builder[Job builder] <--> assistant[AI assistant]
+        watcher[Queue watcher] --> run[Run: capture, extract,<br>render, deliver, finish]
+        builder --> db[(Postgres)]
+        run --> db
     end
-
-    user("Browser") --> builder
-    builder --> assistant
-    assistant -.->|masked page text| model("Model provider")
-    dtaq -->|real time| watcher
-    outq -->|polling| watcher
-    watcher --> runner
-    outq <-->|jt400| runner
-    runner --> pipeline --> chromium --> dest["Destination"]
-    builder --> db
-    runner --> db
+    outq --> watcher
+    dtaq -.-> watcher
+    run --> dest[Destination]
+    assistant -.-> model[Model provider]
 ```
 
 ## A run
