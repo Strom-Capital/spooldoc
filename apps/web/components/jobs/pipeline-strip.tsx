@@ -45,6 +45,24 @@ const DOT: Record<StepStatus, string> = {
 const STATUS_LABEL: Record<StepStatus, string> = { unset: 'Not set', ok: 'Ready', warn: 'Check', error: 'Problem' };
 
 const NODE_WIDTH = 184;
+const NODE_HEIGHT = 76;
+const HANDLE = 6;
+
+/**
+ * The size and handle positions of every step, given up front. React Flow forgets a
+ * node's measured size whenever it gets a new node object (the strip rebuilds them on
+ * every change), and an unmeasured node is hidden and its edges dropped until it is
+ * measured again, which never happens when its size does not change. Known sizes make
+ * the steps and connectors render every time, and the strip can be fitted at once.
+ */
+const NODE_SIZE = {
+  width: NODE_WIDTH,
+  height: NODE_HEIGHT,
+  handles: [
+    { type: 'target' as const, position: Position.Left, x: -HANDLE / 2, y: NODE_HEIGHT / 2 - HANDLE / 2, width: HANDLE, height: HANDLE },
+    { type: 'source' as const, position: Position.Right, x: NODE_WIDTH - HANDLE / 2, y: NODE_HEIGHT / 2 - HANDLE / 2, width: HANDLE, height: HANDLE },
+  ],
+};
 const GAP = 36;
 
 function StepCard({ data }: NodeProps<StepNode>) {
@@ -56,7 +74,7 @@ function StepCard({ data }: NodeProps<StepNode>) {
       aria-pressed={data.selected}
       aria-label={`${data.title}: ${data.detail}. ${STATUS_LABEL[data.status]}`}
       className={cn(
-        // One height for every step, so the handles line up and the connectors stay level.
+        // NODE_SIZE: one size for every step, so the handles line up and the connectors stay level.
         'nodrag nopan flex h-[76px] w-[184px] cursor-pointer flex-col justify-start gap-1 rounded-lg border bg-card px-3 py-2 text-left shadow-xs transition-colors hover:border-primary/60',
         data.selected && 'border-primary ring-2 ring-primary/25',
       )}
@@ -84,15 +102,31 @@ const nodeTypes = { step: StepCard };
 
 const subscribeNothing = () => () => undefined;
 
-const FIT = { padding: 0.08, maxZoom: 1, minZoom: 0.3 };
+/** Smallest zoom at which the step text is still readable. */
+const MIN_ZOOM = 0.45;
+const PAD = 12;
+const STEPS = 6;
+const TOTAL_WIDTH = STEPS * NODE_WIDTH + (STEPS - 1) * GAP;
 
-/** Fit the steps again whenever the strip changes width (the sidebar or the window). */
+/**
+ * Fit the steps whenever the strip changes size (the sidebars or the window). When all
+ * six do not fit at a readable size, start at Source and let the strip be dragged.
+ */
 function FitOnResize() {
-  const { fitView } = useReactFlow();
+  const { setViewport } = useReactFlow();
   const width = useStore((state) => state.width);
+  const height = useStore((state) => state.height);
   useEffect(() => {
-    void fitView(FIT);
-  }, [width, fitView]);
+    if (width <= 0 || height <= 0) {
+      return;
+    }
+    const zoom = Math.min(1, (width - 2 * PAD) / TOTAL_WIDTH, (height - 2 * PAD) / NODE_HEIGHT);
+    if (zoom >= MIN_ZOOM) {
+      void setViewport({ x: (width - TOTAL_WIDTH * zoom) / 2, y: (height - NODE_HEIGHT * zoom) / 2, zoom });
+    } else {
+      void setViewport({ x: PAD, y: (height - NODE_HEIGHT * MIN_ZOOM) / 2, zoom: MIN_ZOOM });
+    }
+  }, [width, height, setViewport]);
   return null;
 }
 
@@ -199,6 +233,7 @@ export function PipelineStrip() {
         id: data.step,
         type: 'step',
         position: { x: index * (NODE_WIDTH + GAP), y: 0 },
+        ...NODE_SIZE,
         data: { ...data, selected: data.step === step, onSelect: setStep },
         draggable: false,
         connectable: false,
@@ -224,9 +259,7 @@ export function PipelineStrip() {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
-        fitView
-        fitViewOptions={FIT}
-        minZoom={0.3}
+        minZoom={MIN_ZOOM}
         maxZoom={1}
         nodesDraggable={false}
         nodesConnectable={false}
