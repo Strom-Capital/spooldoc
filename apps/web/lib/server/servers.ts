@@ -17,7 +17,7 @@ export function serverView(row: ServerRow): ServerView {
     host: row.host,
     user: row.user,
     libraries: row.libraries,
-    dataQueue: row.dtaqLibrary && row.dtaqName ? { library: row.dtaqLibrary, name: row.dtaqName } : null,
+    dataQueue: row.dtaqLibrary && row.dtaqName ? { library: row.dtaqLibrary, name: row.dtaqName, owned: row.dtaqOwned } : null,
     ccsid: row.ccsid,
     vrm: row.vrm,
     lastCheckedAt: row.lastCheckedAt?.toISOString() ?? null,

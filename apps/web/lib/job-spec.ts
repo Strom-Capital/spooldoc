@@ -39,6 +39,11 @@ export function filterParams(filter: SourceFilter, params = new URLSearchParams(
   return params;
 }
 
+/** The spooled file statuses the watcher takes for a trigger. */
+export function watchedStatuses(trigger: { includeHeld: boolean }): string[] {
+  return trigger.includeHeld ? ['READY', 'HELD'] : ['READY'];
+}
+
 /** A job's filters as the IBM i spooled file filter. */
 export function ibmiFilter(filter: SourceFilter): { name?: string; userData?: string; jobName?: string; jobUser?: string; formType?: string } {
   const value = (text: string) => text.trim() || undefined;
@@ -64,8 +69,10 @@ export const jobSpecSchema = z.object({
       mode: z.enum(['manual', 'watch']).default('manual'),
       /** When watching starts, also run the files already ready on the queue (else they are left for Run now). */
       backlog: z.boolean().default(false),
+      /** The watcher also takes held files, not only ready ones. */
+      includeHeld: z.boolean().default(false),
     })
-    .default({ mode: 'manual', backlog: false }),
+    .default({ mode: 'manual', backlog: false, includeHeld: false }),
   extract: z.object({ definition: z.string().max(200_000).default('') }).default({ definition: '' }),
   render: z
     .preprocess(

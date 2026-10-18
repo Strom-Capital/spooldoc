@@ -107,6 +107,8 @@ export const servers = pgTable('servers', {
   /** The data queue output queues send entries to for real-time watching. */
   dtaqLibrary: text('dtaq_library'),
   dtaqName: text('dtaq_name'),
+  /** Spooldoc created the data queue (Set up real-time), rather than using one that was there. */
+  dtaqOwned: boolean('dtaq_owned').notNull().default(false),
   ccsid: integer('ccsid'),
   vrm: text('vrm'),
   lastCheckedAt: timestamp('last_checked_at', { withTimezone: true }),

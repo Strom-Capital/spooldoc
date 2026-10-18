@@ -1,0 +1,1 @@
+ALTER TABLE "servers" ADD COLUMN "dtaq_owned" boolean DEFAULT false NOT NULL;

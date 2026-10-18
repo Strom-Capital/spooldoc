@@ -49,8 +49,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!info) {
       return errorResponse(404, `Output queue ${library}/${queue} not found.`);
     }
-    const save = (dtaq: { library: string; name: string }) =>
-      getDb().update(servers).set({ dtaqLibrary: dtaq.library, dtaqName: dtaq.name }).where(eq(servers.id, server.id));
+    const save = (dtaq: { library: string; name: string }, owned: boolean) =>
+      getDb().update(servers).set({ dtaqLibrary: dtaq.library, dtaqName: dtaq.name, dtaqOwned: owned }).where(eq(servers.id, server.id));
 
     if (info.dataQueue) {
       const same = server.dtaqLibrary === info.dataQueue.library && server.dtaqName === info.dataQueue.name;
@@ -58,7 +58,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return json({ ok: true });
       }
       if (adopt) {
-        await save(info.dataQueue);
+        await save(info.dataQueue, false);
         return json({ ok: true });
       }
       return json(
@@ -91,7 +91,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         { status: noAuthority ? 403 : 422 },
       );
     }
-    await save(dtaq);
+    // Owned when Spooldoc created it now, or created it before for another queue.
+    await save(dtaq, server.dtaqLibrary ? server.dtaqOwned : true);
     return json({ ok: true, dataQueue: dtaq });
   });
 }

@@ -3,7 +3,7 @@ import 'server-only';
 import { parseSpooledFileEntry, type Connection, type OutputQueue, type QueueRef, type SpooledFileEntry } from '@spooldoc/ibmi';
 import type { SpooledFileId } from '@spooldoc/core';
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
-import { ibmiFilter, jobSpecSchema, splfKey, type JobSpec } from '@/lib/job-spec';
+import { ibmiFilter, jobSpecSchema, splfKey, watchedStatuses, type JobSpec } from '@/lib/job-spec';
 import { getDb, getLocks } from './db';
 import { jobs, jobVersions, watchSeen } from './db/schema';
 import { redact } from './http';
@@ -190,7 +190,7 @@ export class Watcher {
         const filter = job.spec.source.filter;
         let files: SpooledFileEntry[] = await opened.conn.listSpooledFiles(queue, {
           ...ibmiFilter(filter),
-          status: ['READY'],
+          status: watchedStatuses(job.spec.trigger),
           limit: 500,
         });
         const db = getDb();

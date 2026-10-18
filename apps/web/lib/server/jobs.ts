@@ -113,6 +113,7 @@ export async function listJobs(): Promise<JobSummary[]> {
         queue: spec.source.queue,
       },
       mode: activeBy.get(row.id)?.trigger.mode ?? 'manual',
+      finish: spec.finish.action,
       paused: row.paused,
       activeVersion: row.activeVersion,
       versions: versionCount.get(row.id) ?? 0,
@@ -182,15 +183,18 @@ export async function saveVersion(job: JobRow, input: { note: string; activate: 
 async function activate(tx: Tx, job: JobRow, number: number, spec: JobSpec): Promise<void> {
   const before = await activeSpec(job, tx);
   const startsWatching = spec.trigger.mode === 'watch' && before?.trigger.mode !== 'watch';
-  // Turning the backlog on while watching takes stock again, so the waiting files are run.
-  const startsBacklog = spec.trigger.mode === 'watch' && spec.trigger.backlog && !before?.trigger.backlog;
+  // Turning the backlog or held files on while watching takes stock again: the waiting
+  // files are run (backlog) or set aside (no backlog) with the new statuses.
+  const retakes =
+    spec.trigger.mode === 'watch' &&
+    ((spec.trigger.backlog && !before?.trigger.backlog) || (spec.trigger.includeHeld && !before?.trigger.includeHeld));
   await tx
     .update(jobs)
     // lastWatchAt null makes the watcher take stock of the queue before it runs anything.
     .set({
       activeVersion: number,
       ...(startsWatching ? { watchSince: new Date(), lastWatchAt: null, lastWatchError: null } : {}),
-      ...(startsBacklog && !startsWatching ? { lastWatchAt: null } : {}),
+      ...(retakes && !startsWatching ? { lastWatchAt: null } : {}),
     })
     .where(eq(jobs.id, job.id));
 }

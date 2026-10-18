@@ -27,10 +27,10 @@ let watcher: InstanceType<typeof Watcher>;
 const fake = (): FakeConnection => connections.get('ibmi.example.com|DEMOUSER')!;
 
 /** A job watching the invoice queue, with an active version. */
-async function watchingJob(overrides: { paused?: boolean; backlog?: boolean } = {}): Promise<string> {
+async function watchingJob(overrides: { paused?: boolean; backlog?: boolean; includeHeld?: boolean } = {}): Promise<string> {
   const spec = {
     ...emptySpec({ serverId, library, queue, destinationId: await builtinDestination() }),
-    trigger: { mode: 'watch' as const, backlog: overrides.backlog ?? false },
+    trigger: { mode: 'watch' as const, backlog: overrides.backlog ?? false, includeHeld: overrides.includeHeld ?? false },
     extract: { definition: fixtureText('invoice', 'definition.yaml') },
   };
   const [job] = await db()
@@ -99,7 +99,7 @@ describe('watcher', () => {
 
     // A new active version with the backlog on (what activating it does to the job).
     const [version] = await db().select().from(jobVersions).where(eq(jobVersions.jobId, jobId));
-    const spec = { ...version!.spec, trigger: { mode: 'watch' as const, backlog: true } };
+    const spec = { ...version!.spec, trigger: { mode: 'watch' as const, backlog: true, includeHeld: false } };
     await db().insert(jobVersions).values({ jobId, number: 2, spec });
     await db().update(jobs).set({ activeVersion: 2, lastWatchAt: null }).where(eq(jobs.id, jobId));
     await watcher.tick();
@@ -132,6 +132,17 @@ describe('watcher', () => {
     const call = fake().calls.find((c) => c.method === 'listSpooledFiles');
     expect(call?.args[1]).toMatchObject({ status: ['READY'], name: 'SPD', jobName: 'QPRTJOB', jobUser: 'DEMOUSER' });
     expect(call?.args[1]).not.toHaveProperty('formType', '');
+  });
+
+  it('takes held files too when the trigger says so', async () => {
+    await watchingJob({ backlog: true, includeHeld: true });
+    const conn = new FakeConnection();
+    connections.set('ibmi.example.com|DEMOUSER', conn);
+    // The fake lists fixture files as HELD unless told otherwise.
+    await watcher.tick();
+    const call = conn.calls.find((c) => c.method === 'listSpooledFiles');
+    expect(call?.args[1]).toMatchObject({ status: ['READY', 'HELD'] });
+    expect(await runRows()).toHaveLength(1);
   });
 
   it('leaves paused jobs alone', async () => {

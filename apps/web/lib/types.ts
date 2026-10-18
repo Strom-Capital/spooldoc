@@ -10,7 +10,8 @@ export interface ServerView {
   host: string;
   user: string;
   libraries: string[];
-  dataQueue: { library: string; name: string } | null;
+  /** The data queue Spooldoc reads; `owned` when Spooldoc created it. */
+  dataQueue: { library: string; name: string; owned: boolean } | null;
   ccsid: number | null;
   vrm: string | null;
   lastCheckedAt: string | null;
@@ -55,6 +56,8 @@ export interface JobSummary {
   name: string;
   source: { serverId: string | null; serverName: string | null; library: string; queue: string };
   mode: 'manual' | 'watch';
+  /** What the active version (else the draft) does with a file after delivery. */
+  finish: 'hold' | 'move' | 'delete' | 'none';
   paused: boolean;
   activeVersion: number | null;
   versions: number;
