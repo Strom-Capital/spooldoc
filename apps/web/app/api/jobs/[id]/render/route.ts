@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { assetResolver } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
 import { errorResponse, json, readJson } from '@/lib/server/http';
 import { draftAndSample } from '@/lib/server/job-preview';
@@ -37,5 +38,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   const yaml = body.data.yaml ?? draft.extract.definition;
   const html = body.data.html === undefined ? draft.render.template : body.data.html;
-  return json(renderSample(sample, { yaml, html, document: body.data.document }));
+  return json(renderSample(sample, { yaml, html, document: body.data.document, asset: await assetResolver() }));
 }

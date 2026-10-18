@@ -36,6 +36,23 @@ describe("templates", () => {
     expect(r).toEqual({ html: "1,000.00 EUR 02.01.2026 [   x]", errors: [] });
   });
 
+  it("prints an asset as its data URI, in HTML and in CSS", () => {
+    const uri = "data:image/png;base64,iVBORw0KGgo+/=";
+    const asset = (name: string) => (name === "logo" ? uri : undefined);
+    const r = renderTemplate(`<img src="{{ asset('logo') }}"><style>i { background: url("{{ asset('lo' ~ 'go') }}"); }</style>`, {}, { asset });
+    expect(r).toEqual({ html: `<img src="${uri}"><style>i { background: url("${uri}"); }</style>`, errors: [] });
+  });
+
+  it("reports an unknown asset, and any asset without a resolver", () => {
+    const missing = renderTemplate("{{ asset('logo') }}", {}, { asset: () => undefined });
+    expect(missing.errors.join()).toContain('There is no asset named "logo". Upload it on the Assets page.');
+    expect(renderTemplate("{{ asset('logo') }}", {}).errors.join()).toContain('There is no asset named "logo"');
+  });
+
+  it("lets the data shadow the asset function", () => {
+    expect(renderTemplate("{{ asset }}", { asset: "mine" })).toEqual({ html: "mine", errors: [] });
+  });
+
   it("reports a template error instead of throwing", () => {
     const r = renderTemplate("{% for x in %}", {});
     expect(r.html).toBe("");

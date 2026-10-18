@@ -39,14 +39,29 @@ function environment(autoescape: boolean): nunjucks.Environment {
 let htmlEnv: nunjucks.Environment | null = null;
 let textEnv: nunjucks.Environment | null = null;
 
+/** Turns an asset name into what `asset('name')` prints (a data URI), or undefined when there is no such asset. */
+export type AssetResolver = (name: string) => string | undefined;
+
+/** Options for `renderTemplate`. */
+export interface RenderOptions {
+  /** Resolves `asset('name')`. Without it every `asset()` call is an error. */
+  asset?: AssetResolver;
+}
+
 /**
  * Renders a Nunjucks (Jinja syntax) template with autoescape on. Errors are returned in
- * `errors`, never thrown. Filters: `money`, `date`, `pad`.
+ * `errors`, never thrown. Filters: `money`, `date`, `pad`. Function: `asset(name)`, an
+ * uploaded image or font as a data URI (an unknown name is an error).
  */
-export function renderTemplate(html: string, data: unknown): { html: string; errors: string[] } {
+export function renderTemplate(html: string, data: unknown, options: RenderOptions = {}): { html: string; errors: string[] } {
   htmlEnv ??= environment(true);
   try {
-    const ctx = data !== null && typeof data === "object" ? (data as object) : { data };
+    const asset = (name: unknown): string => {
+      const uri = typeof name === "string" ? options.asset?.(name) : undefined;
+      if (uri === undefined) throw new Error(`There is no asset named ${JSON.stringify(name)}. Upload it on the Assets page.`);
+      return uri;
+    };
+    const ctx = { asset, ...(data !== null && typeof data === "object" ? (data as object) : { data }) };
     return { html: htmlEnv.renderString(html, ctx), errors: [] };
   } catch (err) {
     return { html: "", errors: [err instanceof Error ? err.message : String(err)] };

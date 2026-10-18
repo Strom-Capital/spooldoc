@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { documentName, pageLayout, parseDefinition, renderTemplate, type Definition, type Sample } from '@spooldoc/core';
+import { documentName, pageLayout, parseDefinition, renderTemplate, type AssetResolver, type Definition, type Sample } from '@spooldoc/core';
 import { loadPdf } from './pdf';
 
 /** One rendered document: its file name (without extension) and HTML. */
@@ -25,13 +25,19 @@ export function fileNameFor(def: Definition | null, doc: Record<string, unknown>
 }
 
 /**
- * Render every document of a sample to HTML.
+ * Render every document of a sample to HTML, with `asset('name')` resolved by `asset`.
  *
  * @throws Error with the template errors when a document does not render
  */
-export function renderDocuments(def: Definition, html: string, documents: Record<string, unknown>[], sample: Sample): RenderedDocument[] {
+export function renderDocuments(
+  def: Definition,
+  html: string,
+  documents: Record<string, unknown>[],
+  sample: Sample,
+  asset?: AssetResolver,
+): RenderedDocument[] {
   return documents.map((doc, index) => {
-    const rendered = renderTemplate(html, { doc, documents, sample: { id: sample.id, splf: sample.splf } });
+    const rendered = renderTemplate(html, { doc, documents, sample: { id: sample.id, splf: sample.splf } }, { asset });
     if (rendered.errors.length > 0) {
       throw new Error(`Document ${index + 1}: ${rendered.errors.join('; ')}`);
     }

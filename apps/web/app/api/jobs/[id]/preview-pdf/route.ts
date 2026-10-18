@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { assetResolver } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
 import { fileNameFor, htmlToPdf, tryDefinition } from '@/lib/server/documents';
 import { errorResponse, json, readJson } from '@/lib/server/http';
@@ -45,7 +46,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   const html = body.data.html === undefined ? draft.render.template : body.data.html;
   const { document } = body.data;
-  const result = renderSample(sample, { yaml, html, document });
+  const result = renderSample(sample, { yaml, html, document, asset: await assetResolver() });
   if (result.definition?.error || result.template?.error || !result.extract) {
     return json({ error: 'The definition or the template has errors.', templateErrors: result.errors }, { status: 422 });
   }

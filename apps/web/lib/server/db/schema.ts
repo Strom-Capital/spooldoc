@@ -311,6 +311,20 @@ export const aiProviders = pgTable(
   ],
 );
 
+/** An image or font that templates print with `asset('name')`, as a data URI. */
+export const assets = pgTable(
+  'assets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull().unique(),
+    contentType: text('content_type').notNull(),
+    size: integer('size').notNull(),
+    content: bytea('content').notNull(),
+    ...timestamps,
+  },
+  (t) => [check('assets_name_check', sql`${t.name} ~ '^[a-z0-9][a-z0-9_-]{0,63}$'`)],
+);
+
 /** Spooled files a job has processed, so none is processed twice. */
 export const watchSeen = pgTable(
   'watch_seen',

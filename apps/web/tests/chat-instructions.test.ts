@@ -30,6 +30,22 @@ describe('buildInstructions', () => {
     expect(short).toContain('(page 1 cut after line 20; read it all with read_sample_page)');
   });
 
+  it('names the uploaded assets, or says there are none', () => {
+    expect(clear).toContain('No assets are uploaded yet; the user uploads them on the Assets page.');
+    const withAssets = buildInstructions({
+      sample,
+      definitionYaml: null,
+      templateHtml: null,
+      masked: false,
+      assets: [
+        { name: 'logo', kind: 'image' },
+        { name: 'brand', kind: 'font' },
+      ],
+    });
+    expect(withAssets).toContain("asset('name')");
+    expect(withAssets).toContain('Uploaded: `logo` (image), `brand` (font).');
+  });
+
   it('holds the sample metadata', () => {
     expect(clear).toContain(`Spooled file: ${sample.splf.name}, number ${sample.splf.number}`);
     expect(clear).toContain(`${sample.attributes.pageWidth} x ${sample.attributes.pageLength}`);

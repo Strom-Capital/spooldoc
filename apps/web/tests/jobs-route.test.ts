@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { jobs, runOutputs, runs, watchSeen } from '@/lib/server/db/schema';
+import { assets, jobs, runOutputs, runs, watchSeen } from '@/lib/server/db/schema';
 import type { JobDetail, RunView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
@@ -225,6 +225,30 @@ describe('runs', () => {
     expect(file.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect(file.headers.get('content-security-policy')).toMatch(/^sandbox;/);
     expect(await file.text()).toContain('260101');
+  });
+
+  it('prints uploaded assets as data URIs in the preview, the preview PDF and runs', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+    await db().insert(assets).values({ name: 'logo', contentType: 'image/png', size: png.length, content: png });
+    const uri = `data:image/png;base64,${png.toString('base64')}`;
+    const withLogo = template.replace('<body>', `<body><img src="{{ asset('logo') }}" alt="">`);
+    const id = await readyJob();
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { template: withLogo, formats: ['html', 'pdf'] } } }), params({ id }));
+
+    const preview = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, {}), params({ id }))).json();
+    expect(preview.html).toContain(`<img src="${uri}" alt="">`);
+    const missing = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { html: "{{ asset('stamp') }}" }), params({ id }))).json();
+    expect(missing.template.error).toContain('There is no asset named "stamp"');
+
+    expect((await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, {}), params({ id }))).status).toBe(200);
+    expect(renderPdf.mock.calls[0]![0]).toContain(uri);
+
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
+    expect(run!.status).toBe('success');
+    const html = run!.outputs.find((o) => o.name === 'invoice-260101.html')!;
+    const file = await fileRoute.GET(get(`/api/runs/${run!.id}/files/${html.id}?inline=1`), params({ id: run!.id, file: html.id }));
+    expect(await file.text()).toContain(uri);
   });
 
   it('makes only HTML when PDF is off', async () => {

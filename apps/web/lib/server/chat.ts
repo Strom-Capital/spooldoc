@@ -43,7 +43,15 @@ export interface InstructionsInput {
   templateHtml: string | null;
   /** Mask values in the page text (SPOOLDOC_MASK). */
   masked: boolean;
+  /** Uploaded images and fonts the template can print with `asset('name')`. */
+  assets?: ChatAsset[];
   config?: InstructionsConfig;
+}
+
+/** An uploaded asset as the model knows it: its name and whether it is an image or a font. */
+export interface ChatAsset {
+  name: string;
+  kind: 'image' | 'font';
 }
 
 /** The sentence that keeps spool text in its place. Tests look for it. */
@@ -93,7 +101,7 @@ const fence = (lang: string, body: string): string => `\`\`\`${lang}\n${body.rep
  * @param input - The sample, its linked files and the masking setting
  * @returns The instructions text
  */
-export function buildInstructions({ sample, definitionYaml, templateHtml, masked, config = {} }: InstructionsInput): string {
+export function buildInstructions({ sample, definitionYaml, templateHtml, masked, assets = [], config = {} }: InstructionsInput): string {
   const width = sample.attributes.pageWidth;
   const pages = visiblePages(sample, masked);
   const maxPages = config.previewPages ?? 3;
@@ -159,6 +167,11 @@ Rules:
 - Nunjucks (Jinja syntax) with autoescape on. \`{{ doc }}\` is the current document, \`documents\` is every document of the run, \`sample\` holds \`id\` and \`splf\`.
 - Filters: \`money(currency?)\` (two decimals, thousands separator), \`date(format?)\` (default \`dd.MM.yyyy\`; tokens yyyy, MM, dd), \`pad(width, side?, char?)\`.
 - One complete HTML page for A4: \`@page { size: A4; margin: 15mm; }\`, all CSS in one \`<style>\` element, no external fonts, images or stylesheets, no scripts.
+- Images and fonts come only from the uploaded assets: \`asset('name')\` prints one as a data URI, as in \`<img src="{{ asset('logo') }}" alt="">\` or \`@font-face { font-family: "Brand"; src: url("{{ asset('brand-font') }}"); }\`. A name that is not uploaded is a template error, so use only the names listed here. ${
+      assets.length === 0
+        ? 'No assets are uploaded yet; the user uploads them on the Assets page.'
+        : `Uploaded: ${assets.map((asset) => `\`${asset.name}\` (${asset.kind})`).join(', ')}.`
+    }
 - Show every field the definition extracts, laid out like a clean version of the printed document.`,
 
     `## Tools
@@ -212,6 +225,8 @@ export interface ToolsInput {
   store: DraftStore;
   /** Mask values in page text and tool results (SPOOLDOC_MASK). */
   masked: boolean;
+  /** Names `asset('name')` accepts. Renders print a placeholder for them, never the file. */
+  assets?: ChatAsset[];
 }
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -345,13 +360,16 @@ function renderDocument(
   index: number,
   sample: Sample,
   masked: boolean,
+  assets: ChatAsset[],
 ): { errors: string[]; textPreview: string } {
   const shown = masked ? (documents.map(maskDocument) as Record<string, unknown>[]) : documents;
   const doc = shown[index];
   if (!doc) {
     return { errors: ['The definition finds no documents, so there is nothing to render.'], textPreview: '' };
   }
-  const rendered = renderTemplate(html, { doc, documents: shown, sample: { id: sample.id, splf: sample.splf } });
+  const names = new Set(assets.map((asset) => asset.name));
+  const asset = (name: string) => (names.has(name) ? 'data:,' : undefined);
+  const rendered = renderTemplate(html, { doc, documents: shown, sample: { id: sample.id, splf: sample.splf } }, { asset });
   return { errors: rendered.errors, textPreview: truncate(visibleText(rendered.html), 1500) };
 }
 
@@ -365,7 +383,7 @@ export const DRAFT_PATHS = { definition: 'definition', template: 'template' } as
  *
  * @param input - The sample, the draft store and the masking setting
  */
-export function buildTools({ sample: current, store, masked }: ToolsInput) {
+export function buildTools({ sample: current, store, masked, assets = [] }: ToolsInput) {
   async function readSample(): Promise<Sample | ToolFailure> {
     return current;
   }
@@ -471,7 +489,7 @@ export function buildTools({ sample: current, store, masked }: ToolsInput) {
         } catch (error) {
           return { ok: false, path, errors: [`Extraction failed: ${message(error)}`], warnings, textPreview: '' };
         }
-        const rendered = renderDocument(html, documents, 0, sample, masked);
+        const rendered = renderDocument(html, documents, 0, sample, masked, assets);
         return { ok: rendered.errors.length === 0, path, errors: rendered.errors, warnings, textPreview: rendered.textPreview };
       },
     }),
@@ -500,7 +518,7 @@ export function buildTools({ sample: current, store, masked }: ToolsInput) {
         const saved = await store.readTemplate().catch(() => null);
         const html = saved ?? starterTemplate(current.def);
         const index = Math.min(document ?? 0, Math.max(0, result.documents.length - 1));
-        const rendered = renderDocument(html, result.documents, index, sample, masked);
+        const rendered = renderDocument(html, result.documents, index, sample, masked, assets);
         const hits = { found: 0, missing: 0, empty: 0 };
         for (const hit of result.hits) {
           hits[hit.status]++;

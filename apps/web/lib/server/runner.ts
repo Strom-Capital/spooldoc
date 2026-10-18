@@ -4,6 +4,7 @@ import { extract, matchProblems, parseDefinition, starterTemplate, type Definiti
 import type { Connection } from '@spooldoc/ibmi';
 import { and, eq } from 'drizzle-orm';
 import { jobSpecSchema, splfKey, type JobSpec } from '@/lib/job-spec';
+import { assetResolver } from './assets';
 import { getDb } from './db';
 import { jobVersions, runs, watchSeen, type RunStep } from './db/schema';
 import { destinationFor, type OutputFile } from './destinations';
@@ -148,7 +149,7 @@ export async function executeRun(runId: string, request: RunRequest, connection?
       'render',
       async () => {
         const html = spec.render.template ?? starterTemplate(def);
-        const rendered = renderDocuments(def, html, docs, sample);
+        const rendered = renderDocuments(def, html, docs, sample, await assetResolver());
         const names = new Set<string>();
         const unique = (base: string, ext: string) => {
           let name = `${base}.${ext}`;

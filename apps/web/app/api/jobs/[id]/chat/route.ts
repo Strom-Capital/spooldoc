@@ -1,5 +1,6 @@
 import { convertToModelMessages, isStepCount, streamText, type UIMessage } from 'ai';
 import { z } from 'zod';
+import { assetNames } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
 import { buildInstructions, buildTools } from '@/lib/server/chat';
 import { getConfig } from '@/lib/server/config';
@@ -61,6 +62,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return errorResponse(503, 'No model set up. Choose one in Settings.');
   }
   const { model, reasoning, secrets } = chat;
+  const assets = await assetNames();
   const safe = (error: unknown): string => redact(error, secrets).replace(KEY_PATTERN, '***');
 
   try {
@@ -72,9 +74,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         definitionYaml: draft.extract.definition.trim() ? draft.extract.definition : null,
         templateHtml: draft.render.template,
         masked: config.mask,
+        assets,
       }),
       messages: await convertToModelMessages(messages, { ignoreIncompleteToolCalls: true }),
-      tools: buildTools({ sample, store: draftStore(job.id), masked: config.mask }),
+      tools: buildTools({ sample, store: draftStore(job.id), masked: config.mask, assets }),
       stopWhen: isStepCount(MAX_STEPS),
       abortSignal: request.signal,
       // The default handler logs to the console; the client gets the error from the stream instead.

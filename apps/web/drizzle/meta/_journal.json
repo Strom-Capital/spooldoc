@@ -57,6 +57,13 @@
       "when": 1792358694752,
       "tag": "0007_dismissals",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792359702698,
+      "tag": "0008_assets",
+      "breakpoints": true
     }
   ]
 }

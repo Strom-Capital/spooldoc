@@ -8,6 +8,7 @@ import {
   renderTemplate,
   resolveCodePage,
   starterTemplate,
+  type AssetResolver,
   type CodePageSource,
   type Definition,
   type ExtractResult,
@@ -40,6 +41,8 @@ export interface RenderInput {
   yaml: string;
   html: string | null;
   document?: number;
+  /** Resolves `asset('name')` in the template. */
+  asset?: AssetResolver;
 }
 
 /**
@@ -122,7 +125,7 @@ export function renderSample(sample: Sample, input: RenderInput): RenderResult {
       doc,
       documents,
       sample: { id: sample.id, splf: sample.splf },
-    });
+    }, { asset: input.asset });
     if (rendered.errors.length > 0) {
       result.template.error = rendered.errors.join('\n');
       errors.push(...rendered.errors);

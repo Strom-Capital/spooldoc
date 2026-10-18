@@ -164,7 +164,11 @@ text. Protect it like the spooled files themselves: access, backups and
 the volume included.
 
 PDFs render locally in headless Chromium; the page may not make any
-network request, so a template cannot fetch or send anything.
+network request, so a template cannot fetch or send anything. Logos,
+images and fonts are uploaded on the Assets page instead and printed with
+`{{ asset('name') }}`, which embeds the file as a data URI (for example
+`<img src="{{ asset('logo') }}" alt="">` or
+`@font-face { font-family: "Brand"; src: url("{{ asset('brand-font') }}"); }`).
 
 The app needs a sign-in (Better Auth, email and password). The first
 account can be created on the login page; after that, sign-up is closed.

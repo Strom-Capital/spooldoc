@@ -2,6 +2,7 @@
 
 import {
   HomeIcon,
+  ImageIcon,
   InboxIcon,
   LogOutIcon,
   PanelLeftIcon,
@@ -48,6 +49,7 @@ const PAGES = [
   { href: '/queues', label: 'Queues', icon: InboxIcon },
   { href: '/jobs', label: 'Jobs', icon: WorkflowIcon },
   { href: '/destinations', label: 'Destinations', icon: SendIcon },
+  { href: '/assets', label: 'Assets', icon: ImageIcon },
   { href: '/runs', label: 'Job log', icon: ScrollTextIcon },
 ];
 

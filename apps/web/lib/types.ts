@@ -49,7 +49,19 @@ export interface DestinationView {
   jobs: { id: string; name: string }[];
 }
 
-export type RunStatus = 'running' | 'success' | 'warning' | 'failed' | 'skipped';
+/** An uploaded image or font, without its bytes. */
+export interface AssetView {
+  id: string;
+  name: string;
+  kind: 'image' | 'font';
+  contentType: string;
+  size: number;
+  updatedAt: string;
+  /** Jobs whose draft or active version prints it with `asset('name')`. */
+  jobs: { id: string; name: string }[];
+}
+
+export type RunStatus ='running' | 'success' | 'warning' | 'failed' | 'skipped';
 
 /** A row of the jobs list. */
 export interface JobSummary {
