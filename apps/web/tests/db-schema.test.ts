@@ -1,6 +1,6 @@
 import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { destinations, jobs, jobVersions, runs, settings, watchSeen } from '@/lib/server/db/schema';
+import { destinations, jobChats, jobs, jobVersions, runs, settings, watchSeen } from '@/lib/server/db/schema';
 import { resetTables } from './helpers/db';
 import { builtinDestination, db, insertJob, insertServer } from './helpers/fixtures';
 
@@ -36,18 +36,20 @@ describe('database rules', () => {
     expect(await db().select().from(jobVersions)).toHaveLength(1);
   });
 
-  it('removes versions, runs and seen files with their job', async () => {
+  it('removes versions, runs, seen files and the chat thread with their job', async () => {
     const jobId = await insertJob(await insertServer());
     const [job] = await db().select().from(jobs).where(eq(jobs.id, jobId));
     await db().insert(jobVersions).values({ jobId, number: 1, spec: job!.draft });
     const [run] = await db().insert(runs).values({ jobId, version: 1, trigger: 'manual', splf }).returning();
     await db().insert(watchSeen).values({ jobId, splfKey: 'k', runId: run!.id });
+    await db().insert(jobChats).values({ jobId, messages: [{ id: 'm1', role: 'user', parts: [{ type: 'text', text: 'Hello' }] }] });
 
     await db().delete(jobs).where(eq(jobs.id, jobId));
 
     expect(await db().select().from(jobVersions)).toEqual([]);
     expect(await db().select().from(runs)).toEqual([]);
     expect(await db().select().from(watchSeen)).toEqual([]);
+    expect(await db().select().from(jobChats)).toEqual([]);
   });
 
   it('records a spooled file only once per job', async () => {

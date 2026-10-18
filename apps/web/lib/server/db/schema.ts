@@ -2,6 +2,7 @@
 // `server-only` or anything that needs the Next.js runtime.
 
 import type { SamplePage, SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
+import type { UIMessage } from 'ai';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -162,6 +163,19 @@ export const jobs = pgTable('jobs', {
   /** The watch error dismissed on Home; it shows again when the error changes or clears and comes back. */
   watchErrorDismissed: text('watch_error_dismissed'),
   createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+  ...timestamps,
+});
+
+/**
+ * The AI assistant's conversation for a job: the UI message list as the chat panel shows
+ * it, tool calls and their (masked) results included. One thread per job; New chat
+ * deletes the row, and the row goes with the job.
+ */
+export const jobChats = pgTable('job_chats', {
+  jobId: uuid('job_id')
+    .primaryKey()
+    .references(() => jobs.id, { onDelete: 'cascade' }),
+  messages: jsonb('messages').$type<UIMessage[]>().notNull().default([]),
   ...timestamps,
 });
 

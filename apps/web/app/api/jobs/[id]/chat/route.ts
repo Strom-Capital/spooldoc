@@ -1,11 +1,12 @@
-import { convertToModelMessages, isStepCount, streamText, type UIMessage } from 'ai';
+import { convertToModelMessages, generateId, isStepCount, streamText, type UIMessage } from 'ai';
 import { z } from 'zod';
 import { assetNames } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
-import { buildInstructions, buildTools } from '@/lib/server/chat';
+import { buildInstructions, buildTools, hasContent, trimHistory } from '@/lib/server/chat';
 import { getConfig } from '@/lib/server/config';
 import { draftStore } from '@/lib/server/draft-store';
-import { errorResponse, readJson, redact } from '@/lib/server/http';
+import { errorResponse, json, readJson, redact } from '@/lib/server/http';
+import { clearChat, readChat, saveChat } from '@/lib/server/job-chat';
 import { jobFilesReader } from '@/lib/server/job-files';
 import { draftAndSample } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
@@ -13,6 +14,8 @@ import { createModel } from '@/lib/server/models';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
+
+type Context = { params: Promise<{ id: string }> };
 
 /** Model steps per request: each tool call and answer is one step. */
 const MAX_STEPS = 12;
@@ -27,13 +30,27 @@ const chatRequest = z.object({
 /** Anything that looks like an API key, in case a provider echoes one back. */
 const KEY_PATTERN = /\b(sk|key|token)-[A-Za-z0-9_-]{6,}/gi;
 
+/** The job's stored thread: `{ messages }`, the UI messages the chat panel shows. */
+export async function GET(request: Request, { params }: Context): Promise<Response> {
+  const auth = await guard(request);
+  if ('response' in auth) {
+    return auth.response;
+  }
+  const job = await getJobRow((await params).id);
+  if (!job) {
+    return errorResponse(404, 'Job not found.');
+  }
+  return json({ messages: await readChat(job.id) });
+}
+
 /**
  * Stream the model's answer for one job. The model gets the job's preview spooled file
  * (page text masked by default), its metadata and the draft's definition and template,
- * and tools that read the sample, write the draft and read other jobs' definitions and
- * templates. It never gets the login session or the IBM i connection.
+ * the recent part of the thread, and tools that read the sample, write the draft and
+ * read other jobs' definitions and templates. It never gets the login session or the
+ * IBM i connection. When the answer ends, the whole thread is stored with the job.
  */
-export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
+export async function POST(request: Request, { params }: Context): Promise<Response> {
   const auth = await guard(request);
   if ('response' in auth) {
     return auth.response;
@@ -77,15 +94,39 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         masked: config.mask,
         assets,
       }),
-      messages: await convertToModelMessages(messages, { ignoreIncompleteToolCalls: true }),
+      messages: await convertToModelMessages(trimHistory(messages), { ignoreIncompleteToolCalls: true }),
       tools: buildTools({ sample, store: draftStore(job.id), masked: config.mask, assets, jobs: jobFilesReader(job.id) }),
       stopWhen: isStepCount(MAX_STEPS),
       abortSignal: request.signal,
       // The default handler logs to the console; the client gets the error from the stream instead.
       onError: () => undefined,
     });
-    return result.toUIMessageStreamResponse({ onError: safe });
+    return result.toUIMessageStreamResponse({
+      originalMessages: messages,
+      // The answer gets its id here, so the stored message and the one on screen are the same.
+      generateMessageId: generateId,
+      // Also after a stop: the part that arrived stays on screen, so it stays in the thread.
+      // A turn whose answer failed before its first token leaves the thread as it was. A
+      // thread that cannot be written (the job was deleted meanwhile) is let go.
+      onFinish: ({ responseMessage, messages: thread }) =>
+        hasContent(responseMessage) ? saveChat(job.id, thread).catch(() => undefined) : undefined,
+      onError: safe,
+    });
   } catch (error) {
     return errorResponse(500, safe(error));
   }
+}
+
+/** Forget the job's thread: New chat. */
+export async function DELETE(request: Request, { params }: Context): Promise<Response> {
+  const auth = await guard(request);
+  if ('response' in auth) {
+    return auth.response;
+  }
+  const job = await getJobRow((await params).id);
+  if (!job) {
+    return errorResponse(404, 'Job not found.');
+  }
+  await clearChat(job.id);
+  return new Response(null, { status: 204 });
 }
