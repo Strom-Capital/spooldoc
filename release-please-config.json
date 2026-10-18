@@ -5,6 +5,7 @@
   "packages": {
     ".": {
       "release-type": "node",
+      "initial-version": "0.1.0",
       "package-name": "spooldoc",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
