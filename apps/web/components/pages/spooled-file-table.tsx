@@ -1,34 +1,21 @@
 'use client';
 
-import { CameraIcon } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { ErrorNote } from '@/components/page';
 import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import { api, errorText, isAbort } from '@/lib/client/api';
+import type { SpooledFileView } from '@/lib/types';
 
-interface SpooledFile {
-  name: string;
-  number: number;
-  jobName: string;
-  jobUser: string;
-  jobNumber: string;
-  status: string;
-  attributes: { userData: string; pages: number; pageWidth: number; pageLength: number; created: string };
-}
+const key = (f: SpooledFileView) => `${f.jobNumber}/${f.jobUser}/${f.jobName}/${f.name}/${f.number}`;
 
-const key = (f: SpooledFile) => `${f.jobNumber}/${f.jobUser}/${f.jobName}/${f.name}/${f.number}`;
-
-/** The spooled files of a queue with name and user data filters and a Capture button per row. */
-export function SpooledFileTable({ library, queue }: { library: string; queue: string }) {
-  const router = useRouter();
+/** The spooled files of a queue with name and user data filters. */
+export function SpooledFileTable({ serverId, library, queue }: { serverId: string; library: string; queue: string }) {
   const [name, setName] = useState('');
   const [userData, setUserData] = useState('');
-  const [files, setFiles] = useState<SpooledFile[] | null>(null);
+  const [files, setFiles] = useState<SpooledFileView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [capturing, setCapturing] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -38,8 +25,8 @@ export function SpooledFileTable({ library, queue }: { library: string; queue: s
       if (name.trim()) params.set('name', name.trim());
       if (userData.trim()) params.set('userData', userData.trim());
       try {
-        const data = await api<{ files: SpooledFile[] }>(
-          `/api/queues/${encodeURIComponent(library)}/${encodeURIComponent(queue)}?${params}`,
+        const data = await api<{ files: SpooledFileView[] }>(
+          `/api/servers/${serverId}/queues/${encodeURIComponent(library)}/${encodeURIComponent(queue)}/files?${params}`,
           { signal: controller.signal },
         );
         setFiles(data.files);
@@ -59,23 +46,7 @@ export function SpooledFileTable({ library, queue }: { library: string; queue: s
       clearTimeout(timer);
       controller.abort();
     };
-  }, [library, queue, name, userData]);
-
-  async function capture(file: SpooledFile) {
-    setCapturing(key(file));
-    setError(null);
-    try {
-      const { name: splfName, number, jobName, jobUser, jobNumber } = file;
-      const result = await api<{ id: string }>('/api/capture', {
-        method: 'POST',
-        body: { splf: { name: splfName, number, jobName, jobUser, jobNumber } },
-      });
-      router.push(`/samples/${encodeURIComponent(result.id)}`);
-    } catch (err) {
-      setError(errorText(err));
-      setCapturing(null);
-    }
-  }
+  }, [serverId, library, queue, name, userData]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -97,11 +68,7 @@ export function SpooledFileTable({ library, queue }: { library: string; queue: s
           spellCheck={false}
         />
       </div>
-      {error && (
-        <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive text-sm">
-          {error}
-        </p>
-      )}
+      {error && <ErrorNote>{error}</ErrorNote>}
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-muted-foreground">
@@ -114,7 +81,6 @@ export function SpooledFileTable({ library, queue }: { library: string; queue: s
               <th className="px-3 py-2 font-medium">Width x length</th>
               <th className="px-3 py-2 font-medium">Status</th>
               <th className="px-3 py-2 font-medium">Created</th>
-              <th className="px-3 py-2" />
             </tr>
           </thead>
           <tbody>
@@ -134,17 +100,11 @@ export function SpooledFileTable({ library, queue }: { library: string; queue: s
                 <td className="tabular whitespace-nowrap px-3 py-2 text-muted-foreground">
                   {file.attributes.created.replace('T', ' ')}
                 </td>
-                <td className="px-3 py-2 text-right">
-                  <Button size="sm" variant="outline" disabled={capturing !== null} onClick={() => capture(file)}>
-                    {capturing === key(file) ? <Spinner /> : <CameraIcon />}
-                    Capture
-                  </Button>
-                </td>
               </tr>
             ))}
             {files?.length === 0 && !loading && (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">
+                <td colSpan={8} className="px-3 py-6 text-center text-muted-foreground">
                   No spooled files match.
                 </td>
               </tr>

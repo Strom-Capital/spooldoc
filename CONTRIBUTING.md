@@ -17,9 +17,17 @@ pnpm -r lint
 pnpm -r test
 ```
 
-CI runs the same four commands. Tests need no IBM i: the web app tests use
-a fake connection over the core fixtures. The Chromium PDF test runs only
+CI runs the same four commands. Tests need no IBM i and no database: the
+web app tests use a fake connection over the core fixtures and an
+in-process Postgres (PGlite) per test file. To run them against a real
+Postgres, start one (`docker compose up -d db`) and set
+`TEST_DATABASE_URL=postgres://spooldoc:spooldoc@localhost:5433/spooldoc`;
+each test file gets a throwaway database. The Chromium PDF test runs only
 when `SPOOLDOC_CHROMIUM_PATH` is set.
+
+Schema changes go in `apps/web/lib/server/db/schema.ts`; then run
+`pnpm --filter @spooldoc/web db:generate` and commit the new migration in
+`apps/web/drizzle/`.
 
 ## Commits and pull requests
 

@@ -8,9 +8,16 @@ import {
   toNumber,
   toText,
 } from "../attributes.js";
-import { ConnectionError, type Connection, type Credentials, type SystemInfo } from "../connection.js";
+import {
+  ConnectionError,
+  type CommandResult,
+  type Connection,
+  type Credentials,
+  type QueueRef,
+  type SystemInfo,
+} from "../connection.js";
 import { toConnectionError } from "../errors.js";
-import { LOGIN_TIMEOUT_SECONDS, loadJava, openJdbc, plain, readAllSync, type JavaObject, type Jt400Db } from "./bridge.js";
+import { javaBytes, LOGIN_TIMEOUT_SECONDS, loadJava, openJdbc, plain, readAllSync, type JavaObject, type Jt400Db } from "./bridge.js";
 import { mapQueueRow, mapSpooledFileRow, outputQueuesQuery, spooledFilesQuery, type Row } from "./sql.js";
 
 type AttrKind = "int" | "float" | "string";
@@ -34,6 +41,11 @@ function attribute(splf: JavaObject, id: number, kind: AttrKind): string | numbe
   return null;
 }
 
+/** The IFS path of a library object, such as `/QSYS.LIB/MYLIB.LIB/FORMS.OUTQ`. */
+export function ifsPath(ref: QueueRef, type: "OUTQ" | "DTAQ"): string {
+  return `/QSYS.LIB/${ref.library.trim().toUpperCase()}.LIB/${ref.name.trim().toUpperCase()}.${type}`;
+}
+
 /**
  * Opens a connection with jt400: JDBC through node-jt400 for the SQL lists, and a
  * separate `AS400` object for the print services that read spooled files.
@@ -45,7 +57,13 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
 
   let db: Jt400Db;
   let system: JavaObject;
-  let classes: { SpooledFile: JavaObject; PrintObject: JavaObject };
+  let classes: {
+    SpooledFile: JavaObject;
+    PrintObject: JavaObject;
+    OutputQueue: JavaObject;
+    DataQueue: JavaObject;
+    CommandCall: JavaObject;
+  };
   try {
     db = await openJdbc(creds.host, creds.user, creds.password);
   } catch (err) {
@@ -62,6 +80,9 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
     classes = {
       SpooledFile: java.import("com.ibm.as400.access.SpooledFile"),
       PrintObject: java.import("com.ibm.as400.access.PrintObject"),
+      OutputQueue: java.import("com.ibm.as400.access.OutputQueue"),
+      DataQueue: java.import("com.ibm.as400.access.DataQueue"),
+      CommandCall: java.import("com.ibm.as400.access.CommandCall"),
     };
   } catch (err) {
     await db.close().catch(() => undefined);
@@ -126,6 +147,44 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
     }
   };
 
+  const splfName = (id: SpooledFileId): string =>
+    `Spooled file ${id.name} number ${id.number} of job ${id.jobNumber}/${id.jobUser}/${id.jobName}`;
+  const spooledFile = (id: SpooledFileId): JavaObject =>
+    new classes.SpooledFile(system, id.name, id.number, id.jobName, id.jobUser, id.jobNumber);
+  // The methods without the Sync suffix return promises and run on a worker thread, so a
+  // slow IBM i does not block the event loop.
+  const onSpooledFile = async (id: SpooledFileId, act: (splf: JavaObject) => Promise<unknown>): Promise<void> => {
+    try {
+      await act(spooledFile(id));
+    } catch (err) {
+      throw fail(err, splfName(id));
+    }
+  };
+
+  const readDataQueue = async (dataQueue: QueueRef, waitSeconds: number): Promise<Uint8Array | null> => {
+    const what = `Data queue ${dataQueue.library}/${dataQueue.name}`;
+    try {
+      const dq = new classes.DataQueue(system, ifsPath(dataQueue, "DTAQ"));
+      const entry = await dq.read(Math.max(0, Math.round(waitSeconds)));
+      if (!entry) return null;
+      return javaBytes(entry.getDataSync());
+    } catch (err) {
+      throw fail(err, what);
+    }
+  };
+
+  const runCommand = async (command: string): Promise<CommandResult> => {
+    try {
+      const call = new classes.CommandCall(system);
+      const ok = Boolean(await call.run(command));
+      const list: JavaObject[] = call.getMessageListSync() ?? [];
+      const messages = Array.from(list, (m: JavaObject) => ({ id: toText(plain(m.getIDSync())), text: toText(plain(m.getTextSync())) }));
+      return { ok, messages };
+    } catch (err) {
+      throw fail(err, "The command");
+    }
+  };
+
   let closed = false;
   return {
     describe,
@@ -138,6 +197,20 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
       return (await query(sql, params)).map((row) => mapSpooledFileRow(row, queue));
     },
     readSpooledFile,
+    // CPF3337: the file is held already, which is what was asked for.
+    holdSpooledFile: (id) =>
+      onSpooledFile(id, async (splf) => {
+        try {
+          await splf.hold("*IMMED");
+        } catch (err) {
+          if (!/CPF3337/.test(String((err as Error)?.message ?? err))) throw err;
+        }
+      }),
+    moveSpooledFile: (id, queue) =>
+      onSpooledFile(id, (splf) => splf.move(new classes.OutputQueue(system, ifsPath(queue, "OUTQ")))),
+    deleteSpooledFile: (id) => onSpooledFile(id, (splf) => splf.delete()),
+    readDataQueue,
+    runCommand,
     async close() {
       if (closed) return;
       closed = true;

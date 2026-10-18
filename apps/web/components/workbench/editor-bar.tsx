@@ -1,38 +1,11 @@
 'use client';
 
-import { EyeIcon, SaveIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
 
-/** Preview and Save buttons with a status line, above an editor. */
-export function EditorBar({
-  onPreview,
-  onSave,
-  saveLabel,
-  saveDisabled,
-  busy,
-  status,
-  children,
-}: {
-  onPreview: () => void;
-  onSave: () => void;
-  saveLabel: string;
-  saveDisabled?: boolean;
-  busy: 'preview' | 'save' | null;
-  status?: ReactNode;
-  children?: ReactNode;
-}) {
+/** A bar above an editor: actions on the left, the save status on the right. */
+export function EditorBar({ status, children }: { status?: ReactNode; children?: ReactNode }) {
   return (
-    <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-1.5 border-b px-2 py-1 text-sm">
-      <Button size="sm" variant="outline" onClick={onPreview} disabled={busy !== null}>
-        {busy === 'preview' ? <Spinner /> : <EyeIcon />}
-        Preview
-      </Button>
-      <Button size="sm" onClick={onSave} disabled={busy !== null || saveDisabled}>
-        {busy === 'save' ? <Spinner /> : <SaveIcon />}
-        {saveLabel}
-      </Button>
+    <div className="flex min-h-9 shrink-0 flex-wrap items-center gap-1.5 border-b px-2 py-1 text-sm">
       {children}
       {status && <span className="ml-auto text-muted-foreground text-xs">{status}</span>}
     </div>

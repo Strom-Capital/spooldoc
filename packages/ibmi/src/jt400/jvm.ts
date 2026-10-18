@@ -76,6 +76,11 @@ function tracked(key: string, entry: Entry, conn: Connection): Connection {
     listOutputQueues: (filter) => touch(conn.listOutputQueues(filter)),
     listSpooledFiles: (queue, filter) => touch(conn.listSpooledFiles(queue, filter)),
     readSpooledFile: (id) => touch(conn.readSpooledFile(id)),
+    holdSpooledFile: (id) => touch(conn.holdSpooledFile(id)),
+    moveSpooledFile: (id, queue) => touch(conn.moveSpooledFile(id, queue)),
+    deleteSpooledFile: (id) => touch(conn.deleteSpooledFile(id)),
+    readDataQueue: (dtaq, wait) => touch(conn.readDataQueue(dtaq, wait)),
+    runCommand: (command) => touch(conn.runCommand(command)),
     close: () => closeConnection(key),
   };
 }

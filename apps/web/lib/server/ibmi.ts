@@ -2,12 +2,13 @@ import 'server-only';
 
 import { noAnswerError, withDeadline, type Connection, type ConnectionErrorCode, type Credentials, type SystemInfo } from '@spooldoc/ibmi';
 import { errorResponse, redact } from './http';
-import { getSession, type IbmiSession } from './session';
+import { getServerRow, serverCredentials, type ServerRow } from './servers';
 
 type Jt400Module = typeof import('@spooldoc/ibmi/jt400');
 
+// A failed IBM i sign-on is 422, so the browser does not take it for the app login (401).
 const STATUS: Record<ConnectionErrorCode, number> = {
-  auth: 401,
+  auth: 422,
   host: 502,
   notfound: 404,
   authority: 403,
@@ -35,7 +36,7 @@ export function isConnectionError(error: unknown): error is Error & { code: Conn
 
 /**
  * Turn an error from the IBM i into a JSON response with the password removed:
- * 401 sign-on, 502 host, 404 not found, 403 authority, 500 anything else.
+ * 422 sign-on, 502 host, 404 not found, 403 authority, 500 anything else.
  *
  * @param error - What the connection threw
  * @param secrets - Values to blank out of the message
@@ -45,11 +46,6 @@ export function connectionErrorResponse(error: unknown, secrets: readonly string
     return errorResponse(STATUS[error.code], redact(error, secrets));
   }
   return errorResponse(500, redact(error, secrets));
-}
-
-/** Credentials for the jt400 cache from the session sign-on. */
-function credentials(ibmi: IbmiSession): Credentials {
-  return { host: ibmi.host, user: ibmi.user, password: ibmi.password };
 }
 
 /**
@@ -83,34 +79,68 @@ export async function signOn(creds: Credentials): Promise<SystemInfo> {
   });
 }
 
-/**
- * Run `fn` with the session's cached IBM i connection. Without a sign-on the answer is
- * 401; a failed call is mapped by `connectionErrorResponse`.
- *
- * @param fn - Gets the connection and the session sign-on, returns the response
- */
-export async function withConnection(
-  fn: (conn: Connection, ibmi: IbmiSession) => Promise<Response>,
-): Promise<Response> {
-  const session = await getSession();
-  const ibmi = session.ibmi;
-  if (!ibmi) {
-    return errorResponse(401, 'Not connected. Connect to an IBM i first.');
-  }
-  try {
-    const conn = await openConnection(credentials(ibmi));
-    return await fn(conn, ibmi);
-  } catch (error) {
-    return connectionErrorResponse(error, [ibmi.password]);
+/** Thrown when a server id is not in the database. */
+export class ServerNotFoundError extends Error {
+  constructor(id: string) {
+    super(`Server ${id} not found.`);
+    this.name = 'ServerNotFoundError';
   }
 }
 
-/** Close the cached connection of the current session's sign-on, if there is one. */
-export async function closeSessionConnection(): Promise<void> {
-  const session = await getSession();
-  if (!session.ibmi) {
-    return;
+/** A saved server with its open connection. */
+export interface ServerConnection {
+  conn: Connection;
+  server: ServerRow;
+  /** The decrypted password, to blank out of error messages. */
+  password: string;
+}
+
+/**
+ * Open (or reuse) the cached connection of a saved server.
+ *
+ * @param serverId - The server's id
+ * @throws ServerNotFoundError, ConnectionError, or Error when the password cannot be decrypted
+ */
+export async function connectServer(serverId: string): Promise<ServerConnection> {
+  const server = await getServerRow(serverId);
+  if (!server) {
+    throw new ServerNotFoundError(serverId);
   }
-  const { closeConnection, connectionKey } = await jt400();
-  await closeConnection(connectionKey(credentials(session.ibmi)));
+  const creds = serverCredentials(server);
+  return { conn: await openConnection(creds), server, password: creds.password };
+}
+
+/**
+ * Run `fn` with a saved server's cached IBM i connection. An unknown server is 404; a
+ * failed call is mapped by `connectionErrorResponse`.
+ *
+ * @param serverId - The server's id
+ * @param fn - Gets the connection and the server, returns the response
+ */
+export async function withConnection(
+  serverId: string,
+  fn: (conn: Connection, server: ServerRow) => Promise<Response>,
+): Promise<Response> {
+  const server = await getServerRow(serverId);
+  if (!server) {
+    return errorResponse(404, `Server ${serverId} not found.`);
+  }
+  let creds: Credentials;
+  try {
+    creds = serverCredentials(server);
+  } catch (error) {
+    return errorResponse(500, redact(error));
+  }
+  try {
+    const conn = await openConnection(creds);
+    return await fn(conn, server);
+  } catch (error) {
+    return connectionErrorResponse(error, [creds.password]);
+  }
+}
+
+/** Close the cached connection for these credentials, if there is one. */
+export async function closeConnection(creds: Credentials): Promise<void> {
+  const { closeConnection: close, connectionKey } = await jt400();
+  await close(connectionKey(creds));
 }

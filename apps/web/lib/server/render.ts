@@ -13,7 +13,6 @@ import {
   type Sample,
 } from '@spooldoc/core';
 import { getConfig } from './config';
-import { getWorkspace } from './workspace';
 
 /** A sample as the browser gets it: everything but the raw bytes. */
 export type SampleView = Omit<Sample, 'rawBase64'> & { codePageSource: CodePageSource | null };
@@ -33,25 +32,17 @@ export interface RenderResult {
   errors: string[];
 }
 
-/** Unsaved editor contents and the document to render. */
-export interface RenderOverrides {
-  yaml?: string;
-  html?: string;
+/** The definition, the template (null for the starter template) and the document to render. */
+export interface RenderInput {
+  yaml: string;
+  html: string | null;
   document?: number;
-}
-
-/** Thrown when the sample does not exist. */
-export class SampleNotFoundError extends Error {
-  constructor(id: string) {
-    super(`Sample ${id} not found.`);
-    this.name = 'SampleNotFoundError';
-  }
 }
 
 /**
  * The sample without its raw bytes, with where its code page came from.
  *
- * @param sample - A sample from the workspace
+ * @param sample - A captured sample
  */
 export function sampleView(sample: Sample): SampleView {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars -- dropped on purpose
@@ -69,41 +60,21 @@ export function sampleView(sample: Sample): SampleView {
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /**
- * Render a sample with its linked definition and template, or with unsaved overrides.
- * The template is `templates/<type>.html`, or the override, or else the starter
- * template for the definition (flagged `generated`). Every problem is reported in
- * `errors` and on the part it belongs to; nothing is thrown except for a missing sample.
+ * Render a sample with a definition and a template. Without a template the starter
+ * template for the definition is used (flagged `generated`). Every problem is reported
+ * in `errors` and on the part it belongs to; nothing is thrown.
  *
- * @param id - Sample id
- * @param overrides - Unsaved definition YAML or template HTML, and the document index
- * @throws SampleNotFoundError when there is no such sample; WorkspaceError for a bad id
+ * @param sample - The captured spooled file
+ * @param input - Definition YAML, template HTML and the document index
  */
-export async function renderSample(id: string, overrides: RenderOverrides = {}): Promise<RenderResult> {
-  const ws = getWorkspace();
-  const sample = await ws.readSample(id);
-  if (!sample) {
-    throw new SampleNotFoundError(id);
-  }
+export function renderSample(sample: Sample, input: RenderInput): RenderResult {
   const errors: string[] = [];
   const result: RenderResult = { sample: sampleView(sample), document: 0, errors };
-
-  let yaml = overrides.yaml;
-  let type = sample.definition;
-  if (yaml === undefined && type) {
-    try {
-      yaml = (await ws.readDefinition(type)) ?? undefined;
-      if (yaml === undefined) {
-        result.definition = { type, yaml: '', error: `There is no definitions/${type}.yaml yet.` };
-        errors.push(result.definition.error as string);
-      }
-    } catch (error) {
-      result.definition = { type, yaml: '', error: message(error) };
-      errors.push(message(error));
-    }
-  }
-  if (yaml === undefined) {
+  const yaml = input.yaml;
+  if (!yaml.trim()) {
     return result;
   }
+  let type: string | undefined;
 
   let def: Definition | undefined;
   try {
@@ -115,15 +86,8 @@ export async function renderSample(id: string, overrides: RenderOverrides = {}):
     errors.push(message(error));
   }
 
-  let html = overrides.html;
+  let html = input.html ?? undefined;
   let generated = false;
-  if (html === undefined && type) {
-    try {
-      html = (await ws.readTemplate(type)) ?? undefined;
-    } catch (error) {
-      errors.push(message(error));
-    }
-  }
   if (html === undefined && def) {
     html = starterTemplate(def);
     generated = true;
@@ -143,7 +107,7 @@ export async function renderSample(id: string, overrides: RenderOverrides = {}):
   }
   const documents = result.extract.documents;
   result.names = documents.map((doc, i) => documentName(def, doc, i));
-  const index = Math.min(Math.max(0, Math.trunc(overrides.document ?? 0)), Math.max(0, documents.length - 1));
+  const index = Math.min(Math.max(0, Math.trunc(input.document ?? 0)), Math.max(0, documents.length - 1));
   result.document = index;
   const doc = documents[index];
   if (html !== undefined && doc && result.template) {

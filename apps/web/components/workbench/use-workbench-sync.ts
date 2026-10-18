@@ -7,20 +7,21 @@ import { savedFile } from '@/lib/client/chat';
 import { useWorkbench } from './workbench-provider';
 
 /**
- * Keep the workbench in step with the chat: when a write_definition, write_template or
- * render_preview call finishes, drop the editor draft it replaced and reload the render,
- * once per tool call. Reload again when a response ends.
+ * Keep the workbench in step with the chat: when a write_definition or write_template
+ * call finishes, fetch the job's draft again (the tool changed it on the server); after
+ * any sync tool, render again, once per tool call. Reload again when a response ends.
  *
  * @param messages - The chat messages
  * @param status - The chat status
  */
 export function useWorkbenchSync(messages: UIMessage[], status: ChatStatus): void {
-  const { reload, setDraft } = useWorkbench();
+  const { reload, onDraftWritten } = useWorkbench();
   const seen = useRef(new Set<string>());
   const previous = useRef<ChatStatus>(status);
 
   useEffect(() => {
     let changed = false;
+    let written = false;
     for (const message of messages) {
       if (message.role !== 'assistant') continue;
       for (const part of message.parts) {
@@ -29,18 +30,19 @@ export function useWorkbenchSync(messages: UIMessage[], status: ChatStatus): voi
         if (!SYNC_TOOLS.includes(toolName as ChatToolName)) continue;
         seen.current.add(part.toolCallId);
         const saved = savedFile({ toolName, state: part.state, output: part.output });
-        if (saved) setDraft(saved, null);
+        if (saved) written = true;
         changed = true;
       }
     }
-    if (changed) void reload();
-  }, [messages, reload, setDraft]);
+    if (written) void onDraftWritten();
+    else if (changed) void reload();
+  }, [messages, reload, onDraftWritten]);
 
   useEffect(() => {
     const was = previous.current;
     previous.current = status;
     if ((was === 'submitted' || was === 'streaming') && (status === 'ready' || status === 'error')) {
-      void reload();
+      void onDraftWritten();
     }
-  }, [status, reload]);
+  }, [status, onDraftWritten]);
 }

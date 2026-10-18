@@ -36,8 +36,13 @@ export function outputQueuesQuery(filter: OutputQueueFilter = {}): SqlQuery {
     where.push(likeClause("OUTPUT_QUEUE_NAME"));
     params.push(containsPattern(filter.name));
   }
+  const libraries = [...new Set((filter.libraries ?? []).map((lib) => lib.trim().toUpperCase()).filter(Boolean))];
+  if (libraries.length > 0) {
+    where.push(`OUTPUT_QUEUE_LIBRARY_NAME IN (${libraries.map(() => "?").join(", ")})`);
+    params.push(...libraries);
+  }
   const sql = [
-    "SELECT OUTPUT_QUEUE_LIBRARY_NAME, OUTPUT_QUEUE_NAME, NUMBER_OF_FILES, TEXT_DESCRIPTION",
+    "SELECT OUTPUT_QUEUE_LIBRARY_NAME, OUTPUT_QUEUE_NAME, NUMBER_OF_FILES, TEXT_DESCRIPTION, DATA_QUEUE_LIBRARY, DATA_QUEUE_NAME",
     "FROM QSYS2.OUTPUT_QUEUE_INFO",
     ...(where.length ? [`WHERE ${where.join(" AND ")}`] : []),
     "ORDER BY OUTPUT_QUEUE_LIBRARY_NAME, OUTPUT_QUEUE_NAME",
@@ -61,6 +66,11 @@ export function spooledFilesQuery(queue: QueueRef, filter: SpooledFileFilter = {
     where.push(likeClause("COALESCE(USER_DATA, '')"));
     params.push(containsPattern(filter.userData));
   }
+  const statuses = [...new Set((filter.status ?? []).map((s) => s.trim().toUpperCase()).filter(Boolean))];
+  if (statuses.length > 0) {
+    where.push(`STATUS IN (${statuses.map(() => "?").join(", ")})`);
+    params.push(...statuses);
+  }
   const limit = Math.min(positiveInt(filter.limit, SPOOLED_FILE_LIMIT.default), SPOOLED_FILE_LIMIT.max);
   const sql = [
     "SELECT SPOOLED_FILE_NAME, FILE_NUMBER, JOB_NAME, USER_DATA, FORM_TYPE, DEVICE_TYPE, TOTAL_PAGES,",
@@ -80,6 +90,7 @@ export function mapQueueRow(row: Row): OutputQueue {
     name: toText(row.OUTPUT_QUEUE_NAME),
     files: toNumber(row.NUMBER_OF_FILES) ?? 0,
     text: toText(row.TEXT_DESCRIPTION),
+    dataQueue: row.DATA_QUEUE_NAME ? { library: toText(row.DATA_QUEUE_LIBRARY), name: toText(row.DATA_QUEUE_NAME) } : null,
   };
 }
 

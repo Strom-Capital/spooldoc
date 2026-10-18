@@ -114,19 +114,3 @@ export async function readJson<T>(
   }
   return { data: parsed.data };
 }
-
-/**
- * Map an error from the workspace or rendering to a response: an invalid name is 400,
- * a missing sample 404, anything else 500 with a short message.
- *
- * @param error - What was thrown
- */
-export function workspaceErrorResponse(error: unknown): Response {
-  if (error instanceof Error && error.name === 'WorkspaceError') {
-    return errorResponse(400, error.message);
-  }
-  if (error instanceof Error && error.name === 'SampleNotFoundError') {
-    return errorResponse(404, error.message);
-  }
-  return errorResponse(500, redact(error));
-}

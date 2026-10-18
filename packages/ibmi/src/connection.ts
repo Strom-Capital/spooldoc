@@ -13,6 +13,8 @@ export interface OutputQueue {
   name: string;
   files: number;
   text: string;
+  /** The data queue the system sends an entry to when a spooled file becomes ready. */
+  dataQueue: QueueRef | null;
 }
 
 /** A spooled file in a queue listing. `attributes.chrid` is null until the file is read. */
@@ -29,16 +31,20 @@ export interface SystemInfo {
   vrm: string;
 }
 
-/** Filter for `listOutputQueues`. Both are case-insensitive "contains" matches. */
+/** Filter for `listOutputQueues`. `library` and `name` are case-insensitive "contains" matches. */
 export interface OutputQueueFilter {
   library?: string;
   name?: string;
+  /** Only queues in these libraries (exact names). Empty or missing means every library. */
+  libraries?: string[];
 }
 
 /** Filter for `listSpooledFiles`. `name` and `userData` are case-insensitive "contains" matches. */
 export interface SpooledFileFilter {
   name?: string;
   userData?: string;
+  /** Only files with one of these statuses, such as `READY` or `HELD`. */
+  status?: string[];
   /** Maximum number of entries, newest first. Default 200. */
   limit?: number;
 }
@@ -49,12 +55,38 @@ export interface QueueRef {
   name: string;
 }
 
-/** A connection to an IBM i that can list output queues and read spooled files. */
+/** The messages of a CL command. */
+export interface CommandResult {
+  ok: boolean;
+  messages: { id: string; text: string }[];
+}
+
+/**
+ * A connection to an IBM i that can list output queues, read spooled files, act on them
+ * after processing, read data queues and run CL commands.
+ */
 export interface Connection {
   describe(): Promise<SystemInfo>;
   listOutputQueues(filter?: OutputQueueFilter): Promise<OutputQueue[]>;
   listSpooledFiles(queue: QueueRef, filter?: SpooledFileFilter): Promise<SpooledFileEntry[]>;
   readSpooledFile(id: SpooledFileId): Promise<{ bytes: Uint8Array; attributes: SpooledFileAttributes }>;
+  /** Hold the spooled file (`HLDSPLF OPTION(*IMMED)`). */
+  holdSpooledFile(id: SpooledFileId): Promise<void>;
+  /** Move the spooled file to another output queue. */
+  moveSpooledFile(id: SpooledFileId, queue: QueueRef): Promise<void>;
+  /** Delete the spooled file. */
+  deleteSpooledFile(id: SpooledFileId): Promise<void>;
+  /**
+   * Take the next entry from a data queue, waiting up to `waitSeconds`.
+   *
+   * @returns The entry bytes, or null when none arrived in time
+   */
+  readDataQueue(dataQueue: QueueRef, waitSeconds: number): Promise<Uint8Array | null>;
+  /**
+   * Run a CL command. A failed command resolves with `ok: false` and its messages; only
+   * a connection problem throws.
+   */
+  runCommand(command: string): Promise<CommandResult>;
   close(): Promise<void>;
 }
 

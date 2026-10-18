@@ -17,7 +17,7 @@ import {
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Suggestion } from '@/components/ai-elements/suggestion';
-import { useSession } from '@/components/session-provider';
+import { useAppInfo } from '@/components/app-info';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { chatErrorText } from '@/lib/client/chat';
@@ -26,34 +26,36 @@ import { useWorkbenchSync } from './use-workbench-sync';
 import { useWorkbench } from './workbench-provider';
 
 const SUGGESTIONS = [
-  'Propose a definition and a template for this sample',
+  'Generate a definition and a template from this spooled file',
   'This is a multi-document run, split it per document',
   'The first page is a parameter page, skip it',
   'Make the template match the printed layout',
 ];
 
 /**
- * The AI chat for the current sample. The model proposes a definition and a template,
- * writes them through tools and checks the extraction report; the workbench reloads as
- * it goes. History lives in this component only. Without a configured model it shows
- * how to set one up.
+ * The AI chat for the job's preview spooled file. The model proposes a definition and a
+ * template, writes them to the job's draft through tools and checks the extraction
+ * report; the workbench reloads as it goes. History lives in this component only.
+ * Without a configured model it shows how to set one up.
  *
  * @param header - Controls for the pane header (the Preview and Chat tabs)
  */
 export function ChatPanel({ header }: { header?: ReactNode }) {
-  const { session } = useSession();
+  const session = useAppInfo();
   return (
     <section className="flex h-full min-h-0 flex-col" aria-label="Chat">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b px-2 text-sm">
         {header ?? <span className="font-medium">Chat</span>}
-        {session && (
-          <Badge variant="secondary" className="ml-auto gap-1 font-normal" title={session.masking ? 'Digits and letters of values are masked before page text goes to the model (SPOOLDOC_MASK).' : 'Page text goes to the model as printed (SPOOLDOC_MASK=false).'}>
-            {session.masking ? <EyeOffIcon /> : <EyeIcon />}
-            {session.masking ? 'Values masked' : 'Values sent in clear'}
-          </Badge>
-        )}
+        <Badge
+          variant="secondary"
+          className="ml-auto gap-1 font-normal"
+          title={session.masking ? 'Digits and letters of values are masked before page text goes to the model (SPOOLDOC_MASK).' : 'Page text goes to the model as printed (SPOOLDOC_MASK=false).'}
+        >
+          {session.masking ? <EyeOffIcon /> : <EyeIcon />}
+          {session.masking ? 'Values masked' : 'Values sent in clear'}
+        </Badge>
       </div>
-      {session === null ? null : session.model ? (
+      {session.model ? (
         <ChatConversation modelId={session.model.id} />
       ) : (
         <p role="note" className="m-3 rounded-md border bg-muted/40 p-3 text-muted-foreground text-sm">
@@ -65,8 +67,8 @@ export function ChatPanel({ header }: { header?: ReactNode }) {
 }
 
 function ChatConversation({ modelId }: { modelId: string }) {
-  const { sampleId } = useWorkbench();
-  const [transport] = useState(() => new DefaultChatTransport({ api: '/api/chat', body: { sampleId } }));
+  const { jobId } = useWorkbench();
+  const [transport] = useState(() => new DefaultChatTransport({ api: `/api/jobs/${jobId}/chat` }));
   const { messages, sendMessage, status, stop, error, clearError } = useChat({ transport });
   const [draft, setDraft] = useState('');
   const busy = status === 'submitted' || status === 'streaming';
@@ -87,8 +89,8 @@ function ChatConversation({ modelId }: { modelId: string }) {
           {messages.length === 0 && (
             <div className="flex flex-col gap-3 pt-2">
               <p className="text-muted-foreground text-sm">
-                Ask the model to propose a definition and a template. It writes them to the workspace, reads the
-                extraction report and fixes what is missing.
+                Ask the model to propose a definition and a template. It writes them to the job&apos;s draft, reads
+                the extraction report and fixes what is missing.
               </p>
               <div className="flex flex-col items-start gap-2">
                 {SUGGESTIONS.map((suggestion) => (

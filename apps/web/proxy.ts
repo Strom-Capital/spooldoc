@@ -1,22 +1,23 @@
-import { unsealData } from 'iron-session';
+import { getSessionCookie } from 'better-auth/cookies';
 import { NextResponse, type NextRequest } from 'next/server';
 
-/** Same cookie name as lib/server/session.ts. */
-const SESSION_COOKIE = 'spooldoc';
-
-/** Pages that need an IBM i sign-on go to /connect without one. */
-export async function proxy(request: NextRequest): Promise<NextResponse> {
-  const sealed = request.cookies.get(SESSION_COOKIE)?.value;
-  const secret = process.env.SESSION_SECRET ?? '';
-  if (sealed && secret.length >= 32) {
-    const data = await unsealData<{ ibmi?: unknown }>(sealed, { password: secret }).catch(() => ({}) as { ibmi?: unknown });
-    if (data.ibmi) {
-      return NextResponse.next();
-    }
+/**
+ * Pages need a signed-in user; without a session cookie they go to /login. The pages
+ * check the session itself on the server, and API routes answer 401 on their own.
+ */
+export function proxy(request: NextRequest): NextResponse {
+  if (getSessionCookie(request)) {
+    return NextResponse.next();
   }
-  return NextResponse.redirect(new URL('/connect', request.url));
+  const login = new URL('/login', request.url);
+  const next = request.nextUrl.pathname + request.nextUrl.search;
+  if (next !== '/') {
+    login.searchParams.set('next', next);
+  }
+  return NextResponse.redirect(login);
 }
 
 export const config = {
-  matcher: ['/queues', '/queues/:path*'],
+  // Everything but the login page, the API, Next.js assets and public files.
+  matcher: ['/((?!login|api/|_next/|brand/|favicon).*)'],
 };

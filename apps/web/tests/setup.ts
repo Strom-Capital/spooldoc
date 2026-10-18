@@ -1,13 +1,24 @@
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
+import { afterAll } from 'vitest';
+import { setDb } from '@/lib/server/db';
+import { openTestDb } from './helpers/db';
 
-// Every test file gets its own empty workspace and a known session secret.
-process.env.SESSION_SECRET = 'test-secret-that-is-at-least-32-characters-long';
+// Every test file gets its own migrated database and known secrets.
+process.env.BETTER_AUTH_SECRET = 'test-auth-secret-that-is-at-least-32-characters';
+process.env.SPOOLDOC_SECRET_KEY = Buffer.alloc(32, 7).toString('base64');
 process.env.APP_URL = 'http://localhost:3002';
-process.env.SPOOLDOC_WORKSPACE = mkdtempSync(path.join(tmpdir(), 'spooldoc-web-'));
+process.env.SPOOLDOC_WATCHER = 'off';
+delete process.env.DATABASE_URL;
 delete process.env.ANTHROPIC_API_KEY;
 delete process.env.OPENAI_COMPATIBLE_BASE_URL;
 delete process.env.OPENAI_COMPATIBLE_MODEL;
 delete process.env.SPOOLDOC_ALLOWED_HOSTS;
 delete process.env.SPOOLDOC_CHROMIUM_PATH;
+
+const testDb = await openTestDb();
+setDb(testDb);
+(globalThis as { __testDb?: typeof testDb }).__testDb = testDb;
+
+afterAll(async () => {
+  setDb(undefined);
+  await testDb.close();
+});

@@ -20,7 +20,17 @@ describe("outputQueuesQuery", () => {
   });
 
   it("ignores blank filters", () => {
-    expect(outputQueuesQuery({ library: "  ", name: "" }).params).toEqual([]);
+    expect(outputQueuesQuery({ library: "  ", name: "", libraries: [" "] }).params).toEqual([]);
+  });
+
+  it("limits to exact libraries, upper-cased and without duplicates", () => {
+    const { sql, params } = outputQueuesQuery({ name: "inv", libraries: ["mylib", "MYLIB", "qgpl"] });
+    expect(sql).toContain("UPPER(OUTPUT_QUEUE_NAME) LIKE ? ESCAPE '\\' AND OUTPUT_QUEUE_LIBRARY_NAME IN (?, ?)");
+    expect(params).toEqual(["%INV%", "MYLIB", "QGPL"]);
+  });
+
+  it("reads the data queue columns", () => {
+    expect(outputQueuesQuery().sql).toContain("DATA_QUEUE_LIBRARY, DATA_QUEUE_NAME");
   });
 });
 
@@ -51,6 +61,12 @@ describe("spooledFilesQuery", () => {
     expect(params).toEqual(["MYLIB", "FORMS", "%SPD\\_%", "%PICK%"]);
   });
 
+  it("filters by status", () => {
+    const { sql, params } = spooledFilesQuery({ library: "MYLIB", name: "FORMS" }, { status: ["ready", "READY"] });
+    expect(sql).toContain("WHERE STATUS IN (?)");
+    expect(params).toEqual(["MYLIB", "FORMS", "READY"]);
+  });
+
   it("clamps the limit to a positive integer no larger than the maximum", () => {
     expect(spooledFilesQuery({ library: "L", name: "Q" }, { limit: 0 }).sql).toMatch(/FETCH FIRST 200 ROWS/);
     expect(spooledFilesQuery({ library: "L", name: "Q" }, { limit: -3 }).sql).toMatch(/FETCH FIRST 200 ROWS/);
@@ -63,12 +79,16 @@ describe("row mapping", () => {
   it("maps a queue row with string numbers", () => {
     expect(
       mapQueueRow({ OUTPUT_QUEUE_LIBRARY_NAME: "MYLIB", OUTPUT_QUEUE_NAME: "EMAIL", NUMBER_OF_FILES: "3", TEXT_DESCRIPTION: "Invoices " }),
-    ).toEqual({ library: "MYLIB", name: "EMAIL", files: 3, text: "Invoices" });
+    ).toEqual({ library: "MYLIB", name: "EMAIL", files: 3, text: "Invoices", dataQueue: null });
+    expect(
+      mapQueueRow({ OUTPUT_QUEUE_LIBRARY_NAME: "MYLIB", OUTPUT_QUEUE_NAME: "FORMS", NUMBER_OF_FILES: 1, DATA_QUEUE_LIBRARY: "MYLIB", DATA_QUEUE_NAME: "SPLFDTAQ" }).dataQueue,
+    ).toEqual({ library: "MYLIB", name: "SPLFDTAQ" });
     expect(mapQueueRow({ OUTPUT_QUEUE_LIBRARY_NAME: "MYLIB", OUTPUT_QUEUE_NAME: "X", NUMBER_OF_FILES: null, TEXT_DESCRIPTION: null })).toEqual({
       library: "MYLIB",
       name: "X",
       files: 0,
       text: "",
+      dataQueue: null,
     });
   });
 

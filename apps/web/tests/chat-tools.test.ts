@@ -1,10 +1,7 @@
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
-import { extract, openWorkspace, parseDefinition, type Workspace } from '@spooldoc/core';
+import { extract, parseDefinition } from '@spooldoc/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ReadPageResult, RenderPreviewResult, WriteDefinitionResult, WriteTemplateResult } from '@/lib/chat-types';
-import { buildTools, visibleText } from '@/lib/server/chat';
+import { buildTools, visibleText, type DraftStore } from '@/lib/server/chat';
 import { fixtureText, loadSample } from './helpers/fake-connection';
 
 const sample = loadSample('invoice');
@@ -12,35 +9,50 @@ const yaml = fixtureText('invoice', 'definition.yaml');
 const template = fixtureText('invoice', 'template.html');
 const options = { toolCallId: 'call-1', messages: [] };
 
-let ws: Workspace;
+/** A job draft in memory. */
+class MemoryDraft implements DraftStore {
+  yaml = '';
+  html: string | null = null;
+  async readDefinition() {
+    return this.yaml;
+  }
+  async readTemplate() {
+    return this.html;
+  }
+  async writeDefinition(yaml: string) {
+    this.yaml = yaml;
+  }
+  async writeTemplate(html: string) {
+    this.html = html;
+  }
+}
 
-beforeEach(async () => {
-  ws = openWorkspace(mkdtempSync(path.join(tmpdir(), 'spooldoc-tools-')));
-  await ws.writeSample(sample);
+let store: MemoryDraft;
+
+beforeEach(() => {
+  store = new MemoryDraft();
 });
 
-const tools = (masked = false) => buildTools({ sampleId: sample.id, workspace: ws, masked });
+const tools = (masked = false) => buildTools({ sample, store, masked });
 
 async function call<T>(t: { execute?: (input: never, opts: never) => unknown }, input: unknown): Promise<T> {
   return (await t.execute?.(input as never, options as never)) as T;
 }
 
 describe('write_definition', () => {
-  it('saves the definition, links the sample and reports the extraction', async () => {
+  it("saves the definition to the job's draft and reports the extraction", async () => {
     const result = await call<WriteDefinitionResult>(tools().write_definition, { yaml });
     if (!result.ok) throw new Error(result.error);
 
     expect(result.type).toBe('invoice');
-    expect(result.path).toBe('definitions/invoice.yaml');
+    expect(result.path).toBe('definition');
     expect(result.documents).toBe(6);
     expect(result.missing).toEqual([]);
     expect(result.fields.find((f) => f.name === 'invoiceNo')).toEqual({ name: 'invoiceNo', status: 'found', value: '260101' });
     expect(result.fields.find((f) => f.name === 'lines')?.value).toMatch(/^\d+ rows$/);
     expect(result.preview).toContain('"invoiceNo": "260101"');
     expect(result.preview.length).toBeLessThanOrEqual(2000 + 20);
-    expect(await ws.readDefinition('invoice')).toBe(yaml);
-    expect((await ws.readSample(sample.id))?.definition).toBe('invoice');
-    expect(JSON.stringify(result)).not.toContain(ws.root);
+    expect(store.yaml).toBe(yaml);
   });
 
   it('returns ok: false with the message for invalid YAML and writes nothing', async () => {
@@ -50,8 +62,7 @@ describe('write_definition', () => {
 
     const schema = await call<WriteDefinitionResult>(tools().write_definition, { yaml: 'type: invoice\nversion: 1\nsource: text\n' });
     expect(!schema.ok && schema.error).toMatch(/needs a `text` section/);
-    expect(await ws.readDefinition('invoice')).toBeNull();
-    expect((await ws.readSample(sample.id))?.definition).toBeUndefined();
+    expect(store.yaml).toBe('');
   });
 
   it('masks the values it reports when masking is on', async () => {
@@ -64,11 +75,11 @@ describe('write_definition', () => {
 });
 
 describe('write_template', () => {
-  it('refuses before a definition is linked', async () => {
+  it('refuses before the job has a definition', async () => {
     const result = await call<WriteTemplateResult>(tools().write_template, { html: template });
     expect(result.ok).toBe(false);
     expect('error' in result && result.error).toMatch(/write_definition first/);
-    expect(await ws.readTemplate('invoice')).toBeNull();
+    expect(store.html).toBeNull();
   });
 
   it('saves the template and returns the visible text of the first document', async () => {
@@ -77,13 +88,13 @@ describe('write_template', () => {
     if (!('path' in result)) throw new Error(result.error);
 
     expect(result.ok).toBe(true);
-    expect(result.path).toBe('templates/invoice.html');
+    expect(result.path).toBe('template');
     expect(result.errors).toEqual([]);
     expect(result.warnings).toEqual([]);
     expect(result.textPreview).toContain('260101');
     expect(result.textPreview).not.toMatch(/<[a-z]/i);
     expect(result.textPreview.length).toBeLessThanOrEqual(1500 + 20);
-    expect(await ws.readTemplate('invoice')).toBe(template);
+    expect(store.html).toBe(template);
   });
 
   it('reports template errors and warns about scripts and external resources', async () => {
@@ -123,7 +134,7 @@ describe('read_sample_page', () => {
 });
 
 describe('render_preview', () => {
-  it('needs a linked definition', async () => {
+  it('needs a definition', async () => {
     const result = await call<RenderPreviewResult>(tools().render_preview, {});
     expect(result.ok).toBe(false);
   });

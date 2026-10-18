@@ -14,7 +14,6 @@ import {
   type ExtractResult,
   type Sample,
   type SamplePage,
-  type Workspace,
 } from '@spooldoc/core';
 import { tool } from 'ai';
 import { z } from 'zod';
@@ -26,7 +25,6 @@ import type {
   WriteDefinitionResult,
   WriteTemplateResult,
 } from '@/lib/chat-types';
-import { linkDefinition } from './samples';
 
 /** Limits for the page preview in the instructions. */
 export interface InstructionsConfig {
@@ -39,9 +37,9 @@ export interface InstructionsConfig {
 /** What `buildInstructions` needs. */
 export interface InstructionsInput {
   sample: Sample;
-  /** The linked definition YAML, or null when there is none yet. */
+  /** The job's definition YAML, or null when there is none yet. */
   definitionYaml: string | null;
-  /** The linked template HTML, or null when there is none yet. */
+  /** The job's template HTML, or null when there is none yet. */
   templateHtml: string | null;
   /** Mask values in the page text (SPOOLDOC_MASK). */
   masked: boolean;
@@ -119,7 +117,7 @@ export function buildInstructions({ sample, definitionYaml, templateHtml, masked
   }
 
   return [
-    `You help define how to turn one IBM i spooled file into structured documents. The user sees the sample page by page, the extracted JSON with every field highlighted on the page, the definition and template editors and an HTML preview.
+    `You help build a Spooldoc job that turns IBM i spooled files into structured documents and PDFs. You work on one sample spooled file from the job's source queue. The user sees the sample page by page, the extracted JSON with every field highlighted on the page, the definition and template editors and an HTML preview.
 
 How to work:
 1. Read the pages below. Propose a document definition in YAML and save it with write_definition.
@@ -138,7 +136,7 @@ A definition is YAML that matches this JSON Schema:
 ${fence('json', JSON.stringify(definitionJsonSchema))}
 
 Rules:
-- \`type\` is the file name: lowercase letters, digits and dashes. \`version: 1\`.
+- \`type\` names the kind of document: lowercase letters, digits and dashes. \`version: 1\`.
 - \`source: text\` for printed text; \`source: xml\` when the pages hold XML, with \`xml.document\` as the root element name of one document and slash paths for fields and groups.
 - \`text.page\` is the page width and length (${width} x ${a.pageLength} for this sample).
 - A field anchor has exactly one of \`after\`, \`regex\` or \`line\`/\`column\`/\`length\`.
@@ -166,9 +164,9 @@ Rules:
     `## Tools
 
 - read_sample_page: the numbered text of any page${masked ? ' (masked)' : ''}.
-- write_definition: saves the YAML, links this sample to its type and returns the extraction report.
-- write_template: saves the template for the linked type and returns the visible text of document 1.
-- render_preview: renders any document with the saved files and returns the counts and its visible text.
+- write_definition: saves the YAML as the job's definition and returns the extraction report.
+- write_template: saves the job's template and returns the visible text of document 1.
+- render_preview: renders any document with the job's definition and template and returns the counts and its visible text.
 Values in tool results are ${masked ? 'masked like the pages' : 'shown as extracted'}.`,
 
     `## This sample
@@ -199,10 +197,19 @@ ${templateHtml ? fence('html', templateHtml) : 'None yet.'}`,
   ].join('\n\n');
 }
 
+/** Where the tools read and write the definition and template: the job's draft. */
+export interface DraftStore {
+  readDefinition(): Promise<string>;
+  /** Null when the job has no template yet (the starter template is used). */
+  readTemplate(): Promise<string | null>;
+  writeDefinition(yaml: string): Promise<void>;
+  writeTemplate(html: string): Promise<void>;
+}
+
 /** What `buildTools` needs. */
 export interface ToolsInput {
-  sampleId: string;
-  workspace: Workspace;
+  sample: Sample;
+  store: DraftStore;
   /** Mask values in page text and tool results (SPOOLDOC_MASK). */
   masked: boolean;
 }
@@ -348,35 +355,31 @@ function renderDocument(
   return { errors: rendered.errors, textPreview: truncate(visibleText(rendered.html), 1500) };
 }
 
+/** The `path` tool results report for the job's definition and template. */
+export const DRAFT_PATHS = { definition: 'definition', template: 'template' } as const;
+
 /**
- * The tools the chat model can call. They read the sample and write definitions and
- * templates in the workspace; none of them reaches the IBM i. Every write is validated,
- * and results carry only relative file names and (masked) extraction data.
+ * The tools the chat model can call. They read the sample and write the job draft's
+ * definition and template; none of them reaches the IBM i. Every write is validated,
+ * and results carry only (masked) extraction data.
  *
- * @param input - The sample id, the workspace and the masking setting
+ * @param input - The sample, the draft store and the masking setting
  */
-export function buildTools({ sampleId, workspace: ws, masked }: ToolsInput) {
+export function buildTools({ sample: current, store, masked }: ToolsInput) {
   async function readSample(): Promise<Sample | ToolFailure> {
-    try {
-      return (await ws.readSample(sampleId)) ?? fail(`Sample ${sampleId} is gone from the workspace.`);
-    } catch (error) {
-      return fail(message(error));
-    }
+    return current;
   }
 
-  async function linked(sample: Sample): Promise<{ type: string; def: Definition } | ToolFailure> {
-    const type = sample.definition;
-    if (!type) {
-      return fail('No definition is linked to this sample yet. Write one with write_definition first.');
-    }
-    const yaml = await ws.readDefinition(type).catch(() => null);
-    if (yaml === null) {
-      return fail(`There is no definitions/${type}.yaml yet. Write it with write_definition first.`);
+  async function linked(): Promise<{ type: string; def: Definition } | ToolFailure> {
+    const yaml = await store.readDefinition().catch(() => '');
+    if (!yaml.trim()) {
+      return fail('The job has no definition yet. Write one with write_definition first.');
     }
     try {
-      return { type, def: parseDefinition(yaml) };
+      const def = parseDefinition(yaml);
+      return { type: def.type, def };
     } catch (error) {
-      return fail(`definitions/${type}.yaml is not valid. Fix it with write_definition.\n${message(error)}`);
+      return fail(`The job's definition is not valid. Fix it with write_definition.\n${message(error)}`);
     }
   }
 
@@ -400,7 +403,7 @@ export function buildTools({ sampleId, workspace: ws, masked }: ToolsInput) {
 
     write_definition: tool({
       description:
-        'Save the document definition YAML as definitions/<type>.yaml, link this sample to the type, run the extraction and return the report: documents found, each field of the first document with its status, missing fields, warnings and the first document as JSON.',
+        "Save the document definition YAML as the job's definition, run the extraction on this sample and return the report: documents found, each field of the first document with its status, missing fields, warnings and the first document as JSON.",
       inputSchema: z.object({ yaml: z.string().min(1).max(200_000).describe('The complete definition YAML') }),
       execute: async ({ yaml }): Promise<WriteDefinitionResult> => {
         let def: Definition;
@@ -417,8 +420,7 @@ export function buildTools({ sampleId, workspace: ws, masked }: ToolsInput) {
           return sample;
         }
         try {
-          await ws.writeDefinition(def.type, yaml);
-          await linkDefinition(sampleId, def.type, ws);
+          await store.writeDefinition(yaml);
         } catch (error) {
           return fail(`Could not save the definition: ${message(error)}`);
         }
@@ -426,13 +428,13 @@ export function buildTools({ sampleId, workspace: ws, masked }: ToolsInput) {
         try {
           result = extract(def, sample);
         } catch (error) {
-          return fail(`Saved definitions/${def.type}.yaml, but the extraction failed: ${message(error)}`);
+          return fail(`Saved the definition, but the extraction failed: ${message(error)}`);
         }
         const first = result.documents[0];
         return {
           ok: true,
           type: def.type,
-          path: `definitions/${def.type}.yaml`,
+          path: DRAFT_PATHS.definition,
           documents: result.documents.length,
           fields: fieldReports(result, masked),
           missing: missingNames(result),
@@ -444,28 +446,25 @@ export function buildTools({ sampleId, workspace: ws, masked }: ToolsInput) {
 
     write_template: tool({
       description:
-        'Save the HTML template (Nunjucks) as templates/<type>.html for the linked definition, render the first document and return any errors and its visible text.',
+        "Save the HTML template (Nunjucks) as the job's template, render the first document and return any errors and its visible text.",
       inputSchema: z.object({ html: z.string().min(1).max(500_000).describe('The complete HTML template') }),
       execute: async ({ html }): Promise<WriteTemplateResult> => {
         const sample = await readSample();
         if ('ok' in sample) {
           return sample;
         }
-        const type = sample.definition;
-        if (!type) {
-          return fail('No definition is linked to this sample yet. Write one with write_definition first.');
+        const before = await linked();
+        if ('ok' in before) {
+          return before;
         }
         try {
-          await ws.writeTemplate(type, html);
+          await store.writeTemplate(html);
         } catch (error) {
           return fail(`Could not save the template: ${message(error)}`);
         }
-        const path = `templates/${type}.html`;
+        const path = DRAFT_PATHS.template;
         const warnings = templateWarnings(html);
-        const current = await linked(sample);
-        if ('ok' in current) {
-          return { ok: false, path, errors: [current.error], warnings, textPreview: '' };
-        }
+        const current = before;
         let documents: Record<string, unknown>[];
         try {
           documents = extract(current.def, sample).documents;
@@ -479,7 +478,7 @@ export function buildTools({ sampleId, workspace: ws, masked }: ToolsInput) {
 
     render_preview: tool({
       description:
-        'Render a document with the saved definition and template and return the document count, hit counts (found, missing, empty), missing fields, template errors and the visible text of the document.',
+        "Render a document with the job's definition and template and return the document count, hit counts (found, missing, empty), missing fields, template errors and the visible text of the document.",
       inputSchema: z.object({
         document: z.number().int().min(0).optional().describe('0-based document index (default 0)'),
       }),
@@ -488,7 +487,7 @@ export function buildTools({ sampleId, workspace: ws, masked }: ToolsInput) {
         if ('ok' in sample) {
           return sample;
         }
-        const current = await linked(sample);
+        const current = await linked();
         if ('ok' in current) {
           return current;
         }
@@ -498,7 +497,7 @@ export function buildTools({ sampleId, workspace: ws, masked }: ToolsInput) {
         } catch (error) {
           return fail(`Extraction failed: ${message(error)}`);
         }
-        const saved = await ws.readTemplate(current.type).catch(() => null);
+        const saved = await store.readTemplate().catch(() => null);
         const html = saved ?? starterTemplate(current.def);
         const index = Math.min(document ?? 0, Math.max(0, result.documents.length - 1));
         const rendered = renderDocument(html, result.documents, index, sample, masked);

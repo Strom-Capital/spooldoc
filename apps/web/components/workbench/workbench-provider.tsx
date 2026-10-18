@@ -1,30 +1,30 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { api, errorText } from '@/lib/client/api';
 import type { FieldHit, RenderResult } from '@/lib/client/render';
 
-/** Middle pane tabs. */
+/** Editor tabs: the Extract step shows the definition and the JSON, Render the template and the JSON. */
 export type WorkbenchTab = 'json' | 'definition' | 'template';
 
-/** Unsaved editor contents. `null` means "use the saved file". */
-export interface Drafts {
-  yaml: string | null;
-  html: string | null;
-}
-
 export interface WorkbenchState {
-  sampleId: string;
+  jobId: string;
+  /** The preview spooled file, or null when none is picked yet. */
+  sampleId: string | null;
+  /** The definition and template shown and rendered. */
+  yaml: string;
+  html: string | null;
+  readOnly: boolean;
+  setYaml(yaml: string): void;
+  setHtml(html: string | null): void;
   render: RenderResult | null;
-  /** A failed load or preview (the render result's own errors are in `render.errors`). */
+  /** A failed render request (the render result's own errors are in `render.errors`). */
   error: string | null;
   loading: boolean;
-  /** Fetch again with the saved files plus any unsaved drafts. */
+  /** Render again. */
   reload(): Promise<void>;
-  /** Set drafts and render with them. */
-  preview(overrides?: Partial<Drafts>): Promise<void>;
-  drafts: Drafts;
-  setDraft(kind: keyof Drafts, value: string | null): void;
+  /** Called when the chat wrote the draft on the server. */
+  onDraftWritten(): Promise<void>;
   selectedHit: FieldHit | null;
   setSelectedHit(hit: FieldHit | null): void;
   /** Sample page number shown in the page view. */
@@ -39,110 +39,99 @@ export interface WorkbenchState {
 
 const WorkbenchContext = createContext<WorkbenchState | null>(null);
 
-/** GET the saved render, or POST with drafts. */
-function fetchRender(sampleId: string, drafts: Drafts, document: number): Promise<RenderResult> {
-  const path = `/api/render/${encodeURIComponent(sampleId)}`;
-  if (drafts.yaml === null && drafts.html === null) {
-    return api<RenderResult>(`${path}?document=${document}`);
-  }
-  return api<RenderResult>(path, {
-    method: 'POST',
-    body: { yaml: drafts.yaml ?? undefined, html: drafts.html ?? undefined, document },
-  });
+/** How long to wait after typing before rendering again. */
+const RENDER_DELAY_MS = 400;
+
+/** `value`, once it has not changed for `ms`. */
+function useDebounced<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(timer);
+  }, [value, ms]);
+  return settled;
 }
 
 /**
- * State shared by the workbench panes: the render result, drafts, the selected hit,
- * the page and the document. Later panes (the chat) read and drive the same state.
+ * State shared by the Extract and Render panes and the chat: the render of the preview
+ * spooled file with the current definition and template, the selected hit, the page
+ * and the document. It renders again shortly after the definition or template changes.
  */
-export function WorkbenchProvider({ sampleId, children }: { sampleId: string; children: ReactNode }) {
-  const [render, setRender] = useState<RenderResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [drafts, setDrafts] = useState<Drafts>({ yaml: null, html: null });
+export function WorkbenchProvider({
+  jobId,
+  sampleId,
+  yaml,
+  html,
+  readOnly,
+  setYaml,
+  setHtml,
+  onDraftWritten,
+  children,
+}: {
+  jobId: string;
+  sampleId: string | null;
+  yaml: string;
+  html: string | null;
+  readOnly: boolean;
+  setYaml(yaml: string): void;
+  setHtml(html: string | null): void;
+  onDraftWritten(): Promise<void>;
+  children: ReactNode;
+}) {
   const [selectedHit, setSelectedHit] = useState<FieldHit | null>(null);
   const [page, setPage] = useState(1);
-  const [documentIndex, setDocumentIndexState] = useState(0);
-  const [tab, setTab] = useState<WorkbenchTab>('json');
-  const draftsRef = useRef(drafts);
-  const documentRef = useRef(documentIndex);
-  const requestRef = useRef(0);
+  const [documentIndex, setDocumentIndex] = useState(0);
+  const [tab, setTab] = useState<WorkbenchTab>('definition');
+  const [nonce, setNonce] = useState(0);
+  const [result, setResult] = useState<{ key: string; render: RenderResult | null; error: string | null } | null>(null);
 
-  const load = useCallback(
-    async (next: Drafts, document: number) => {
-      const request = ++requestRef.current;
-      setLoading(true);
-      try {
-        const result = await fetchRender(sampleId, next, document);
-        if (request === requestRef.current) {
-          setRender(result);
-          setError(null);
-        }
-      } catch (err) {
-        if (request === requestRef.current) {
-          setError(errorText(err));
-        }
-      } finally {
-        if (request === requestRef.current) {
-          setLoading(false);
-        }
-      }
-    },
-    [sampleId],
-  );
+  // A new preview file starts on its first page.
+  const [shownSample, setShownSample] = useState(sampleId);
+  if (sampleId !== shownSample) {
+    setShownSample(sampleId);
+    setPage(1);
+    setSelectedHit(null);
+  }
 
-  const setDraft = useCallback((kind: keyof Drafts, value: string | null) => {
-    draftsRef.current = { ...draftsRef.current, [kind]: value };
-    setDrafts(draftsRef.current);
-  }, []);
-
-  const reload = useCallback(() => load(draftsRef.current, documentRef.current), [load]);
-
-  const preview = useCallback(
-    (overrides: Partial<Drafts> = {}) => {
-      draftsRef.current = { ...draftsRef.current, ...overrides };
-      setDrafts(draftsRef.current);
-      return load(draftsRef.current, documentRef.current);
-    },
-    [load],
-  );
-
-  const setDocumentIndex = useCallback(
-    (index: number) => {
-      documentRef.current = index;
-      setDocumentIndexState(index);
-      void load(draftsRef.current, index);
-    },
-    [load],
-  );
+  // Text changes render after a pause; a new file, document or reload at once.
+  const text = useDebounced(JSON.stringify({ yaml, html }), RENDER_DELAY_MS);
+  const requestKey = JSON.stringify([jobId, sampleId, documentIndex, nonce, text]);
 
   useEffect(() => {
-    const request = ++requestRef.current;
-    fetchRender(sampleId, { yaml: null, html: null }, 0).then(
-      (result) => {
-        if (request !== requestRef.current) return;
-        setRender(result);
-        setLoading(false);
-      },
-      (err: unknown) => {
-        if (request !== requestRef.current) return;
-        setError(errorText(err));
-        setLoading(false);
-      },
+    if (!sampleId) {
+      return;
+    }
+    let cancelled = false;
+    const body = JSON.parse(text) as { yaml: string; html: string | null };
+    api<RenderResult>(`/api/jobs/${jobId}/render`, { method: 'POST', body: { sampleId, ...body, document: documentIndex } }).then(
+      (render) => !cancelled && setResult({ key: requestKey, render, error: null }),
+      (err: unknown) => !cancelled && setResult((prev) => ({ key: requestKey, render: prev?.render ?? null, error: errorText(err) })),
     );
-  }, [sampleId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [requestKey, jobId, sampleId, documentIndex, text]);
+
+  const render = sampleId ? (result?.render ?? null) : null;
+  const error = sampleId ? (result?.error ?? null) : null;
+  const loading = !!sampleId && result?.key !== requestKey;
+  const reload = useCallback(async () => setNonce((n) => n + 1), []);
 
   return (
     <WorkbenchContext.Provider
       value={{
+        jobId,
         sampleId,
+        yaml,
+        html,
+        readOnly,
+        setYaml,
+        setHtml,
         render,
         error,
         loading,
         reload,
-        preview,
-        drafts,
-        setDraft,
+        onDraftWritten,
         selectedHit,
         setSelectedHit,
         page,

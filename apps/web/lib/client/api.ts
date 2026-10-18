@@ -1,14 +1,3 @@
-/** Session info from `GET /api/session`. */
-export interface SessionInfo {
-  connected: boolean;
-  host?: string;
-  user?: string;
-  library?: string;
-  model: { provider: string; id: string } | null;
-  masking: boolean;
-  pdf: boolean;
-}
-
 /** A failed API call, with the server's `{ error }` text and the HTTP status. */
 export class ApiError extends Error {
   readonly status: number;

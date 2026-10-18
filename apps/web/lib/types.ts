@@ -1,0 +1,113 @@
+// Shapes the API returns, shared by the server routes and the pages.
+
+import type { SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
+import type { JobSpec } from './job-spec';
+
+/** A saved IBM i server. Never carries the password. */
+export interface ServerView {
+  id: string;
+  name: string;
+  host: string;
+  user: string;
+  libraries: string[];
+  dataQueue: { library: string; name: string } | null;
+  ccsid: number | null;
+  vrm: string | null;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+  hiddenQueues?: number;
+}
+
+/** An output queue of a server. */
+export interface QueueView {
+  library: string;
+  name: string;
+  files: number;
+  text: string;
+  hidden: boolean;
+  /** The data queue the output queue sends entries to, when it has one. */
+  dataQueue: { library: string; name: string } | null;
+}
+
+/** A spooled file in a queue listing. */
+export interface SpooledFileView extends SpooledFileId {
+  status: string;
+  attributes: SpooledFileAttributes;
+  /** The run of this job that already processed the file, when listed for a job. */
+  processedBy?: { runId: string | null; seq: number | null } | null;
+}
+
+/** A destination. */
+export interface DestinationView {
+  id: string;
+  kind: 'spooldoc';
+  name: string;
+  builtin: boolean;
+  jobs: { id: string; name: string }[];
+}
+
+export type RunStatus = 'running' | 'success' | 'warning' | 'failed';
+
+/** A row of the jobs list. */
+export interface JobSummary {
+  id: string;
+  name: string;
+  source: { serverId: string | null; serverName: string | null; library: string; queue: string };
+  mode: 'manual' | 'watch';
+  paused: boolean;
+  activeVersion: number | null;
+  versions: number;
+  lastWatchAt: string | null;
+  lastWatchError: string | null;
+  lastRun: { id: string; seq: number; status: RunStatus; startedAt: string } | null;
+  updatedAt: string;
+}
+
+/** A job with its draft and version list, for the job builder. */
+export interface JobDetail {
+  id: string;
+  name: string;
+  description: string;
+  draft: JobSpec;
+  activeVersion: number | null;
+  paused: boolean;
+  lastWatchAt: string | null;
+  lastWatchError: string | null;
+  versions: { number: number; note: string; createdAt: string; createdBy: string | null }[];
+  updatedAt: string;
+}
+
+/** One step of a run. */
+export interface RunStepView {
+  step: 'capture' | 'extract' | 'render' | 'deliver' | 'finish';
+  ok: boolean;
+  ms: number;
+  error?: string;
+  note?: string;
+}
+
+/** A row of the job log. */
+export interface RunView {
+  id: string;
+  seq: number;
+  jobId: string;
+  jobName: string;
+  version: number;
+  trigger: 'manual' | 'watch';
+  splf: SpooledFileId;
+  status: RunStatus;
+  documents: number;
+  error: string | null;
+  steps: RunStepView[];
+  outputs: { id: string; name: string; size: number; contentType: string }[];
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+/** App-wide watcher settings. */
+export interface SettingsView {
+  pollSeconds: number;
+  safetyCheckSeconds: number;
+  watching: { realtime: number; polled: number };
+}

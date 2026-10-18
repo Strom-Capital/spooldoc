@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { sampleSchema, type Sample, type SpooledFileAttributes, type SpooledFileId } from "@spooldoc/core";
 import {
   ConnectionError,
+  type CommandResult,
   type Connection,
   type OutputQueue,
   type SpooledFileEntry,
@@ -48,7 +49,7 @@ export class FakeConnection implements Connection {
     const byQueue = new Map<string, OutputQueue>();
     for (const s of this.samples) {
       const { library, name } = s.attributes.queue;
-      const q = byQueue.get(`${library}/${name}`) ?? { library, name, files: 0, text: "" };
+      const q = byQueue.get(`${library}/${name}`) ?? { library, name, files: 0, text: "", dataQueue: null };
       q.files++;
       byQueue.set(`${library}/${name}`, q);
     }
@@ -76,6 +77,28 @@ export class FakeConnection implements Connection {
     if (!s) throw new ConnectionError("notfound", `Spooled file ${id.name} number ${id.number} not found`);
     const attributes = this.options.attributes ? this.options.attributes(s.attributes) : s.attributes;
     return { bytes: new Uint8Array(Buffer.from(s.rawBase64, "base64")), attributes };
+  }
+
+  async holdSpooledFile(): Promise<void> {
+    this.calls.push("holdSpooledFile");
+  }
+
+  async moveSpooledFile(): Promise<void> {
+    this.calls.push("moveSpooledFile");
+  }
+
+  async deleteSpooledFile(): Promise<void> {
+    this.calls.push("deleteSpooledFile");
+  }
+
+  async readDataQueue(): Promise<Uint8Array | null> {
+    this.calls.push("readDataQueue");
+    return null;
+  }
+
+  async runCommand(): Promise<CommandResult> {
+    this.calls.push("runCommand");
+    return { ok: true, messages: [] };
   }
 
   async close(): Promise<void> {
