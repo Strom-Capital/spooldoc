@@ -3,15 +3,19 @@ import 'server-only';
 import { and, eq, inArray, isNotNull, isNull, lt, notExists, or, sql } from 'drizzle-orm';
 import { getDb, getLocks } from './db';
 import { jobs, runs, samples } from './db/schema';
+import { log } from './log';
 
 /** Rows deleted per statement, so no single delete holds its locks for long. */
 const BATCH = 500;
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** How often a running run touches its `heartbeat_at`. */
+export const HEARTBEAT_MS = 30_000;
 /**
- * A run still `running` this long after it started was cut off (the server stopped
- * while it ran) and is marked failed. Far longer than any run takes.
+ * A run still `running` whose heartbeat is this old was cut off (the process stopped
+ * while it ran) and is marked failed. Several heartbeats, so a busy moment is not taken
+ * for a stop.
  */
-export const STALE_RUN_MS = 6 * 60 * 60 * 1000;
+export const STALE_RUN_MS = 3 * 60_000;
 
 /** What one cleanup deleted. */
 export interface CleanupResult {
@@ -20,12 +24,29 @@ export interface CleanupResult {
 }
 
 /**
+ * Mark runs failed that are still `running` but whose process stopped: their heartbeat
+ * is older than `STALE_RUN_MS`. Safe with several instances, as each running run keeps
+ * its own heartbeat.
+ *
+ * @returns How many runs were marked failed
+ */
+export async function failStaleRuns(now: Date = new Date()): Promise<number> {
+  const failed = await getDb()
+    .update(runs)
+    .set({ status: 'failed', error: 'The run was cut off: the server stopped while it ran. Run the file again.', finishedAt: now })
+    .where(and(eq(runs.status, 'running'), lt(runs.heartbeatAt, new Date(now.getTime() - STALE_RUN_MS))))
+    .returning({ id: runs.id, jobId: runs.jobId, seq: runs.seq });
+  for (const run of failed) log.warn('Marked a cut-off run as failed', { runId: run.id, seq: run.seq, jobId: run.jobId });
+  return failed.length;
+}
+
+/**
  * Delete what is older than the retention: runs that finished before the cutoff (their
  * files go with them), samples captured by runs that no longer exist, and preview samples
  * captured before the cutoff that no job draft points at. Runs still running are kept,
  * and so are the `watch_seen` rows, which stop a spooled file from being processed again.
- * A run still running `STALE_RUN_MS` after it started was cut off by a restart: it is
- * marked failed first, and kept for the retention from then.
+ * Runs a stopped process cut off are marked failed first (`failStaleRuns`), and kept for
+ * the retention from then.
  *
  * @param retentionDays - How many days runs are kept
  * @param now - The current time
@@ -39,10 +60,7 @@ export async function cleanUp(retentionDays: number, now: Date = new Date()): Pr
     const cutoff = new Date(now.getTime() - retentionDays * DAY_MS);
     const result: CleanupResult = { runs: 0, samples: 0 };
 
-    await db
-      .update(runs)
-      .set({ status: 'failed', error: 'The run was cut off: the server stopped while it ran. Run the file again.', finishedAt: now })
-      .where(and(eq(runs.status, 'running'), lt(runs.startedAt, new Date(now.getTime() - STALE_RUN_MS))));
+    await failStaleRuns(now);
 
     for (;;) {
       const old = db.select({ id: runs.id }).from(runs).where(lt(runs.finishedAt, cutoff)).limit(BATCH);

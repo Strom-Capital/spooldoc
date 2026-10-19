@@ -10,6 +10,7 @@ import { getConfig } from './config';
 import { getDb } from './db';
 import * as schema from './db/schema';
 import { checkFetchSite, checkOrigin, errorResponse } from './http';
+import { log } from './log';
 
 function createAuth() {
   const config = getConfig();
@@ -24,7 +25,11 @@ function createAuth() {
     emailAndPassword: { enabled: true, minPasswordLength: 10, autoSignIn: true },
     session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24 },
     telemetry: { enabled: false },
-    logger: { disabled: true },
+    // Better Auth's warnings and errors go to the server log, as JSON lines like the rest.
+    logger: {
+      level: 'warn',
+      log: (level, message, ...args) => log[level](`Auth: ${message}`, args.length ? { details: args.map((arg) => (arg instanceof Error ? arg.message : arg)) } : undefined),
+    },
     hooks: {
       // Anyone may create the first account; after that sign-up is closed.
       before: createAuthMiddleware(async (ctx) => {

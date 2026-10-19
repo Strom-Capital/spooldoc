@@ -2,13 +2,14 @@ import 'server-only';
 
 import { parseSpooledFileEntry, type Connection, type OutputQueue, type QueueRef, type SpooledFileEntry } from '@spooldoc/ibmi';
 import type { SpooledFileId } from '@spooldoc/core';
-import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
 import { ibmiFilter, jobSpecSchema, splfKey, watchedStatuses, type JobSpec } from '@/lib/job-spec';
 import { getDb, getLocks } from './db';
-import { jobs, jobVersions, watchSeen } from './db/schema';
+import { jobs, jobVersions, queueHealth, watchSeen } from './db/schema';
 import { redact } from './http';
 import { connectServer, type ServerConnection } from './ibmi';
-import { cleanUp } from './retention';
+import { log } from './log';
+import { cleanUp, failStaleRuns } from './retention';
 import { runJob } from './runner';
 import { getSettings } from './settings';
 
@@ -28,9 +29,11 @@ export interface WatcherDeps {
   now(): number;
   /** Seconds a data queue read waits for an entry. */
   readWaitSeconds: number;
+  /** The first wait before a failed data queue reader tries again; it doubles up to a minute. */
+  retryMs: number;
 }
 
-const defaultDeps: WatcherDeps = { connect: connectServer, run: runJob, now: Date.now, readWaitSeconds: 30 };
+const defaultDeps: WatcherDeps = { connect: connectServer, run: runJob, now: Date.now, readWaitSeconds: 30, retryMs: 5_000 };
 
 /** How often the queue list (which data queue each queue sends to) is read again. */
 const QUEUE_INFO_MS = 60_000;
@@ -46,6 +49,8 @@ const LIST_LIMIT = 500;
 const STOCK_TAKE_LIMIT = 10_000;
 /** How often old runs and samples are deleted (see `cleanUp`). */
 export const CLEANUP_MS = 60 * 60_000;
+/** How often runs a stopped process cut off are marked failed (see `failStaleRuns`). */
+const STALE_CHECK_MS = 60_000;
 
 /** The last cleanup this process did. */
 export interface CleanupStatus {
@@ -66,7 +71,14 @@ interface Reader {
   healthy: boolean;
   stopped: boolean;
   done: Promise<void>;
+  /** Why reading failed last, until a read works again. */
+  lastError: string | null;
+  /** When reading first failed since it last worked. */
+  errorSince: number | null;
 }
+
+/** What a tick wants `queue_health` to say about a queue: an error, no error, or leave it. */
+type Health = { error: string; since: Date } | null | 'keep';
 
 /**
  * Watches the source queues of jobs set to Watching. A queue that sends entries to the
@@ -82,6 +94,9 @@ export class Watcher {
   private timer: ReturnType<typeof setInterval> | null = null;
   private ticking: Promise<void> | null = null;
   private lastCleanup: number | null = null;
+  private lastStaleCheck: number | null = null;
+  /** The problem last logged per server or job, so a lasting one is logged once. */
+  private readonly reported = new Map<string, string>();
   status = { realtime: 0, polled: 0 };
   cleanup: CleanupStatus | null = null;
 
@@ -93,7 +108,7 @@ export class Watcher {
   start(): void {
     if (this.timer) return;
     // A tick that fails (the database is down) is tried again on the next one.
-    const tick = () => void this.tick().catch(() => undefined);
+    const tick = () => void this.tick().catch((error: unknown) => log.error('Watcher tick failed', { error: redact(error) }));
     this.timer = setInterval(tick, TICK_MS);
     this.timer.unref?.();
     tick();
@@ -127,23 +142,46 @@ export class Watcher {
     }
     let realtime = 0;
     let polled = 0;
+    const health = new Map<string, Health>();
     for (const [serverId, list] of byServer) {
+      const queues = uniqueQueues(list);
       let opened: ServerConnection;
       try {
         opened = await this.deps.connect(serverId);
       } catch (error) {
-        await markError(list.map((j) => j.jobId), redact(error));
+        const message = redact(error);
+        this.report(`connect:${serverId}`, 'Could not connect to watch the queues of a server', { serverId, error: message });
+        await markError(list.map((j) => j.jobId), message);
+        // What real time last said stays until the server can be reached again.
+        for (const queue of queues) health.set(queueKey(serverId, queue), 'keep');
         continue;
       }
-      const queues = uniqueQueues(list);
-      const info = await this.queues(serverId, opened.conn, queues).catch(() => [] as OutputQueue[]);
+      this.resolve(`connect:${serverId}`, 'Connected to the server again', { serverId });
+      let info: OutputQueue[];
+      try {
+        info = await this.queues(serverId, opened.conn, queues);
+        this.resolve(`queues:${serverId}`, 'Read the output queue list again', { serverId });
+      } catch (error) {
+        // Which data queue each queue sends to is kept from the last read that worked.
+        info = this.queueInfo.get(serverId)?.queues ?? [];
+        this.report(`queues:${serverId}`, 'Could not read the output queue list', { serverId, error: redact(error, [opened.password]) });
+      }
       const dataQueue = opened.server.dtaqLibrary && opened.server.dtaqName ? { library: opened.server.dtaqLibrary, name: opened.server.dtaqName } : null;
       const live = queues.filter((q) => dataQueue && sameQueue(info.find((i) => sameQueue(i, q))?.dataQueue, dataQueue));
       if (dataQueue && live.length > 0) this.ensureReader(serverId, dataQueue, opened.server.ccsid ?? 37);
       else this.stopReader(serverId);
       const reader = this.readers.get(serverId);
+      for (const queue of live) {
+        // Not yet connected, or another instance reads the data queue: nothing to say.
+        const state: Health = reader?.lastError
+          ? { error: reader.lastError, since: new Date(reader.errorSince ?? this.deps.now()) }
+          : reader?.healthy
+            ? null
+            : 'keep';
+        health.set(queueKey(serverId, queue), state);
+      }
       for (const queue of queues) {
-        const isLive = !!reader?.healthy && live.some((q) => sameQueue(q, queue));
+        const isLive = !!reader?.healthy && !reader.lastError && live.some((q) => sameQueue(q, queue));
         if (isLive) realtime++;
         else polled++;
         const every = (isLive ? settings.safetyCheckSeconds : settings.pollSeconds) * 1000;
@@ -161,7 +199,45 @@ export class Watcher {
       if (!byServer.has(serverId)) this.stopReader(serverId);
     }
     this.status = { realtime, polled };
+    await this.recordHealth(health);
+    await this.failStaleRunsWhenDue();
     await this.cleanUpWhenDue(settings.retentionDays);
+  }
+
+  /**
+   * Bring `queue_health` in line with what this tick found: a queue whose real-time
+   * watching fails gets the error, and one that works again, is no longer watched in real
+   * time or no longer watched at all loses it. Rows are written only when they change.
+   */
+  private async recordHealth(health: Map<string, Health>): Promise<void> {
+    const db = getDb();
+    const rows = await db.select().from(queueHealth).where(isNotNull(queueHealth.realtimeError));
+    const current = new Map(rows.map((row) => [queueKey(row.serverId, { library: row.library, name: row.name }), row]));
+    for (const [key, state] of health) {
+      if (!state || state === 'keep' || current.get(key)?.realtimeError === state.error) continue;
+      const [serverId, library, name] = key.split('/') as [string, string, string];
+      const error = { realtimeError: state.error, realtimeErrorSince: current.get(key)?.realtimeErrorSince ?? state.since };
+      await db
+        .insert(queueHealth)
+        .values({ serverId, library, name, ...error })
+        .onConflictDoUpdate({ target: [queueHealth.serverId, queueHealth.library, queueHealth.name], set: error });
+    }
+    const cleared = [...current].filter(([key]) => !health.has(key) || health.get(key) === null).map(([, row]) => row.id);
+    if (cleared.length > 0) {
+      await db.update(queueHealth).set({ realtimeError: null, realtimeErrorSince: null, errorDismissed: null }).where(inArray(queueHealth.id, cleared));
+    }
+  }
+
+  /** Mark runs failed whose process stopped, at most once every `STALE_CHECK_MS`. */
+  private async failStaleRunsWhenDue(): Promise<void> {
+    const now = this.deps.now();
+    if (this.lastStaleCheck !== null && now - this.lastStaleCheck < STALE_CHECK_MS) return;
+    this.lastStaleCheck = now;
+    try {
+      await failStaleRuns(new Date(now));
+    } catch (error) {
+      log.error('Could not check for cut-off runs', { error: redact(error) });
+    }
   }
 
   /** Delete old runs and samples, at most once every `CLEANUP_MS`. */
@@ -174,6 +250,7 @@ export class Watcher {
       if (deleted) this.cleanup = { at: new Date(now).toISOString(), ...deleted };
     } catch (error) {
       this.cleanup = { at: new Date(now).toISOString(), runs: 0, samples: 0, error: redact(error) };
+      log.error('Cleanup of old runs failed', { error: this.cleanup.error });
     }
   }
 
@@ -241,19 +318,34 @@ export class Watcher {
           }
         }
         await db.update(jobs).set({ lastWatchAt: new Date(this.deps.now()), lastWatchError: null, watchErrorDismissed: null }).where(eq(jobs.id, job.jobId));
+        this.resolve(`job:${job.jobId}`, 'Watching the job works again', { jobId: job.jobId });
       } catch (error) {
-        await markError([job.jobId], redact(error, [opened.password]));
+        const message = redact(error, [opened.password]);
+        this.report(`job:${job.jobId}`, 'Watching a job failed', { jobId: job.jobId, queue: `${queue.library}/${queue.name}`, error: message });
+        await markError([job.jobId], message);
       } finally {
         await release();
       }
     }
   }
 
+  /** Log a problem as a warning, unless the same one was logged last for `key`. */
+  private report(key: string, message: string, fields: { error: string } & Record<string, unknown>): void {
+    if (this.reported.get(key) === fields.error) return;
+    this.reported.set(key, fields.error);
+    log.warn(message, fields);
+  }
+
+  /** Log that the problem last reported for `key` is gone. */
+  private resolve(key: string, message: string, fields: Record<string, unknown>): void {
+    if (this.reported.delete(key)) log.info(message, fields);
+  }
+
   private ensureReader(serverId: string, dataQueue: QueueRef, ccsid: number): void {
     const current = this.readers.get(serverId);
     if (current && !current.stopped && sameQueue(current.dataQueue, dataQueue)) return;
     if (current) current.stopped = true;
-    const reader: Reader = { serverId, dataQueue, healthy: false, stopped: false, done: Promise.resolve() };
+    const reader: Reader = { serverId, dataQueue, healthy: false, stopped: false, done: Promise.resolve(), lastError: null, errorSince: null };
     reader.done = this.read(reader, ccsid);
     this.readers.set(serverId, reader);
   }
@@ -266,24 +358,37 @@ export class Watcher {
     }
   }
 
-  /** Read the data queue until stopped; reconnect with backoff after an error. */
+  /**
+   * Read the data queue until stopped; reconnect with backoff after an error. While
+   * reading fails, the reader keeps the error and since when, and its queues are polled.
+   */
   private async read(reader: Reader, ccsid: number): Promise<void> {
-    let backoff = 5_000;
+    let backoff = this.deps.retryMs;
+    const dataQueue = `${reader.dataQueue.library}/${reader.dataQueue.name}`;
     while (!reader.stopped) {
       // Reading takes entries off the data queue, so only one instance may read it.
       const release = await getLocks().tryLock(`dtaq:${reader.serverId}`);
       if (!release) {
         // Another instance reads it: not an error, this one polls the queues meanwhile.
         reader.healthy = false;
+        reader.lastError = null;
+        reader.errorSince = null;
         await sleep(30_000, reader);
         continue;
       }
+      let password = '';
       try {
         const opened = await this.deps.connect(reader.serverId);
+        password = opened.password;
         reader.healthy = true;
-        backoff = 5_000;
+        backoff = this.deps.retryMs;
         while (!reader.stopped) {
           const bytes = await opened.conn.readDataQueue(reader.dataQueue, this.deps.readWaitSeconds);
+          if (reader.lastError) {
+            log.info('Real-time watching works again', { serverId: reader.serverId, dataQueue });
+            reader.lastError = null;
+            reader.errorSince = null;
+          }
           if (!bytes) continue;
           const notice = parseSpooledFileEntry(bytes, ccsid);
           if (!notice) continue;
@@ -292,8 +397,16 @@ export class Watcher {
           );
           if (list.length > 0) await this.dispatch(opened, notice.queue, list, notice.splf);
         }
-      } catch {
+      } catch (error) {
         reader.healthy = false;
+        reader.lastError = redact(error, [password]);
+        reader.errorSince ??= this.deps.now();
+        log.warn('Real-time watching failed; the queues are polled meanwhile', {
+          serverId: reader.serverId,
+          dataQueue,
+          error: reader.lastError,
+          retryInSeconds: backoff / 1000,
+        });
         await sleep(backoff, reader);
         backoff = Math.min(backoff * 2, 60_000);
       } finally {
@@ -343,7 +456,16 @@ export async function watchedJobs(): Promise<WatchedJob[]> {
     }
     watched.push({ jobId: row.jobId, version: row.version!, spec: spec.data, lastWatchAt: row.lastWatchAt });
   }
-  await markError(broken, 'The active version cannot be read. Save the job as a new version.');
+  if (broken.length > 0) {
+    const message = 'The active version cannot be read. Save the job as a new version.';
+    // Logged when the job first gets the error, not on every tick.
+    const marked = await getDb()
+      .update(jobs)
+      .set({ lastWatchError: message })
+      .where(and(inArray(jobs.id, broken), or(isNull(jobs.lastWatchError), ne(jobs.lastWatchError, message))))
+      .returning({ id: jobs.id });
+    if (marked.length > 0) log.warn('A job is not watched: its active version cannot be read', { jobs: marked.map((j) => j.id) });
+  }
   return watched.filter((job) => job.spec.trigger.mode === 'watch' && job.spec.source.serverId && job.spec.source.library && job.spec.source.queue);
 }
 

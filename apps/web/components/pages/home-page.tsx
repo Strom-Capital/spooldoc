@@ -74,6 +74,7 @@ export function HomePage() {
           attention: {
             servers: current.data.attention.servers.filter((s) => !gone.has(s.id)),
             jobs: current.data.attention.jobs.filter((j) => !gone.has(j.id)),
+            queues: current.data.attention.queues.filter((q) => !gone.has(q.id)),
             runs: current.data.attention.runs.filter((r) => !gone.has(r.id)),
           },
         },

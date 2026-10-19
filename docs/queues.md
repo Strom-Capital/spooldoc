@@ -31,6 +31,10 @@ each a "contains" match:
 | Job contains | The job as `number/user/name` |
 | User data contains | The `USRDTA` attribute |
 
+The list shows the newest 200 files. When the queue has more, or more
+match the filters, the page says so under the list, and Load more lists
+200 more, up to 5000. Past that, narrow the filters to find older files.
+
 Open a file to see its pages as the printer would print them, decoded with
 the file's own code page. This is the same view the job builder uses, so a
 page that reads right here will read right in a job. A page that shows the

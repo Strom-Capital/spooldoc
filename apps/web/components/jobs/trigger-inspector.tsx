@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { api, errorText } from '@/lib/client/api';
+import { ago } from '@/lib/client/format';
 import type { JobSummary, SettingsView } from '@/lib/types';
 import { Choice, Panel, SettingRow } from './inspectors';
 import { useJob } from './job-provider';
@@ -232,6 +233,16 @@ export function TriggerInspector() {
             </p>
           ) : realtime ? (
             <>
+              {job.realtimeError && (
+                <p className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-amber-800 text-sm dark:text-amber-300">
+                  <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    Real-time watching stopped {ago(job.realtimeError.since)}. Until it works again, Spooldoc checks the queue every{' '}
+                    {settings ? seconds(settings.pollSeconds) : '30 s'} and keeps trying to reconnect.
+                    <span className="mt-1 block text-xs">{job.realtimeError.error}</span>
+                  </span>
+                </p>
+              )}
               <p className="text-sm">
                 {library}/{queue} sends an entry to {server?.dataQueue?.library}/{server?.dataQueue?.name} when a spooled file is ready, and
                 the job starts within seconds. As a safety net the queue is also checked every{' '}

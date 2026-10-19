@@ -40,7 +40,7 @@ describe('getConfig', () => {
   });
 
   it('has defaults', () => {
-    withEnv({ APP_URL: undefined, SPOOLDOC_MASK: undefined, SPOOLDOC_WATCHER: undefined, DATABASE_URL: undefined });
+    withEnv({ APP_URL: undefined, SPOOLDOC_MASK: undefined, SPOOLDOC_WATCHER: undefined, DATABASE_URL: undefined, SPOOLDOC_LOG_LEVEL: undefined });
     const config = getConfig();
     expect(config.databaseUrl).toBeUndefined();
     expect(config.secretKey).toHaveLength(32);
@@ -49,6 +49,14 @@ describe('getConfig', () => {
     expect(config.mask).toBe(true);
     expect(config.allowedHosts).toEqual([]);
     expect(config.defaultCcsid).toBeUndefined();
+    expect(config.logLevel).toBe('info');
+  });
+
+  it('reads the log level in any case, and refuses an unknown one', () => {
+    withEnv({ SPOOLDOC_LOG_LEVEL: 'WARN' });
+    expect(getConfig().logLevel).toBe('warn');
+    withEnv({ SPOOLDOC_LOG_LEVEL: 'verbose' });
+    expect(() => getConfig()).toThrow(/SPOOLDOC_LOG_LEVEL must be one of off, error, warn, info, debug/);
   });
 
   it('reads the optional settings', () => {

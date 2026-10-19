@@ -71,6 +71,13 @@
       "when": 1792362999090,
       "tag": "0009_job_chats",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792391137057,
+      "tag": "0010_watch_health",
+      "breakpoints": true
     }
   ]
 }

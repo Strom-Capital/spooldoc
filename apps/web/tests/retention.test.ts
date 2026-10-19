@@ -8,7 +8,7 @@ import { db, insertJob, insertServer, testDb } from './helpers/fixtures';
 
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
 
-const { cleanUp } = await import('@/lib/server/retention');
+const { cleanUp, failStaleRuns, STALE_RUN_MS } = await import('@/lib/server/retention');
 const { Watcher } = await import('@/lib/server/watcher');
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -41,7 +41,7 @@ async function insertSample(values: { runId?: string | null; capturedAt: Date; n
 }
 
 /** A run with its captured sample, a delivered PDF and its `watch_seen` row. */
-async function insertRun(values: { startedAt: Date; finishedAt: Date | null; number: number }): Promise<{ runId: string; sampleId: string }> {
+async function insertRun(values: { startedAt: Date; finishedAt: Date | null; number: number; heartbeatAt?: Date }): Promise<{ runId: string; sampleId: string }> {
   const splf = { ...sample.splf, number: values.number };
   const [run] = await db()
     .insert(runs)
@@ -52,6 +52,7 @@ async function insertRun(values: { startedAt: Date; finishedAt: Date | null; num
       splf,
       status: values.finishedAt ? 'success' : 'running',
       startedAt: values.startedAt,
+      heartbeatAt: values.heartbeatAt ?? values.startedAt,
       finishedAt: values.finishedAt,
     })
     .returning({ id: runs.id });
@@ -106,6 +107,19 @@ describe('cleanUp', () => {
     const rows = await db().select().from(runs);
     expect(rows.find((r) => r.id === cutOff.runId)).toMatchObject({ status: 'failed', finishedAt: NOW, error: expect.stringMatching(/cut off/) });
     expect(rows.find((r) => r.id === running.runId)).toMatchObject({ status: 'running', finishedAt: null });
+  });
+
+  it('fails a running run as soon as its heartbeat is stale, however long it has run', async () => {
+    const minutes = (n: number) => new Date(NOW.getTime() - n * 60_000);
+    const long = await insertRun({ startedAt: daysAgo(1), heartbeatAt: minutes(1), finishedAt: null, number: 1 });
+    const stopped = await insertRun({ startedAt: minutes(5), heartbeatAt: new Date(NOW.getTime() - STALE_RUN_MS - 1000), finishedAt: null, number: 2 });
+    const done = await insertRun({ startedAt: daysAgo(1), finishedAt: daysAgo(1), number: 3 });
+
+    expect(await failStaleRuns(NOW)).toBe(1);
+    const rows = await db().select().from(runs);
+    expect(rows.find((r) => r.id === stopped.runId)).toMatchObject({ status: 'failed', finishedAt: NOW, error: expect.stringMatching(/cut off/) });
+    expect(rows.find((r) => r.id === long.runId)).toMatchObject({ status: 'running', finishedAt: null });
+    expect(rows.find((r) => r.id === done.runId)).toMatchObject({ status: 'success' });
   });
 
   it('deletes samples of runs that are gone, such as those of a deleted job', async () => {
@@ -188,5 +202,14 @@ describe('watcher cleanup', () => {
     clock += 31 * 60_000;
     await watcher.tick();
     expect(await ids(db().select({ id: runs.id }).from(runs))).toEqual([kept.runId]);
+  });
+
+  it('fails runs a stopped process cut off within minutes, not at the hourly cleanup', async () => {
+    await watcher.tick(); // the hourly cleanup is done
+    const cutOff = await insertRun({ startedAt: new Date(clock - 60_000), finishedAt: null, number: 1 });
+    clock += STALE_RUN_MS + 61_000;
+    await watcher.tick();
+    const [run] = await db().select().from(runs).where(eq(runs.id, cutOff.runId));
+    expect(run).toMatchObject({ status: 'failed', error: expect.stringMatching(/cut off/) });
   });
 });

@@ -1,11 +1,12 @@
 import 'server-only';
 
 import { parseDefinition } from '@spooldoc/core';
-import { and, desc, eq, inArray, max, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, max, sql } from 'drizzle-orm';
+import type { ZodError } from 'zod';
 import { emptySpec, jobSpecSchema, missingParts, versionSpec, type JobSpec } from '@/lib/job-spec';
 import type { JobDetail, JobSummary, RunStatus } from '@/lib/types';
 import { getDb, type Db, type Tx } from './db';
-import { destinations, jobs, jobVersions, runs, servers } from './db/schema';
+import { destinations, jobs, jobVersions, queueHealth, runs, servers } from './db/schema';
 import { UUID } from './servers';
 
 export type JobRow = typeof jobs.$inferSelect;
@@ -41,23 +42,52 @@ export async function createJob(input: { serverId?: string; library?: string; qu
 
 /** A job with its version list. */
 export async function jobDetail(row: JobRow): Promise<JobDetail> {
-  const versions = await getDb()
-    .select({ number: jobVersions.number, note: jobVersions.note, createdAt: jobVersions.createdAt, createdBy: jobVersions.createdBy })
-    .from(jobVersions)
-    .where(eq(jobVersions.jobId, row.id))
-    .orderBy(desc(jobVersions.number));
+  const draft = jobSpecSchema.parse(row.draft);
+  const [versions, realtimeError] = await Promise.all([
+    getDb()
+      .select({ number: jobVersions.number, note: jobVersions.note, createdAt: jobVersions.createdAt, createdBy: jobVersions.createdBy })
+      .from(jobVersions)
+      .where(eq(jobVersions.jobId, row.id))
+      .orderBy(desc(jobVersions.number)),
+    sourceRealtimeError(row, draft),
+  ]);
   return {
     id: row.id,
     name: row.name,
     description: row.description,
-    draft: jobSpecSchema.parse(row.draft),
+    draft,
     activeVersion: row.activeVersion,
     paused: row.paused,
     lastWatchAt: row.lastWatchAt?.toISOString() ?? null,
     lastWatchError: row.lastWatchError,
+    realtimeError,
     versions: versions.map((v) => ({ ...v, createdAt: v.createdAt.toISOString() })),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+/**
+ * Why the queue the job reads from (by its active version, else the draft) is polled
+ * although it sends to the server's data queue, as the watcher recorded it.
+ */
+async function sourceRealtimeError(row: JobRow, draft: JobSpec): Promise<JobDetail['realtimeError']> {
+  const active = await activeSpec(row).catch(() => null);
+  const { serverId, library, queue } = (active ?? draft).source;
+  if (!serverId || !library || !queue) {
+    return null;
+  }
+  const [health] = await getDb()
+    .select({ error: queueHealth.realtimeError, since: queueHealth.realtimeErrorSince })
+    .from(queueHealth)
+    .where(and(eq(queueHealth.serverId, serverId), eq(queueHealth.library, library), eq(queueHealth.name, queue), isNotNull(queueHealth.realtimeError)));
+  return health?.error ? { error: health.error, since: (health.since ?? new Date()).toISOString() } : null;
+}
+
+/** "trigger.mode: Invalid option", the first problem of a spec that does not parse. */
+function specProblem(error: ZodError): string {
+  const issue = error.issues[0];
+  if (!issue) return 'It does not match the job format.';
+  return issue.path.length > 0 ? `${issue.path.join('.')}: ${issue.message}` : issue.message;
 }
 
 /** The spec of a job's active version, or null when no version is active. */
@@ -72,36 +102,45 @@ export async function activeSpec(job: JobRow, db: Db | Tx = getDb()): Promise<Jo
   return row ? jobSpecSchema.parse(row.spec) : null;
 }
 
-/** Every job, by name, with its source server name and last run. */
+/**
+ * Every job, by name, with its source server name and last run. A job whose active
+ * version or draft no longer reads as a spec (after an upgrade, for example) is listed
+ * with `broken` saying why, instead of failing the list.
+ */
 export async function listJobs(): Promise<JobSummary[]> {
   const db = getDb();
-  const rows = await db.select().from(jobs).orderBy(jobs.name);
-  if (rows.length === 0) {
-    return [];
-  }
-  const ids = rows.map((row) => row.id);
-  const serverRows = await db.select({ id: servers.id, name: servers.name }).from(servers);
+  const [rows, serverRows, versionRows, activeRows, lastRuns] = await Promise.all([
+    db.select().from(jobs).orderBy(jobs.name),
+    db.select({ id: servers.id, name: servers.name }).from(servers),
+    db
+      .select({ jobId: jobVersions.jobId, n: max(jobVersions.number) })
+      .from(jobVersions)
+      .groupBy(jobVersions.jobId),
+    db
+      .select({ jobId: jobVersions.jobId, spec: jobVersions.spec })
+      .from(jobVersions)
+      .innerJoin(jobs, and(eq(jobs.id, jobVersions.jobId), eq(jobs.activeVersion, jobVersions.number))),
+    db
+      .selectDistinctOn([runs.jobId], { jobId: runs.jobId, id: runs.id, seq: runs.seq, status: runs.status, startedAt: runs.startedAt })
+      .from(runs)
+      .orderBy(runs.jobId, desc(runs.startedAt)),
+  ]);
   const serverName = new Map(serverRows.map((s) => [s.id, s.name]));
-  const versionRows = await db
-    .select({ jobId: jobVersions.jobId, n: max(jobVersions.number) })
-    .from(jobVersions)
-    .where(inArray(jobVersions.jobId, ids))
-    .groupBy(jobVersions.jobId);
   const versionCount = new Map(versionRows.map((v) => [v.jobId, v.n ?? 0]));
-  const activeRows = await db
-    .select({ jobId: jobVersions.jobId, spec: jobVersions.spec })
-    .from(jobVersions)
-    .innerJoin(jobs, and(eq(jobs.id, jobVersions.jobId), eq(jobs.activeVersion, jobVersions.number)));
-  const activeBy = new Map(activeRows.map((a) => [a.jobId, jobSpecSchema.parse(a.spec)]));
-  const lastRuns = await db
-    .selectDistinctOn([runs.jobId], { jobId: runs.jobId, id: runs.id, seq: runs.seq, status: runs.status, startedAt: runs.startedAt })
-    .from(runs)
-    .where(inArray(runs.jobId, ids))
-    .orderBy(runs.jobId, desc(runs.startedAt));
+  const activeBy = new Map(activeRows.map((a) => [a.jobId, jobSpecSchema.safeParse(a.spec)]));
   const lastRun = new Map(lastRuns.map((r) => [r.jobId, r]));
 
   return rows.map((row) => {
-    const spec = activeBy.get(row.id) ?? jobSpecSchema.parse(row.draft);
+    const active = activeBy.get(row.id);
+    const draft = jobSpecSchema.safeParse(row.draft);
+    const broken =
+      active && !active.success
+        ? `The active version cannot be read (${specProblem(active.error)}). Save the job as a new version.`
+        : !draft.success
+          ? `The draft cannot be read (${specProblem(draft.error)}).`
+          : null;
+    // What is shown comes from the active version, else the draft, else an empty job.
+    const spec = (active?.success ? active.data : null) ?? (draft.success ? draft.data : emptySpec());
     const run = lastRun.get(row.id);
     return {
       id: row.id,
@@ -112,13 +151,14 @@ export async function listJobs(): Promise<JobSummary[]> {
         library: spec.source.library,
         queue: spec.source.queue,
       },
-      mode: activeBy.get(row.id)?.trigger.mode ?? 'manual',
+      mode: active?.success ? active.data.trigger.mode : 'manual',
       finish: spec.finish.action,
       paused: row.paused,
       activeVersion: row.activeVersion,
       versions: versionCount.get(row.id) ?? 0,
       lastWatchAt: row.lastWatchAt?.toISOString() ?? null,
       lastWatchError: row.lastWatchError,
+      broken,
       lastRun: run ? { id: run.id, seq: run.seq, status: run.status as RunStatus, startedAt: run.startedAt.toISOString() } : null,
       updatedAt: row.updatedAt.toISOString(),
     };

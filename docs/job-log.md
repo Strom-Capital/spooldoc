@@ -19,15 +19,24 @@ Filter by job, status and date. Open a run to see its steps.
 
 | Status | Meaning |
 |--------|---------|
-| Running | The run is in progress. |
+| Running | The run is in progress. A run whose server stopped while it ran is marked failed within a few minutes. |
 | Success | Every document was delivered and the finish step did what it should. |
 | Warning | The documents were delivered, but the finish step failed: the spooled file is still where it was. Hold, move or delete it by hand, or retry. |
 | Failed | A step failed before anything was delivered. The error names the step and the cause, with secrets removed. The spooled file is left alone. |
 | Skipped | The spooled file does not pass the definition's `match` rules, so it is not one the job is for. It is left alone. |
 
-Failed runs appear under Needs attention on the Home page until they are
-dismissed, as do servers that cannot be reached and jobs whose watcher
-reports an error.
+Failed and warning runs appear under Needs attention on the Home page
+until they are dismissed, as do servers that cannot be reached, jobs whose
+watcher reports an error, and queues that are polled because real-time
+watching stopped. What fails before a run exists, such as a server the
+watcher cannot reach, is also in the [server log](configuration.md#server-log).
+
+## Runs cut off by a restart
+
+A running run touches its heartbeat every 30 seconds. When the server
+stops in the middle of a run, the heartbeat stops too, and the watcher
+marks the run failed once the heartbeat is 3 minutes old, with "The run
+was cut off". Retry it to run the file again.
 
 ## Steps
 

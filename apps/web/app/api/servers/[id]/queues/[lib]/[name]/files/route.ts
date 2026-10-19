@@ -6,7 +6,7 @@ import { runs, watchSeen } from '@/lib/server/db/schema';
 import { errorResponse, json } from '@/lib/server/http';
 import { withConnection } from '@/lib/server/ibmi';
 import { UUID } from '@/lib/server/servers';
-import type { SpooledFileView } from '@/lib/types';
+import { SPOOLED_FILE_LIST, type SpooledFileView } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,8 +15,9 @@ const OBJECT_NAME = /^[A-Za-z0-9$#@_.]{1,10}$/;
 /**
  * Spooled files of one output queue, newest first, filtered by `name`, `userData`,
  * `job` (the qualified IBM i job), `jobName`, `jobUser` and `formType` ("contains") and
- * `status` (comma-separated). With `forJob` (a Spooldoc job id), each file says which
- * run of that job already processed it.
+ * `status` (comma-separated). At most `limit` files (default 200, at most 5000); `more`
+ * says that older files were left out. With `forJob` (a Spooldoc job id), each file says
+ * which run of that job already processed it.
  */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string; lib: string; name: string }> }): Promise<Response> {
   const auth = await guard(request);
@@ -38,10 +39,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     jobUser: search.get('jobUser')?.slice(0, 10) || undefined,
     formType: search.get('formType')?.slice(0, 10) || undefined,
     status: search.get('status')?.split(',').filter(Boolean).slice(0, 10),
-    limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : undefined,
   };
+  const max = Number.isInteger(limit) && limit > 0 ? Math.min(limit, SPOOLED_FILE_LIST.max) : SPOOLED_FILE_LIST.page;
   return withConnection(id, async (conn) => {
-    const entries = await conn.listSpooledFiles({ library: lib.toUpperCase(), name: name.toUpperCase() }, filter);
+    // One more than asked for tells whether the list was cut off.
+    const listed = await conn.listSpooledFiles({ library: lib.toUpperCase(), name: name.toUpperCase() }, { ...filter, limit: max + 1 });
+    const more = listed.length > max;
+    const entries = listed.slice(0, max);
     let files: SpooledFileView[] = entries;
     if (jobId && UUID.test(jobId) && entries.length > 0) {
       const keys = entries.map(splfKey);
@@ -57,6 +61,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         return { ...entry, processedBy: row?.runId ? { runId: row.runId, seq: row.seq } : null };
       });
     }
-    return json({ files });
+    return json({ files, more });
   });
 }

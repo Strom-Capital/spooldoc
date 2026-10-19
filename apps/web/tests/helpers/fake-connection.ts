@@ -92,7 +92,8 @@ export class FakeConnection implements Connection {
       .filter((s) => !filter.name || s.splf.name.includes(filter.name.toUpperCase()))
       .filter((s) => !filter.userData || s.attributes.userData.toUpperCase().includes(filter.userData.toUpperCase()))
       .map((s) => ({ ...s.splf, status: this.status.get(key(s)) ?? 'HELD', attributes: { ...s.attributes, chrid: null, jobCcsid: null } }))
-      .filter((entry) => !filter.status?.length || filter.status.includes(entry.status));
+      .filter((entry) => !filter.status?.length || filter.status.includes(entry.status))
+      .slice(0, filter.limit ?? 200);
   }
 
   async readSpooledFile(id: SpooledFileId): Promise<{ bytes: Uint8Array; attributes: SpooledFileAttributes }> {

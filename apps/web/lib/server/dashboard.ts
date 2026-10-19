@@ -3,7 +3,7 @@ import 'server-only';
 import { and, count, desc, eq, gte, inArray, isNotNull, isNull, ne, or, type SQL, sql } from 'drizzle-orm';
 import type { AttentionItem, DashboardRange, DashboardView, JobSummary, RunBucket } from '@/lib/types';
 import { getDb } from './db';
-import { jobs, runs, servers } from './db/schema';
+import { jobs, queueHealth, runs, servers } from './db/schema';
 import { listJobs } from './jobs';
 import { describeModel } from './models';
 import { watchStatus } from './watcher';
@@ -68,7 +68,7 @@ export async function runSeries(range: DashboardRange, tz: string): Promise<RunB
 /** Everything the Home page shows. */
 export async function dashboard(range: DashboardRange, tz: string): Promise<DashboardView> {
   const db = getDb();
-  const [serverRows, jobRows, jobErrors, [logged], [anyRun], model, series] = await Promise.all([
+  const [serverRows, jobRows, jobErrors, queueErrors, [logged], [anyRun], model, series] = await Promise.all([
     db.select({ id: servers.id, name: servers.name, lastCheckedAt: servers.lastCheckedAt, lastError: servers.lastError, errorDismissed: servers.errorDismissed }).from(servers).orderBy(servers.name),
     listJobs(),
     db
@@ -76,16 +76,35 @@ export async function dashboard(range: DashboardRange, tz: string): Promise<Dash
       .from(jobs)
       .where(and(isNotNull(jobs.lastWatchError), or(isNull(jobs.watchErrorDismissed), ne(jobs.watchErrorDismissed, jobs.lastWatchError))))
       .orderBy(jobs.name),
+    db
+      .select({
+        id: queueHealth.id,
+        serverId: queueHealth.serverId,
+        serverName: servers.name,
+        library: queueHealth.library,
+        name: queueHealth.name,
+        error: queueHealth.realtimeError,
+        since: queueHealth.realtimeErrorSince,
+      })
+      .from(queueHealth)
+      .innerJoin(servers, eq(servers.id, queueHealth.serverId))
+      .where(
+        and(
+          isNotNull(queueHealth.realtimeError),
+          or(isNull(queueHealth.errorDismissed), ne(queueHealth.errorDismissed, queueHealth.realtimeError)),
+        ),
+      )
+      .orderBy(servers.name, queueHealth.library, queueHealth.name),
     db.select({ n: count() }).from(runs),
     db.select({ id: runs.id }).from(runs).limit(1),
     describeModel(),
     runSeries(range, tz),
   ]);
   const failed = await db
-    .select({ id: runs.id, seq: runs.seq, jobId: runs.jobId, jobName: jobs.name, error: runs.error, startedAt: runs.startedAt })
+    .select({ id: runs.id, seq: runs.seq, jobId: runs.jobId, jobName: jobs.name, status: runs.status, error: runs.error, startedAt: runs.startedAt })
     .from(runs)
     .innerJoin(jobs, eq(jobs.id, runs.jobId))
-    .where(and(eq(runs.status, 'failed'), isNull(runs.dismissedAt), gte(runs.startedAt, since(range, tz))))
+    .where(and(inArray(runs.status, ['failed', 'warning']), isNull(runs.dismissedAt), gte(runs.startedAt, since(range, tz))))
     .orderBy(desc(runs.startedAt))
     .limit(5);
 
@@ -114,24 +133,29 @@ export async function dashboard(range: DashboardRange, tz: string): Promise<Dash
     attention: {
       servers: serverRows.filter((s) => s.lastError && s.lastError !== s.errorDismissed).map((s) => ({ id: s.id, name: s.name, error: s.lastError! })),
       jobs: jobErrors.map((j) => ({ id: j.id, name: j.name, error: j.error! })),
-      runs: failed.map((r) => ({ ...r, startedAt: r.startedAt.toISOString() })),
+      queues: queueErrors.map((q) => ({ ...q, error: q.error!, since: (q.since ?? new Date()).toISOString() })),
+      runs: failed.map((r) => ({ ...r, status: r.status as 'failed' | 'warning', startedAt: r.startedAt.toISOString() })),
     },
   };
 }
 
 /**
- * Dismiss items from Needs attention, or bring them back. A server or job error is
- * dismissed as it reads now, so a different error shows again; a failed run stays dismissed.
+ * Dismiss items from Needs attention, or bring them back. A server, job or queue error is
+ * dismissed as it reads now, so a different error shows again; a failed or warning run
+ * stays dismissed.
  */
 export async function setDismissed(items: AttentionItem[], dismissed: boolean): Promise<void> {
   const ids = (kind: AttentionItem['kind']) => items.filter((item) => item.kind === kind).map((item) => item.id);
   const db = getDb();
-  const [serverIds, jobIds, runIds] = [ids('server'), ids('job'), ids('run')];
+  const [serverIds, jobIds, queueIds, runIds] = [ids('server'), ids('job'), ids('queue'), ids('run')];
   if (serverIds.length) {
     await db.update(servers).set({ errorDismissed: dismissed ? sql`${servers.lastError}` : null }).where(inArray(servers.id, serverIds));
   }
   if (jobIds.length) {
     await db.update(jobs).set({ watchErrorDismissed: dismissed ? sql`${jobs.lastWatchError}` : null }).where(inArray(jobs.id, jobIds));
+  }
+  if (queueIds.length) {
+    await db.update(queueHealth).set({ errorDismissed: dismissed ? sql`${queueHealth.realtimeError}` : null }).where(inArray(queueHealth.id, queueIds));
   }
   if (runIds.length) {
     await db.update(runs).set({ dismissedAt: dismissed ? new Date() : null }).where(inArray(runs.id, runIds));

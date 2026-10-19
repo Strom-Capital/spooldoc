@@ -32,6 +32,9 @@ export interface QueueView {
   dataQueue: { library: string; name: string } | null;
 }
 
+/** Spooled files a queue listing shows at first and per Load more, and the most one listing shows. */
+export const SPOOLED_FILE_LIST = { page: 200, max: 5000 } as const;
+
 /** A spooled file in a queue listing. */
 export interface SpooledFileView extends SpooledFileId {
   status: string;
@@ -76,6 +79,8 @@ export interface JobSummary {
   versions: number;
   lastWatchAt: string | null;
   lastWatchError: string | null;
+  /** Why the job's active version or draft cannot be read, when it cannot. */
+  broken: string | null;
   lastRun: { id: string; seq: number; status: RunStatus; startedAt: string } | null;
   updatedAt: string;
 }
@@ -90,6 +95,8 @@ export interface JobDetail {
   paused: boolean;
   lastWatchAt: string | null;
   lastWatchError: string | null;
+  /** Why the source queue is polled although it sends to the server's data queue, and since when. */
+  realtimeError: { error: string; since: string } | null;
   versions: { number: number; note: string; createdAt: string; createdBy: string | null }[];
   updatedAt: string;
 }
@@ -148,7 +155,7 @@ export interface SettingsView {
 
 /** An item of Needs attention on Home, to dismiss or bring back. */
 export interface AttentionItem {
-  kind: 'server' | 'job' | 'run';
+  kind: 'server' | 'job' | 'queue' | 'run';
   id: string;
 }
 
@@ -178,6 +185,9 @@ export interface DashboardView {
   attention: {
     servers: { id: string; name: string; error: string }[];
     jobs: { id: string; name: string; error: string }[];
-    runs: { id: string; seq: number; jobId: string; jobName: string; error: string | null; startedAt: string }[];
+    /** Queues that should be watched in real time but are polled, with why and since when. */
+    queues: { id: string; serverId: string; serverName: string; library: string; name: string; error: string; since: string }[];
+    /** Failed runs, and warning runs (delivered, but the finish step failed). */
+    runs: { id: string; seq: number; jobId: string; jobName: string; status: 'failed' | 'warning'; error: string | null; startedAt: string }[];
   };
 }

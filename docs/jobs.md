@@ -4,8 +4,11 @@ description: "The job builder, versions, running on demand, watching a queue and
 ---
 
 A job is a pipeline from one output queue to a destination. The Jobs page
-lists them with their server, queue, trigger and last run. The job builder
-shows the pipeline as six steps, and each step opens an inspector.
+lists them with their server, queue, trigger and last run. A job whose
+active version or draft no longer matches the job format, after an upgrade
+for example, is listed with the reason instead of breaking the page. The
+job builder shows the pipeline as six steps, and each step opens an
+inspector.
 
 <p align="center">
   <picture>
@@ -73,6 +76,13 @@ new ready spooled file, in one of two ways:
 - **Polling.** Any other queue is listed every poll interval, 30 seconds by
   default. Real-time queues are polled too, every safety check interval,
   in case an entry was missed. Both intervals are under Settings.
+
+When reading the data queue fails, for example because the data queue was
+deleted or the connection dropped, the queue is polled at the poll
+interval meanwhile and Spooldoc keeps trying to read it again. The trigger
+step and Needs attention on the Home page say why and since when, and the
+[server log](configuration.md#server-log) has each attempt. Once reading
+works again, the note goes away.
 
 Two more switches:
 
