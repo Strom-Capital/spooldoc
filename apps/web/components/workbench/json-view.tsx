@@ -36,7 +36,7 @@ export function JsonView() {
       <p className="p-4 text-muted-foreground text-sm">
         {render?.definition?.error
           ? 'The definition has errors; fix them in the Definition tab.'
-          : 'No definition yet. Link a definition type above, or paste one into the Definition tab and preview it.'}
+          : 'No definition yet. Write one in the Definition tab, or ask the AI assistant for one.'}
       </p>
     );
   }

@@ -137,7 +137,7 @@ export async function withConnection(
 ): Promise<Response> {
   const server = await getServerRow(serverId);
   if (!server) {
-    return errorResponse(404, `Server ${serverId} not found.`);
+    return errorResponse(404, 'Server not found.');
   }
   let creds: Credentials;
   try {

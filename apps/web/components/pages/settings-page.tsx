@@ -261,7 +261,7 @@ export function SettingsPage() {
       // The layout tells the chat panel which model is set up.
       router.refresh();
     } catch (err) {
-      toast.error('Settings not saved', { description: errorText(err) });
+      toast.error('Could not save the settings', { description: errorText(err) });
     } finally {
       setBusy(false);
     }

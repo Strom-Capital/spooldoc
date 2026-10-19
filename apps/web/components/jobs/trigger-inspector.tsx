@@ -328,8 +328,8 @@ export function TriggerInspector() {
       <SettingRow id="job-paused" title="Paused" text="A paused job is not watched. Files that arrive meanwhile are left for Run now.">
         <Switch id="job-paused" checked={job.paused} onCheckedChange={(paused) =>
             void updateJob({ paused }).then(
-              () => toast.success(paused ? 'Job paused' : 'Job resumed'),
-              (err) => toast.error(paused ? 'Could not pause the job' : 'Could not resume the job', { description: errorText(err) }),
+              () => toast.success(paused ? `Paused ${job.name}` : `Resumed ${job.name}`),
+              (err) => toast.error(paused ? `Could not pause ${job.name}` : `Could not resume ${job.name}`, { description: errorText(err) }),
             )
           } />
       </SettingRow>

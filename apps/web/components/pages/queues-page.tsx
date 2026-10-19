@@ -137,9 +137,9 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
             method: 'PUT',
             body: { queues: targets.map((queue) => ({ library: queue.library, name: queue.name, hidden: hide })) },
           });
-          toast.success(hide ? `Hid ${what}` : `Showing ${what} again`, undoable ? { action: { label: 'Undo', onClick: () => void apply(!hide, false) } } : undefined);
+          toast.success(hide ? `Hid ${what}` : `Unhid ${what}`, undoable ? { action: { label: 'Undo', onClick: () => void apply(!hide, false) } } : undefined);
         } catch (err) {
-          toast.error(hide ? `Could not hide ${what}` : `Could not show ${what}`, { description: errorText(err) });
+          toast.error(hide ? `Could not hide ${what}` : `Could not unhide ${what}`, { description: errorText(err) });
           setQueues((current) => current?.map((queue) => (keys.has(queueKey(queue)) ? { ...queue, hidden: !hide } : queue)) ?? null);
         }
       }
