@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkTemplate, problemText, templatePaths, templateTags, templateUses } from "../src/tags.js";
+import { checkTemplate, nunjucksSpans, problemText, templatePaths, templateTags, templateUses } from "../src/tags.js";
 import { FIXTURES, loadFixture } from "./helpers/fixtures.js";
 
 const { definition } = loadFixture("invoice");
@@ -95,5 +95,24 @@ describe("templateTags and templateUses", () => {
     expect(paths).toContain("doc.lines[].amount");
     expect(paths).toContain("documents[].lines[].amount");
     expect(paths).toContain("sample.splf.jobNumber");
+  });
+});
+
+describe("nunjucksSpans", () => {
+  it("finds each span up to the first closer of its kind", () => {
+    expect(nunjucksSpans("a {{ x }}} b {%- if y -%} {# c #} {{ open").map((s) => [s.kind, s.inner])).toEqual([
+      ["{", " x "],
+      ["%", "- if y -"],
+      ["#", " c "],
+    ]);
+  });
+
+  it("stays fast on many openers without a closer", () => {
+    const started = performance.now();
+    for (const opener of ["{{", "{%", "{#", "{{{{a"]) {
+      expect(nunjucksSpans(opener.repeat(50_000))).toEqual([]);
+      expect(checkTemplate(`${opener.repeat(50_000)}{{ doc.a }}`, null).length).toBeGreaterThan(0);
+    }
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 });

@@ -3,7 +3,6 @@ import 'server-only';
 import {
   checkDocx,
   checkTemplate,
-  convertNunjucks,
   docxConverter,
   documentName,
   readDocx,
@@ -139,8 +138,7 @@ function renderError(result: RenderResult, error: unknown): string {
 /**
  * Render a sample with a definition and a template with Carbone: an HTML template to
  * HTML, a Word template to a PDF. Without a template of its own the starter template for
- * the definition is used (flagged `generated`); a Nunjucks template from before Carbone is
- * converted. The template is checked before it is rendered. Every problem is reported in
+ * the definition is used (flagged `generated`). The template is checked before it is rendered. Every problem is reported in
  * `errors` and on the part it belongs to; nothing is thrown.
  *
  * @param sample - The captured spooled file
@@ -165,7 +163,7 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
 
   let html: string | undefined;
   if (input.template.kind === 'html') {
-    html = input.template.source === null ? (def ? starterTemplate(def) : undefined) : convertNunjucks(input.template.source);
+    html = input.template.source === null ? (def ? starterTemplate(def) : undefined) : input.template.source;
     if (html !== undefined) result.template = { kind: 'html', html, ...(input.template.source === null ? { generated: true } : {}) };
   } else {
     const file = input.template.file;

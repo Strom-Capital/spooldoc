@@ -100,8 +100,8 @@ describe("starterDocx", () => {
     expect(read.fields).toEqual(["PAGE", "NUMPAGES"]);
   });
 
-  it("writes a title from before Carbone as a tag, in both starter templates", async () => {
-    const def = { ...definition, output: { name: "invoice-{{ invoiceNo }}", title: "Invoice {{ invoiceNo }}" } };
+  it("writes a title with a tag in both starter templates", async () => {
+    const def = { ...definition, output: { name: "invoice-{d.doc.invoiceNo}", title: "Invoice {d.doc.invoiceNo}" } };
     expect(readDocx(await starterDocx(def)).paragraphs[0]?.text).toBe("Invoice {d.doc.invoiceNo}");
     expect(checkDocx(readDocx(await starterDocx(def)), def)).toEqual([]);
     expect(starterTemplate(def)).toContain("<h1>Invoice {d.doc.invoiceNo}</h1>");

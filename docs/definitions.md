@@ -82,7 +82,7 @@ The result for one invoice:
 | `source` | `text` for printed pages, `xml` for a spooled file that holds XML. |
 | `text` | The page layout and what to read, with `source: text`. |
 | `xml` | The element paths, with `source: xml`. |
-| `output` | `name`, the file name of each document, with tags for its fields such as `invoice-{d.doc.invoiceNo}` (plain tags, no formatters), and `title`, the heading the starter template uses. Without `name` the files are named after the spooled file and numbered. A name from before Carbone, such as `invoice-{{ invoiceNo }}`, still works. |
+| `output` | `name`, the file name of each document, with tags for its fields such as `invoice-{d.doc.invoiceNo}` (plain tags, no formatters), and `title`, the heading the starter template uses. Without `name` the files are named after the spooled file and numbered. |
 
 Names of fields, tables, records and columns use letters, digits and
 underscores and start with a letter; they become the keys of the JSON.

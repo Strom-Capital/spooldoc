@@ -20,10 +20,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./convert": {
-      "types": "./dist/convert.d.ts",
-      "import": "./dist/convert.js"
     }
   },
   "files": [

@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { convertNunjucks, documentName, parseDefinition, renderDocument, starterTemplate, type Definition, type DocumentRender } from '@spooldoc/core';
+import { documentName, parseDefinition, renderDocument, starterTemplate, type Definition, type DocumentRender } from '@spooldoc/core';
 import type { OutputTemplate } from '@/lib/job-spec';
 import { log } from './log';
 import type { SampleTemplate } from './render';
@@ -21,9 +21,9 @@ export function fileNameFor(def: Definition | null, doc: Record<string, unknown>
   return `${fallback}-${index + 1}`;
 }
 
-/** The Carbone template of an output: its own, converted from Nunjucks if it is from before Carbone, or the starter template. */
+/** The Carbone template of an output: its own, or the starter template. */
 export function outputTemplate(source: string | null | undefined, def: Definition): string {
-  return source === null || source === undefined ? starterTemplate(def) : convertNunjucks(source);
+  return source === null || source === undefined ? starterTemplate(def) : source;
 }
 
 /**

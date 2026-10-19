@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  draftPatchSchema,
   filterParams,
   findOutput,
   formatList,
@@ -18,28 +17,6 @@ import {
 
 describe('job spec', () => {
   const output = (fields: Partial<JobOutput> = {}): JobOutput => ({ id: 'main', label: 'Document', template: { kind: 'html', source: null }, formats: ['pdf'], ...fields });
-
-  it('reads specs saved with the single PDF format as one output', () => {
-    const spec = jobSpecSchema.parse({ render: { template: null, format: 'pdf' } });
-    expect(spec.render).toEqual({ outputs: [output()] });
-    expect(draftPatchSchema.parse({ render: { template: '<p/>', format: 'html' } }).render).toEqual({
-      outputs: [output({ template: { kind: 'html', source: '<p/>' }, formats: ['html'] })],
-    });
-  });
-
-  it('reads specs saved with a template and formats as one output', () => {
-    const spec = jobSpecSchema.parse({ render: { template: '<p/>', formats: ['html', 'pdf'] } });
-    expect(spec.render).toEqual({ outputs: [output({ template: { kind: 'html', source: '<p/>' }, formats: ['pdf', 'html'] })] });
-    expect(jobSpecSchema.parse({ render: {} }).render).toEqual({ outputs: [output()] });
-  });
-
-  it('converts a Nunjucks template from before Carbone when it is read', () => {
-    const old = '<p>{{ doc.invoiceNo }}</p><ul>{% for l in doc.lines %}<li>{{ l.item }}</li>{% endfor %}</ul>';
-    const spec = jobSpecSchema.parse({ render: { template: old, formats: ['pdf'] } });
-    const converted = { kind: 'html', source: '<p>{d.doc.invoiceNo}</p><ul><li>{d.doc.lines[i].item}</li>\n<li>{d.doc.lines[i+1]}</li></ul>' };
-    expect(spec.render.outputs[0]!.template).toEqual(converted);
-    expect(jobSpecSchema.parse(spec).render.outputs[0]!.template).toEqual(converted);
-  });
 
   it('starts with one PDF output and keeps outputs as they are', () => {
     expect(jobSpecSchema.parse({}).render).toEqual({ outputs: [output()] });

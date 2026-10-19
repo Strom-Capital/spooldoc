@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { carboneRender, carboneStatus, isCarboneError, probeEdition, type CarboneError } from "../src/carbone.js";
-import { convertNunjucks } from "../src/convert.js";
 import { extract } from "../src/extract.js";
 import { checkDocx, readDocx, starterDocx } from "../src/docx.js";
 import { buildDocx } from "../src/docx-design.js";
@@ -8,7 +7,7 @@ import { editDocx } from "../src/docx-edit.js";
 import { pdfPageCount, renderDocument } from "../src/render.js";
 import { checkTemplate } from "../src/tags.js";
 import { starterTemplate, templateData } from "../src/template.js";
-import { FIXTURES, fixtureText, loadFixture } from "./helpers/fixtures.js";
+import { FIXTURES, loadFixture } from "./helpers/fixtures.js";
 import { invoiceDesign } from "./helpers/invoice-design.js";
 import { testPng } from "./helpers/png.js";
 
@@ -113,18 +112,6 @@ describe.skipIf(!url)("Carbone server", () => {
     const read = readDocx(template);
     const out = readDocx(await renderDocument(server, { kind: "docx", template, data: templateData(read, documents[0]!, documents, sample), format: "docx" }));
     expect(out.paragraphs[0]!.text).toBe(`Invoice ${String(documents[0]!.invoiceNo)}`);
-  });
-
-  it("renders the converted Nunjucks invoice like the original", async () => {
-    const { sample, definition } = loadFixture("invoice");
-    const { documents } = extract(definition, sample);
-    const html = convertNunjucks(fixtureText("invoice", "template.nunjucks.html"));
-    const out = Buffer.from(await renderDocument(server, { template: html, data: templateData(html, documents[2]!, documents, sample), format: "html" })).toString();
-    expect(out).toContain("BAKER &amp; SONS LTD");
-    expect(out).toContain("1,374.50 EUR");
-    expect(out).toContain("15.10.2026");
-    expect(out).not.toContain("Building");
-    expect(out).toContain("carbone-pdf-header, carbone-pdf-footer, carbone-pdf-options { display: none; }");
   });
 
   it("keeps the paper-size rule: the template's @page wins, else landscape above 160 columns", async () => {

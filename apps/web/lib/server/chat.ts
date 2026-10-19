@@ -10,7 +10,6 @@ import {
   MAX_DOCX_BYTES,
   pdfPageCount,
   readDocxPart,
-  convertNunjucks,
   definitionJsonSchema,
   extract,
   maskPages,
@@ -685,7 +684,7 @@ const ASSET_PLACEHOLDER = 'data:,';
  * the visible text. Without Carbone only the check runs.
  */
 async function renderDocument(
-  template: string,
+  html: string,
   def: Definition,
   documents: Record<string, unknown>[],
   index: number,
@@ -694,7 +693,6 @@ async function renderDocument(
   assets: ChatAsset[],
   renderer: DocumentRenderer | null,
 ): Promise<{ errors: string[]; textPreview: string }> {
-  const html = convertNunjucks(template);
   const problems = checkTemplate(html, def, { assets: assets.map((asset) => asset.name) });
   if (problems.length > 0) {
     return { errors: problems.map((p) => `Line ${p.line}: ${p.message}`), textPreview: '' };
