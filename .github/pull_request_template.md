@@ -4,6 +4,7 @@
 
 ## Checklist
 
+- [ ] The change follows the [principles](https://github.com/Strom-Capital/spooldoc/blob/main/docs/principles.md), or changes that page and says why.
 - [ ] The title is a Conventional Commit (`feat(web): ...`, `fix(core): ...`); it becomes the commit message on `main`.
 - [ ] `pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint` and `pnpm -r test` pass.
 - [ ] No real customer, site, host, library or user names in the code, fixtures, text or screenshots.

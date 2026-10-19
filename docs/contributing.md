@@ -89,6 +89,9 @@ map and add its settings to the Destinations page.
 
 ## Conventions
 
+- Check the change against the [principles](principles.md). When it
+  needs one to bend, say so in the pull request and change that page in
+  the same pull request.
 - Conventional Commits: `feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `test:`,
   with a scope when it helps (`feat(web): ...`). Pull requests are squash
   merged, so the pull request title is the commit message on `main` and

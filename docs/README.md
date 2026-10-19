@@ -19,6 +19,7 @@ overview and the architecture diagram, see the [project README](../README.md).
 | [Deployment](deployment.md) | Docker, Compose, ports, backups, upgrades |
 | [Security](security.md) | What the model sees, what is stored, how |
 | [FAQ](faq.md) | Short answers to common questions |
+| [Principles](principles.md) | What every change is checked against |
 | [Contributing](contributing.md) | Development setup, tests, conventions |
 
 Each page starts with a `title` and `description` header so the folder can
