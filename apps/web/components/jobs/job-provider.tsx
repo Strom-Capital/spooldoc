@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { toast } from 'sonner';
 import { jobSpecSchema, specsDiffer, type DraftPatch, type JobSpec } from '@/lib/job-spec';
 import { api, errorText } from '@/lib/client/api';
 import type { DestinationView, JobDetail, ServerView } from '@/lib/types';
@@ -164,8 +165,9 @@ export function JobProvider({ initial, children }: { initial: JobDetail; childre
         }
       }
       setJob({ ...fresh, draft: { ...fresh.draft, ...pending.current } });
-    } catch {
+    } catch (err) {
       // Keep what is shown; the next change saves again.
+      toast.error('Could not reload the job', { description: errorText(err) });
     }
   }, [job.id, job.draft]);
 

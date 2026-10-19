@@ -64,7 +64,10 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
   }, [current]);
 
   useEffect(() => {
-    api<{ jobs: JobSummary[] }>('/api/jobs').then((data) => setJobs(data.jobs), () => undefined);
+    api<{ jobs: JobSummary[] }>('/api/jobs').then(
+      (data) => setJobs(data.jobs),
+      (err) => toast.error('Could not load the jobs for the job filter', { description: errorText(err) }),
+    );
   }, []);
 
   useEffect(() => {
