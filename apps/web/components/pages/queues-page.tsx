@@ -17,14 +17,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { EmptyNote, ErrorNote, Page } from '@/components/page';
+import { ErrorNote, Page } from '@/components/page';
 import { ServerSelect } from '@/components/server-select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SkeletonRows } from '@/components/skeleton-rows';
-import { TableEmpty } from '@/components/table-empty';
+import { EmptyState, TableEmpty } from '@/components/empty-state';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
@@ -158,15 +158,11 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   if (servers?.length === 0) {
     return (
       <Page title="Queues" description="Output queues of a server.">
-        <EmptyNote>
-          <ServerIcon className="mx-auto mb-2 size-6" aria-hidden />
-          Add a server first.
-          <div className="mt-4">
-            <Button asChild>
-              <Link href="/servers">Go to Servers</Link>
-            </Button>
-          </div>
-        </EmptyNote>
+        <EmptyState icon={ServerIcon} title="No servers yet" description="Add a server first. Its output queues show here.">
+          <Button asChild>
+            <Link href="/servers">Go to Servers</Link>
+          </Button>
+        </EmptyState>
       </Page>
     );
   }

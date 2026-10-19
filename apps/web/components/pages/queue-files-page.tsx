@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { EyeIcon, InboxIcon, RefreshCwIcon, SearchXIcon, XIcon } from 'lucide-react';
 import { SkeletonRows } from '@/components/skeleton-rows';
 import { SpoolFileDialog } from '@/components/spool-file-dialog';
-import { TableEmpty } from '@/components/table-empty';
+import { TableEmpty } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
 import { SPOOLED_FILE_LIST, type SpooledFileView } from '@/lib/types';

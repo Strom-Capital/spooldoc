@@ -3,9 +3,9 @@
 import { CloudIcon, DownloadIcon, FolderTreeIcon, MailIcon, ServerIcon, WebhookIcon, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
 import { Badge } from '@/components/ui/badge';
-import { Spinner } from '@/components/ui/spinner';
 import { api, errorText } from '@/lib/client/api';
 import type { DestinationView } from '@/lib/types';
 
@@ -33,9 +33,7 @@ export function DestinationsPage() {
     <Page title="Destinations" description="Where jobs deliver their documents.">
       {error && <ErrorNote className="mb-4">{error}</ErrorNote>}
       {destinations === null && !error && (
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Spinner /> Loading destinations...
-        </div>
+        <Loading>Loading destinations...</Loading>
       )}
       <div className="grid gap-4 md:grid-cols-2">
         {destinations?.map((destination) => (

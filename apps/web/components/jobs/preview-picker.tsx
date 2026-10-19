@@ -2,6 +2,7 @@
 
 import { ChevronsUpDownIcon, FileTextIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Loading } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -105,9 +106,7 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
             <CommandInput placeholder="Search by name, job or user data" />
             <CommandList>
               {files === null && !error && (
-                <div className="flex items-center gap-2 p-3 text-muted-foreground text-sm">
-                  <Spinner /> Loading spooled files...
-                </div>
+                <Loading className="p-3">Loading spooled files...</Loading>
               )}
               <CommandEmpty>No spooled file matches.</CommandEmpty>
               <CommandGroup heading={`${library}/${queue}, newest first`}>

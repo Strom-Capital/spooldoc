@@ -2,10 +2,10 @@
 
 import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Loading } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Spinner } from '@/components/ui/spinner';
 import { api, shownError, type ShownError } from '@/lib/client/api';
 import type { QueueView } from '@/lib/types';
 
@@ -63,9 +63,7 @@ export function QueueSelect({
           <CommandInput placeholder="Search queues" />
           <CommandList>
             {queues === null && !error && (
-              <div className="flex items-center gap-2 p-3 text-muted-foreground text-sm">
-                <Spinner /> Loading queues...
-              </div>
+              <Loading className="p-3">Loading queues...</Loading>
             )}
             {error && <p className="p-3 text-destructive text-sm">{error.message}</p>}
             <CommandEmpty>No queue matches.</CommandEmpty>

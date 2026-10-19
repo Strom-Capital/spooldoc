@@ -4,10 +4,10 @@ import { CircleAlertIcon, PauseIcon, PlayIcon, RadioIcon, Trash2Icon, WorkflowIc
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { EmptyNote, ErrorNote, Page } from '@/components/page';
+import { EmptyState, Loading } from '@/components/empty-state';
+import { ErrorNote, Page } from '@/components/page';
 import { RunStatusBadge } from '@/components/run-status';
 import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/spinner';
 import { api, errorText } from '@/lib/client/api';
 import { ago } from '@/lib/client/format';
 import type { JobSummary } from '@/lib/types';
@@ -60,18 +60,12 @@ export function JobsPage() {
     >
       {error && <ErrorNote className="mb-4">{error}</ErrorNote>}
       {jobs === null && !error && (
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Spinner /> Loading jobs...
-        </div>
+        <Loading>Loading jobs...</Loading>
       )}
       {jobs?.length === 0 && (
-        <EmptyNote>
-          <WorkflowIcon className="mx-auto mb-2 size-6" aria-hidden />
-          No jobs yet. Start one here, or from a queue on the Queues page.
-          <div className="mt-4">
-            <NewJobButton onError={setError} />
-          </div>
-        </EmptyNote>
+        <EmptyState icon={WorkflowIcon} title="No jobs yet" description="Start one here, or from a queue on the Queues page.">
+          <NewJobButton onError={setError} />
+        </EmptyState>
       )}
       {jobs && jobs.length > 0 && (
         <div className="overflow-x-auto rounded-lg border">

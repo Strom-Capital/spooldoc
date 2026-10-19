@@ -4,7 +4,8 @@ import { CheckCircle2Icon, InboxIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, 
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { EmptyNote, ErrorNote, Page } from '@/components/page';
+import { EmptyState, Loading } from '@/components/empty-state';
+import { ErrorNote, Page } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -85,21 +86,15 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
     >
       {error && <ErrorNote className="mb-4">{error}</ErrorNote>}
       {servers === null && !error && (
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Spinner /> Loading servers...
-        </div>
+        <Loading>Loading servers...</Loading>
       )}
       {servers?.length === 0 && (
-        <EmptyNote>
-          <ServerIcon className="mx-auto mb-2 size-6" aria-hidden />
-          No servers yet. Add the IBM i whose spooled files you want to turn into documents.
-          <div className="mt-4">
-            <Button onClick={() => setEditing('new')}>
-              <PlusIcon />
-              Add server
-            </Button>
-          </div>
-        </EmptyNote>
+        <EmptyState icon={ServerIcon} title="No servers yet" description="Add the IBM i whose spooled files you want to turn into documents.">
+          <Button onClick={() => setEditing('new')}>
+            <PlusIcon />
+            Add server
+          </Button>
+        </EmptyState>
       )}
       {servers && servers.length > 0 && (
         <div className="overflow-x-auto rounded-lg border">

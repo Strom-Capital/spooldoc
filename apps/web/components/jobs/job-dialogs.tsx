@@ -4,6 +4,7 @@ import { CheckCircle2Icon, CircleAlertIcon, CircleSlashIcon, PlayIcon, SaveIcon,
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { Loading } from '@/components/empty-state';
 import { ErrorNote } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -286,9 +287,7 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
             {error && <ErrorNote detail={error.detail}>{error.message}</ErrorNote>}
             <div className="max-h-80 overflow-auto rounded-md border">
               {files === null && !error ? (
-                <div className="flex items-center gap-2 p-3 text-muted-foreground text-sm">
-                  <Spinner /> Loading spooled files...
-                </div>
+                <Loading className="p-3">Loading spooled files...</Loading>
               ) : shown.length === 0 ? (
                 <p className="p-4 text-center text-muted-foreground text-sm">
                   {files && files.length > 0 ? 'No ready files this job has not processed. Turn on the switch to see the rest.' : 'The queue has no matching spooled files.'}

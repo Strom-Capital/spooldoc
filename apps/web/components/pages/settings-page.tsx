@@ -4,10 +4,12 @@ import { SaveIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
+import { Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { AI_PROVIDERS, aiProvider, DEFAULT_LOCAL_BASE_URL, EFFORTS, type AiProviderId, type Effort } from '@/lib/ai-providers';
 import { api, errorText } from '@/lib/client/api';
@@ -15,7 +17,6 @@ import type { AiSettingsView, SettingsView } from '@/lib/types';
 
 type Unit = 's' | 'min';
 
-const selectClass = 'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm dark:bg-input/30';
 
 function split(seconds: number): { value: number; unit: Unit } {
   return seconds % 60 === 0 ? { value: seconds / 60, unit: 'min' } : { value: seconds, unit: 's' };
@@ -45,15 +46,15 @@ function Interval({
       <Label htmlFor={id}>{label}</Label>
       <div className="flex gap-2">
         <Input id={id} type="number" min={1} value={value} onChange={(event) => update({ value: Number(event.target.value), unit })} className="w-28" />
-        <select
-          aria-label={`${label} unit`}
-          value={unit}
-          onChange={(event) => update({ value, unit: event.target.value as Unit })}
-          className={selectClass}
-        >
-          <option value="s">seconds</option>
-          <option value="min">minutes</option>
-        </select>
+        <Select value={unit} onValueChange={(next) => update({ value, unit: next as Unit })}>
+          <SelectTrigger aria-label={`${label} unit`} className="w-28">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="s">seconds</SelectItem>
+            <SelectItem value="min">minutes</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <p className="text-muted-foreground text-xs">{hint}</p>
     </div>
@@ -115,30 +116,35 @@ function AiSection({ saved, ai, onChange }: { saved: AiSettingsView; ai: AiDraft
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="ai-provider">Provider</Label>
-          <select
-            id="ai-provider"
-            value={ai.provider ?? ''}
-            onChange={(event) => onChange(aiDraft(saved, (event.target.value || null) as AiProviderId | null))}
-            className={selectClass}
-          >
-            <option value="">None (chat off)</option>
-            {AI_PROVIDERS.map((provider) => (
-              <option key={provider.id} value={provider.id}>
-                {provider.label}
-              </option>
-            ))}
-          </select>
+          <Select value={ai.provider ?? 'none'} onValueChange={(next) => onChange(aiDraft(saved, (next === 'none' ? null : next) as AiProviderId | null))}>
+            <SelectTrigger id="ai-provider" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None (chat off)</SelectItem>
+              {AI_PROVIDERS.map((provider) => (
+                <SelectItem key={provider.id} value={provider.id}>
+                  {provider.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         {meta && (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="ai-effort">Effort</Label>
-            <select id="ai-effort" value={ai.effort} onChange={(event) => onChange({ ...ai, effort: event.target.value as Effort })} className={selectClass}>
-              {EFFORTS.map((effort) => (
-                <option key={effort.id} value={effort.id}>
-                  {effort.label}
-                </option>
-              ))}
-            </select>
+            <Select value={ai.effort} onValueChange={(next) => onChange({ ...ai, effort: next as Effort })}>
+              <SelectTrigger id="ai-effort" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {EFFORTS.map((effort) => (
+                  <SelectItem key={effort.id} value={effort.id}>
+                    {effort.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <p className="text-muted-foreground text-xs">How much the model thinks before it answers. Models that do not reason ignore it.</p>
           </div>
         )}
@@ -265,9 +271,7 @@ export function SettingsPage() {
     <Page title="Settings" description="Settings for the whole app." className="max-w-3xl">
       {error && <ErrorNote className="mb-4">{error}</ErrorNote>}
       {!draft && !error && (
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Spinner /> Loading settings...
-        </div>
+        <Loading>Loading settings...</Loading>
       )}
       {draft && ai && settings && (
         <form onSubmit={onSubmit} className="flex flex-col gap-6">

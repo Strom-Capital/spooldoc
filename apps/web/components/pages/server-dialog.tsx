@@ -7,12 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { api, shownError, type ShownError } from '@/lib/client/api';
 import type { ServerView } from '@/lib/types';
-
-const selectClass =
-  'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30';
 
 /**
  * Add a server (`server` null) or edit one. Saving signs on first, so a wrong password
@@ -70,13 +68,18 @@ export function ServerDialog({
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="server-host">Host</Label>
             {allowedHosts.length > 0 ? (
-              <select id="server-host" name="host" required defaultValue={server?.host ?? allowedHosts[0]} className={selectClass}>
-                {allowedHosts.map((host) => (
-                  <option key={host} value={host}>
-                    {host}
-                  </option>
-                ))}
-              </select>
+              <Select name="host" required defaultValue={server?.host ?? allowedHosts[0]}>
+                <SelectTrigger id="server-host" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {allowedHosts.map((host) => (
+                    <SelectItem key={host} value={host}>
+                      {host}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             ) : (
               <Input
                 id="server-host"

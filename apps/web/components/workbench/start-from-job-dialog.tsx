@@ -3,6 +3,7 @@
 import { CopyIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { Loading } from '@/components/empty-state';
 import { ErrorNote } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -95,9 +96,7 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="start-from-job">Job</Label>
             {jobs === null && !error ? (
-              <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                <Spinner /> Loading jobs...
-              </div>
+              <Loading>Loading jobs...</Loading>
             ) : jobs && jobs.length === 0 ? (
               <p className="text-muted-foreground text-sm">There are no other jobs yet.</p>
             ) : (

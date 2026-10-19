@@ -5,19 +5,19 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { EmptyNote, ErrorNote, Page } from '@/components/page';
+import { EmptyState, Loading } from '@/components/empty-state';
+import { ErrorNote, Page } from '@/components/page';
 import { RunStatusBadge } from '@/components/run-status';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/spinner';
 import { api, errorText } from '@/lib/client/api';
 import { bytes, dateTime, duration, splfLabel } from '@/lib/client/format';
 import type { JobSummary, RunStatus, RunView } from '@/lib/types';
 import { cn } from '@/lib/utils';
-
-const selectClass = 'h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30';
 
 const STEP_LABEL: Record<string, string> = { capture: 'Capture', extract: 'Extract', render: 'Render', deliver: 'Deliver', finish: 'Finish' };
 
@@ -128,27 +128,37 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
           <Label htmlFor="filter-job" className="text-xs">
             Job
           </Label>
-          <select id="filter-job" value={job} onChange={(event) => setFilter('job', event.target.value)} className={`${selectClass} w-56`}>
-            <option value="">All jobs</option>
-            {jobs.map((j) => (
-              <option key={j.id} value={j.id}>
-                {j.name}
-              </option>
-            ))}
-          </select>
+          <Select value={job || 'all'} onValueChange={(next) => setFilter('job', next === 'all' ? '' : next)}>
+            <SelectTrigger id="filter-job" size="sm" className="w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All jobs</SelectItem>
+              {jobs.map((j) => (
+                <SelectItem key={j.id} value={j.id}>
+                  {j.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex flex-col gap-1">
           <Label htmlFor="filter-status" className="text-xs">
             Status
           </Label>
-          <select id="filter-status" value={status} onChange={(event) => setFilter('status', event.target.value)} className={`${selectClass} w-36`}>
-            <option value="">Any status</option>
-            <option value="success">Success</option>
-            <option value="warning">Warning</option>
-            <option value="failed">Failed</option>
-            <option value="skipped">Skipped</option>
-            <option value="running">Running</option>
-          </select>
+          <Select value={status || 'any'} onValueChange={(next) => setFilter('status', next === 'any' ? '' : next)}>
+            <SelectTrigger id="filter-status" size="sm" className="w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="any">Any status</SelectItem>
+              <SelectItem value="success">Success</SelectItem>
+              <SelectItem value="warning">Warning</SelectItem>
+              <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="skipped">Skipped</SelectItem>
+              <SelectItem value="running">Running</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex flex-col gap-1">
           <Label htmlFor="filter-from" className="text-xs">
@@ -171,15 +181,14 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
       </div>
       {error && <ErrorNote className="mb-4">{error}</ErrorNote>}
       {runs === null && !error && (
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Spinner /> Loading runs...
-        </div>
+        <Loading>Loading runs...</Loading>
       )}
       {runs?.length === 0 && (
-        <EmptyNote>
-          <ScrollTextIcon className="mx-auto mb-2 size-6" aria-hidden />
-          {filtered ? 'No runs match the filters.' : 'No runs yet. Use Run now in a job, or let a watching job pick up a spooled file.'}
-        </EmptyNote>
+        <EmptyState
+          icon={ScrollTextIcon}
+          title={filtered ? 'No runs match' : 'No runs yet'}
+          description={filtered ? 'Change or clear the filters.' : 'Use Run now in a job, or let a watching job pick up a spooled file.'}
+        />
       )}
       {runs && runs.length > 0 && (
         <div className="overflow-x-auto rounded-lg border">
