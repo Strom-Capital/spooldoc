@@ -1,17 +1,17 @@
 ---
 title: "Templates"
-description: "The HTML and Word templates that render each document with Carbone tags, the check Spooldoc runs before each render, assets, and how PDFs are laid out."
+description: "The HTML and Word templates that make each document with Carbone tags, the check Spooldoc runs before each render, assets, and how PDFs are laid out."
 ---
 
 A template is an ordinary HTML page with [Carbone](https://carbone.io)
-tags, such as `{d.doc.invoiceNo}`, or a Word document with the same tags
-in its text (see [Word templates](#word-templates)). Each output of a job
-has its own template. Each document the definition extracts is rendered
-through it once, to the output's formats: an HTML template makes HTML
-files, PDFs or both, and a Word template makes DOCX files, PDFs or both.
-Until you write or upload one, the starter template renders the fields in
-a header block and a table for each table, record or group. See
-[Outputs](jobs.md#outputs).
+tags, such as `{d.pageGroup.invoiceNo}`, or a Word document with the same
+tags in its text (see [Word templates](#word-templates)). A job has one
+or more templates. Each page group the definition finds becomes a
+document through every template, in that template's formats: an HTML
+template makes HTML files, PDFs or both, and a Word template makes DOCX
+files, PDFs or both. Until you write or upload one, the starter template
+renders the fields in a header block and a table for each table, record
+or group. See [Templates](jobs.md#templates).
 
 Spooldoc renders every document with a Carbone server, your own or Carbone
 Cloud. See [Carbone](carbone.md) to set one up.
@@ -19,31 +19,31 @@ Cloud. See [Carbone](carbone.md) to set one up.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/template-preview-dark.png">
-    <img src="assets/template-preview-light.png" alt="The render step of a job with two outputs: the Document output picked, with its template kind (HTML template), its PDF and HTML switches and Add output, its HTML template in an editor on the left and the rendered invoice preview on the right" width="900">
+    <img src="assets/template-preview-light.png" alt="The render step of a job with two templates: the Document template picked, with its kind (HTML template), its PDF and HTML switches and Add template, its HTML in an editor on the left and the rendered invoice preview on the right" width="900">
   </picture>
 </p>
 
 "Start from job" in the template editor's bar copies another job's
-template, HTML or Word, into the output shown, and on request its
-definition into the draft. When the other job has more than one output, pick the one to copy.
+template, HTML or Word, into the template shown, and on request its
+definition into the draft. When the other job has more than one template, pick the one to copy.
 The [AI assistant](ai-assistant.md) does the same when asked.
 
 ## The data
 
-A tag starts with `d`, the data of the document being rendered:
+A tag starts with `d`, the data of the document being made:
 
 | Path | What it is |
 |------|------------|
-| `d.doc` | The document being rendered: the fields, tables, records and groups of the [definition](definitions.md). |
-| `d.documents` | Every document of the spooled file, for page counts or totals. Sent only to templates that use it. |
-| `d.sample.splf` | The spooled file: `name`, `number`, `jobName`, `jobUser`, `jobNumber`. |
+| `d.pageGroup` | The page group the document is made from: the fields, tables, records and groups of the [definition](definitions.md). |
+| `d.pageGroups` | Every page group of the spooled file, for page counts or totals. Sent only to templates that use it. |
+| `d.splf` | The spooled file: `name`, `number`, `jobName`, `jobUser`, `jobNumber`. |
 
 ```html
-<h1>Invoice {d.doc.invoiceNo}</h1>
-<p>{d.doc.customerName}<br>{d.doc.invoiceDate:formatD('DD.MM.YYYY')}</p>
+<h1>Invoice {d.pageGroup.invoiceNo}</h1>
+<p>{d.pageGroup.customerName}<br>{d.pageGroup.invoiceDate:formatD('DD.MM.YYYY')}</p>
 <table>
-  <tr><td>{d.doc.lines[i].item}</td><td class="num">{d.doc.lines[i].amount:formatN(2)} EUR</td></tr>
-  <tr><td>{d.doc.lines[i+1]}</td></tr>
+  <tr><td>{d.pageGroup.lines[i].item}</td><td class="num">{d.pageGroup.lines[i].amount:formatN(2)} EUR</td></tr>
+  <tr><td>{d.pageGroup.lines[i+1]}</td></tr>
 </table>
 ```
 
@@ -56,8 +56,8 @@ with an `[i+1]` tag, marks where the loop ends; Carbone removes it.
 
 ```html
 <tbody>
-  <tr><td>{d.doc.lines[i].line}</td><td>{d.doc.lines[i].item}</td></tr>
-  <tr><td>{d.doc.lines[i+1]}</td></tr>
+  <tr><td>{d.pageGroup.lines[i].line}</td><td>{d.pageGroup.lines[i].item}</td></tr>
+  <tr><td>{d.pageGroup.lines[i+1]}</td></tr>
 </tbody>
 ```
 
@@ -69,8 +69,8 @@ its `[i+1]` row is an error.
 `showBegin` and `showEnd` keep a part only when the condition holds:
 
 ```html
-{d.doc.address2:ifNEM:showBegin}{d.doc.address2}<br>{d.doc.address2:showEnd}
-{d.doc.type:ifEQ('C'):showBegin}<h2>Credit note</h2>{d.doc.type:showEnd}
+{d.pageGroup.address2:ifNEM:showBegin}{d.pageGroup.address2}<br>{d.pageGroup.address2:showEnd}
+{d.pageGroup.type:ifEQ('C'):showBegin}<h2>Credit note</h2>{d.pageGroup.type:showEnd}
 ```
 
 `ifNEM` is "not empty"; `ifEM`, `ifEQ`, `ifNE`, `ifGT`, `ifGTE`, `ifLT` and
@@ -82,14 +82,14 @@ Formatters follow the path, each after a colon:
 
 | Formatter | Example | Result |
 |-----------|---------|--------|
-| `formatN` | `{d.doc.total:formatN(2)}` | `1,234.50` |
-| `formatD` | `{d.doc.invoiceDate:formatD('DD.MM.YYYY')}`, `{d.doc.invoiceDate:formatD('YYYY-MM-DD')}` | `01.10.2026`, `2026-10-01` |
-| `padl`, `padr` | `{d.doc.no:padl(8)}`, `{d.doc.no:padr(8, '.')}` | Padded to eight characters on the left, or on the right with dots |
-| `upperCase`, `lowerCase` | `{d.doc.city:upperCase}` | `HELSINKI` |
+| `formatN` | `{d.pageGroup.total:formatN(2)}` | `1,234.50` |
+| `formatD` | `{d.pageGroup.invoiceDate:formatD('DD.MM.YYYY')}`, `{d.pageGroup.invoiceDate:formatD('YYYY-MM-DD')}` | `01.10.2026`, `2026-10-01` |
+| `padl`, `padr` | `{d.pageGroup.no:padl(8)}`, `{d.pageGroup.no:padr(8, '.')}` | Padded to eight characters on the left, or on the right with dots |
+| `upperCase`, `lowerCase` | `{d.pageGroup.city:upperCase}` | `HELSINKI` |
 
 Numbers use English separators. Write a currency after the tag, as in
-`{d.doc.total:formatN(2)} EUR`, or from the data:
-`{d.doc.total:formatN(2)} {d.doc.currency}`. `formatN` without a number
+`{d.pageGroup.total:formatN(2)} EUR`, or from the data:
+`{d.pageGroup.total:formatN(2)} {d.pageGroup.currency}`. `formatN` without a number
 shows three decimals.
 
 Inside a tag, quote text with straight single quotes. Carbone prints
@@ -108,7 +108,7 @@ Spooldoc checks each template before it renders, and the Template tab
 lists each problem with its line (for a Word template, with its part:
 body, header or footer):
 
-- a tag whose field is not in the definition, such as `{d.doc.invoiceNumber}`,
+- a tag whose field is not in the definition, such as `{d.pageGroup.invoiceNumber}`,
   with the field it most likely means;
 - double quotes or curly quotes inside a tag;
 - Nunjucks, such as `{{ doc.x }}` or `{% for %}`, from Spooldoc 0.2 and older
@@ -123,7 +123,7 @@ Carbone's text under Details.
 
 ## Word templates
 
-An output can use a Word document as its template instead: you lay it out
+A template can be a Word document instead: you lay it out
 in Word, with Word's own styles, headers and footers, and type the tags
 into its text. It makes DOCX files, PDFs or both. Pick Word template in
 the render step's header.
@@ -156,16 +156,16 @@ Word panel offers your earlier file back.
   Word, Preferences, AutoCorrect, AutoFormat As You Type. The check finds
   a tag with curly quotes.
 - **The tags are the ones HTML templates use**, such as
-  `{d.doc.invoiceDate:formatD('DD.MM.YYYY')}`. Word splits a tag into
+  `{d.pageGroup.invoiceDate:formatD('DD.MM.YYYY')}`. Word splits a tag into
   several pieces when part of it is styled or typed later; Spooldoc and
   Carbone read each paragraph as one text, so that is fine. A tag cannot
   go across two paragraphs.
 - **Repeat a table row** with a row of `[i]` tags and, below it, a row
-  with `{d.doc.lines[i+1]}` in its first cell, as in HTML. Keep a loop
+  with `{d.pageGroup.lines[i+1]}` in its first cell, as in HTML. Keep a loop
   inside one part: the body, a header or a footer.
 - **An optional line** is hidden with its line break when its field is
-  empty: `{d.doc.address1}{d.doc.address2:ifEM:hideBegin}`, then a line
-  break (Shift+Enter), then `{d.doc.address2}{d.doc.address2:hideEnd}`.
+  empty: `{d.pageGroup.address1}{d.pageGroup.address2:ifEM:hideBegin}`, then a line
+  break (Shift+Enter), then `{d.pageGroup.address2}{d.pageGroup.address2:hideEnd}`.
   The starter template writes its fields this way.
 - **Pictures**, such as a logo, are inserted in Word and are the same in
   every document. Set each to In line with text (Picture Format, Wrap
@@ -247,22 +247,22 @@ the PDF only: Spooldoc hides them in HTML output.
 ```html
 <carbone-pdf-footer>
   <div style="font-size: 8pt; width: 100%; text-align: center">
-    Invoice {d.doc.invoiceNo}, page <span class="pageNumber"></span> of <span class="totalPages"></span>
+    Invoice {d.pageGroup.invoiceNo}, page <span class="pageNumber"></span> of <span class="totalPages"></span>
   </div>
 </carbone-pdf-footer>
 ```
 
 ## Files
 
-Each document becomes a file named after the definition's `output.name`,
-such as `invoice-260102.pdf`, `invoice-260102.html` or
-`invoice-260102.docx`, or after the
-spooled file and a number when there is no name. The files of every
-output but the first add the output's name: `invoice-260102-lines.pdf`
-for an output named Lines. See [Destinations](destinations.md).
+Each document becomes a file in each of its template's formats, named
+after the definition's `output.name`, such as `invoice-260102.pdf`,
+`invoice-260102.html` or `invoice-260102.docx`, or after the spooled file
+and a number when there is no name. The files of every template but the
+first add the template's name: `invoice-260102-lines.pdf` for a template
+named Lines. See [Destinations](destinations.md).
 
-A template with problems fails the run, and the error names the output
-and the lines: `The "Lines" output's template has 1 problem. Line 12: ...`,
-or for a Word template the parts: `... has 1 problem. Body: ...`. A Word
+A template with problems fails the run, and the error names the template
+and the lines: `The "Lines" template has 1 problem. Line 12: ...`, or for
+a Word template the parts: `... has 1 problem. Body: ...`. A Word
 template whose file is gone fails the run and says to upload it again.
-An error from Carbone names the output and the document.
+An error from Carbone names the template and the page group.

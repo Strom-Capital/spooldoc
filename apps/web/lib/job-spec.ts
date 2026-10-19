@@ -14,8 +14,8 @@ export const queueRefSchema = z.object({ library: ibmiName, name: ibmiName });
 export type QueueRefSpec = z.infer<typeof queueRefSchema>;
 
 /** The files a job makes from each document. */
-export const OUTPUT_FORMATS = ['pdf', 'html', 'docx'] as const;
-export type OutputFormat = (typeof OUTPUT_FORMATS)[number];
+export const FORMATS = ['pdf', 'html', 'docx'] as const;
+export type Format = (typeof FORMATS)[number];
 
 /** The kinds of template: HTML, written in the app, or a Word file made in Word and uploaded. */
 export const TEMPLATE_KINDS = ['html', 'docx'] as const;
@@ -25,17 +25,17 @@ export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
 export const HTML_FORMATS = ['pdf', 'html'] as const;
 
 /** The formats each kind of template renders to. */
-export const KIND_FORMATS: Record<TemplateKind, readonly OutputFormat[]> = { html: HTML_FORMATS, docx: ['pdf', 'docx'] };
+export const KIND_FORMATS: Record<TemplateKind, readonly Format[]> = { html: HTML_FORMATS, docx: ['pdf', 'docx'] };
 
 /** How each format is named in the app and stored as a file. */
-export const FORMAT_FILES: Record<OutputFormat, { label: string; extension: string; contentType: string }> = {
+export const FORMAT_FILES: Record<Format, { label: string; extension: string; contentType: string }> = {
   pdf: { label: 'PDF', extension: 'pdf', contentType: 'application/pdf' },
   html: { label: 'HTML', extension: 'html', contentType: 'text/html; charset=utf-8' },
   docx: { label: 'DOCX', extension: 'docx', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
 };
 
 /** "PDF and HTML". */
-export function formatList(formats: readonly OutputFormat[]): string {
+export function formatList(formats: readonly Format[]): string {
   return formats.map((format) => FORMAT_FILES[format].label).join(' and ');
 }
 
@@ -72,124 +72,122 @@ export function ibmiFilter(filter: SourceFilter): { name?: string; userData?: st
   return { name: value(filter.splf), userData: value(filter.userData), jobName: value(filter.jobName), jobUser: value(filter.jobUser), formType: value(filter.formType) };
 }
 
-/** An output's id: lowercase letters, digits and dashes. */
-export const OUTPUT_ID = /^[a-z0-9-]{1,40}$/;
+/** A template's id: lowercase letters, digits and dashes. */
+export const TEMPLATE_ID = /^[a-z0-9-]{1,40}$/;
+
+const htmlContent = z.object({ kind: z.literal('html'), source: z.string().max(500_000).nullable().default(null) });
+const docxContent = z.object({ kind: z.literal('docx'), fileId: z.string().uuid().nullable().default(null) });
 
 /**
- * An output's template. HTML: `source: null` is the starter template generated from the
- * definition. Word: `fileId` is an uploaded template file, which never changes, or
- * null for the Word starter template generated from the definition.
+ * What a template lays out with. HTML: `source: null` is the starter template generated
+ * from the definition. Word: `fileId` is an uploaded template file, which never changes,
+ * or null for the Word starter template generated from the definition.
  */
-const templateSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('html'),
-    source: z
-      .string()
-      .max(500_000)
-      .nullable()
-      .default(null),
-  }),
-  z.object({ kind: z.literal('docx'), fileId: z.string().uuid().nullable().default(null) }),
-]);
-export type OutputTemplate = z.infer<typeof templateSchema>;
+export type TemplateContent = z.infer<typeof htmlContent> | z.infer<typeof docxContent>;
 
-/** One set of files a job makes from each document: a template and the formats it renders to. */
-const outputSchema = z
-  .object({
-    id: z.string().regex(OUTPUT_ID, 'Use lowercase letters, digits and dashes for an output id'),
-    label: z.string().trim().min(1, 'Name the output').max(40, 'Use at most 40 characters for an output name'),
-    template: templateSchema,
-    formats: z
-      .array(z.enum(OUTPUT_FORMATS))
-      .min(1, 'Pick at least one format')
-      .transform((formats) => OUTPUT_FORMATS.filter((f) => formats.includes(f))),
-  })
-  .superRefine((output, ctx) => {
-    const allowed = KIND_FORMATS[output.template.kind];
-    const other = output.formats.find((format) => !allowed.includes(format));
+const templateFields = {
+  id: z.string().regex(TEMPLATE_ID, 'Use lowercase letters, digits and dashes for a template id'),
+  name: z.string().trim().min(1, 'Name the template').max(40, 'Use at most 40 characters for a template name'),
+  formats: z
+    .array(z.enum(FORMATS))
+    .min(1, 'Pick at least one format')
+    .transform((formats) => FORMATS.filter((f) => formats.includes(f))),
+};
+
+/** One template of a job: what it lays out with, and the formats it makes from each page group. */
+const templateSchema = z
+  .discriminatedUnion('kind', [htmlContent.extend(templateFields), docxContent.extend(templateFields)])
+  .superRefine((template, ctx) => {
+    const allowed = KIND_FORMATS[template.kind];
+    const other = template.formats.find((format) => !allowed.includes(format));
     if (other) {
       ctx.addIssue({
         code: 'custom',
         path: ['formats'],
-        message: `${output.template.kind === 'docx' ? 'A Word' : 'An HTML'} template makes ${formatList(allowed)} files, not ${FORMAT_FILES[other].label}.`,
+        message: `${template.kind === 'docx' ? 'A Word' : 'An HTML'} template makes ${formatList(allowed)} files, not ${FORMAT_FILES[other].label}.`,
       });
     }
   });
-export type JobOutput = z.infer<typeof outputSchema>;
+export type JobTemplate = z.infer<typeof templateSchema>;
 
-/**
- * The output with another template, and the formats that kind makes: the ones it kept,
- * or PDF when none is left.
- */
-export function withTemplate(output: JobOutput, template: OutputTemplate): JobOutput {
-  const allowed = KIND_FORMATS[template.kind];
-  const formats = output.formats.filter((format) => allowed.includes(format));
-  return { ...output, template, formats: formats.length > 0 ? formats : ['pdf'] };
+/** A template's content alone, without its id, name and formats. */
+export function templateContent(template: TemplateContent): TemplateContent {
+  return template.kind === 'html' ? { kind: 'html', source: template.source } : { kind: 'docx', fileId: template.fileId };
 }
 
-/** True when the output has a template of its own: HTML that was written, or an uploaded Word file. */
-export function hasOwnTemplate(template: OutputTemplate): boolean {
+/**
+ * The template with other content, and the formats that kind makes: the ones it kept,
+ * or PDF when none is left.
+ */
+export function withContent(template: JobTemplate, content: TemplateContent): JobTemplate {
+  const allowed = KIND_FORMATS[content.kind];
+  const formats = template.formats.filter((format) => allowed.includes(format));
+  return { id: template.id, name: template.name, ...templateContent(content), formats: formats.length > 0 ? formats : ['pdf'] };
+}
+
+/** True when the template has content of its own: HTML that was written, or an uploaded Word file. */
+export function hasOwnContent(template: TemplateContent): boolean {
   return template.kind === 'html' ? template.source !== null : template.fileId !== null;
 }
 
-/** The output of a new job, and of a job saved before a job had several. */
-function firstOutput(): JobOutput {
-  return { id: 'main', label: 'Document', template: { kind: 'html', source: null }, formats: ['pdf'] };
+/** The template of a new job. */
+function firstTemplate(): JobTemplate {
+  return { id: 'template-1', name: 'Template 1', kind: 'html', source: null, formats: ['pdf'] };
 }
 
 /**
- * The output with this id, or else this label (any case); the first output when `key` is not given.
- * Null when there is no such output.
+ * The template with this id, or else this name (any case); the first template when `key` is not given.
+ * Null when there is no such template.
  */
-export function findOutput(outputs: JobOutput[], key?: string | null): JobOutput | null {
+export function findTemplate(templates: JobTemplate[], key?: string | null): JobTemplate | null {
   if (key === undefined || key === null) {
-    return outputs[0] ?? null;
+    return templates[0] ?? null;
   }
-  const label = key.trim().toLowerCase();
-  return outputs.find((output) => output.id === key) ?? outputs.find((output) => output.label.toLowerCase() === label) ?? null;
+  const name = key.trim().toLowerCase();
+  return templates.find((template) => template.id === key) ?? templates.find((template) => template.name.toLowerCase() === name) ?? null;
 }
 
-/** An output's label as part of a file name: "Order lines" is `order-lines`. Its id when nothing is left. */
-export function outputSlug(output: Pick<JobOutput, 'id' | 'label'>): string {
-  const slug = output.label
+/** A template's name as part of a file name: "Order lines" is `order-lines`. Its id when nothing is left. */
+export function templateSlug(template: Pick<JobTemplate, 'id' | 'name'>): string {
+  const slug = template.name
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 40);
-  return slug || output.id;
+  return slug || template.id;
 }
 
 /**
- * A document's file name (without extension) for one output: the first output's files keep
- * the document's name, the others add their label, as in `invoice-260101-lines`.
+ * A document's file name (without extension) from one template: the first template's files
+ * keep the document's name, the others add their name, as in `invoice-260101-lines`.
  */
-export function outputFileName(documentName: string, outputs: Pick<JobOutput, 'id'>[], output: Pick<JobOutput, 'id' | 'label'>): string {
-  return outputs[0]?.id === output.id ? documentName : `${documentName}-${outputSlug(output)}`;
+export function templateFileName(documentName: string, templates: Pick<JobTemplate, 'id'>[], template: Pick<JobTemplate, 'id' | 'name'>): string {
+  return templates[0]?.id === template.id ? documentName : `${documentName}-${templateSlug(template)}`;
 }
 
-/** True when another output than `except` already has this label (any case). */
-export function labelTaken(outputs: JobOutput[], label: string, except?: string): boolean {
-  const wanted = label.trim().toLowerCase();
-  return outputs.some((output) => output.id !== except && output.label.toLowerCase() === wanted);
+/** True when another template than `except` already has this name (any case). */
+export function nameTaken(templates: JobTemplate[], name: string, except?: string): boolean {
+  const wanted = name.trim().toLowerCase();
+  return templates.some((template) => template.id !== except && template.name.toLowerCase() === wanted);
 }
 
 /**
- * A new output for a job that has `outputs`: the label given, or "Output 2" and so on,
- * an id made from the label that no other output has, the starter template and PDF.
+ * A new template for a job that has `templates`: the name given, or "Template 2" and so on,
+ * an id made from the name that no other template has, the starter HTML template and PDF.
  */
-export function newOutput(outputs: JobOutput[], label?: string, formats: OutputFormat[] = ['pdf']): JobOutput {
-  let name = label?.trim();
-  if (!name) {
-    let n = outputs.length + 1;
-    while (labelTaken(outputs, `Output ${n}`)) n++;
-    name = `Output ${n}`;
+export function newTemplate(templates: JobTemplate[], name?: string, formats: Format[] = ['pdf']): JobTemplate {
+  let label = name?.trim();
+  if (!label) {
+    let n = templates.length + 1;
+    while (nameTaken(templates, `Template ${n}`)) n++;
+    label = `Template ${n}`;
   }
-  const base = outputSlug({ id: 'output', label: name });
+  const base = templateSlug({ id: 'template', name: label });
   let id = base;
-  for (let n = 2; outputs.some((output) => output.id === id); n++) id = `${base.slice(0, 36)}-${n}`;
-  return { id, label: name, template: { kind: 'html', source: null }, formats: OUTPUT_FORMATS.filter((f) => formats.includes(f)) };
+  for (let n = 2; templates.some((template) => template.id === id); n++) id = `${base.slice(0, 36)}-${n}`;
+  return { id, name: label, kind: 'html', source: null, formats: FORMATS.filter((f) => formats.includes(f)) };
 }
 
 /** What happens to a spooled file after every document was delivered. */
@@ -217,8 +215,8 @@ export const jobSpecSchema = z.object({
     .default({ mode: 'manual', backlog: false, includeHeld: false }),
   extract: z.object({ definition: z.string().max(200_000).default('') }).default({ definition: '' }),
   render: z
-    .object({ outputs: z.array(outputSchema).min(1, 'Add at least one output') })
-    .default(() => ({ outputs: [firstOutput()] })),
+    .object({ templates: z.array(templateSchema).min(1, 'Add at least one template') })
+    .default(() => ({ templates: [firstTemplate()] })),
   destination: z.object({ destinationId: z.string().uuid().nullable().default(null) }).default({ destinationId: null }),
   finish: z
     .object({ action: z.enum(FINISH_ACTIONS).default('hold'), queue: queueRefSchema.nullable().default(null) })
@@ -246,13 +244,13 @@ export function missingParts(spec: JobSpec): string[] {
   const missing: string[] = [];
   if (!spec.source.serverId || !spec.source.library || !spec.source.queue) missing.push('Source: pick a server and an output queue.');
   if (!spec.extract.definition.trim()) missing.push('Extract: write a definition.');
-  const outputs = spec.render.outputs;
+  const templates = spec.render.templates;
   const twice = new Set<string>();
-  for (const [index, output] of outputs.entries()) {
-    if (outputs.findIndex((other) => other.id === output.id) < index) {
-      twice.add(`Render: two outputs have the id "${output.id}". Give each output its own id.`);
-    } else if (labelTaken(outputs.slice(0, index), output.label)) {
-      twice.add(`Render: two outputs are named "${output.label}". Give each output its own name.`);
+  for (const [index, template] of templates.entries()) {
+    if (templates.findIndex((other) => other.id === template.id) < index) {
+      twice.add(`Render: two templates have the id "${template.id}". Give each template its own id.`);
+    } else if (nameTaken(templates.slice(0, index), template.name)) {
+      twice.add(`Render: two templates are named "${template.name}". Give each template its own name.`);
     }
   }
   missing.push(...twice);

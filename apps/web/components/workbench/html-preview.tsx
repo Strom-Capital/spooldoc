@@ -10,7 +10,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { shownError, type ShownError } from '@/lib/client/api';
 import { download, postForFile } from '@/lib/client/download';
-import { DocumentSelect } from './document-select';
+import { PageGroupSelect } from './page-group-select';
 import { useWorkbench } from './workbench-provider';
 
 /** A PDF in base64 as an object URL, revoked when it changes or the pane goes. */
@@ -24,7 +24,7 @@ function usePdfUrl(base64: string | undefined): string | null {
 }
 
 /**
- * The current document as rendered: an HTML template's HTML in a sandboxed iframe (no
+ * The current page group's document as rendered: an HTML template's HTML in a sandboxed iframe (no
  * scripts), a Word template's PDF in the browser's PDF viewer. Buttons download it as
  * HTML or as a PDF, or a Word template's as a PDF or a DOCX, rendered by Carbone from the
  * text in the editors. Without a working Carbone server it says where to set one up.
@@ -33,11 +33,11 @@ function usePdfUrl(base64: string | undefined): string | null {
  * @param fileName - The file name (without extension) of a document's files, from its name
  */
 export function HtmlPreview({ header, fileName = (name) => name }: { header?: ReactNode; fileName?(documentName: string): string }) {
-  const { render, jobId, documentIndex, yaml, template, templateRequest, outputId } = useWorkbench();
+  const { render, jobId, pageGroupIndex, yaml, content, templateRequest, templateId } = useWorkbench();
   const { rendering } = useAppInfo();
   const [busy, setBusy] = useState<'pdf' | 'docx' | null>(null);
   const [error, setError] = useState<ShownError | null>(null);
-  const word = template.kind === 'docx';
+  const word = content.kind === 'docx';
   const pdfUrl = usePdfUrl(word ? render?.pdf : undefined);
   const rendered = word ? !!render?.pdf : !!render?.html;
   const ready = rendering && rendered;
@@ -47,7 +47,7 @@ export function HtmlPreview({ header, fileName = (name) => name }: { header?: Re
       : !rendered
         ? 'Nothing to print yet: fix the definition or the template first.'
         : `Download this document as ${format}`;
-  const name = () => fileName(render?.names?.[documentIndex] ?? `document-${documentIndex + 1}`);
+  const name = () => fileName(render?.names?.[pageGroupIndex] ?? `document-${pageGroupIndex + 1}`);
 
   /** The rendered HTML of this document as a file, named like the PDF. */
   function onHtml() {
@@ -64,7 +64,7 @@ export function HtmlPreview({ header, fileName = (name) => name }: { header?: Re
     }
     setBusy(format);
     try {
-      await postForFile(`/api/jobs/${jobId}/preview-file`, { yaml, ...templateRequest, document: documentIndex, outputId, format }, `${name()}.${format}`);
+      await postForFile(`/api/jobs/${jobId}/preview-file`, { yaml, ...templateRequest, pageGroup: pageGroupIndex, templateId, format }, `${name()}.${format}`);
     } catch (err) {
       setError(shownError(err));
     } finally {
@@ -90,7 +90,7 @@ export function HtmlPreview({ header, fileName = (name) => name }: { header?: Re
     <section className="flex h-full min-h-0 flex-col" aria-label="Preview">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b px-2 text-sm">
         {header ?? <span className="font-medium">Preview</span>}
-        <DocumentSelect />
+        <PageGroupSelect />
         <div className="ml-auto flex items-center gap-2">
           {word ? (
             fileButton('docx', 'DOCX')
@@ -124,7 +124,7 @@ export function HtmlPreview({ header, fileName = (name) => name }: { header?: Re
           <p className="p-2 text-muted-foreground text-sm">
             {render?.template?.error
               ? 'The template has errors; see the Template tab.'
-              : 'Nothing to show yet: the preview needs a definition that finds documents.'}
+              : 'Nothing to show yet: the preview needs a definition that finds page groups.'}
           </p>
         )}
       </div>

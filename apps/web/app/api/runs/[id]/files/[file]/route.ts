@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { guard } from '@/lib/server/auth';
 import { getDb } from '@/lib/server/db';
-import { runOutputs } from '@/lib/server/db/schema';
+import { runFiles } from '@/lib/server/db/schema';
 import { errorResponse } from '@/lib/server/http';
 import { UUID } from '@/lib/server/servers';
 
@@ -19,8 +19,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
   const [row] = await getDb()
     .select()
-    .from(runOutputs)
-    .where(and(eq(runOutputs.runId, id), eq(runOutputs.id, file)));
+    .from(runFiles)
+    .where(and(eq(runFiles.runId, id), eq(runFiles.id, file)));
   if (!row) {
     return errorResponse(404, 'File not found.');
   }
@@ -31,7 +31,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       'Content-Length': String(row.size),
       'Content-Disposition': `${inline ? 'inline' : 'attachment'}; filename="${row.name.replace(/["\\\r\n]/g, '_')}"`,
       'Cache-Control': 'private, no-store',
-      // HTML outputs come from templates: opened here they may not run scripts or load anything.
+      // HTML files come from templates: opened here they may not run scripts or load anything.
       'Content-Security-Policy': "sandbox; default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'",
       'X-Content-Type-Options': 'nosniff',
     },

@@ -40,13 +40,13 @@ function joinPages(pages: SamplePage[], width?: number): Joined {
   return { text, segments };
 }
 
-interface XmlDocSpan {
+interface XmlGroupSpan {
   start: number;
   end: number;
 }
 
-function findDocuments(text: string, rootName: string): XmlDocSpan[] {
-  const out: XmlDocSpan[] = [];
+function findPageGroups(text: string, rootName: string): XmlGroupSpan[] {
+  const out: XmlGroupSpan[] = [];
   const esc = rootName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const open = new RegExp(`<${esc}(?=[\\s/>])`, "g");
   const close = `</${rootName}>`;
@@ -68,13 +68,13 @@ function findDocuments(text: string, rootName: string): XmlDocSpan[] {
 }
 
 /**
- * Finds each `<root ...>...</root>` document in the joined page text. Text outside a root
+ * Finds each `<root ...>...</root>` page group in the joined page text. Text outside a root
  * element, such as a printer footer line or an XML declaration, is dropped. Entities are
  * left as they are for the XML parser.
  */
-export function joinXmlDocuments(pages: SamplePage[], rootName: string, width?: number): string[] {
+export function joinXmlPageGroups(pages: SamplePage[], rootName: string, width?: number): string[] {
   const { text } = joinPages(pages, width);
-  return findDocuments(text, rootName).map((d) => text.slice(d.start, d.end));
+  return findPageGroups(text, rootName).map((d) => text.slice(d.start, d.end));
 }
 
 interface Element {
@@ -135,15 +135,15 @@ function textOf(v: unknown): string | undefined {
   return undefined;
 }
 
-/** Extracts documents from XML printed into a spooled file. Same result shape as `extract`. */
+/** Extracts the page groups of XML printed into a spooled file. Same result shape as `extract`. */
 export function extractXml(def: Definition, sample: Sample): ExtractResult {
   const xml = def.xml;
   const hits: FieldHit[] = [];
   const warnings: string[] = [];
-  if (!xml) return { documents: [], hits, warnings: ["definition has no xml section"] };
+  if (!xml) return { pageGroups: [], hits, warnings: ["definition has no xml section"] };
   const joined = joinPages(sample.pages, sample.attributes.pageWidth);
-  const spans = findDocuments(joined.text, xml.document);
-  if (spans.length === 0) warnings.push(`no <${xml.document}> element found`);
+  const spans = findPageGroups(joined.text, xml.pageGroup);
+  if (spans.length === 0) warnings.push(`no <${xml.pageGroup}> element found`);
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: "@",
@@ -161,37 +161,37 @@ export function extractXml(def: Definition, sample: Sample): ExtractResult {
     return seg ? { page: seg.page, line: seg.line, column: offset - seg.offset + 1 } : { page: 0, line: 0, column: 0 };
   };
 
-  const documents = spans.map((span, doc) => {
+  const pageGroups = spans.map((span, group) => {
     const out: Record<string, unknown> = {};
     const source = joined.text.slice(span.start, span.end);
     let root: unknown;
     try {
-      root = (parser.parse(source) as Record<string, unknown>)[xml.document];
+      root = (parser.parse(source) as Record<string, unknown>)[xml.pageGroup];
     } catch (err) {
-      warnings.push(`document ${doc + 1}: XML does not parse: ${err instanceof Error ? err.message : String(err)}`);
+      warnings.push(`page group ${group + 1}: XML does not parse: ${err instanceof Error ? err.message : String(err)}`);
       root = undefined;
     }
     const elements = scanElements(source, span.start);
-    const rootPrefix = `${xml.document}/`;
+    const rootPrefix = `${xml.pageGroup}/`;
     const hitFor = (name: string, el: Element | undefined, value: string | undefined): void => {
       if (value === undefined) {
         const page = el ? locate(el.start).page : (locate(span.start).page);
-        hits.push({ document: doc, name, page, line: 0, column: 0, length: 0, value: "", status: "missing" });
-        warnings.push(`document ${doc + 1}: field ${name} not found`);
+        hits.push({ pageGroup: group, name, page, line: 0, column: 0, length: 0, value: "", status: "missing" });
+        warnings.push(`page group ${group + 1}: field ${name} not found`);
         return;
       }
       const status = value.trim() === "" ? "empty" : "found";
       if (!el) {
-        hits.push({ document: doc, name, page: locate(span.start).page, line: 0, column: 0, length: 0, value, status });
+        hits.push({ pageGroup: group, name, page: locate(span.start).page, line: 0, column: 0, length: 0, value, status });
         return;
       }
       const at = locate(el.start);
-      hits.push({ document: doc, name, page: at.page, line: at.line, column: at.column, length: el.tagLength, value, status });
+      hits.push({ pageGroup: group, name, page: at.page, line: at.line, column: at.column, length: el.tagLength, value, status });
     };
     const typed = (name: string, value: string | undefined, type: ValueType | undefined): unknown => {
       if (value === undefined) return null;
       const r = convertValue(value.trim(), type);
-      if (!r.ok) warnings.push(`document ${doc + 1}: ${name} value ${JSON.stringify(value)} is not a valid ${type}`);
+      if (!r.ok) warnings.push(`page group ${group + 1}: ${name} value ${JSON.stringify(value)} is not a valid ${type}`);
       return r.value;
     };
 
@@ -224,5 +224,5 @@ export function extractXml(def: Definition, sample: Sample): ExtractResult {
     }
     return out;
   });
-  return { documents, hits, warnings };
+  return { pageGroups, hits, warnings };
 }

@@ -12,7 +12,7 @@ const montserrat = Montserrat({ subsets: ['latin'], weight: ['600'], variable: '
 
 export const metadata: Metadata = {
   title: { default: 'Spooldoc', template: '%s | Spooldoc' },
-  description: 'Turn IBM i spooled files into JSON documents and render them with templates.',
+  description: 'Turn IBM i spooled files into documents with a definition and templates.',
   icons: {
     icon: [
       { url: '/brand/spooldoc-favicon-light.svg', type: 'image/svg+xml', media: '(prefers-color-scheme: light)' },

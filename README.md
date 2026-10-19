@@ -17,10 +17,10 @@
 
 Spooled files into documents, for IBM i. Open output management.
 
-Spooldoc watches the output queues of your IBM i, turns each spooled file
-into a JSON document with a definition you write in YAML, renders it with an
-ordinary HTML template into PDF or HTML, or with a Word template into DOCX or
-PDF, and delivers the files. The JSON
+Spooldoc watches the output queues of your IBM i, splits each spooled file
+into page groups and reads each into JSON with a definition you write in
+YAML, makes documents of them with ordinary HTML templates (PDF or HTML) or
+Word templates (DOCX or PDF), and delivers the files. The JSON
 keeps reading the page and laying out the document apart, so a template
 never deals with lines and columns and a new look is just a new template. An AI
 assistant proposes the definition and the template from a sample spooled
@@ -33,7 +33,7 @@ Programs on the IBM i print to output queues as they always have. Spooldoc
 connects through jt400, lists the queues, and runs a job for every new
 spooled file: in real time through a data queue on the output queue, or by
 polling. A run reads the spooled file, parses the *SCS data, extracts the
-documents, renders each one and delivers the files, then holds, moves,
+page groups, makes a document of each with every template and delivers the files, then holds, moves,
 deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 
 <p align="center">
@@ -50,7 +50,7 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 - **Jobs as pipelines**: source, trigger, extract, render, destination,
   finish. Saved as versions, run on demand or by watching the queue.
 - **Definitions in YAML**: fields by label, pattern or position, tables,
-  multi-line records, split keys for documents printed back to back, and
+  multi-line records, split keys for page groups printed back to back, and
   XML-in-spool.
 - **HTML and Word templates**: [Carbone](https://carbone.io) tags with your
   logos, images and fonts, rendered to PDF, HTML or DOCX by a Carbone server

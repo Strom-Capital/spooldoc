@@ -112,10 +112,10 @@ describe('assets', () => {
     expect((await assetResolver())('logo')).toBe(`data:image/svg+xml;base64,${SVG.toString('base64')}`);
   });
 
-  it('lists the jobs with an output whose template prints it', async () => {
+  it('lists the jobs with a template that prints it', async () => {
     const serverId = await insertServer();
-    const lines = { id: 'lines', label: 'Lines', template: { kind: 'html' as const, source: `<img src="{asset('logo')}">` }, formats: ['pdf' as const] };
-    const jobId = await insertJob(serverId, { render: { outputs: [{ ...lines, id: 'main', label: 'Document', template: { kind: 'html', source: null } }, lines] } });
+    const lines = { id: 'lines', name: 'Lines', kind: 'html' as const, source: `<img src="{asset('logo')}">`, formats: ['pdf' as const] };
+    const jobId = await insertJob(serverId, { render: { templates: [{ ...lines, id: 'main', name: 'Document', kind: 'html', source: null }, lines] } });
     await insertJob(serverId);
     await create('logo', PNG);
     await create('stamp', PNG);

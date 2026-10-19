@@ -20,13 +20,14 @@ export interface RenderResult {
   /** Carbone is not connected or did not answer, so nothing was rendered. */
   carbone?: { error: string; detail?: string };
   extract?: ExtractResult;
-  /** One name per extracted document, from the definition output name. */
+  /** The name of each page group's document, from the definition's output name. */
   names?: string[];
   /** The rendered HTML, from an HTML template. */
   html?: string;
   /** The rendered PDF in base64, from a Word template. */
   pdf?: string;
-  document: number;
+  /** 0-based index of the rendered page group. */
+  pageGroup: number;
   /** Why the definition's `match` rules do not accept this file (runs skip such files). */
   mismatch?: string[];
   errors: string[];
@@ -45,12 +46,12 @@ export function pageLines(page: SamplePage, width: number): string[] {
 
 /** A stable key for a hit. */
 export function hitKey(hit: FieldHit): string {
-  return `${hit.document}:${hit.name}:${hit.page}:${hit.line}:${hit.column}`;
+  return `${hit.pageGroup}:${hit.name}:${hit.page}:${hit.line}:${hit.column}`;
 }
 
-/** `documents[0].invoiceNo = 260101` */
+/** `pageGroups[0].invoiceNo = 260101` */
 export function hitLabel(hit: FieldHit): string {
-  return `documents[${hit.document}].${hit.name} = ${hit.value || (hit.status === 'missing' ? '(missing)' : '(empty)')}`;
+  return `pageGroups[${hit.pageGroup}].${hit.name} = ${hit.value || (hit.status === 'missing' ? '(missing)' : '(empty)')}`;
 }
 
 /** The `type:` value of definition YAML, read with a regular expression (no YAML parser in the browser). */

@@ -70,27 +70,27 @@ export interface RenderResult {
   /** Carbone is not connected or did not answer, so nothing was rendered. */
   carbone?: { error: string; detail?: string };
   extract?: ExtractResult;
-  /** One name per extracted document, from the definition's `output.name`. */
+  /** The name of each page group's document, from the definition's `output.name`. */
   names?: string[];
-  /** The rendered HTML of document `document`, from an HTML template. */
+  /** The rendered HTML of page group `pageGroup`'s document, from an HTML template. */
   html?: string;
-  /** Document `document` as a PDF in base64, from a Word template. */
+  /** Page group `pageGroup`'s document as a PDF in base64, from a Word template. */
   pdf?: string;
-  /** 0-based index of the rendered document. */
-  document: number;
+  /** 0-based index of the rendered page group. */
+  pageGroup: number;
   /** Why the definition's `match` rules do not accept this file (runs skip such files). */
   mismatch?: string[];
   errors: string[];
 }
 
-/** An output's template for `renderSample`: HTML (null for the starter template) or a Word file (null for the starter). */
+/** A template's content for `renderSample`: HTML (null for the starter template) or a Word file (null for the starter). */
 export type SampleTemplate = { kind: 'html'; source: string | null } | { kind: 'docx'; file: TemplateFileRow | null };
 
-/** The definition, the template and the document to render. */
+/** The definition, the template and the page group to render. */
 export interface RenderInput {
   yaml: string;
   template: SampleTemplate;
-  document?: number;
+  pageGroup?: number;
   /** Resolves `{asset('name')}` in the template. */
   asset?: AssetResolver;
   /** The uploaded asset names, for the tag check. */
@@ -142,11 +142,11 @@ function renderError(result: RenderResult, error: unknown): string {
  * `errors` and on the part it belongs to; nothing is thrown.
  *
  * @param sample - The captured spooled file
- * @param input - Definition YAML, the template, the document index and the renderer
+ * @param input - Definition YAML, the template, the page group index and the renderer
  */
 export async function renderSample(sample: Sample, input: RenderInput): Promise<RenderResult> {
   const errors: string[] = [];
-  const result: RenderResult = { sample: sampleView(sample), document: 0, errors };
+  const result: RenderResult = { sample: sampleView(sample), pageGroup: 0, errors };
   const yaml = input.yaml;
   if (!yaml.trim()) {
     return result;
@@ -183,12 +183,12 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
     errors.push(`Extraction failed: ${message(error)}`);
     return result;
   }
-  const documents = result.extract.documents;
-  result.names = documents.map((doc, i) => documentName(def, doc, i));
-  const index = Math.min(Math.max(0, Math.trunc(input.document ?? 0)), Math.max(0, documents.length - 1));
-  result.document = index;
-  const doc = documents[index];
-  if (!doc || !result.template) {
+  const pageGroups = result.extract.pageGroups;
+  result.names = pageGroups.map((group, i) => documentName(def, group, i));
+  const index = Math.min(Math.max(0, Math.trunc(input.pageGroup ?? 0)), Math.max(0, pageGroups.length - 1));
+  result.pageGroup = index;
+  const group = pageGroups[index];
+  if (!group || !result.template) {
     return result;
   }
 
@@ -228,10 +228,10 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
   }
   try {
     if (prepared.kind === 'html') {
-      const out = await input.renderer({ template: prepared.html, data: templateData(prepared.html, doc, documents, sample), format: 'html', asset: input.asset });
+      const out = await input.renderer({ template: prepared.html, data: templateData(prepared.html, group, pageGroups, sample), format: 'html', asset: input.asset });
       result.html = Buffer.from(out).toString('utf8');
     } else {
-      const data = templateData(prepared.read, doc, documents, sample);
+      const data = templateData(prepared.read, group, pageGroups, sample);
       const out = await input.renderer({ kind: 'docx', template: prepared.bytes, data, format: 'pdf', converter: docxConverter(prepared.read) });
       result.pdf = Buffer.from(out).toString('base64');
     }

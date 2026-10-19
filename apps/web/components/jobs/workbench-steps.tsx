@@ -10,39 +10,39 @@ import { PaneTabs, SplitPanes } from '@/components/workbench/split-panes';
 import { TemplateEditor } from '@/components/workbench/template-editor';
 import { useWorkbench, WorkbenchProvider } from '@/components/workbench/workbench-provider';
 import { Spinner } from '@/components/ui/spinner';
-import { outputFileName, withTemplate, type OutputTemplate } from '@/lib/job-spec';
+import { templateFileName, withContent, type TemplateContent } from '@/lib/job-spec';
 import { useJob } from './job-provider';
-import { OutputControls } from './output-controls';
+import { TemplateControls } from './template-controls';
 import { PreviewPicker } from './preview-picker';
 
-/** The workbench state for the job's spec, the picked output and the preview spooled file, around the builder. */
+/** The workbench state for the job's spec, the picked template and the preview spooled file, around the builder. */
 export function JobWorkbench({ children }: { children: React.ReactNode }) {
   const { job, spec, readOnly, updateDraft, refresh } = useJob();
-  const outputs = spec.render.outputs;
+  const templates = spec.render.templates;
   const [picked, setPicked] = useState<string | null>(null);
-  // A picked output that is gone (removed, or not in the version shown) falls back to the first.
-  const output = outputs.find((o) => o.id === picked) ?? outputs[0]!;
+  // A picked template that is gone (removed, or not in the version shown) falls back to the first.
+  const template = templates.find((t) => t.id === picked) ?? templates[0]!;
   const setYaml = useCallback((yaml: string) => updateDraft({ extract: { definition: yaml } }), [updateDraft]);
   // Typing in the HTML editor saves after a pause; anything else (a kind, a file, the starter) at once.
-  const setTemplate = useCallback(
-    (template: OutputTemplate) =>
+  const setContent = useCallback(
+    (content: TemplateContent) =>
       updateDraft(
-        { render: { outputs: outputs.map((o) => (o.id === output.id ? withTemplate(o, template) : o)) } },
-        { debounce: template.kind === 'html' && template.source !== null && output.template.kind === 'html' },
+        { render: { templates: templates.map((t) => (t.id === template.id ? withContent(t, content) : t)) } },
+        { debounce: content.kind === 'html' && content.source !== null && template.kind === 'html' },
       ),
-    [updateDraft, outputs, output.id, output.template.kind],
+    [updateDraft, templates, template.id, template.kind],
   );
   return (
     <WorkbenchProvider
       jobId={job.id}
       sampleId={spec.preview.sampleId}
       yaml={spec.extract.definition}
-      template={output.template}
-      outputId={output.id}
-      setOutputId={setPicked}
+      content={template}
+      templateId={template.id}
+      setTemplateId={setPicked}
       readOnly={readOnly}
       setYaml={setYaml}
-      setTemplate={setTemplate}
+      setContent={setContent}
       onDraftWritten={refresh}
     >
       {children}
@@ -118,15 +118,15 @@ export function ExtractStep() {
   );
 }
 
-/** Render: the picked output's template (and the JSON for field names) next to its preview, with downloads of each format. */
+/** Render: the picked template (and the JSON for field names) next to its preview, with downloads of each format. */
 export function RenderStep() {
-  const { tab, setTab, outputId, setOutputId } = useWorkbench();
+  const { tab, setTab, templateId, setTemplateId } = useWorkbench();
   const { spec } = useJob();
-  const output = spec.render.outputs.find((o) => o.id === outputId) ?? spec.render.outputs[0]!;
+  const template = spec.render.templates.find((t) => t.id === templateId) ?? spec.render.templates[0]!;
   const current = tab === 'definition' ? 'template' : tab;
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <StepHeader end={<OutputControls output={output} onPick={setOutputId} />} />
+      <StepHeader end={<TemplateControls template={template} onPick={setTemplateId} />} />
       <div className="min-h-0 flex-1">
         <SplitPanes
           labels={['Template and JSON', 'Preview']}
@@ -143,7 +143,7 @@ export function RenderStep() {
               <div className="min-h-0 flex-1">{current === 'json' ? <JsonView /> : <TemplateEditor />}</div>
             </div>
           }
-          right={<HtmlPreview fileName={(name) => outputFileName(name, spec.render.outputs, output)} />}
+          right={<HtmlPreview fileName={(name) => templateFileName(name, spec.render.templates, template)} />}
         />
       </div>
     </div>

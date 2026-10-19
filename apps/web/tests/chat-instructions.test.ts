@@ -1,16 +1,16 @@
 import { definitionJsonSchema, parseDefinition, starterDocx } from '@spooldoc/core';
 import { describe, expect, it } from 'vitest';
-import { jobSpecSchema } from '@/lib/job-spec';
+import { jobSpecSchema, type JobTemplate } from '@/lib/job-spec';
 import { buildInstructions, DATA_NOT_INSTRUCTIONS, OTHER_JOBS_RULE, wordTemplates } from '@/lib/server/chat';
 import { fixtureText, loadSample } from './helpers/fake-connection';
 
 const sample = loadSample('invoice');
 const yaml = fixtureText('invoice', 'definition.yaml');
 const html = fixtureText('invoice', 'template.html');
-const outputs = jobSpecSchema.parse({}).render.outputs;
+const templates = jobSpecSchema.parse({}).render.templates;
 
 describe('buildInstructions', () => {
-  const clear = buildInstructions({ sample, definitionYaml: null, outputs, masked: false });
+  const clear = buildInstructions({ sample, definitionYaml: null, templates, masked: false });
 
   it('holds the definition JSON Schema', () => {
     expect(clear).toContain(JSON.stringify(definitionJsonSchema));
@@ -27,7 +27,7 @@ describe('buildInstructions', () => {
   });
 
   it('cuts the preview at the line budget', () => {
-    const short = buildInstructions({ sample, definitionYaml: null, outputs, masked: false, config: { previewLines: 20 } });
+    const short = buildInstructions({ sample, definitionYaml: null, templates, masked: false, config: { previewLines: 20 } });
     expect(short).not.toContain('--- Page 2 of');
     expect(short).toContain('(page 1 cut after line 20; read it all with read_sample_page)');
   });
@@ -37,7 +37,7 @@ describe('buildInstructions', () => {
     const withAssets = buildInstructions({
       sample,
       definitionYaml: null,
-      outputs,
+      templates,
       masked: false,
       assets: [
         { name: 'logo', kind: 'image' },
@@ -55,34 +55,34 @@ describe('buildInstructions', () => {
   });
 
   it('masks values when masking is on', () => {
-    const masked = buildInstructions({ sample, definitionYaml: null, outputs, masked: true });
+    const masked = buildInstructions({ sample, definitionYaml: null, templates, masked: true });
     expect(masked).not.toContain('260101');
     expect(masked).toContain('999999');
     expect(masked).toContain('Invoice no');
     expect(masked).toContain('Masking is on');
   });
 
-  it('holds the current YAML and every output with its formats and template, and says none yet otherwise', () => {
+  it('holds the current YAML and every template with its kind, formats and content, and says none yet otherwise', () => {
     expect(clear).toContain('## Current definition\n\nNone yet.');
-    expect(clear).toContain('### 1. Document (id `main`): PDF\n\nNo template yet: the starter template generated from the definition is used.');
+    expect(clear).toContain('### 1. Template 1 (id `template-1`): HTML, PDF\n\nNo HTML yet: the starter template generated from the definition is used.');
     const withFiles = buildInstructions({
       sample,
       definitionYaml: yaml,
-      outputs: [
-        { ...outputs[0]!, template: { kind: 'html', source: html } },
-        { id: 'lines', label: 'Lines', template: { kind: 'html', source: null }, formats: ['pdf', 'html'] },
+      templates: [
+        { ...templates[0]!, kind: 'html', source: html },
+        { id: 'lines', name: 'Lines', kind: 'html', source: null, formats: ['pdf', 'html'] },
       ],
       masked: true,
     });
     expect(withFiles).toContain(yaml);
-    expect(withFiles).toContain('<title>Invoice {d.doc.invoiceNo}</title>');
-    expect(withFiles).toContain('### 2. Lines (id `lines`): PDF and HTML\n\nNo template yet');
+    expect(withFiles).toContain('<title>Invoice {d.pageGroup.invoiceNo}</title>');
+    expect(withFiles).toContain('### 2. Lines (id `lines`): HTML, PDF and HTML\n\nNo HTML yet');
   });
 
-  it('names the tools that add and remove outputs', () => {
+  it('names the tools that add and remove templates', () => {
     const tools = clear.slice(clear.indexOf('## Tools'), clear.indexOf('## This sample'));
-    expect(tools).toContain('- add_output: ');
-    expect(tools).toContain('- remove_output: ');
+    expect(tools).toContain('- add_template: ');
+    expect(tools).toContain('- remove_template: ');
   });
 
   it('names the tools that read other jobs and says when to use them', () => {
@@ -95,8 +95,8 @@ describe('buildInstructions', () => {
 
   it('teaches Carbone tags with the Carbone Skill as the reference, with credit', () => {
     const template = clear.slice(clear.indexOf('## Template'), clear.indexOf('## Tools'));
-    expect(template).toContain('{d.doc.invoiceNo}');
-    expect(template).toContain('{d.doc.lines[i+1]}');
+    expect(template).toContain('{d.pageGroup.invoiceNo}');
+    expect(template).toContain('{d.pageGroup.lines[i+1]}');
     expect(template).toContain('Never write Nunjucks');
     expect(clear).toContain('- read_carbone_reference: ');
     const reference = clear.slice(clear.indexOf('## Carbone syntax reference'));
@@ -108,9 +108,9 @@ describe('buildInstructions', () => {
   it('says which Carbone features to use, from the last check', () => {
     expect(clear).toContain('Carbone is not connected, so templates are checked but not rendered.');
     const at = new Date().toISOString();
-    const community = buildInstructions({ sample, definitionYaml: null, outputs, masked: false, carbone: { ok: true, at, version: '5.15.5', edition: 'community' } });
+    const community = buildInstructions({ sample, definitionYaml: null, templates, masked: false, carbone: { ok: true, at, version: '5.15.5', edition: 'community' } });
     expect(community).toContain('runs the Community Edition. Do not use Enterprise features');
-    const enterprise = buildInstructions({ sample, definitionYaml: null, outputs, masked: false, carbone: { ok: true, at, version: '5.15.5', edition: 'enterprise' } });
+    const enterprise = buildInstructions({ sample, definitionYaml: null, templates, masked: false, carbone: { ok: true, at, version: '5.15.5', edition: 'enterprise' } });
     expect(enterprise).toContain('has the Enterprise features');
   });
 
@@ -121,19 +121,19 @@ describe('buildInstructions', () => {
 });
 
 describe('Word templates in the instructions', () => {
-  const word = [{ id: 'letter', label: 'Letter', template: { kind: 'docx' as const, fileId: '00000000-0000-4000-8000-000000000001' }, formats: ['pdf' as const, 'docx' as const] }];
+  const word: JobTemplate[] = [{ id: 'letter', name: 'Letter', kind: 'docx', fileId: '00000000-0000-4000-8000-000000000001', formats: ['pdf' as const, 'docx' as const] }];
 
   it("shows a file's text by part and what the tag check finds, and how to change it", async () => {
     const bad = await starterDocx(parseDefinition(yaml.replace('name: invoiceNo,', 'name: invoiceNumber,').replace('field: invoiceNo }', 'field: invoiceNumber }')));
     const notes = await wordTemplates(word, yaml, async () => ({ name: 'letter.docx', content: bad }));
-    const text = buildInstructions({ sample, definitionYaml: yaml, outputs: word, masked: false, wordTemplates: notes });
-    expect(text).toContain('### 1. Letter (id `letter`): PDF and DOCX');
+    const text = buildInstructions({ sample, definitionYaml: yaml, templates: word, masked: false, wordTemplates: notes });
+    expect(text).toContain('### 1. Letter (id `letter`): Word, PDF and DOCX');
     expect(text).toContain('A Word template file, `letter.docx`.');
-    expect(text).toContain('body: Invoice Number\t{d.doc.invoiceNumber}');
+    expect(text).toContain('body: Invoice Number\t{d.pageGroup.invoiceNumber}');
     expect(text).toContain('footer: Page  of ');
-    expect(text).toContain('- body: {d.doc.invoiceNumber} is not in the data. Did you mean {d.doc.invoiceNo}?');
+    expect(text).toContain('- body: {d.pageGroup.invoiceNumber} is not in the data. Did you mean {d.pageGroup.invoiceNo}?');
     expect(text).toContain('edit_word_template changes the file there is, the user\'s own included');
-    expect(text).toContain('You get the text of document 1 after each write or edit, not a picture');
+    expect(text).toContain('You get the text of the first document after each write or edit, not a picture');
     expect(text).not.toContain('a PDF of every page');
     expect(text).toContain('## Designing a document');
   });
@@ -142,7 +142,7 @@ describe('Word templates in the instructions', () => {
     const text = buildInstructions({
       sample,
       definitionYaml: yaml,
-      outputs: word,
+      templates: word,
       masked: false,
       visual: true,
       assets: [
@@ -150,15 +150,15 @@ describe('Word templates in the instructions', () => {
         { name: 'brand', kind: 'font' },
       ],
     });
-    expect(text).toContain('you get document 1 as it prints: a PDF of every page');
+    expect(text).toContain('you get the first document as it prints: a PDF of every page');
     expect(text).toContain('Look at every page: the first page of a document often differs from the rest');
     expect(text).toContain('Uploaded images: `logo`; only PNG and JPEG ones can be placed.');
     expect(text).toContain('and for Word, the document as it prints');
   });
 
   it('shows the starter template, or why the file cannot be read', async () => {
-    const starter = await wordTemplates([{ ...word[0]!, template: { kind: 'docx', fileId: null } }], yaml, async () => null);
-    expect(buildInstructions({ sample, definitionYaml: yaml, outputs: word, masked: false, wordTemplates: { letter: starter.letter! } })).toContain(
+    const starter = await wordTemplates([{ ...word[0]!, kind: 'docx', fileId: null }], yaml, async () => null);
+    expect(buildInstructions({ sample, definitionYaml: yaml, templates: word, masked: false, wordTemplates: { letter: starter.letter! } })).toContain(
       'No Word template file yet: the Word starter template generated from the definition is used.',
     );
     const gone = await wordTemplates(word, yaml, async () => null);

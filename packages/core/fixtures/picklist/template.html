@@ -21,24 +21,24 @@
 <body>
   <h1>Pick list</h1>
   <dl>
-    <dt>Picklist No</dt><dd>{d.doc.picklistNo}</dd>
-    <dt>Order No</dt><dd>{d.doc.orderNo}</dd>
-    <dt>Customer No</dt><dd>{d.doc.customerNo}</dd>
-    <dt>Route</dt><dd>{d.doc.route}</dd>
-    <dt>Ship Date</dt><dd>{d.doc.shipDate}</dd>
-    <dt>Warehouse</dt><dd>{d.doc.warehouse}</dd>
-    <dt>Deliver Name</dt><dd>{d.doc.deliverName}</dd>
-    <dt>Deliver Address1</dt><dd>{d.doc.deliverAddress1}</dd>
-    <dt>Deliver Address2</dt><dd>{d.doc.deliverAddress2}</dd>
-    <dt>Deliver Address3</dt><dd>{d.doc.deliverAddress3}</dd>
-    <dt>Line Count</dt><dd>{d.doc.lineCount}</dd>
+    <dt>Picklist No</dt><dd>{d.pageGroup.picklistNo}</dd>
+    <dt>Order No</dt><dd>{d.pageGroup.orderNo}</dd>
+    <dt>Customer No</dt><dd>{d.pageGroup.customerNo}</dd>
+    <dt>Route</dt><dd>{d.pageGroup.route}</dd>
+    <dt>Ship Date</dt><dd>{d.pageGroup.shipDate}</dd>
+    <dt>Warehouse</dt><dd>{d.pageGroup.warehouse}</dd>
+    <dt>Deliver Name</dt><dd>{d.pageGroup.deliverName}</dd>
+    <dt>Deliver Address1</dt><dd>{d.pageGroup.deliverAddress1}</dd>
+    <dt>Deliver Address2</dt><dd>{d.pageGroup.deliverAddress2}</dd>
+    <dt>Deliver Address3</dt><dd>{d.pageGroup.deliverAddress3}</dd>
+    <dt>Line Count</dt><dd>{d.pageGroup.lineCount}</dd>
   </dl>
   <h2>Lines</h2>
   <table>
     <thead><tr><th>Line</th><th>Item</th><th>Description</th><th>Bin</th><th>Lot</th><th>Quantity</th><th>Unit</th></tr></thead>
     <tbody>
-      <tr><td>{d.doc.lines[i].line}</td><td>{d.doc.lines[i].item}</td><td>{d.doc.lines[i].description}</td><td>{d.doc.lines[i].bin}</td><td>{d.doc.lines[i].lot}</td><td>{d.doc.lines[i].quantity}</td><td>{d.doc.lines[i].unit}</td></tr>
-      <tr><td>{d.doc.lines[i+1]}</td></tr>
+      <tr><td>{d.pageGroup.lines[i].line}</td><td>{d.pageGroup.lines[i].item}</td><td>{d.pageGroup.lines[i].description}</td><td>{d.pageGroup.lines[i].bin}</td><td>{d.pageGroup.lines[i].lot}</td><td>{d.pageGroup.lines[i].quantity}</td><td>{d.pageGroup.lines[i].unit}</td></tr>
+      <tr><td>{d.pageGroup.lines[i+1]}</td></tr>
     </tbody>
   </table>
 </body>

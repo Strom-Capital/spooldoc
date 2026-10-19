@@ -71,12 +71,12 @@ A licence for Carbone Enterprise adds, among others:
 
 | Feature | Example |
 |---------|---------|
-| Aggregators | `{d.doc.lines[].amount:aggSum:formatN(2)}` |
-| Dropping an element | `{d.doc.lines[i].amount:ifEM:drop(row)}` |
-| HTML from the data | `{d.doc.note:html}` |
-| Barcodes and QR codes | `<img src="{d.doc.invoiceNo:barcode(qrcode)}">` |
-| Colors from the data | `{d.doc.status:color(row, background)}` |
-| Charts | `<img src="{d.doc.chart:chart}">` |
+| Aggregators | `{d.pageGroup.lines[].amount:aggSum:formatN(2)}` |
+| Dropping an element | `{d.pageGroup.lines[i].amount:ifEM:drop(row)}` |
+| HTML from the data | `{d.pageGroup.note:html}` |
+| Barcodes and QR codes | `<img src="{d.pageGroup.invoiceNo:barcode(qrcode)}">` |
+| Colors from the data | `{d.pageGroup.status:color(row, background)}` |
+| Charts | `<img src="{d.pageGroup.chart:chart}">` |
 | Pictures from the data in a Word template | A logo per customer. On Community, Carbone keeps the template's picture without an error. |
 
 Carbone Cloud has the Enterprise features.

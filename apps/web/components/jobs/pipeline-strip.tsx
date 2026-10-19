@@ -17,7 +17,7 @@ import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useAppInfo } from '@/components/app-info';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
-import { formatList, type OutputTemplate } from '@/lib/job-spec';
+import { formatList, type TemplateContent } from '@/lib/job-spec';
 import { cn } from '@/lib/utils';
 import { useJob, type Step } from './job-provider';
 
@@ -135,7 +135,7 @@ function FitOnResize() {
 /** Title, detail line and status of each step, from the spec and the latest render. */
 function useSteps(): StepInfo[] {
   const { spec, job, servers, destinations } = useJob();
-  const { render, sampleId, outputId } = useWorkbench();
+  const { render, sampleId, templateId } = useWorkbench();
   const { rendering } = useAppInfo();
   const server = servers.find((s) => s.id === spec.source.serverId);
   const hasSource = !!spec.source.serverId && !!spec.source.library && !!spec.source.queue;
@@ -143,8 +143,8 @@ function useSteps(): StepInfo[] {
   const missing = extract ? new Set(extract.hits.filter((h) => h.status === 'missing').map((h) => h.name)).size : 0;
   const destination = destinations.find((d) => d.id === spec.destination.destinationId);
   const finish = spec.finish;
-  const outputs = spec.render.outputs;
-  const picked = outputs.find((o) => o.id === outputId) ?? outputs[0];
+  const templates = spec.render.templates;
+  const picked = templates.find((t) => t.id === templateId) ?? templates[0];
 
   const extractStatus: StepStatus = !spec.extract.definition.trim()
     ? 'unset'
@@ -152,7 +152,7 @@ function useSteps(): StepInfo[] {
       ? 'error'
       : !extract
         ? 'unset'
-        : extract.documents.length === 0 || missing > 0
+        : extract.pageGroups.length === 0 || missing > 0
           ? 'warn'
           : 'ok';
 
@@ -186,7 +186,7 @@ function useSteps(): StepInfo[] {
       detail: !spec.extract.definition.trim()
         ? 'Write a definition'
         : extract
-          ? `${extract.documents.length} ${extract.documents.length === 1 ? 'document' : 'documents'}`
+          ? `${extract.pageGroups.length} ${extract.pageGroups.length === 1 ? 'page group' : 'page groups'}`
           : sampleId
             ? 'Definition to JSON'
             : 'Pick a spooled file',
@@ -197,18 +197,18 @@ function useSteps(): StepInfo[] {
       step: 'render',
       title: 'Render',
       icon: FileTextIcon,
-      detail: outputs.length > 1 ? `${outputs.length} outputs` : templateName(outputs[0]!.template),
+      detail: templates.length > 1 ? `${templates.length} templates` : contentName(templates[0]!),
       sub: !rendering
         ? 'Connect Carbone in Settings'
         : render?.template?.error
-          ? outputs.length > 1
-            ? `The ${picked?.label} template has errors`
+          ? templates.length > 1
+            ? `The ${picked?.name} template has errors`
             : 'Template has errors'
           : render?.carbone
             ? 'Carbone did not answer'
-            : outputs.length > 1
-              ? outputs.map((o) => `${o.label}: ${formatList(o.formats)}`).join(', ')
-              : formatList(outputs[0]!.formats),
+            : templates.length > 1
+              ? templates.map((t) => `${t.name}: ${formatList(t.formats)}`).join(', ')
+              : formatList(templates[0]!.formats),
       status: !rendering || render?.carbone ? 'warn' : render?.template?.error ? 'error' : render?.html || render?.pdf ? 'ok' : 'unset',
     },
     {
@@ -237,8 +237,8 @@ function useSteps(): StepInfo[] {
   ];
 }
 
-/** What an output's template is, for the Render step's summary. */
-function templateName(template: OutputTemplate): string {
+/** What a template has as its content, for the Render step's summary. */
+function contentName(template: TemplateContent): string {
   if (template.kind === 'docx') return template.fileId === null ? 'Starter Word template' : 'Word template';
   return template.source === null ? 'Starter template' : 'Custom template';
 }

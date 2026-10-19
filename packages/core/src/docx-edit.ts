@@ -252,6 +252,31 @@ export function editDocx(bytes: Uint8Array, edits: readonly DocxEdit[]): Uint8Ar
     }
     changed.set(edit.part, xml.slice(0, first) + edit.replace + xml.slice(first + edit.find.length));
   });
+  return rezip(files, changed);
+}
+
+/**
+ * Rewrites the text of every part that can be edited with `change`, which gets each
+ * part's XML with runs merged. Parts it leaves as they were, and every other file, come
+ * out the same. Checked like `editDocx`.
+ *
+ * @returns The new file, or `bytes` itself when no part changed
+ * @throws DocxEditError when a part is no longer well-formed or the file no longer reads
+ */
+export function rewriteDocx(bytes: Uint8Array, change: (xml: string, part: string) => string): Uint8Array {
+  const files = unzipAll(bytes);
+  const changed = new Map<string, string>();
+  for (const [name, content] of Object.entries(files)) {
+    if (!isEditablePart(name)) continue;
+    const xml = mergeRuns(strFromU8(content));
+    const next = change(xml, name);
+    if (next !== xml) changed.set(name, next);
+  }
+  return changed.size === 0 ? bytes : rezip(files, changed);
+}
+
+/** The zip again with the changed parts, after checking them and the file. */
+function rezip(files: Record<string, Uint8Array>, changed: Map<string, string>): Uint8Array {
   for (const [part, xml] of changed) {
     const problem = xmlProblem(xml);
     if (problem) throw new DocxEditError(`After the edits, ${part} is not well-formed XML: ${problem} Nothing was saved.`);

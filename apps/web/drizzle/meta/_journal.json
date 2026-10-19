@@ -113,6 +113,13 @@
       "when": 1792421440678,
       "tag": "0015_masking_setting",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792440198257,
+      "tag": "0016_page_groups_and_templates",
+      "breakpoints": true
     }
   ]
 }

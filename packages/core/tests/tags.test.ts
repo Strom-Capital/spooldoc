@@ -12,31 +12,31 @@ describe("checkTemplate", () => {
   });
 
   it("flags fields that are not in the definition, with the line and a likely fix", () => {
-    const problems = checkTemplate(page("<p>{d.doc.invoiceNumber}</p>\n<td>{d.doc.lines[i].ammount:formatN(2)}</td>\n<td>{d.doc.lines[i+1]}</td>"), definition);
+    const problems = checkTemplate(page("<p>{d.pageGroup.invoiceNumber}</p>\n<td>{d.pageGroup.lines[i].ammount:formatN(2)}</td>\n<td>{d.pageGroup.lines[i+1]}</td>"), definition);
     expect(problems).toEqual([
-      { line: 4, message: "{d.doc.invoiceNumber} is not in the data. Did you mean {d.doc.invoiceNo}?" },
-      { line: 5, message: "{d.doc.lines[i].ammount:formatN(2)} is not in the data. Did you mean {d.doc.lines[i].amount}?" },
+      { line: 4, message: "{d.pageGroup.invoiceNumber} is not in the data. Did you mean {d.pageGroup.invoiceNo}?" },
+      { line: 5, message: "{d.pageGroup.lines[i].ammount:formatN(2)} is not in the data. Did you mean {d.pageGroup.lines[i].amount}?" },
     ]);
   });
 
-  it("knows documents, sample and aggregates over a list", () => {
+  it("knows pageGroups, splf and aggregates over a list", () => {
     const html = page(
-      "{d.documents[i].invoiceNo} {d.documents[i+1]} {d.sample.splf.name} {d.sample.id} {d.doc.lines[].amount:aggSum} {d.doc.lines[i, quantity > 1].item} {d.doc} {d}",
+      "{d.pageGroups[i].invoiceNo} {d.pageGroups[i+1]} {d.splf.name} {d.pageGroup.lines[].amount:aggSum} {d.pageGroup.lines[i, quantity > 1].item} {d.pageGroup} {d}",
     );
     expect(checkTemplate(html, definition)).toEqual([]);
   });
 
   it("says what d is when a tag reads it as a list", () => {
-    expect(checkTemplate(page("{d[i].invoiceNo}"), definition)[0]?.message).toMatch(/d is \{ doc, documents, sample \}/);
-    expect(checkTemplate(page("{d.invoiceNo}"), definition)[0]?.message).toBe("{d.invoiceNo} is not in the data. Did you mean {d.doc.invoiceNo}?");
+    expect(checkTemplate(page("{d[i].invoiceNo}"), definition)[0]?.message).toMatch(/d is \{ pageGroup, pageGroups, splf \}/);
+    expect(checkTemplate(page("{d.invoiceNo}"), definition)[0]?.message).toBe("{d.invoiceNo} is not in the data. Did you mean {d.pageGroup.invoiceNo}?");
   });
 
   it("does not check fields without a definition", () => {
-    expect(checkTemplate(page("{d.doc.anything}"), null)).toEqual([]);
+    expect(checkTemplate(page("{d.pageGroup.anything}"), null)).toEqual([]);
   });
 
   it("flags smart quotes and double quotes inside tags", () => {
-    const problems = checkTemplate(page("{d.doc.invoiceDate:formatD(‘DD.MM.YYYY’)}\n{d.doc.invoiceDate:formatD(\"DD.MM.YYYY\")}\n<img src=\"{d.doc.customerNo}\">"), definition);
+    const problems = checkTemplate(page("{d.pageGroup.invoiceDate:formatD(‘DD.MM.YYYY’)}\n{d.pageGroup.invoiceDate:formatD(\"DD.MM.YYYY\")}\n<img src=\"{d.pageGroup.customerNo}\">"), definition);
     expect(problems.map((p) => [p.line, p.message.replace(/^.* has /, "")])).toEqual([
       [4, "curly quotes, which Carbone prints as text. Use straight single quotes (')."],
       [5, "double quotes, which Carbone prints as text. Use single quotes (')."],
@@ -46,7 +46,7 @@ describe("checkTemplate", () => {
   it("flags Nunjucks left in the template", () => {
     const problems = checkTemplate(page("{{ doc.invoiceNo }}\n{% for row in doc.lines %}\n{# note #}\n{% if doc.x %}\n{{ doc.oops"), definition);
     expect(problems.map((p) => p.line)).toEqual([4, 5, 6, 7, 8]);
-    expect(problems[0]?.message).toBe("{{ doc.invoiceNo }} is Nunjucks, which templates no longer use. Write a Carbone tag such as {d.doc.invoiceNo} instead.");
+    expect(problems[0]?.message).toBe("{{ doc.invoiceNo }} is Nunjucks, which templates no longer use. Write a Carbone tag such as {d.pageGroup.invoiceNo} instead.");
     expect(problems[1]?.message).toMatch(/row with \[i\] and a row with \[i\+1\]/);
     expect(problems[2]?.message).toMatch(/HTML comment/);
     expect(problems[3]?.message).toMatch(/:showBegin and :showEnd/);
@@ -54,8 +54,8 @@ describe("checkTemplate", () => {
   });
 
   it("flags tags that are never closed", () => {
-    expect(checkTemplate(page("<p>{d.doc.invoiceNo</p>\n<p>{d.doc.customerNo}</p>"), definition)).toEqual([
-      { line: 4, message: "This tag has no closing }: {d.doc.invoiceNo</p>" },
+    expect(checkTemplate(page("<p>{d.pageGroup.invoiceNo</p>\n<p>{d.pageGroup.customerNo}</p>"), definition)).toEqual([
+      { line: 4, message: "This tag has no closing }: {d.pageGroup.invoiceNo</p>" },
     ]);
   });
 
@@ -69,7 +69,7 @@ describe("checkTemplate", () => {
   });
 
   it("leaves CSS braces, aliases and options alone", () => {
-    const html = `<html><head><style>@media print{body{margin:0}} td{color:red}</style></head><body>{#total = d.doc.totalAmount}{$total} {o.lang=fi} {c.now:formatD('YYYY')}</body></html>`;
+    const html = `<html><head><style>@media print{body{margin:0}} td{color:red}</style></head><body>{#total = d.pageGroup.totalAmount}{$total} {o.lang=fi} {c.now:formatD('YYYY')}</body></html>`;
     expect(checkTemplate(html, definition)).toEqual([]);
   });
 
@@ -80,21 +80,22 @@ describe("checkTemplate", () => {
 
 describe("templateTags and templateUses", () => {
   it("reads the tags in order and skips Nunjucks", () => {
-    expect(templateTags("{{ doc.x }} {d.doc.a} {#a = d.b} {$a} {t(Total)}").map((t) => t.text)).toEqual(["{d.doc.a}", "{#a = d.b}", "{$a}", "{t(Total)}"]);
+    expect(templateTags("{{ doc.x }} {d.pageGroup.a} {#a = d.b} {$a} {t(Total)}").map((t) => t.text)).toEqual(["{d.pageGroup.a}", "{#a = d.b}", "{$a}", "{t(Total)}"]);
   });
 
-  it("knows when a template reads documents", () => {
-    expect(templateUses("{d.documents[i].a}", "documents")).toBe(true);
-    expect(templateUses("{d.doc.documents}", "documents")).toBe(false);
-    expect(templateUses("<p>documents</p>", "documents")).toBe(false);
+  it("knows when a template reads pageGroups", () => {
+    expect(templateUses("{d.pageGroups[i].a}", "pageGroups")).toBe(true);
+    expect(templateUses("{d.pageGroup.pageGroups}", "pageGroups")).toBe(false);
+    expect(templateUses("{d.pageGroup.a}", "pageGroups")).toBe(false);
+    expect(templateUses("<p>pageGroups</p>", "pageGroups")).toBe(false);
   });
 
   it("lists the paths of a definition", () => {
     const paths = templatePaths(definition);
-    expect(paths).toContain("doc.invoiceNo");
-    expect(paths).toContain("doc.lines[].amount");
-    expect(paths).toContain("documents[].lines[].amount");
-    expect(paths).toContain("sample.splf.jobNumber");
+    expect(paths).toContain("pageGroup.invoiceNo");
+    expect(paths).toContain("pageGroup.lines[].amount");
+    expect(paths).toContain("pageGroups[].lines[].amount");
+    expect(paths).toContain("splf.jobNumber");
   });
 });
 

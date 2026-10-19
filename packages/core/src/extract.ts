@@ -5,8 +5,8 @@ import { extractXml } from "./xmlspool.js";
 
 /** Where one extracted value came from. Columns and lines are 1-based; 0 when unknown. */
 export interface FieldHit {
-  /** 0-based index into `documents`. */
-  document: number;
+  /** 0-based index into `pageGroups`. */
+  pageGroup: number;
   /** Field name, or `table[row].column` for table and record cells. */
   name: string;
   /** Sample page number. */
@@ -21,7 +21,7 @@ export interface FieldHit {
 
 /** Result of `extract`. */
 export interface ExtractResult {
-  documents: Record<string, unknown>[];
+  pageGroups: Record<string, unknown>[];
   hits: FieldHit[];
   warnings: string[];
 }
@@ -97,40 +97,40 @@ class Collector {
   readonly warnings: string[] = [];
 
   /** Records a located value, converts it and returns the typed value. */
-  value(doc: number, name: string, page: number, loc: Located, type: ValueType | undefined, warnEmpty: boolean): unknown {
+  value(group: number, name: string, page: number, loc: Located, type: ValueType | undefined, warnEmpty: boolean): unknown {
     const status = loc.value === "" ? "empty" : "found";
-    this.hits.push({ document: doc, name, page, line: loc.line, column: loc.column, length: loc.length, value: loc.value, status });
-    if (status === "empty" && warnEmpty) this.warnings.push(`document ${doc + 1}: field ${name} is empty (page ${page}, line ${loc.line})`);
+    this.hits.push({ pageGroup: group, name, page, line: loc.line, column: loc.column, length: loc.length, value: loc.value, status });
+    if (status === "empty" && warnEmpty) this.warnings.push(`page group ${group + 1}: field ${name} is empty (page ${page}, line ${loc.line})`);
     const { value, ok } = convertValue(loc.value, type);
-    if (!ok) this.warnings.push(`document ${doc + 1}: ${name} value ${JSON.stringify(loc.value)} is not a valid ${type}`);
+    if (!ok) this.warnings.push(`page group ${group + 1}: ${name} value ${JSON.stringify(loc.value)} is not a valid ${type}`);
     return value;
   }
 
-  missing(doc: number, name: string, page: number): null {
-    this.hits.push({ document: doc, name, page, line: 0, column: 0, length: 0, value: "", status: "missing" });
-    this.warnings.push(`document ${doc + 1}: field ${name} not found`);
+  missing(group: number, name: string, page: number): null {
+    this.hits.push({ pageGroup: group, name, page, line: 0, column: 0, length: 0, value: "", status: "missing" });
+    this.warnings.push(`page group ${group + 1}: field ${name} not found`);
     return null;
   }
 }
 
-/** Groups pages into documents by the split field: a new document starts when its value changes. */
-function splitDocuments(pages: SamplePage[], text: TextSource): SamplePage[][] {
+/** Groups pages into page groups by the split field: a new page group starts when its value changes. */
+function splitPageGroups(pages: SamplePage[], text: TextSource): SamplePage[][] {
   const splitName = text.split?.field;
   const splitField = splitName ? text.fields?.find((f) => f.name === splitName) : undefined;
   if (!splitField) return pages.length ? [pages] : [];
-  const docs: SamplePage[][] = [];
+  const groups: SamplePage[][] = [];
   let current: SamplePage[] | null = null;
   let key: string | null = null;
   for (const page of pages) {
     const v = locateAnchor(page, splitField.anchor)?.value || null;
     if (!current || (v !== null && v !== key)) {
       current = [];
-      docs.push(current);
+      groups.push(current);
       if (v !== null) key = v;
     }
     current.push(page);
   }
-  return docs;
+  return groups;
 }
 
 function isBody(no: number, text: TextSource): boolean {
@@ -139,16 +139,16 @@ function isBody(no: number, text: TextSource): boolean {
   return no > header && (footer === undefined || no < footer);
 }
 
-function extractField(c: Collector, doc: number, pages: SamplePage[], field: TextField): unknown {
+function extractField(c: Collector, group: number, pages: SamplePage[], field: TextField): unknown {
   const candidates = pagesForRule(pages, field.page);
   for (const page of candidates) {
     const loc = locateAnchor(page, field.anchor);
-    if (loc) return c.value(doc, field.name, page.no, loc, field.type, false);
+    if (loc) return c.value(group, field.name, page.no, loc, field.type, false);
   }
-  return c.missing(doc, field.name, candidates[0]?.no ?? pages[0]?.no ?? 0);
+  return c.missing(group, field.name, candidates[0]?.no ?? pages[0]?.no ?? 0);
 }
 
-function extractTables(c: Collector, doc: number, pages: SamplePage[], text: TextSource, out: Record<string, unknown>): void {
+function extractTables(c: Collector, group: number, pages: SamplePage[], text: TextSource, out: Record<string, unknown>): void {
   for (const table of text.tables ?? []) {
     const headerRe = new RegExp(table.header.pattern);
     const untilRe = table.until ? new RegExp(table.until.pattern) : null;
@@ -165,7 +165,7 @@ function extractTables(c: Collector, doc: number, pages: SamplePage[], text: Tex
         const index = rows.length;
         for (const col of table.columns) {
           const raw = l.text.slice(col.column - 1, col.column - 1 + col.length);
-          row[col.name] = c.value(doc, `${table.name}[${index}].${col.name}`, page.no, span(raw, l.no, col.column), col.type, false);
+          row[col.name] = c.value(group, `${table.name}[${index}].${col.name}`, page.no, span(raw, l.no, col.column), col.type, false);
         }
         rows.push(row);
       }
@@ -174,7 +174,7 @@ function extractTables(c: Collector, doc: number, pages: SamplePage[], text: Tex
   }
 }
 
-function extractRecords(c: Collector, doc: number, pages: SamplePage[], text: TextSource, out: Record<string, unknown>): void {
+function extractRecords(c: Collector, group: number, pages: SamplePage[], text: TextSource, out: Record<string, unknown>): void {
   for (const rec of text.records ?? []) {
     const startRe = new RegExp(rec.start.pattern);
     const items: Record<string, unknown>[] = [];
@@ -188,7 +188,7 @@ function extractRecords(c: Collector, doc: number, pages: SamplePage[], text: Te
         for (const col of rec.columns) {
           const no = l.no + col.line - 1;
           const raw = (lines.get(no) ?? "").slice(col.column - 1, col.column - 1 + col.length);
-          item[col.name] = c.value(doc, `${rec.name}[${index}].${col.name}`, page.no, span(raw, no, col.column), col.type, false);
+          item[col.name] = c.value(group, `${rec.name}[${index}].${col.name}`, page.no, span(raw, no, col.column), col.type, false);
         }
         items.push(item);
         next = l.no + rec.lines;
@@ -199,26 +199,25 @@ function extractRecords(c: Collector, doc: number, pages: SamplePage[], text: Te
 }
 
 /**
- * Extracts JSON documents from a sample with a definition. Text definitions read positioned
+ * Extracts the page groups of a sample as JSON with a definition. Text definitions read positioned
  * text; XML definitions go through `extractXml`. Never throws for missing values: those
  * become hits with status `missing` and a warning.
  */
 export function extract(def: Definition, sample: Sample): ExtractResult {
   if (def.source === "xml") return extractXml(def, sample);
   const text = def.text;
-  if (!text) return { documents: [], hits: [], warnings: ["definition has no text section"] };
+  if (!text) return { pageGroups: [], hits: [], warnings: ["definition has no text section"] };
   const c = new Collector();
   const pages = text.skipFirstPage ? sample.pages.slice(1) : sample.pages;
-  const groups = splitDocuments(pages, text);
-  const documents = groups.map((docPages, doc) => {
+  const pageGroups = splitPageGroups(pages, text).map((groupPages, group) => {
     const out: Record<string, unknown> = {};
-    for (const field of text.fields ?? []) out[field.name] = extractField(c, doc, docPages, field);
-    extractTables(c, doc, docPages, text, out);
-    extractRecords(c, doc, docPages, text, out);
+    for (const field of text.fields ?? []) out[field.name] = extractField(c, group, groupPages, field);
+    extractTables(c, group, groupPages, text, out);
+    extractRecords(c, group, groupPages, text, out);
     return out;
   });
-  if (documents.length === 0) c.warnings.push("no pages to extract from");
-  return { documents, hits: c.hits, warnings: c.warnings };
+  if (pageGroups.length === 0) c.warnings.push("no pages to extract from");
+  return { pageGroups, hits: c.hits, warnings: c.warnings };
 }
 
 /**

@@ -37,10 +37,10 @@ describe("buildDocx", () => {
     expect(checkDocx(template, loadFixture("invoice").definition)).toEqual([]);
     expect(template.fields).toEqual(["PAGE", "NUMPAGES"]);
     const text = template.text;
-    expect(text).toContain("{d.doc.lines[i].amount:formatN(2)}");
-    expect(text).toContain("{d.doc.lines[i+1]}");
-    expect(text).toContain("{d.doc.address1}{d.doc.address2:ifEM:hideBegin}\n{d.doc.address2}{d.doc.address2:hideEnd}");
-    expect(template.paragraphs.some((p) => p.part === "header" && p.text === "Invoice {d.doc.invoiceNo}\t{d.doc.customerName}")).toBe(true);
+    expect(text).toContain("{d.pageGroup.lines[i].amount:formatN(2)}");
+    expect(text).toContain("{d.pageGroup.lines[i+1]}");
+    expect(text).toContain("{d.pageGroup.address1}{d.pageGroup.address2:ifEM:hideBegin}\n{d.pageGroup.address2}{d.pageGroup.address2:hideEnd}");
+    expect(template.paragraphs.some((p) => p.part === "header" && p.text === "Invoice {d.pageGroup.invoiceNo}\t{d.pageGroup.customerName}")).toBe(true);
   });
 
   it("puts each part of a page field in its own run, as Word does", async () => {

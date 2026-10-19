@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { eq } from 'drizzle-orm';
-import { jobSpecSchema, withTemplate, type JobOutput, type JobSpec } from '@/lib/job-spec';
+import { jobSpecSchema, withContent, type JobTemplate, type JobSpec } from '@/lib/job-spec';
 import type { DraftStore } from './chat';
 import { getDb, type Tx } from './db';
 import { jobs } from './db/schema';
@@ -34,7 +34,7 @@ export async function updateDraft(jobId: string, change: (draft: JobSpec) => Job
 }
 
 /**
- * The chat tools' view of a job's draft: its definition and its outputs.
+ * The chat tools' view of a job's draft: its definition and its templates.
  *
  * @param userId - Who is chatting, recorded on the Word template files the assistant makes
  */
@@ -46,47 +46,47 @@ export function draftStore(jobId: string, userId: string | null = null): DraftSt
     }
     return jobSpecSchema.parse(row.draft);
   };
-  const changeOutputs = async (change: (outputs: JobOutput[]) => JobOutput[]): Promise<JobOutput[]> => {
-    let saved: JobOutput[] = [];
+  const changeTemplates = async (change: (templates: JobTemplate[]) => JobTemplate[]): Promise<JobTemplate[]> => {
+    let saved: JobTemplate[] = [];
     await updateDraft(jobId, (draft) => {
-      // Parsed again, so a change the schema refuses (no outputs, a bad label) is not saved.
-      saved = jobSpecSchema.shape.render.parse({ outputs: change(draft.render.outputs) }).outputs;
-      return { ...draft, render: { outputs: saved } };
+      // Parsed again, so a change the schema refuses (no templates, a bad name) is not saved.
+      saved = jobSpecSchema.shape.render.parse({ templates: change(draft.render.templates) }).templates;
+      return { ...draft, render: { templates: saved } };
     });
     return saved;
   };
   return {
     readDefinition: async () => (await read()).extract.definition,
-    readOutputs: async () => (await read()).render.outputs,
+    readTemplates: async () => (await read()).render.templates,
     writeDefinition: (yaml) => updateDraft(jobId, (draft) => ({ ...draft, extract: { ...draft.extract, definition: yaml } })),
-    writeTemplate: async (outputId, html) => {
-      await changeOutputs((outputs) => {
-        if (!outputs.some((output) => output.id === outputId)) {
-          throw new Error('The output is gone.');
+    writeHtml: async (templateId, html) => {
+      await changeTemplates((templates) => {
+        if (!templates.some((template) => template.id === templateId)) {
+          throw new Error('The template is gone.');
         }
-        return outputs.map((output) => (output.id === outputId ? { ...output, template: { kind: 'html', source: html } } : output));
+        return templates.map((template) => (template.id === templateId ? withContent(template, { kind: 'html', source: html }) : template));
       });
     },
-    changeOutputs,
-    writeWordTemplate: (outputId, file) =>
+    changeTemplates,
+    writeWordTemplate: (templateId, file) =>
       getDb().transaction(async (tx) => {
         const row = await lockJobRow(tx, jobId);
         if (!row) {
           throw new Error('The job is gone.');
         }
         const draft = jobSpecSchema.parse(row.draft);
-        const output = draft.render.outputs.find((o) => o.id === outputId);
-        if (!output) {
-          throw new Error('The output is gone.');
+        const template = draft.render.templates.find((t) => t.id === templateId);
+        if (!template) {
+          throw new Error('The template is gone.');
         }
-        if (output.template.kind === 'html' && output.template.source !== null) {
+        if (template.kind === 'html' && template.source !== null) {
           throw new Error(
-            `The ${output.label} output has an HTML template of its own. Ask the user to switch it to a Word template in the app first, or to add a Word output (add_output with kind docx).`,
+            `The ${template.name} template has HTML of its own. Ask the user to switch it to a Word template in the app first, or to add a Word template (add_template with kind docx).`,
           );
         }
         const saved = await storeTemplateFile(tx, { ...file, userId, madeBy: 'assistant' });
-        const outputs = draft.render.outputs.map((o) => (o.id === outputId ? withTemplate(o, { kind: 'docx', fileId: saved.id }) : o));
-        await tx.update(jobs).set({ draft: { ...draft, render: { outputs } } }).where(eq(jobs.id, jobId));
+        const templates = draft.render.templates.map((t) => (t.id === templateId ? withContent(t, { kind: 'docx', fileId: saved.id }) : t));
+        await tx.update(jobs).set({ draft: { ...draft, render: { templates } } }).where(eq(jobs.id, jobId));
         return templateFileView(saved);
       }),
   };

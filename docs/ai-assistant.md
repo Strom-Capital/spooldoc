@@ -42,19 +42,19 @@ Carbone syntax reference:
 | Tool | What it does |
 |------|--------------|
 | `read_sample_page` | Reads one page of the sample as numbered lines. The first three pages are in its instructions already. |
-| `write_definition` | Saves the definition YAML to the draft, runs the extraction on the sample and returns the report: documents found, each field with its status, missing fields, warnings and the first document as JSON. |
-| `write_template` | Saves the HTML template of one [output](jobs.md#outputs), the first unless it names another, checks it, renders the first document with Carbone and returns any errors, by line, and its visible text. Without a working Carbone server it only checks. It refuses an output with a Word template. |
-| `write_word_template` | Designs a [Word template](templates.md#word-templates) for one output and saves it as a new file the output uses. Returns what the check and Carbone find, the text of the first document and, for models that take files, the document itself. |
-| `read_word_template` | Lists the parts of an output's Word template (the body, headers and footers), or reads one part's XML. |
-| `edit_word_template` | Changes an output's Word template, yours or the starter template, by replacing text in its XML, and saves the result as a new file. Returns what `write_word_template` returns. |
-| `render_preview` | Renders a document with one output's template, HTML or Word, again after a change to the definition, and returns what the check finds and the visible text. For a Word template it also shows models that take files the document. |
-| `add_output` | Adds an output with an HTML or Word template, a name and formats. It uses the starter template until the assistant writes one. |
-| `remove_output` | Removes an output and its template. The last output cannot be removed. |
-| `list_jobs` | Lists the other jobs with their definition type, outputs and whether they have a template. |
-| `read_job_files` | Reads another job's definition YAML and the template HTML of each of its outputs, from its active version or else its draft, so a new job can start from them. |
+| `write_definition` | Saves the definition YAML to the draft, runs the extraction on the sample and returns the report: page groups found, each field with its status, missing fields, warnings and the first page group as JSON. |
+| `write_template` | Saves the HTML of one [template](jobs.md#templates), the first unless it names another, checks it, renders the first document with Carbone and returns any errors, by line, and its visible text. Without a working Carbone server it only checks. It refuses a Word template. |
+| `write_word_template` | Designs a [Word template](templates.md#word-templates) and saves it as a new file the template uses. Returns what the check and Carbone find, the text of the first document and, for models that take files, the document itself. |
+| `read_word_template` | Lists the parts of a Word template (the body, headers and footers), or reads one part's XML. |
+| `edit_word_template` | Changes a Word template, yours or the starter template, by replacing text in its XML, and saves the result as a new file. Returns what `write_word_template` returns. |
+| `render_preview` | Renders the document of a page group with one template, HTML or Word, again after a change to the definition, and returns what the check finds and the visible text. For a Word template it also shows models that take files the document. |
+| `add_template` | Adds a template, HTML or Word, with a name and formats. It uses the starter until the assistant writes it. |
+| `remove_template` | Removes a template. The last template cannot be removed. |
+| `list_jobs` | Lists the other jobs with their definition type, templates and whether those have content of their own. |
+| `read_job_files` | Reads another job's definition YAML and each of its templates, from its active version or else its draft, so a new job can start from them. |
 | `read_carbone_reference` | Reads one reference file of the Carbone syntax reference, such as the list of formatters. |
 
-The model adds or removes outputs only when you ask for it. It uses the
+The model adds or removes templates only when you ask for it. It uses the
 last two tools only when you ask it to start from or reuse another job ("start from the Invoices job's template"); it adapts what it
 takes to the sample and saves it with the write tools. The same copy
 without a model is "Start from job" in the template editor's bar.
@@ -94,7 +94,7 @@ makes it. The first page of a document often differs from the rest, with
 the letterhead and the address on page 1 and the running header,
 continued table and totals after it, so it checks them all. A document of
 more than five pages comes as a picture of page 1, with a note to check
-the later pages on a shorter document. The model gets the file in the
+the later pages on a page group with fewer pages. The model gets the file in the
 next steps of the answer it is working on, not again later, and the
 conversation stores only the text of the result. Models from Anthropic,
 OpenAI and Google take files, directly or through OpenRouter and the
@@ -104,13 +104,13 @@ document only. Values in the document are masked when
 in the file.
 
 **Nothing is overwritten.** Each design or edit is saved as a new file,
-and the output uses it from then on. Your earlier file is kept, and the
+and the template uses it from then on. Your earlier file is kept, and the
 Word panel says when the assistant made the current file and offers
 **Use previous file**, or **Use starter template** when there was none. A
 saved version keeps the file it ran with. The assistant changes an HTML
-output to Word only while it still uses the HTML starter template;
-otherwise it asks you to switch the output in the render step, or adds a
-Word output when you ask for one.
+template to Word only while it still uses the HTML starter; otherwise it
+asks you to switch it in the render step, or adds a Word template when
+you ask for one.
 
 The file is an ordinary Word document: open it in Word, change it and
 upload it again, or ask the assistant for the next change.
@@ -129,8 +129,8 @@ What the model receives:
   400 lines) in the instructions, any other page on request.
 - The sample's metadata: spooled file name, queue, user data, page size
   and code page.
-- The job's current definition, its outputs with their formats and
-  templates (the text of a Word template, paragraph by paragraph), the
+- The job's current definition, its templates with their formats and
+  content (the text of a Word template, paragraph by paragraph), the
   names of the uploaded assets, and the Carbone edition.
 - Tool results: the extraction report and the rendered text, and for a
   Word template, the rendered document (see
@@ -151,8 +151,8 @@ the definition and template it wrote stay in the draft. Only the recent
 part of a long conversation goes to the model with each message (the last
 20 messages, within a character budget, older tool results and the
 model's thinking around them dropped first);
-the model's instructions carry the current definition, outputs,
-templates and sample pages, so nothing it needs is lost. The stored messages hold what
+the model's instructions carry the current definition, templates and
+sample pages, so nothing it needs is lost. The stored messages hold what
 the model saw, except the rendered Word documents: with masking on, the
 tool results are masked too.
 

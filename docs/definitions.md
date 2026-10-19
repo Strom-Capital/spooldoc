@@ -1,14 +1,15 @@
 ---
 title: "Definitions"
-description: "The YAML that tells Spooldoc which spooled files a job is for and how to read documents out of their pages."
+description: "The YAML that tells Spooldoc which spooled files a job is for, how to split them into page groups and how to read their pages."
 ---
 
 A definition is a YAML document, one per document type. It says which
 spooled files it is for, how the pages are laid out, where each field is,
-which lines are table rows, and how the pages split into documents. The
-extraction turns every spooled file that matches into one JSON object per
-document, which the [template](templates.md) renders. The JSON is the
-contract between reading the page and laying out the document; the
+which lines are table rows, and how the pages split into page groups,
+such as one invoice each. The extraction turns every spooled file that
+matches into one JSON object per page group, which each
+[template](templates.md) makes into a document. The JSON is the contract
+between reading the page and laying out the document; the
 [FAQ](faq.md#why-turn-the-pages-into-json-first-instead-of-rendering-straight-from-the-spooled-file)
 says why.
 
@@ -53,7 +54,7 @@ text:
         - { name: quantity, column: 55, length: 8, type: number }
         - { name: amount, column: 91, length: 20, type: number }
 output:
-  name: "invoice-{d.doc.invoiceNo}"
+  name: "invoice-{d.pageGroup.invoiceNo}"
   title: Invoice
 ```
 
@@ -82,7 +83,7 @@ The result for one invoice:
 | `source` | `text` for printed pages, `xml` for a spooled file that holds XML. |
 | `text` | The page layout and what to read, with `source: text`. |
 | `xml` | The element paths, with `source: xml`. |
-| `output` | `name`, the file name of each document, with tags for its fields such as `invoice-{d.doc.invoiceNo}` (plain tags, no formatters), and `title`, the heading the starter template uses. Without `name` the files are named after the spooled file and numbered. |
+| `output` | `name`, the file name of each document, with tags for its fields such as `invoice-{d.pageGroup.invoiceNo}` (plain tags, no formatters), and `title`, the heading the starter template uses. Without `name` the files are named after the spooled file and numbered. |
 
 Names of fields, tables, records and columns use letters, digits and
 underscores and start with a letter; they become the keys of the JSON.
@@ -105,10 +106,10 @@ so a job on a mixed queue takes only its own files.
 | Key | What it is |
 |-----|------------|
 | `page` | `width` and `length` in columns and lines, as printed. |
-| `skipFirstPage` | `true` when page 1 is a parameter or banner page that belongs to no document. |
+| `skipFirstPage` | `true` when page 1 is a parameter or banner page that belongs to no page group. |
 | `header` | `lines`: how many lines at the top of every page repeat. They are left out of the page body that tables and records are read from. |
 | `footer` | `fromLine`: the first line of the footer on every page; the body ends before it. |
-| `split` | `field`: the pages split into one document wherever this field's value changes. Without `split`, the whole spooled file is one document. |
+| `split` | `field`: the pages split into a new page group wherever this field's value changes. Without `split`, the whole spooled file is one page group. Spooldoc finds page groups with `split`; it does not read the page groups a program marks with the DDS keywords `STRPAGGRP` and `ENDPAGGRP`. |
 | `fields` | Single values. See [Fields](#fields). |
 | `tables` | Column tables under a header line. See [Tables](#tables). |
 | `records` | Repeating records that span several printed lines. See [Records](#records). |
@@ -126,7 +127,7 @@ An anchor is exactly one of:
 | `{ regex: "...", group? }` | A regular expression tested line by line; the first match on the page wins. The value is capture group 1, or `group`, or the whole match when there are no groups. |
 | `{ line, column, length }` | A fixed position: 1-based line and column, and the length. Use it for blocks where a missing value prints as a blank line, such as address lines. |
 
-`page` says which page of the document the field is read from: `first`
+`page` says which page of the page group the field is read from: `first`
 (the default), `last` (totals), `all` (the first match on any page) or a
 page number.
 
@@ -144,7 +145,7 @@ the end of the page body, or until the first line that matches `until`.
 Lines that match `skip` inside the table are not rows: rules, notes,
 delivery note lines. Each `column` is read from a fixed `column` and
 `length` on the row, with an optional `type`. A table that continues on the
-next page of the same document is read on every page and the rows are
+next page of the same page group is read on every page and the rows are
 joined.
 
 ### Records
@@ -155,15 +156,16 @@ column names the `line` within the record, the `column` and the `length`.
 
 ## XML sources
 
-Some forms products print one XML document per page. With `source: xml`,
-the text of each page is parsed as XML:
+Some forms products print one XML document per page group. With
+`source: xml`, the text of the pages is parsed as XML, and each element
+named by `pageGroup` is one page group:
 
 ```yaml
 type: picklist
 version: 1
 source: xml
 xml:
-  document: FORM
+  pageGroup: FORM
   fields:
     pickListNo: DOCUMENT/PICKLIST_NO
     shipDate: { path: DOCUMENT/SHIP_DATE, type: date }
@@ -177,7 +179,7 @@ xml:
 
 | Key | What it is |
 |-----|------------|
-| `document` | The root element of one document. Each occurrence is one document. |
+| `pageGroup` | The element that holds one page group. Each occurrence is one page group. |
 | `fields` | Field name to a slash path from the root, as a string or `{ path, type }`. |
 | `groups` | Repeating elements: `path` from the root, and `map` from item field name to a path under each element. |
 
@@ -185,7 +187,7 @@ xml:
 
 The workbench shows every hit on the page and the JSON beside it. The
 extraction report, which the assistant reads after every write, lists the
-documents found, each field of the first document with its status, the
+page groups found, each field of the first page group with its status, the
 missing fields and warnings such as a table with no rows. The core package
 exports the same schema as JSON Schema, so an editor can check the YAML
 too.

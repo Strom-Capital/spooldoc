@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Invoice {d.doc.invoiceNo}</title>
+<title>Invoice {d.pageGroup.invoiceNo}</title>
 <style>
   @page { size: A4; margin: 15mm; }
   * { box-sizing: border-box; }
@@ -41,19 +41,19 @@
   <section class="parties">
     <div class="bill-to">
       <div class="label">Bill to</div>
-      <strong>{d.doc.customerName}</strong><br>
-      {d.doc.address1:ifNEM:showBegin}{d.doc.address1}<br>{d.doc.address1:showEnd}
-      {d.doc.address2:ifNEM:showBegin}{d.doc.address2}<br>{d.doc.address2:showEnd}
-      {d.doc.address3:ifNEM:showBegin}{d.doc.address3}<br>{d.doc.address3:showEnd}
-      Customer no {d.doc.customerNo}
+      <strong>{d.pageGroup.customerName}</strong><br>
+      {d.pageGroup.address1:ifNEM:showBegin}{d.pageGroup.address1}<br>{d.pageGroup.address1:showEnd}
+      {d.pageGroup.address2:ifNEM:showBegin}{d.pageGroup.address2}<br>{d.pageGroup.address2:showEnd}
+      {d.pageGroup.address3:ifNEM:showBegin}{d.pageGroup.address3}<br>{d.pageGroup.address3:showEnd}
+      Customer no {d.pageGroup.customerNo}
     </div>
     <dl>
-      <dt>Invoice no</dt><dd>{d.doc.invoiceNo}</dd>
-      <dt>Invoice date</dt><dd>{d.doc.invoiceDate:formatD('DD.MM.YYYY')}</dd>
-      <dt>Due date</dt><dd>{d.doc.dueDate:formatD('DD.MM.YYYY')}</dd>
-      <dt>Payment terms</dt><dd>{d.doc.paymentTerms}</dd>
-      <dt>Your reference</dt><dd>{d.doc.reference}</dd>
-      <dt>Our order no</dt><dd>{d.doc.orderNo}</dd>
+      <dt>Invoice no</dt><dd>{d.pageGroup.invoiceNo}</dd>
+      <dt>Invoice date</dt><dd>{d.pageGroup.invoiceDate:formatD('DD.MM.YYYY')}</dd>
+      <dt>Due date</dt><dd>{d.pageGroup.dueDate:formatD('DD.MM.YYYY')}</dd>
+      <dt>Payment terms</dt><dd>{d.pageGroup.paymentTerms}</dd>
+      <dt>Your reference</dt><dd>{d.pageGroup.reference}</dd>
+      <dt>Our order no</dt><dd>{d.pageGroup.orderNo}</dd>
     </dl>
   </section>
 
@@ -66,18 +66,18 @@
     </thead>
     <tbody>
       <tr>
-        <td>{d.doc.lines[i].line}</td><td>{d.doc.lines[i].item}</td><td>{d.doc.lines[i].description}</td>
-        <td class="num">{d.doc.lines[i].quantity}</td><td>{d.doc.lines[i].unit}</td>
-        <td class="num">{d.doc.lines[i].unitPrice:formatN(2)}</td><td class="num">{d.doc.lines[i].amount:formatN(2)}</td>
+        <td>{d.pageGroup.lines[i].line}</td><td>{d.pageGroup.lines[i].item}</td><td>{d.pageGroup.lines[i].description}</td>
+        <td class="num">{d.pageGroup.lines[i].quantity}</td><td>{d.pageGroup.lines[i].unit}</td>
+        <td class="num">{d.pageGroup.lines[i].unitPrice:formatN(2)}</td><td class="num">{d.pageGroup.lines[i].amount:formatN(2)}</td>
       </tr>
-      <tr><td>{d.doc.lines[i+1]}</td></tr>
+      <tr><td>{d.pageGroup.lines[i+1]}</td></tr>
     </tbody>
   </table>
 
   <table class="totals">
-    <tr><td>Net amount</td><td class="num">{d.doc.netAmount:formatN(2)}</td></tr>
-    <tr><td>VAT {d.doc.vatRate} %</td><td class="num">{d.doc.vatAmount:formatN(2)}</td></tr>
-    <tr class="grand"><td>Total</td><td class="num">{d.doc.totalAmount:formatN(2)} {d.doc.currency}</td></tr>
+    <tr><td>Net amount</td><td class="num">{d.pageGroup.netAmount:formatN(2)}</td></tr>
+    <tr><td>VAT {d.pageGroup.vatRate} %</td><td class="num">{d.pageGroup.vatAmount:formatN(2)}</td></tr>
+    <tr class="grand"><td>Total</td><td class="num">{d.pageGroup.totalAmount:formatN(2)} {d.pageGroup.currency}</td></tr>
   </table>
 
   <footer>MYCO LTD, Industrial Road 12, FI-00100 HELSINKI, Business ID 1234567-8</footer>

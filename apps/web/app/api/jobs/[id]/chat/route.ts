@@ -87,7 +87,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   const { model, info, reasoning, secrets } = chat;
   const assets = await assetNames();
   const templateFile = getTemplateFile;
-  const words = await wordTemplates(draft.render.outputs, draft.extract.definition, getTemplateFile);
+  const words = await wordTemplates(draft.render.templates, draft.extract.definition, getTemplateFile);
   const safe = (error: unknown): string => redact(error, secrets).replace(KEY_PATTERN, '***');
 
   try {
@@ -97,7 +97,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
       instructions: buildInstructions({
         sample,
         definitionYaml: draft.extract.definition.trim() ? draft.extract.definition : null,
-        outputs: draft.render.outputs,
+        templates: draft.render.templates,
         masked,
         assets,
         carbone: (await getRendering()).check,

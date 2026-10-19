@@ -1,73 +1,74 @@
 import { describe, expect, it } from 'vitest';
 import {
   filterParams,
-  findOutput,
+  findTemplate,
   formatList,
-  hasOwnTemplate,
+  hasOwnContent,
   ibmiFilter,
   jobSpecSchema,
-  labelTaken,
+  nameTaken,
   missingParts,
-  newOutput,
-  outputFileName,
-  outputSlug,
-  withTemplate,
-  type JobOutput,
+  newTemplate,
+  templateFileName,
+  templateSlug,
+  withContent,
+  type JobTemplate,
 } from '@/lib/job-spec';
 
 describe('job spec', () => {
-  const output = (fields: Partial<JobOutput> = {}): JobOutput => ({ id: 'main', label: 'Document', template: { kind: 'html', source: null }, formats: ['pdf'], ...fields });
+  const template = (fields: Partial<JobTemplate> = {}): JobTemplate =>
+    ({ id: 'template-1', name: 'Template 1', kind: 'html', source: null, formats: ['pdf'], ...fields }) as JobTemplate;
 
-  it('starts with one PDF output and keeps outputs as they are', () => {
-    expect(jobSpecSchema.parse({}).render).toEqual({ outputs: [output()] });
-    const two = { outputs: [output(), output({ id: 'lines', label: 'Lines', formats: ['html'] })] };
+  it('starts with one PDF template and keeps templates as they are', () => {
+    expect(jobSpecSchema.parse({}).render).toEqual({ templates: [template()] });
+    const two = { templates: [template(), template({ id: 'lines', name: 'Lines', formats: ['html'] })] };
     expect(jobSpecSchema.parse({ render: two }).render).toEqual(two);
   });
 
-  it('keeps formats in a fixed order and needs one format and one output', () => {
-    expect(jobSpecSchema.parse({ render: { outputs: [output({ formats: ['html', 'pdf', 'html'] })] } }).render.outputs[0]!.formats).toEqual(['pdf', 'html']);
-    expect(() => jobSpecSchema.parse({ render: { outputs: [output({ formats: [] })] } })).toThrow(/Pick at least one format/);
-    expect(() => jobSpecSchema.parse({ render: { outputs: [] } })).toThrow(/Add at least one output/);
-    expect(() => jobSpecSchema.parse({ render: { outputs: [output({ formats: ['docx' as never] })] } })).toThrow();
-    expect(() => jobSpecSchema.parse({ render: { outputs: [output({ id: 'Main Output' })] } })).toThrow(/output id/);
-    expect(() => jobSpecSchema.parse({ render: { outputs: [output({ label: '  ' })] } })).toThrow(/Name the output/);
+  it('keeps formats in a fixed order and needs one format and one template', () => {
+    expect(jobSpecSchema.parse({ render: { templates: [template({ formats: ['html', 'pdf', 'html'] })] } }).render.templates[0]!.formats).toEqual(['pdf', 'html']);
+    expect(() => jobSpecSchema.parse({ render: { templates: [template({ formats: [] })] } })).toThrow(/Pick at least one format/);
+    expect(() => jobSpecSchema.parse({ render: { templates: [] } })).toThrow(/Add at least one template/);
+    expect(() => jobSpecSchema.parse({ render: { templates: [template({ formats: ['docx' as never] })] } })).toThrow();
+    expect(() => jobSpecSchema.parse({ render: { templates: [template({ id: 'Main Template' })] } })).toThrow(/template id/);
+    expect(() => jobSpecSchema.parse({ render: { templates: [template({ name: '  ' })] } })).toThrow(/Name the template/);
   });
 
-  it('reports outputs with the same id or name as a sentence each', () => {
+  it('reports templates with the same id or name as a sentence each', () => {
     const spec = jobSpecSchema.parse({});
-    const named = (outputs: JobOutput[]) => missingParts({ ...spec, render: { outputs } }).filter((line) => line.startsWith('Render'));
-    expect(named([output(), output({ id: 'lines', label: 'Lines' })])).toEqual([]);
-    expect(named([output(), output({ id: 'lines', label: 'document' }), output({ id: 'more', label: 'DOCUMENT' })])).toEqual([
-      'Render: two outputs are named "document". Give each output its own name.',
-      'Render: two outputs are named "DOCUMENT". Give each output its own name.',
+    const named = (templates: JobTemplate[]) => missingParts({ ...spec, render: { templates } }).filter((line) => line.startsWith('Render'));
+    expect(named([template(), template({ id: 'lines', name: 'Lines' })])).toEqual([]);
+    expect(named([template(), template({ id: 'lines', name: 'template 1' }), template({ id: 'more', name: 'TEMPLATE 1' })])).toEqual([
+      'Render: two templates are named "template 1". Give each template its own name.',
+      'Render: two templates are named "TEMPLATE 1". Give each template its own name.',
     ]);
-    expect(named([output(), output({ label: 'Lines' })])).toEqual(['Render: two outputs have the id "main". Give each output its own id.']);
+    expect(named([template(), template({ name: 'Lines' })])).toEqual(['Render: two templates have the id "template-1". Give each template its own id.']);
   });
 
-  it('finds an output by id or name, and the first without either', () => {
-    const outputs = [output(), output({ id: 'lines', label: 'Order lines' })];
-    expect(findOutput(outputs)?.id).toBe('main');
-    expect(findOutput(outputs, 'lines')?.id).toBe('lines');
-    expect(findOutput(outputs, 'order LINES')?.id).toBe('lines');
-    expect(findOutput(outputs, 'nope')).toBeNull();
+  it('finds a template by id or name, and the first without either', () => {
+    const templates = [template(), template({ id: 'lines', name: 'Order lines' })];
+    expect(findTemplate(templates)?.id).toBe('template-1');
+    expect(findTemplate(templates, 'lines')?.id).toBe('lines');
+    expect(findTemplate(templates, 'order LINES')?.id).toBe('lines');
+    expect(findTemplate(templates, 'nope')).toBeNull();
   });
 
-  it('names the files of every output but the first after its label', () => {
-    const outputs = [output(), output({ id: 'lines', label: 'Order lines' }), output({ id: 'x', label: '***' })];
-    expect(outputFileName('invoice-260101', outputs, outputs[0]!)).toBe('invoice-260101');
-    expect(outputFileName('invoice-260101', outputs, outputs[1]!)).toBe('invoice-260101-order-lines');
-    expect(outputFileName('invoice-260101', outputs, outputs[2]!)).toBe('invoice-260101-x');
-    expect(outputSlug({ id: 'a', label: 'Ääkkönen rivit' })).toBe('aakkonen-rivit');
+  it('names the files of every template but the first after its name', () => {
+    const templates = [template(), template({ id: 'lines', name: 'Order lines' }), template({ id: 'x', name: '***' })];
+    expect(templateFileName('invoice-260101', templates, templates[0]!)).toBe('invoice-260101');
+    expect(templateFileName('invoice-260101', templates, templates[1]!)).toBe('invoice-260101-order-lines');
+    expect(templateFileName('invoice-260101', templates, templates[2]!)).toBe('invoice-260101-x');
+    expect(templateSlug({ id: 'a', name: 'Ääkkönen rivit' })).toBe('aakkonen-rivit');
   });
 
-  it('makes new outputs with a free name and id', () => {
-    const outputs = [output()];
-    const second = newOutput(outputs);
-    expect(second).toEqual(output({ id: 'output-2', label: 'Output 2' }));
-    expect(newOutput([...outputs, second], 'Lines', ['html', 'pdf'])).toEqual(output({ id: 'lines', label: 'Lines', formats: ['pdf', 'html'] }));
-    expect(newOutput([output({ id: 'lines', label: 'Old lines' })], 'Lines').id).toBe('lines-2');
-    expect(labelTaken(outputs, ' document ')).toBe(true);
-    expect(labelTaken(outputs, 'Document', 'main')).toBe(false);
+  it('makes new templates with a free name and id', () => {
+    const templates = [template()];
+    const second = newTemplate(templates);
+    expect(second).toEqual(template({ id: 'template-2', name: 'Template 2' }));
+    expect(newTemplate([...templates, second], 'Lines', ['html', 'pdf'])).toEqual(template({ id: 'lines', name: 'Lines', formats: ['pdf', 'html'] }));
+    expect(newTemplate([template({ id: 'lines', name: 'Old lines' })], 'Lines').id).toBe('lines-2');
+    expect(nameTaken(templates, ' template 1 ')).toBe(true);
+    expect(nameTaken(templates, 'Template 1', 'template-1')).toBe(false);
   });
 });
 
@@ -85,24 +86,24 @@ describe('job filters', () => {
 });
 
 describe('Word templates', () => {
-  const html: JobOutput = { id: 'main', label: 'Document', template: { kind: 'html', source: '<p/>' }, formats: ['pdf', 'html'] };
+  const html: JobTemplate = { id: 'main', name: 'Document', kind: 'html', source: '<p/>', formats: ['pdf', 'html'] };
 
-  it('reads a Word output and refuses formats a Word template does not make', () => {
-    const word = { ...html, template: { kind: 'docx', fileId: null }, formats: ['docx', 'pdf'] };
-    expect(jobSpecSchema.parse({ render: { outputs: [word] } }).render.outputs[0]).toEqual({ ...word, formats: ['pdf', 'docx'] });
-    const wrong = jobSpecSchema.safeParse({ render: { outputs: [{ ...word, formats: ['html'] }] } });
+  it('reads a Word template and refuses formats a Word template does not make', () => {
+    const word = { id: 'main', name: 'Document', kind: 'docx', fileId: null, formats: ['docx', 'pdf'] };
+    expect(jobSpecSchema.parse({ render: { templates: [word] } }).render.templates[0]).toEqual({ ...word, formats: ['pdf', 'docx'] });
+    const wrong = jobSpecSchema.safeParse({ render: { templates: [{ ...word, formats: ['html'] }] } });
     expect(wrong.success).toBe(false);
     expect(wrong.error?.issues[0]?.message).toBe('A Word template makes PDF and DOCX files, not HTML.');
-    expect(jobSpecSchema.safeParse({ render: { outputs: [{ ...html, formats: ['docx'] }] } }).error?.issues[0]?.message).toBe(
+    expect(jobSpecSchema.safeParse({ render: { templates: [{ ...html, formats: ['docx'] }] } }).error?.issues[0]?.message).toBe(
       'An HTML template makes PDF and HTML files, not DOCX.',
     );
   });
 
-  it('switches a template, keeping the formats the new kind makes, else PDF', () => {
-    expect(withTemplate(html, { kind: 'docx', fileId: null })).toEqual({ ...html, template: { kind: 'docx', fileId: null }, formats: ['pdf'] });
-    expect(withTemplate({ ...html, formats: ['html'] }, { kind: 'docx', fileId: null }).formats).toEqual(['pdf']);
-    expect(hasOwnTemplate({ kind: 'docx', fileId: null })).toBe(false);
-    expect(hasOwnTemplate(html.template)).toBe(true);
+  it('switches content, keeping the formats the new kind makes, else PDF', () => {
+    expect(withContent(html, { kind: 'docx', fileId: null })).toEqual({ id: 'main', name: 'Document', kind: 'docx', fileId: null, formats: ['pdf'] });
+    expect(withContent({ ...html, formats: ['html'] }, { kind: 'docx', fileId: null }).formats).toEqual(['pdf']);
+    expect(hasOwnContent({ kind: 'docx', fileId: null })).toBe(false);
+    expect(hasOwnContent(html)).toBe(true);
     expect(formatList(['pdf', 'docx'])).toBe('PDF and DOCX');
   });
 });

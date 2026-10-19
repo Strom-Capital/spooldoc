@@ -35,22 +35,22 @@ import { z } from 'zod';
 import type {
   FieldReport,
   JobListing,
-  JobOutputFiles,
+  JobTemplateFiles,
   ListJobsResult,
-  OutputChangeResult,
-  OutputListing,
   ReadJobFilesResult,
   ReadCarboneReferenceResult,
   ReadPageResult,
   ReadWordTemplateResult,
   RenderPreviewResult,
+  TemplateChangeResult,
+  TemplateListing,
   ToolFailure,
   WordTemplateResult,
   WordView,
   WriteDefinitionResult,
   WriteTemplateResult,
 } from '@/lib/chat-types';
-import { findOutput, formatList, hasOwnTemplate, KIND_FORMATS, labelTaken, newOutput, OUTPUT_FORMATS, withTemplate, type JobOutput } from '@/lib/job-spec';
+import { findTemplate, formatList, hasOwnContent, KIND_FORMATS, nameTaken, newTemplate, FORMATS, withContent, type JobTemplate } from '@/lib/job-spec';
 import type { CarboneCheck, TemplateFileView } from '@/lib/types';
 import { CARBONE_REFERENCES, CARBONE_SKILL, CARBONE_SKILL_SOURCE, type CarboneReference } from './carbone-skill.generated';
 import type { DocumentRenderer } from './documents';
@@ -68,15 +68,15 @@ export interface InstructionsInput {
   sample: Sample;
   /** The job's definition YAML, or null when there is none yet. */
   definitionYaml: string | null;
-  /** The job's outputs, each with its formats and template (null for the starter template). */
-  outputs: JobOutput[];
+  /** The job's templates, each with its formats and content (null for the starter). */
+  templates: JobTemplate[];
   /** Mask values in the page text (Settings, AI model). */
   masked: boolean;
   /** Uploaded images and fonts the template can print with `{asset('name')}`. */
   assets?: ChatAsset[];
   /** The last check of the Carbone server: whether it works, and its edition. */
   carbone?: CarboneCheck | null;
-  /** What Spooldoc read from each Word output's template, by output id (`wordTemplates`). */
+  /** What Spooldoc read from each Word template, by template id (`wordTemplates`). */
   wordTemplates?: Record<string, WordTemplateNote>;
   /** The model is shown Word renders as files (`ToolsInput.visual`). */
   visual?: boolean;
@@ -84,7 +84,7 @@ export interface InstructionsInput {
 }
 
 /**
- * A Word output's template as the model sees it: the file's name (null for the starter
+ * A Word template as the model sees it: the file's name (null for the starter
  * template), its paragraphs with text, and what the tag check finds; or why it could not
  * be read.
  */
@@ -94,13 +94,13 @@ export type WordTemplateNote = { name: string | null; paragraphs: DocxParagraph[
 const WORD_TEXT_MAX = 20_000;
 
 /**
- * What the instructions say about each Word output's template: its paragraphs and the
+ * What the instructions say about each Word template: its paragraphs and the
  * tag check's problems, read from the uploaded file or the starter template.
  *
  * @param read - The bytes and name of an uploaded template file, or null when it is gone
  */
 export async function wordTemplates(
-  outputs: JobOutput[],
+  templates: JobTemplate[],
   definitionYaml: string,
   read: (fileId: string) => Promise<{ name: string; content: Uint8Array } | null>,
 ): Promise<Record<string, WordTemplateNote>> {
@@ -111,28 +111,28 @@ export async function wordTemplates(
     // The template is still shown, without the field check.
   }
   const notes: Record<string, WordTemplateNote> = {};
-  for (const output of outputs) {
-    if (output.template.kind !== 'docx') continue;
+  for (const template of templates) {
+    if (template.kind !== 'docx') continue;
     try {
-      const file = output.template.fileId === null ? null : await read(output.template.fileId);
-      if (output.template.fileId !== null && !file) {
-        notes[output.id] = { error: 'The file is gone; write a new one with write_word_template, or the user uploads one.' };
+      const file = template.fileId === null ? null : await read(template.fileId);
+      if (template.fileId !== null && !file) {
+        notes[template.id] = { error: 'The file is gone; write a new one with write_word_template, or the user uploads one.' };
         continue;
       }
       if (!file && !def) {
-        notes[output.id] = { error: 'No file uploaded yet, and the starter template needs a definition that parses.' };
+        notes[template.id] = { error: 'No file uploaded yet, and the starter template needs a definition that parses.' };
         continue;
       }
-      const template = readDocx(file ? file.content : await starterDocx(def!));
-      notes[output.id] = { name: file?.name ?? null, paragraphs: template.paragraphs, problems: checkDocx(template, def) };
+      const docx = readDocx(file ? file.content : await starterDocx(def!));
+      notes[template.id] = { name: file?.name ?? null, paragraphs: docx.paragraphs, problems: checkDocx(docx, def) };
     } catch (error) {
-      notes[output.id] = { error: message(error) };
+      notes[template.id] = { error: message(error) };
     }
   }
   return notes;
 }
 
-/** A Word output's template in the instructions. */
+/** A Word template in the instructions. */
 function wordTemplateText(note: WordTemplateNote | undefined): string {
   if (!note) return 'A Word template. Its text is not available here.';
   if ('error' in note) return `A Word template that could not be read: ${note.error}`;
@@ -161,7 +161,7 @@ export const DATA_NOT_INSTRUCTIONS =
 
 /** When the model may look at other jobs. Tests look for it. */
 export const OTHER_JOBS_RULE =
-  'Use list_jobs and read_job_files only when the user asks to start from or reuse another job; then adapt what you take to this sample and save it with write_definition and write_template (and add_output for an output this job does not have).';
+  'Use list_jobs and read_job_files only when the user asks to start from or reuse another job; then adapt what you take to this sample and save it with write_definition and write_template (and add_template for a template this job does not have).';
 
 const PREFIX = 4;
 
@@ -196,12 +196,15 @@ function visiblePages(sample: Sample, masked: boolean): SamplePage[] {
   return masked ? maskPages(sample.pages) : sample.pages;
 }
 
+/** A template's kind in the instructions. */
+const KIND_NAMES = { html: 'HTML', docx: 'Word' } as const;
+
 const fence = (lang: string, body: string): string => `\`\`\`${lang}\n${body.replace(/```/g, '`​``')}\n\`\`\``;
 
 /**
  * The system instructions for the chat: the task, the definition and template rules,
  * the sample's metadata, the first pages as numbered text (masked when masking is on)
- * and the current definition and outputs with their templates.
+ * and the current definition and templates.
  *
  * @param input - The sample, its linked files and the masking setting
  * @returns The instructions text
@@ -209,7 +212,7 @@ const fence = (lang: string, body: string): string => `\`\`\`${lang}\n${body.rep
 export function buildInstructions({
   sample,
   definitionYaml,
-  outputs,
+  templates,
   masked,
   assets = [],
   carbone = null,
@@ -240,19 +243,19 @@ export function buildInstructions({
   }
 
   return [
-    `You help build a Spooldoc job that turns IBM i spooled files into structured documents and PDFs. You work on one sample spooled file from the job's source queue. The user sees the sample page by page, the extracted JSON with every field highlighted on the page, the definition and template editors and an HTML preview.
+    `You help build a Spooldoc job that turns IBM i spooled files into documents: the definition cuts a spooled file into page groups and reads each into JSON, and each template of the job makes a document from every page group. You work on one sample spooled file from the job's source queue. The user sees the sample page by page, the extracted JSON with every field highlighted on the page, the definition and template editors and an HTML preview.
 
 How to work:
-1. Read the pages below. Propose a document definition in YAML and save it with write_definition.
+1. Read the pages below. Propose a definition in YAML and save it with write_definition.
 2. Read the extraction report it returns. Fix fields that are missing, empty when they should not be, or hold the wrong text, and write the definition again.
-3. Write the output's template: HTML with write_template, or a Word template with write_word_template or edit_word_template. Check it with render_preview. A job has one or more outputs, each with its own template and formats; the tools take the output, and default to the first.
+3. Write the template: HTML with write_template, or a Word template with write_word_template or edit_word_template. Check it with render_preview. A job has one or more templates, each with its own content and formats; the tools take the template, and default to the first.
 4. Repeat until nothing that should be found is missing.
 5. End with a short summary of what you did and anything the user should check.
-When the layout is ambiguous (where a document starts, which page is a cover page, what a value means), ask the user instead of guessing.
+When the layout is ambiguous (where a page group starts, which page is a cover page, what a value means), ask the user instead of guessing.
 ${masked ? 'Masking is on: digits in values show as 9 and letters as X or x. Labels that repeat across pages stay readable. Positions and lengths are exact, so build anchors on labels and positions, not on values.' : 'Masking is off: you see the values as printed.'}
 ${DATA_NOT_INSTRUCTIONS}`,
 
-    `## Document definition
+    `## Definition
 
 A definition is YAML that matches this JSON Schema:
 
@@ -260,28 +263,28 @@ ${fence('json', JSON.stringify(definitionJsonSchema))}
 
 Rules:
 - \`type\` names the kind of document: lowercase letters, digits and dashes. \`version: 1\`.
-- \`source: text\` for printed text; \`source: xml\` when the pages hold XML, with \`xml.document\` as the root element name of one document and slash paths for fields and groups.
+- \`source: text\` for printed text; \`source: xml\` when the pages hold XML, with \`xml.pageGroup\` as the name of the element that holds one page group and slash paths for fields and groups.
 - \`text.page\` is the page width and length (${width} x ${a.pageLength} for this sample).
 - A field anchor has exactly one of \`after\`, \`regex\` or \`line\`/\`column\`/\`length\`.
   - \`after\`: label text; the value starts after the label on the same line and ends at two spaces in a row, unless \`length\` is given.
   - \`regex\`: tested line by line; the value is capture group 1 (or \`group\`), or the whole match when there are no groups. Escape backslashes in YAML strings.
   - \`line\`, \`column\`, \`length\`: a fixed position; lines and columns are 1-based.
-- \`page\` on a field: \`first\` (default), \`last\`, \`all\` (first match on any page) or a page number within the document.
+- \`page\` on a field: \`first\` (default), \`last\`, \`all\` (first match on any page) or a page number within the page group.
 - \`type\` on a field or column: \`string\` (trimmed), \`number\` or \`date\` (converted; a value that does not convert is reported).
 - \`header.lines\`: lines at the top of every page that are not body; \`footer.fromLine\`: body ends before this line.
 - \`tables\`: \`header.pattern\` matches the column header line and rows start on the next line; \`until\` stops the rows; \`skip\` drops rules and notes. Columns are 1-based \`column\` and \`length\`.
 - \`records\`: repeating blocks of \`lines\` printed lines each, starting at a line matching \`start.pattern\`; columns give \`line\` within the record, \`column\` and \`length\`.
-- \`split.field\`: for a run that prints many documents back to back, a new document starts on each page where this field's value changes. The field must be in \`fields\`.
+- \`split.field\`: for a run that prints many documents back to back, a new page group starts on each page where this field's value changes. The field must be in \`fields\`.
 - \`skipFirstPage: true\` drops a parameter or banner page.
 - \`match\` (splf, queue, userData, page1 regex) says which spooled files the definition is for.
-- \`output.name\` is the file name of each document, with plain tags for its fields and no formatters, such as \`invoice-{d.doc.invoiceNo}\`.
+- \`output.name\` is the file name of each document, with plain tags for its fields and no formatters, such as \`invoice-{d.pageGroup.invoiceNo}\`.
 - Field names: letters, digits and underscores, starting with a letter; camelCase.`,
 
     `## Template
 
-- One complete HTML page in Carbone's template language. The data is \`d\` = \`{ doc, documents, sample }\`: \`{d.doc.invoiceNo}\` prints a field of the current document, \`d.documents\` holds every document of the spooled file, and \`d.sample\` holds \`id\` and \`splf\`.
-- Repeat a table row with a row of \`[i]\` tags and, right after it, an end row with \`[i+1]\`, which Carbone removes: \`<tr><td>{d.doc.lines[i].item}</td></tr>\` then \`<tr><td>{d.doc.lines[i+1]}</td></tr>\`.
-- Show a part only when a field has a value: \`{d.doc.address2:ifNEM:showBegin}{d.doc.address2}<br>{d.doc.address2:showEnd}\`.
+- One complete HTML page in Carbone's template language. The data is \`d\` = \`{ pageGroup, pageGroups, splf }\`: \`{d.pageGroup.invoiceNo}\` prints a field of the current page group, \`d.pageGroups\` holds every page group of the spooled file, and \`d.splf\` holds the spooled file's \`name\`, \`number\`, \`jobName\`, \`jobUser\` and \`jobNumber\`.
+- Repeat a table row with a row of \`[i]\` tags and, right after it, an end row with \`[i+1]\`, which Carbone removes: \`<tr><td>{d.pageGroup.lines[i].item}</td></tr>\` then \`<tr><td>{d.pageGroup.lines[i+1]}</td></tr>\`.
+- Show a block only when a field has a value: \`{d.pageGroup.address2:ifNEM:showBegin}{d.pageGroup.address2}<br>{d.pageGroup.address2:showEnd}\`.
 - Format dates with \`:formatD('DD.MM.YYYY')\` and amounts with \`:formatN(2)\` (\`1,234.50\`). Pad with \`:padl(6)\` or \`:padr(6, '0')\`.
 - Inside tags use straight single quotes only, never double or curly quotes. Never write Nunjucks or Jinja (\`{{ }}\`, \`{% %}\`).
 - Use only the fields the definition extracts. Spooldoc checks every tag against the definition before it renders, and a tag it does not know is an error with its line.
@@ -297,17 +300,17 @@ Rules:
 
     `## Word templates
 
-An output can use a Word template instead: a .docx, which makes PDF and DOCX files. The user opens and edits it in Word, so make one they can keep working on: real paragraphs, tables and styles, nothing positioned by hand. Its text is in Current outputs.
+A template can be a Word template instead: a .docx, which makes PDF and DOCX files. The user opens and edits it in Word, so make one they can keep working on: real paragraphs, tables and styles, nothing positioned by hand. Its text is in Current templates.
 
-You make one in two ways. Each saves a new file the output uses; the file before it is kept, and the user can put it back.
+You make one in two ways. Each saves a new file the template uses; the file before it is kept, and the user can put it back.
 - write_word_template designs a whole template from a JSON tree. Use it for a new design, or to start over.
 - edit_word_template changes the file there is, the user's own included, by replacing text in its XML. Use it for changes to a file the user made in Word, so the rest of it stays as they made it. Read the XML first with read_word_template.
-write_word_template switches an output that still uses the HTML starter template to Word. For an output with an HTML template of its own, ask the user: they switch it in the app, or you add a Word output with add_output.
+write_word_template switches a template that still uses the HTML starter to Word. For a template with HTML of its own, ask the user: they switch it in the app, or you add a Word template with add_template.
 
 ${
   visual
-    ? 'After each write or edit you get document 1 as it prints: a PDF of every page, made as a run makes it. A longer document gets page 1 as a picture; check the later pages with render_preview on a shorter document. Look at every page: the first page of a document often differs from the rest, with a letterhead and an address first, then the running header, the table header repeated and the totals at the end. Fix what you see and write again until it reads well.'
-    : 'You get the text of document 1 after each write or edit, not a picture: check the order and the values, and keep the layout simple enough to be sure of.'
+    ? 'After each write or edit you get the first document as it prints: a PDF of every page, made as a run makes it. A longer document gets page 1 as a picture; check the later pages with render_preview on a page group with fewer pages. Look at every page: the first page of a document often differs from the rest, with a letterhead and an address first, then the running header, the table header repeated and the totals at the end. Fix what you see and write again until it reads well.'
+    : 'You get the text of the first document after each write or edit, not a picture: check the order and the values, and keep the layout simple enough to be sure of.'
 }
 
 The tree has the shape of the docx library's options, with a \`type\` on each node. Values are as in docx: alignment \`"right"\`, border style \`"single"\`, width type \`"dxa"\`. Colours are six hex digits. Lengths are twips (1440 an inch, 567 a cm) or strings with a unit (\`"15mm"\`, \`"10pt"\`); font \`size\` is half-points (\`20\` is 10 pt) or \`"10pt"\`.
@@ -325,9 +328,9 @@ The tree has the shape of the docx library's options, with a \`type\` on each no
     }
 - \`Table\`: \`rows\`, \`width: { size, type: "dxa" }\`, \`columnWidths\` (they should add up to the width; the text width of A4 with 20 mm margins is 9638 twips), \`layout: "fixed"\`, \`alignment\`, \`borders: { top, bottom, left, right, insideHorizontal, insideVertical }\`, \`margins\` (cell padding). \`TableRow\`: \`children\`, \`tableHeader\` (repeats on each page), \`cantSplit\`, \`height: { value, rule }\`. \`TableCell\`: \`children\`, \`width\`, \`columnSpan\`, \`rowSpan\`, \`shading: { fill }\`, \`borders\`, \`margins\`, \`verticalAlign\`. Use borderless tables to place blocks side by side.
 
-The tags and data are the same as in HTML: \`{d.doc.invoiceNo}\`, \`{d.doc.invoiceDate:formatD('DD.MM.YYYY')}\`.
-- A loop is a table row with \`[i]\` tags and, right after it, a row with \`{d.doc.lines[i+1]}\` in its first cell. A loop stays in one part: the body, a header or a footer.
-- An optional line: \`{d.doc.address1}{d.doc.address2:ifEM:hideBegin}\`, then a run with \`break: 1\` and \`{d.doc.address2}{d.doc.address2:hideEnd}\`. In Word that is a line break (Shift+Enter).
+The tags and data are the same as in HTML: \`{d.pageGroup.invoiceNo}\`, \`{d.pageGroup.invoiceDate:formatD('DD.MM.YYYY')}\`.
+- A loop is a table row with \`[i]\` tags and, right after it, a row with \`{d.pageGroup.lines[i+1]}\` in its first cell. A loop stays in one part: the body, a header or a footer.
+- An optional line: \`{d.pageGroup.address1}{d.pageGroup.address2:ifEM:hideBegin}\`, then a run with \`break: 1\` and \`{d.pageGroup.address2}{d.pageGroup.address2:hideEnd}\`. In Word that is a line break (Shift+Enter).
 - Page numbers are PageNumber nodes, which are Word's own fields. Never write them as tags.
 - Pictures are inserted in the file and are the same in every document; \`{asset('name')}\` is for HTML only.
 - When the user types tags in Word themselves: Word types curly quotes by default, and Carbone prints a tag with them as text. Tell them to turn off smart quotes (File, Options, Proofing, AutoCorrect Options, AutoFormat As You Type).`,
@@ -349,15 +352,15 @@ Business documents are read quickly, filed and often printed in black and white.
 
 - read_sample_page: the numbered text of any page${masked ? ' (masked)' : ''}.
 - write_definition: saves the YAML as the job's definition and returns the extraction report.
-- write_template: saves the HTML template of one output (\`output\`: its id or name, default the first) and returns the visible text of document 1. Not for an output with a Word template.
-- write_word_template: designs a Word template from a JSON tree and saves it as a new file the output uses.
+- write_template: saves the HTML of one template (\`template\`: its id or name, default the first) and returns the visible text of the first document. Not for a Word template.
+- write_word_template: designs a Word template from a JSON tree and saves it as a new file the template uses.
 - read_word_template: lists a Word template's parts, or returns one part's XML as edit_word_template matches it.
-- edit_word_template: replaces text in a Word template's XML and saves the result as a new file the output uses.
-- render_preview: renders any document with the job's definition and one output's template, HTML or Word, and returns the counts, the tag check's problems and its visible text${visual ? ', and for Word, the document as it prints' : ''}.
-- add_output: adds an output with an HTML or Word template, a name and formats, using the starter template until you write one. Only when the user asks for another set of files, such as the lines of an invoice as a separate document.
-- remove_output: removes an output and its template. Only when the user asks; the last output cannot be removed.
-- list_jobs: the other jobs with their definition type, outputs and whether they have a template.
-- read_job_files: another job's definition YAML and the template HTML of each of its outputs.
+- edit_word_template: replaces text in a Word template's XML and saves the result as a new file the template uses.
+- render_preview: renders the document of any page group with the job's definition and one template, HTML or Word, and returns the counts, the tag check's problems and its visible text${visual ? ', and for Word, the document as it prints' : ''}.
+- add_template: adds a template, HTML or Word, with a name and formats, using the starter until you write it. Only when the user asks for another set of documents, such as the lines of an invoice as a separate document.
+- remove_template: removes a template. Only when the user asks; the last template cannot be removed.
+- list_jobs: the other jobs with their definition type, templates and whether those have content of their own.
+- read_job_files: another job's definition YAML and the content of each of its templates.
 - read_carbone_reference: one reference file of the Carbone syntax reference, such as formatters or html-templates.
 ${OTHER_JOBS_RULE}
 Values in tool results are ${masked ? 'masked like the pages' : 'shown as extracted'}.`,
@@ -384,18 +387,18 @@ ${fence('text', `${ruler(width)}\n${preview.join('\n')}`)}${
 
 ${definitionYaml ? fence('yaml', definitionYaml) : 'None yet.'}`,
 
-    `## Current outputs
+    `## Current templates
 
-Each document of a run becomes the files of every output. The first output's files are named after the document; the others add their name, so a document named \`invoice\` gives \`invoice.pdf\` and \`invoice-lines.pdf\`.
+Each page group of a run becomes a document through every template. The first template's files are named after the document; the others add their name, so a document named \`invoice\` gives \`invoice.pdf\` and \`invoice-lines.pdf\`.
 
-${outputs.map((output, index) => `### ${index + 1}. ${output.label} (id \`${output.id}\`): ${formatList(output.formats)}
+${templates.map((template, index) => `### ${index + 1}. ${template.name} (id \`${template.id}\`): ${KIND_NAMES[template.kind]}, ${formatList(template.formats)}
 
 ${
-  output.template.kind === 'docx'
-    ? wordTemplateText(words[output.id])
-    : output.template.source
-      ? fence('html', output.template.source)
-      : 'No template yet: the starter template generated from the definition is used.'
+  template.kind === 'docx'
+    ? wordTemplateText(words[template.id])
+    : template.source
+      ? fence('html', template.source)
+      : 'No HTML yet: the starter template generated from the definition is used.'
 }`).join('\n\n')}`,
 
     `## Carbone syntax reference
@@ -476,34 +479,34 @@ export function trimHistory<M extends UIMessage>(messages: M[], limits: HistoryL
   return first > 0 ? kept.slice(first) : kept;
 }
 
-/** Where the tools read and write the definition and the outputs' templates: the job's draft. */
+/** Where the tools read and write the definition and the templates: the job's draft. */
 export interface DraftStore {
   readDefinition(): Promise<string>;
-  /** The job's outputs, in order. */
-  readOutputs(): Promise<JobOutput[]>;
+  /** The job's templates, in order. */
+  readTemplates(): Promise<JobTemplate[]>;
   writeDefinition(yaml: string): Promise<void>;
-  /** Save the template of the output with this id. */
-  writeTemplate(outputId: string, html: string): Promise<void>;
+  /** Save the HTML of the template with this id. */
+  writeHtml(templateId: string, html: string): Promise<void>;
   /**
-   * Change the outputs in one step and return them as saved. `change` throws an Error,
+   * Change the templates in one step and return them as saved. `change` throws an Error,
    * with a message for the model, when the change cannot be made.
    */
-  changeOutputs(change: (outputs: JobOutput[]) => JobOutput[]): Promise<JobOutput[]>;
+  changeTemplates(change: (templates: JobTemplate[]) => JobTemplate[]): Promise<JobTemplate[]>;
   /**
-   * Store a Word template the assistant made as a new file and point the output at it.
-   * An HTML output becomes a Word one only while it has no HTML template of its own.
-   * Throws an Error with a message for the model when the output is gone or has one.
+   * Store a Word template the assistant made as a new file and point the template at it.
+   * An HTML template becomes a Word one only while it has no HTML of its own.
+   * Throws an Error with a message for the model when the template is gone or has HTML.
    */
-  writeWordTemplate(outputId: string, file: { name: string; content: Uint8Array; previousId: string | null }): Promise<TemplateFileView>;
+  writeWordTemplate(templateId: string, file: { name: string; content: Uint8Array; previousId: string | null }): Promise<TemplateFileView>;
 }
 
-/** The definition and outputs of a job: its active version's when it has one, else its draft's. */
+/** The definition and templates of a job: its active version's when it has one, else its draft's. */
 export interface JobFiles {
   id: string;
   name: string;
   /** The definition YAML; empty when the job has none yet. */
   definitionYaml: string;
-  outputs: JobOutputFiles[];
+  templates: JobTemplateFiles[];
 }
 
 /**
@@ -561,8 +564,8 @@ function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max)}\n(truncated)`;
 }
 
-/** Mask every string and number in a document; keeps its shape and number types. */
-export function maskDocument(value: unknown): unknown {
+/** Mask every string and number in a page group; keeps its shape and number types. */
+export function maskPageGroup(value: unknown): unknown {
   if (typeof value === 'string') {
     return maskText(value);
   }
@@ -571,10 +574,10 @@ export function maskDocument(value: unknown): unknown {
     return Number.isFinite(masked) ? masked : 9;
   }
   if (Array.isArray(value)) {
-    return value.map(maskDocument);
+    return value.map(maskPageGroup);
   }
   if (value !== null && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, maskDocument(item)]));
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, maskPageGroup(item)]));
   }
   return value;
 }
@@ -607,7 +610,7 @@ export function visibleText(html: string): string {
     .join('\n');
 }
 
-/** Field names with status `missing`, rows folded to `table[].column`, with how many documents miss each. */
+/** Field names with status `missing`, rows folded to `table[].column`, with how many page groups miss each. */
 function missingNames(result: ExtractResult): string[] {
   const byName = new Map<string, Set<number>>();
   for (const hit of result.hits) {
@@ -615,31 +618,31 @@ function missingNames(result: ExtractResult): string[] {
       continue;
     }
     const name = hit.name.replace(/\[\d+\]/g, '[]');
-    let docs = byName.get(name);
-    if (!docs) {
-      byName.set(name, (docs = new Set()));
+    let groups = byName.get(name);
+    if (!groups) {
+      byName.set(name, (groups = new Set()));
     }
-    docs.add(hit.document);
+    groups.add(hit.pageGroup);
   }
-  const total = result.documents.length;
+  const total = result.pageGroups.length;
   return [...byName]
     .slice(0, 40)
-    .map(([name, docs]) => (total > 1 && docs.size < total ? `${name} (in ${docs.size} of ${total} documents)` : name));
+    .map(([name, groups]) => (total > 1 && groups.size < total ? `${name} (in ${groups.size} of ${total} page groups)` : name));
 }
 
-/** The top-level fields of the first document with their status and value. */
+/** The top-level fields of the first page group with their status and value. */
 function fieldReports(result: ExtractResult, masked: boolean): FieldReport[] {
-  const doc = result.documents[0];
-  if (!doc) {
+  const group = result.pageGroups[0];
+  if (!group) {
     return [];
   }
   const status = new Map<string, FieldReport['status']>();
   for (const hit of result.hits) {
-    if (hit.document === 0 && !status.has(hit.name)) {
+    if (hit.pageGroup === 0 && !status.has(hit.name)) {
       status.set(hit.name, hit.status);
     }
   }
-  return Object.entries(doc).map(([name, value]): FieldReport => {
+  return Object.entries(group).map(([name, value]): FieldReport => {
     if (Array.isArray(value)) {
       return { name, status: value.length > 0 ? 'found' : 'empty', value: `${value.length} rows` };
     }
@@ -680,13 +683,13 @@ function templateWarnings(html: string): string[] {
 const ASSET_PLACEHOLDER = 'data:,';
 
 /**
- * Check a template, render one document to HTML with Carbone, and return the problems and
- * the visible text. Without Carbone only the check runs.
+ * Check a template, render the document of one page group to HTML with Carbone, and return
+ * the problems and the visible text. Without Carbone only the check runs.
  */
 async function renderDocument(
   html: string,
   def: Definition,
-  documents: Record<string, unknown>[],
+  pageGroups: Record<string, unknown>[],
   index: number,
   sample: Sample,
   masked: boolean,
@@ -697,17 +700,17 @@ async function renderDocument(
   if (problems.length > 0) {
     return { errors: problems.map((p) => `Line ${p.line}: ${p.message}`), textPreview: '' };
   }
-  const shown = masked ? (documents.map(maskDocument) as Record<string, unknown>[]) : documents;
-  const doc = shown[index];
-  if (!doc) {
-    return { errors: ['The definition finds no documents, so there is nothing to render.'], textPreview: '' };
+  const shown = masked ? (pageGroups.map(maskPageGroup) as Record<string, unknown>[]) : pageGroups;
+  const group = shown[index];
+  if (!group) {
+    return { errors: ['The definition finds no page groups, so there is nothing to render.'], textPreview: '' };
   }
   if (!renderer) {
     return { errors: ['Carbone is not connected, so the template was checked but not rendered. The user sets it up in Settings, under Rendering.'], textPreview: '' };
   }
   const names = new Set(assets.map((asset) => asset.name));
   try {
-    const out = await renderer({ template: html, data: templateData(html, doc, shown, sample), format: 'html', asset: (name) => (names.has(name) ? ASSET_PLACEHOLDER : undefined) });
+    const out = await renderer({ template: html, data: templateData(html, group, shown, sample), format: 'html', asset: (name) => (names.has(name) ? ASSET_PLACEHOLDER : undefined) });
     return { errors: [], textPreview: truncate(visibleText(Buffer.from(out).toString('utf8')), 1500) };
   } catch (error) {
     const detail = error instanceof Error && 'detail' in error && typeof error.detail === 'string' ? ` Carbone said: ${error.detail}` : '';
@@ -726,7 +729,7 @@ interface WordRender {
 }
 
 /**
- * Check a Word template, render one document to DOCX (no conversion, so it is fast on
+ * Check a Word template, render the document of one page group to DOCX (no conversion, so it is fast on
  * every edition) and return the problems and the text of its paragraphs. With `visual`,
  * also render it for the model to look at: a PDF made as a run makes it, or page 1 as a
  * PNG when it has more than `PREVIEW_PAGES` pages.
@@ -735,7 +738,7 @@ interface WordRender {
 async function renderWord(
   bytes: Uint8Array,
   def: Definition,
-  documents: Record<string, unknown>[],
+  pageGroups: Record<string, unknown>[],
   index: number,
   sample: Sample,
   masked: boolean,
@@ -753,15 +756,15 @@ async function renderWord(
   if (problems.length > 0) {
     return none(problems.map((p) => `${p.part}: ${p.message}`));
   }
-  const shown = masked ? (documents.map(maskDocument) as Record<string, unknown>[]) : documents;
-  const doc = shown[index];
-  if (!doc) {
-    return none(['The definition finds no documents, so there is nothing to render.']);
+  const shown = masked ? (pageGroups.map(maskPageGroup) as Record<string, unknown>[]) : pageGroups;
+  const group = shown[index];
+  if (!group) {
+    return none(['The definition finds no page groups, so there is nothing to render.']);
   }
   if (!renderer) {
     return none(['Carbone is not connected, so the template was checked but not rendered. The user sets it up in Settings, under Rendering.']);
   }
-  const data = templateData(template, doc, shown, sample);
+  const data = templateData(template, group, shown, sample);
   let textPreview: string;
   try {
     const out = await renderer({ kind: 'docx', template: bytes, data, format: 'docx' });
@@ -782,7 +785,7 @@ async function renderWord(
   } catch (error) {
     return { errors: [], textPreview, view: null, pages: null, note: `The document could not be rendered to PDF, so you see its text only: ${carboneMessage(error)}` };
   }
-  const long = `Document ${index + 1} has ${pages ?? `more than ${PREVIEW_PAGES}`} pages, so you see page 1 only. To check the later pages, render a document with fewer pages (render_preview with document).`;
+  const long = `The document of page group ${index + 1} has ${pages ?? `more than ${PREVIEW_PAGES}`} pages, so you see page 1 only. To check the later pages, render a page group with fewer pages (render_preview with pageGroup).`;
   try {
     const png = await renderer({ kind: 'docx', template: bytes, data, format: 'png' });
     return { errors: [], textPreview, view: 'png', visual: { mediaType: 'image/png', data: png }, pages, note: long };
@@ -809,35 +812,35 @@ export function definitionType(yaml: string): string | null {
   }
 }
 
-/** A job as `list_jobs` reports it: its id, name, definition type, outputs and whether it has a template. */
+/** A job as `list_jobs` reports it: its id, name, definition type, templates and whether they have content of their own. */
 export function jobListing(job: JobFiles): JobListing {
   return {
     id: job.id,
     name: job.name,
     type: definitionType(job.definitionYaml),
-    outputs: job.outputs.map((output) => output.label),
-    hasTemplate: job.outputs.some((output) => output.templateHtml !== null || output.fileId !== null),
+    templates: job.templates.map((template) => template.name),
+    hasOwnContent: job.templates.some((template) => template.html !== null || template.fileId !== null),
   };
 }
 
-/** An output's files as another job's reader hands them over. */
-export function outputFiles(output: JobOutput): JobOutputFiles {
-  const html = output.template.kind === 'html' ? output.template.source : null;
-  const fileId = output.template.kind === 'docx' ? output.template.fileId : null;
-  return { id: output.id, label: output.label, formats: output.formats, kind: output.template.kind, templateHtml: html, fileId };
+/** A template's files as another job's reader hands them over. */
+export function templateFiles(template: JobTemplate): JobTemplateFiles {
+  const html = template.kind === 'html' ? template.source : null;
+  const fileId = template.kind === 'docx' ? template.fileId : null;
+  return { id: template.id, name: template.name, formats: template.formats, kind: template.kind, html, fileId };
 }
 
-/** An output as tool results report it. */
-function outputListing(output: JobOutput): OutputListing {
-  return { id: output.id, label: output.label, formats: output.formats, kind: output.template.kind, template: hasOwnTemplate(output.template) ? 'saved' : 'starter' };
+/** A template as tool results report it. */
+function templateListing(template: JobTemplate): TemplateListing {
+  return { id: template.id, name: template.name, formats: template.formats, kind: template.kind, content: hasOwnContent(template) ? 'saved' : 'starter' };
 }
 
-/** Why there is no output `key`, with the outputs there are. */
-function noOutput(key: string, outputs: JobOutput[]): ToolFailure {
-  return fail(`There is no output "${key}". The job's outputs are ${outputs.map((output) => `${output.label} (id ${output.id})`).join(', ')}.`);
+/** Why there is no template `key`, with the templates there are. */
+function noTemplate(key: string, templates: JobTemplate[]): ToolFailure {
+  return fail(`There is no template "${key}". The job's templates are ${templates.map((template) => `${template.name} (id ${template.id})`).join(', ')}.`);
 }
 
-const outputParam = z.string().min(1).max(40).optional().describe("The output's id or name (default: the first output)");
+const templateParam = z.string().min(1).max(40).optional().describe("The template's id or name (default: the first template)");
 
 /** A file name that ends in `.docx`. */
 function docxName(name: string): string {
@@ -849,7 +852,7 @@ export const DRAFT_PATHS = { definition: 'definition', template: 'template' } as
 
 /**
  * The tools the chat model can call. They read the sample and write the job draft's
- * definition and the outputs and their templates; none of them reaches the IBM i. Every write is validated,
+ * definition and templates; none of them reaches the IBM i. Every write is validated,
  * and results carry only (masked) extraction data.
  *
  * @param input - The sample, the draft store, the masking setting and the other jobs' files
@@ -894,47 +897,48 @@ export function buildTools({ sample: current, store, masked, assets = [], render
   };
 
   /** Render a Word template for a tool result, keeping what the model is shown for its next step. */
-  async function showWord(toolCallId: string, bytes: Uint8Array, def: Definition, sample: Sample, index: number): Promise<WordRender & { documents: number }> {
-    let documents: Record<string, unknown>[];
+  async function showWord(toolCallId: string, bytes: Uint8Array, def: Definition, sample: Sample, index: number): Promise<WordRender & { pageGroups: number }> {
+    let pageGroups: Record<string, unknown>[];
     try {
-      documents = extract(def, sample).documents;
+      pageGroups = extract(def, sample).pageGroups;
     } catch (error) {
-      return { errors: [`Extraction failed: ${message(error)}`], textPreview: '', view: null, pages: null, documents: 0 };
+      return { errors: [`Extraction failed: ${message(error)}`], textPreview: '', view: null, pages: null, pageGroups: 0 };
     }
-    const at = Math.min(index, Math.max(0, documents.length - 1));
-    const rendered = await renderWord(bytes, def, documents, at, sample, masked, renderer, visual);
+    const at = Math.min(index, Math.max(0, pageGroups.length - 1));
+    const rendered = await renderWord(bytes, def, pageGroups, at, sample, masked, renderer, visual);
     if (rendered.visual) {
       visuals.set(toolCallId, rendered.visual);
     }
-    return { ...rendered, documents: documents.length };
+    return { ...rendered, pageGroups: pageGroups.length };
   }
 
-  /** The Word template an output uses now: its file, or the starter template made from the definition. */
-  async function currentWord(output: JobOutput, def: Definition): Promise<{ bytes: Uint8Array; name: string; fileId: string | null } | ToolFailure> {
-    if (output.template.kind === 'docx' && output.template.fileId !== null) {
-      const file = await templateFile?.(output.template.fileId).catch(() => null);
+  /** The Word file a template uses now: its own, or the starter made from the definition. */
+  async function currentWord(template: JobTemplate, def: Definition): Promise<{ bytes: Uint8Array; name: string; fileId: string | null } | ToolFailure> {
+    if (template.kind === 'docx' && template.fileId !== null) {
+      const file = await templateFile?.(template.fileId).catch(() => null);
       return file
-        ? { bytes: file.content, name: file.name, fileId: output.template.fileId }
-        : fail(`The Word template of the ${output.label} output is gone. Write a new one with write_word_template, or the user uploads one.`);
+        ? { bytes: file.content, name: file.name, fileId: template.fileId }
+        : fail(`The Word file of the ${template.name} template is gone. Write a new one with write_word_template, or the user uploads one.`);
     }
     return { bytes: await starterDocx(def), name: `${def.type}.docx`, fileId: null };
   }
 
-  /** Save a Word template the assistant made for an output, render document 1 and report both. */
-  async function saveWord(toolCallId: string, output: JobOutput, file: { name: string; content: Uint8Array; previousId: string | null }, def: Definition, sample: Sample): Promise<WordTemplateResult> {
+  /** Save a Word template the assistant made, render the first document and report both. */
+  async function saveWord(toolCallId: string, template: JobTemplate, file: { name: string; content: Uint8Array; previousId: string | null }, def: Definition, sample: Sample): Promise<WordTemplateResult> {
     if (file.content.length > MAX_DOCX_BYTES) {
       return fail(`The file is larger than ${MAX_DOCX_BYTES / 1024 / 1024} MB, the most Spooldoc takes. Use smaller pictures.`);
     }
     let saved: TemplateFileView;
     try {
-      saved = await store.writeWordTemplate(output.id, file);
+      saved = await store.writeWordTemplate(template.id, file);
     } catch (error) {
       return fail(`Could not save the Word template: ${message(error)}`);
     }
     const rendered = await showWord(toolCallId, file.content, def, sample, 0);
     return {
       ok: rendered.errors.length === 0,
-      output: output.label,
+      template: template.name,
+      templateId: template.id,
       file: { id: saved.id, name: saved.name, size: saved.size },
       errors: rendered.errors,
       textPreview: rendered.textPreview,
@@ -944,15 +948,15 @@ export function buildTools({ sample: current, store, masked, assets = [], render
     };
   }
 
-  /** The output `key` names, or the first. */
-  async function pickOutput(key: string | undefined): Promise<JobOutput | ToolFailure> {
-    let outputs: JobOutput[];
+  /** The template `key` names, or the first. */
+  async function pickTemplate(key: string | undefined): Promise<JobTemplate | ToolFailure> {
+    let templates: JobTemplate[];
     try {
-      outputs = await store.readOutputs();
+      templates = await store.readTemplates();
     } catch (error) {
-      return fail(`Could not read the job's outputs: ${message(error)}`);
+      return fail(`Could not read the job's templates: ${message(error)}`);
     }
-    return findOutput(outputs, key) ?? noOutput(key ?? '', outputs);
+    return findTemplate(templates, key) ?? noTemplate(key ?? '', templates);
   }
 
   async function linked(): Promise<{ type: string; def: Definition } | ToolFailure> {
@@ -988,7 +992,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
     write_definition: tool({
       description:
-        "Save the document definition YAML as the job's definition, run the extraction on this sample and return the report: documents found, each field of the first document with its status, missing fields, warnings and the first document as JSON.",
+        "Save the definition YAML as the job's definition, run the extraction on this sample and return the report: page groups found, each field of the first page group with its status, missing fields, warnings and the first page group as JSON.",
       inputSchema: z.object({ yaml: z.string().min(1).max(200_000).describe('The complete definition YAML') }),
       execute: inTurn(async ({ yaml }): Promise<WriteDefinitionResult> => {
         let def: Definition;
@@ -1015,25 +1019,25 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         } catch (error) {
           return fail(`Saved the definition, but the extraction failed: ${message(error)}`);
         }
-        const first = result.documents[0];
+        const first = result.pageGroups[0];
         return {
           ok: true,
           type: def.type,
           path: DRAFT_PATHS.definition,
-          documents: result.documents.length,
+          pageGroups: result.pageGroups.length,
           fields: fieldReports(result, masked),
           missing: missingNames(result),
           warnings: extractWarnings(def, sample, result),
-          preview: first ? truncate(JSON.stringify(masked ? maskDocument(first) : first, null, 1), 2000) : '',
+          preview: first ? truncate(JSON.stringify(masked ? maskPageGroup(first) : first, null, 1), 2000) : '',
         };
       }),
     }),
 
     write_template: tool({
       description:
-        "Save the HTML template (Carbone tags) as the template of one of the job's outputs (the first unless `output` names another), check it, render the first document and return any errors, by line, and its visible text.",
-      inputSchema: z.object({ html: z.string().min(1).max(500_000).describe('The complete HTML template'), output: outputParam }),
-      execute: inTurn(async ({ html, output: key }): Promise<WriteTemplateResult> => {
+        "Save the HTML (Carbone tags) of one of the job's templates (the first unless `template` names another), check it, render the first document and return any errors, by line, and its visible text.",
+      inputSchema: z.object({ html: z.string().min(1).max(500_000).describe('The complete HTML template'), template: templateParam }),
+      execute: inTurn(async ({ html, template: key }): Promise<WriteTemplateResult> => {
         const sample = await readSample();
         if ('ok' in sample) {
           return sample;
@@ -1042,40 +1046,41 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         if ('ok' in before) {
           return before;
         }
-        const output = await pickOutput(key);
-        if ('ok' in output) {
-          return output;
+        const template = await pickTemplate(key);
+        if ('ok' in template) {
+          return template;
         }
-        if (output.template.kind === 'docx') {
-          return fail(`The ${output.label} output uses a Word template. Change it with edit_word_template, or design a new one with write_word_template.`);
+        if (template.kind === 'docx') {
+          return fail(`The ${template.name} template is a Word template. Change it with edit_word_template, or design a new one with write_word_template.`);
         }
         try {
-          await store.writeTemplate(output.id, html);
+          await store.writeHtml(template.id, html);
         } catch (error) {
           return fail(`Could not save the template: ${message(error)}`);
         }
         const path = DRAFT_PATHS.template;
         const warnings = templateWarnings(html);
         const current = before;
-        let documents: Record<string, unknown>[];
+        const named = { template: template.name, templateId: template.id };
+        let pageGroups: Record<string, unknown>[];
         try {
-          documents = extract(current.def, sample).documents;
+          pageGroups = extract(current.def, sample).pageGroups;
         } catch (error) {
-          return { ok: false, path, output: output.label, errors: [`Extraction failed: ${message(error)}`], warnings, textPreview: '' };
+          return { ok: false, path, ...named, errors: [`Extraction failed: ${message(error)}`], warnings, textPreview: '' };
         }
-        const rendered = await renderDocument(html, current.def, documents, 0, sample, masked, assets, renderer);
-        return { ok: rendered.errors.length === 0, path, output: output.label, errors: rendered.errors, warnings, textPreview: rendered.textPreview };
+        const rendered = await renderDocument(html, current.def, pageGroups, 0, sample, masked, assets, renderer);
+        return { ok: rendered.errors.length === 0, path, ...named, errors: rendered.errors, warnings, textPreview: rendered.textPreview };
       }),
     }),
 
     render_preview: tool({
       description:
-        "Render a document with the job's definition and one output's template (the first unless `output` names another) and return the document count, hit counts (found, missing, empty), missing fields, template errors and the visible text of the document.",
+        "Render the document of one page group with the job's definition and one of its templates (the first unless `template` names another) and return the page group count, hit counts (found, missing, empty), missing fields, template errors and the visible text of the document.",
       inputSchema: z.object({
-        document: z.number().int().min(0).optional().describe('0-based document index (default 0)'),
-        output: outputParam,
+        pageGroup: z.number().int().min(0).optional().describe('0-based page group index (default 0)'),
+        template: templateParam,
       }),
-      execute: inTurn(async ({ document, output: key }, { toolCallId }): Promise<RenderPreviewResult> => {
+      execute: inTurn(async ({ pageGroup, template: key }, { toolCallId }): Promise<RenderPreviewResult> => {
         const sample = await readSample();
         if ('ok' in sample) {
           return sample;
@@ -1090,22 +1095,22 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         } catch (error) {
           return fail(`Extraction failed: ${message(error)}`);
         }
-        const output = await pickOutput(key);
-        if ('ok' in output) {
-          return output;
+        const template = await pickTemplate(key);
+        if ('ok' in template) {
+          return template;
         }
-        const index = Math.min(document ?? 0, Math.max(0, result.documents.length - 1));
+        const index = Math.min(pageGroup ?? 0, Math.max(0, result.pageGroups.length - 1));
         let rendered: { errors: string[]; textPreview: string; view?: WordView; pages?: number | null; note?: string };
-        if (output.template.kind === 'docx') {
-          const word = await currentWord(output, current.def);
+        if (template.kind === 'docx') {
+          const word = await currentWord(template, current.def);
           if ('ok' in word) {
             return word;
           }
           const { errors, textPreview, view, pages, note } = await showWord(toolCallId, word.bytes, current.def, sample, index);
           rendered = { errors, textPreview, view, pages, ...(note ? { note } : {}) };
         } else {
-          const html = output.template.source ?? starterTemplate(current.def);
-          rendered = await renderDocument(html, current.def, result.documents, index, sample, masked, assets, renderer);
+          const html = template.source ?? starterTemplate(current.def);
+          rendered = await renderDocument(html, current.def, result.pageGroups, index, sample, masked, assets, renderer);
         }
         const hits = { found: 0, missing: 0, empty: 0 };
         for (const hit of result.hits) {
@@ -1113,10 +1118,11 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         }
         return {
           ok: true,
-          output: output.label,
-          document: index,
-          documents: result.documents.length,
-          template: hasOwnTemplate(output.template) ? 'saved' : 'starter',
+          template: template.name,
+          templateId: template.id,
+          pageGroup: index,
+          pageGroups: result.pageGroups.length,
+          content: hasOwnContent(template) ? 'saved' : 'starter',
           hits,
           missing: missingNames(result),
           templateErrors: rendered.errors,
@@ -1130,13 +1136,13 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
     write_word_template: tool({
       description:
-        "Design a Word template for one of the job's outputs (the first unless `output` names another) and save it as a new file the output uses: `design` is a JSON tree in the shape of the docx library's options (see Word templates in the instructions). Returns the tag check's and Carbone's errors, the text of document 1 and, when you can see files, document 1 as it prints. The user's earlier file is kept and can be put back.",
+        "Design one of the job's templates as a Word template (the first unless `template` names another) and save it as a new file the template uses: `design` is a JSON tree in the shape of the docx library's options (see Word templates in the instructions). Returns the tag check's and Carbone's errors, the text of the first document and, when you can see files, the first document as it prints. The user's earlier file is kept and can be put back.",
       inputSchema: z.object({
         design: z.record(z.string(), z.unknown()).describe('The document: { styles?, sections: [{ properties?, headers?, footers?, children }] }'),
         name: z.string().trim().min(1).max(120).optional().describe("The file's name, such as invoice.docx (default: the current file's name, or the definition type)"),
-        output: outputParam,
+        template: templateParam,
       }),
-      execute: inTurn(async ({ design, name, output: key }, { toolCallId }): Promise<WordTemplateResult> => {
+      execute: inTurn(async ({ design, name, template: key }, { toolCallId }): Promise<WordTemplateResult> => {
         const sample = await readSample();
         if ('ok' in sample) {
           return sample;
@@ -1145,9 +1151,9 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         if ('ok' in current) {
           return current;
         }
-        const output = await pickOutput(key);
-        if ('ok' in output) {
-          return output;
+        const template = await pickTemplate(key);
+        if ('ok' in template) {
+          return template;
         }
         let content: Uint8Array;
         try {
@@ -1156,45 +1162,45 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         } catch (error) {
           return fail(error instanceof DesignError ? `The design has problems, nothing was saved:\n${error.problems.join('\n')}` : `Could not build the Word file: ${message(error)}`);
         }
-        const previousId = output.template.kind === 'docx' ? output.template.fileId : null;
-        const word = output.template.kind === 'docx' && previousId !== null ? await templateFile?.(previousId).catch(() => null) : null;
-        return saveWord(toolCallId, output, { name: docxName(name ?? word?.name ?? `${current.def.type}.docx`), content, previousId }, current.def, sample);
+        const previousId = template.kind === 'docx' ? template.fileId : null;
+        const word = template.kind === 'docx' && previousId !== null ? await templateFile?.(previousId).catch(() => null) : null;
+        return saveWord(toolCallId, template, { name: docxName(name ?? word?.name ?? `${current.def.type}.docx`), content, previousId }, current.def, sample);
       }),
       toModelOutput: withVisual,
     }),
 
     read_word_template: tool({
       description:
-        "Read the Word template of an output (the first unless `output` names another): without `part`, the parts it has (word/document.xml, headers, footers) with their sizes; with `part`, that part's XML, with runs of the same formatting merged, as edit_word_template matches it. Long parts come in pieces: read on with `from`.",
+        "Read one of the job's Word templates (the first unless `template` names another): without `part`, the parts it has (word/document.xml, headers, footers) with their sizes; with `part`, that part's XML, with runs of the same formatting merged, as edit_word_template matches it. Long parts come in pieces: read on with `from`.",
       inputSchema: z.object({
         part: z.string().min(1).max(60).optional().describe('A part, such as word/document.xml or word/header1.xml'),
         from: z.number().int().min(0).optional().describe('The character to start at (default 0)'),
-        output: outputParam,
+        template: templateParam,
       }),
-      execute: inTurn(async ({ part, from = 0, output: key }): Promise<ReadWordTemplateResult> => {
+      execute: inTurn(async ({ part, from = 0, template: key }): Promise<ReadWordTemplateResult> => {
         const current = await linked();
         if ('ok' in current) {
           return current;
         }
-        const output = await pickOutput(key);
-        if ('ok' in output) {
-          return output;
+        const template = await pickTemplate(key);
+        if ('ok' in template) {
+          return template;
         }
-        if (output.template.kind !== 'docx') {
-          return fail(`The ${output.label} output uses an HTML template, which is in the instructions. Design a Word template with write_word_template.`);
+        if (template.kind !== 'docx') {
+          return fail(`The ${template.name} template is an HTML template, which is in the instructions. Design a Word template with write_word_template.`);
         }
-        const word = await currentWord(output, current.def);
+        const word = await currentWord(template, current.def);
         if ('ok' in word) {
           return word;
         }
         const file = word.fileId === null ? null : word.name;
         try {
           if (part === undefined) {
-            return { ok: true, output: output.label, file, parts: docxParts(word.bytes) };
+            return { ok: true, template: template.name, file, parts: docxParts(word.bytes) };
           }
           const xml = readDocxPart(word.bytes, part);
           const piece = xml.slice(from, from + PART_READ_MAX);
-          return { ok: true, output: output.label, file, part, size: xml.length, from, xml: piece, more: from + piece.length < xml.length };
+          return { ok: true, template: template.name, file, part, size: xml.length, from, xml: piece, more: from + piece.length < xml.length };
         } catch (error) {
           return fail(message(error));
         }
@@ -1203,7 +1209,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
     edit_word_template: tool({
       description:
-        "Change the Word template of an output (the first unless `output` names another), the user's own file or the starter template, and save the result as a new file the output uses. Each edit replaces `find`, which must occur exactly once in the part's XML as read_word_template shows it, with `replace`. The edits apply in order, all or none, and the XML must stay well-formed. Returns what write_word_template returns.",
+        "Change one of the job's Word templates (the first unless `template` names another), the user's own file or the starter, and save the result as a new file the template uses. Each edit replaces `find`, which must occur exactly once in the part's XML as read_word_template shows it, with `replace`. The edits apply in order, all or none, and the XML must stay well-formed. Returns what write_word_template returns.",
       inputSchema: z.object({
         edits: z
           .array(
@@ -1215,9 +1221,9 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           )
           .min(1)
           .max(50),
-        output: outputParam,
+        template: templateParam,
       }),
-      execute: inTurn(async ({ edits, output: key }, { toolCallId }): Promise<WordTemplateResult> => {
+      execute: inTurn(async ({ edits, template: key }, { toolCallId }): Promise<WordTemplateResult> => {
         const sample = await readSample();
         if ('ok' in sample) {
           return sample;
@@ -1226,14 +1232,14 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         if ('ok' in current) {
           return current;
         }
-        const output = await pickOutput(key);
-        if ('ok' in output) {
-          return output;
+        const template = await pickTemplate(key);
+        if ('ok' in template) {
+          return template;
         }
-        if (output.template.kind !== 'docx') {
-          return fail(`The ${output.label} output uses an HTML template. Change it with write_template, or design a Word template with write_word_template.`);
+        if (template.kind !== 'docx') {
+          return fail(`The ${template.name} template is an HTML template. Change it with write_template, or design a Word template with write_word_template.`);
         }
-        const word = await currentWord(output, current.def);
+        const word = await currentWord(template, current.def);
         if ('ok' in word) {
           return word;
         }
@@ -1243,64 +1249,64 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         } catch (error) {
           return fail(message(error));
         }
-        return saveWord(toolCallId, output, { name: word.name, content, previousId: word.fileId }, current.def, sample);
+        return saveWord(toolCallId, template, { name: word.name, content, previousId: word.fileId }, current.def, sample);
       }),
       toModelOutput: withVisual,
     }),
 
-    add_output: tool({
+    add_template: tool({
       description:
-        "Add an output to the job: another set of files made from each document, with its own template and formats. It uses the starter template until write_template or write_word_template writes one. Only when the user asks for another output.",
+        "Add a template to the job: another document made from each page group, with its own content and formats. It uses the starter until write_template or write_word_template writes it. Only when the user asks for another template.",
       inputSchema: z.object({
-        label: z.string().trim().min(1).max(40).describe('A short name, such as "Lines". Other outputs\' files add it to their names.'),
+        name: z.string().trim().min(1).max(40).describe('A short name, such as "Lines". The files of every template but the first add it to their names.'),
         kind: z.enum(['html', 'docx']).optional().describe('html (default) for an HTML template, which makes PDF and HTML; docx for a Word template, which makes PDF and DOCX'),
         formats: z
-          .array(z.enum(OUTPUT_FORMATS))
+          .array(z.enum(FORMATS))
           .min(1)
           .optional()
           .describe('The formats to make (default PDF)'),
       }),
-      execute: inTurn(async ({ label, kind = 'html', formats }): Promise<OutputChangeResult> => {
+      execute: inTurn(async ({ name, kind = 'html', formats }): Promise<TemplateChangeResult> => {
         const other = formats?.find((format) => !KIND_FORMATS[kind].includes(format));
         if (other) {
           return fail(`${kind === 'docx' ? 'A Word' : 'An HTML'} template makes ${formatList(KIND_FORMATS[kind])} files, not ${other.toUpperCase()}.`);
         }
-        let added: JobOutput | undefined;
+        let added: JobTemplate | undefined;
         try {
-          const outputs = await store.changeOutputs((outputs) => {
-            if (labelTaken(outputs, label)) {
-              throw new Error(`There is already an output named "${label}". Pick another name.`);
+          const templates = await store.changeTemplates((templates) => {
+            if (nameTaken(templates, name)) {
+              throw new Error(`There is already a template named "${name}". Pick another name.`);
             }
-            added = newOutput(outputs, label, formats);
+            added = newTemplate(templates, name, formats);
             if (kind === 'docx') {
-              added = withTemplate(added, { kind: 'docx', fileId: null });
+              added = withContent(added, { kind: 'docx', fileId: null });
             }
-            return [...outputs, added];
+            return [...templates, added];
           });
-          return { ok: true, output: outputListing(added!), outputs: outputs.map(outputListing) };
+          return { ok: true, template: templateListing(added!), templates: templates.map(templateListing) };
         } catch (error) {
           return fail(message(error));
         }
       }),
     }),
 
-    remove_output: tool({
-      description: 'Remove one of the job\'s outputs and its template. The last output cannot be removed. Only when the user asks.',
-      inputSchema: z.object({ output: z.string().min(1).max(40).describe("The output's id or name") }),
-      execute: inTurn(async ({ output: key }): Promise<OutputChangeResult> => {
-        let removed: JobOutput | undefined;
+    remove_template: tool({
+      description: 'Remove one of the job\'s templates. The last template cannot be removed. Only when the user asks.',
+      inputSchema: z.object({ template: z.string().min(1).max(40).describe("The template's id or name") }),
+      execute: inTurn(async ({ template: key }): Promise<TemplateChangeResult> => {
+        let removed: JobTemplate | undefined;
         try {
-          const outputs = await store.changeOutputs((outputs) => {
-            removed = findOutput(outputs, key) ?? undefined;
+          const templates = await store.changeTemplates((templates) => {
+            removed = findTemplate(templates, key) ?? undefined;
             if (!removed) {
-              throw new Error(noOutput(key, outputs).error);
+              throw new Error(noTemplate(key, templates).error);
             }
-            if (outputs.length === 1) {
-              throw new Error('A job needs at least one output, so the last one cannot be removed.');
+            if (templates.length === 1) {
+              throw new Error('A job needs at least one template, so the last one cannot be removed.');
             }
-            return outputs.filter((output) => output !== removed);
+            return templates.filter((template) => template !== removed);
           });
-          return { ok: true, output: outputListing(removed!), outputs: outputs.map(outputListing) };
+          return { ok: true, template: templateListing(removed!), templates: templates.map(templateListing) };
         } catch (error) {
           return fail(message(error));
         }
@@ -1309,7 +1315,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
     list_jobs: tool({
       description:
-        'List the other jobs with their id, name, definition type, outputs and whether they have a template, to pick one to start from. Only when the user asks to reuse another job.',
+        'List the other jobs with their id, name, definition type, templates and whether those have content of their own, to pick one to start from. Only when the user asks to reuse another job.',
       inputSchema: z.object({}),
       execute: async (): Promise<ListJobsResult> => {
         if (!jobs) {
@@ -1325,7 +1331,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
     read_job_files: tool({
       description:
-        "Read another job's definition YAML and each of its outputs with its formats and template HTML (its active version's, else its draft's) to start this job from them. Only when the user asks to reuse that job.",
+        "Read another job's definition YAML and each of its templates with its formats and HTML (its active version's, else its draft's) to start this job from them. Only when the user asks to reuse that job.",
       inputSchema: z.object({ id: z.string().min(1).max(64).describe('The job id from list_jobs') }),
       execute: async ({ id }): Promise<ReadJobFilesResult> => {
         if (!jobs) {
@@ -1345,7 +1351,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           id: job.id,
           name: job.name,
           definitionYaml: job.definitionYaml.trim() ? job.definitionYaml : null,
-          outputs: job.outputs,
+          templates: job.templates,
         };
       },
     }),

@@ -244,7 +244,7 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
                     <div className="text-muted-foreground text-xs">
                       {run.status === 'running'
                         ? 'Still running; see the Job log.'
-                        : run.error ?? `${run.documents} ${run.documents === 1 ? 'document' : 'documents'} delivered`}
+                        : run.error ?? `${run.files.length} ${run.files.length === 1 ? 'file' : 'files'} delivered`}
                     </div>
                   </div>
                   {run.files.slice(0, 3).map((file) => (

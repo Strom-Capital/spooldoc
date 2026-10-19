@@ -22,7 +22,7 @@ inspector.
 | Source | The server, the output queue, and filters on spooled file name, user data, job name, job user and form type. Each filter is a "contains" match; empty means any file on the queue. |
 | Trigger | On demand, or Watching the queue. See [Watching a queue](#watching-a-queue). |
 | Extract | The [definition](definitions.md): the YAML that turns pages into JSON. |
-| Render | The outputs: each has a name, a [template](templates.md) and the formats it makes, PDF, HTML or both. The starter template renders every field and table of the definition until you write your own. See [Outputs](#outputs). |
+| Render | The [templates](templates.md): each has a name, HTML or a Word file, and the formats it makes. The starter template renders every field and table of the definition until you write your own. See [Templates](#templates). |
 | Destination | Where the files go. See [Destinations](destinations.md). |
 | Finish | What happens to the spooled file after every document was delivered. |
 
@@ -30,8 +30,8 @@ inspector.
 
 The extract and render steps open the workbench: the sample's pages with
 the field hits highlighted, the definition, the extracted JSON, the
-template and the rendered document: the HTML of an HTML template, or the
-PDF of a Word template. Pick a spooled file on
+template and the rendered document of one page group: the HTML of an
+HTML template, or the PDF of a Word template. Pick a spooled file on
 the queue as the preview sample; Spooldoc captures it into the database.
 Only drafts have a preview sample, and samples no job uses are deleted
 with the old runs.
@@ -41,29 +41,28 @@ the definition and the template to the draft, reads the extraction report
 and renders the result, and the page view, JSON and preview update as it
 works. Everything it writes can be edited by hand.
 
-## Outputs
+## Templates
 
-Each document a run extracts becomes the files of every output of the
-job. A new job has one output, Document, that makes a PDF. Add another
-when the same data needs a second set of files, for example an invoice
-as a PDF and its lines as a separate HTML page.
+The definition splits a spooled file into page groups, such as one
+invoice each, and every page group becomes a document through every
+template of the job. A new job has one template, Template 1, that makes
+a PDF. Add another when the same data needs a second document, for
+example an invoice as a PDF and its lines as a separate HTML page.
 
-The render step's header picks the output that the template editor and
-the preview show, and holds its kind of template, its format switches,
-Add output and a menu to rename or remove it. An HTML template makes PDF
-and HTML files; a [Word template](templates.md#word-templates) makes PDF
-and DOCX files. Switching the kind starts the output from the other
-kind's starter template, and asks first when the output has a template of
-its own; saved versions keep theirs. The last output cannot be removed. The pipeline
-shows one output as its template and formats, and several as "2 outputs"
-with each name and its formats.
+The render step's header picks the template that the editor and the
+preview show, and holds its kind, its format switches, Add template and
+a menu to rename or remove it. An HTML template makes PDF and HTML
+files; a [Word template](templates.md#word-templates) makes PDF and DOCX
+files. Switching the kind starts the template from the other kind's
+starter, and asks first when it has HTML or a Word file of its own;
+saved versions keep theirs. The last template cannot be removed. The
+pipeline shows one template as its kind and formats, and several as
+"2 templates" with each name and its formats.
 
-The first output's files are named after the document, as in
-`invoice-260101.pdf`. Every other output adds its name, so a Lines output
-gives `invoice-260101-lines.html`. Two outputs cannot have the same name.
-
-Jobs saved before outputs have one output, Document, with their template
-and formats, and their old versions still run.
+The first template's files are named after the document, as in
+`invoice-260101.pdf`. Every other template adds its name, so a Lines
+template gives `invoice-260101-lines.html`. Two templates cannot have the
+same name.
 
 ## Versions
 
@@ -74,7 +73,7 @@ run is logged against the version it used. Restoring a version copies it
 back into the draft. A draft that differs from the active version is
 marked, so you know what runs and what you are still working on.
 
-A version must be complete: a server and queue, a definition, outputs
+A version must be complete: a server and queue, a definition, templates
 with different names, and a destination, plus the queue to move files to
 when the finish action is Move.
 

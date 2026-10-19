@@ -3,7 +3,7 @@ import 'server-only';
 import { and, desc, eq, gte, inArray, lt, lte, type SQL } from 'drizzle-orm';
 import type { RunStatus, RunView } from '@/lib/types';
 import { getDb } from './db';
-import { jobs, runOutputs, runs } from './db/schema';
+import { jobs, runFiles, runs } from './db/schema';
 import { UUID } from './servers';
 
 type RunRow = typeof runs.$inferSelect;
@@ -16,10 +16,10 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
   const db = getDb();
   const ids = rows.map((row) => row.id);
   const files = await db
-    .select({ id: runOutputs.id, runId: runOutputs.runId, name: runOutputs.name, size: runOutputs.size, contentType: runOutputs.contentType, output: runOutputs.output })
-    .from(runOutputs)
-    .where(inArray(runOutputs.runId, ids))
-    .orderBy(runOutputs.outputIndex, runOutputs.documentIndex);
+    .select({ id: runFiles.id, runId: runFiles.runId, name: runFiles.name, size: runFiles.size, contentType: runFiles.contentType, template: runFiles.template })
+    .from(runFiles)
+    .where(inArray(runFiles.runId, ids))
+    .orderBy(runFiles.templateIndex, runFiles.pageGroupIndex);
   const jobRows = await db
     .select({ id: jobs.id, name: jobs.name })
     .from(jobs)
@@ -34,10 +34,10 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
     trigger: row.trigger as RunView['trigger'],
     splf: row.splf,
     status: row.status as RunStatus,
-    documents: row.documents,
+    pageGroups: row.pageGroups,
     error: row.error,
     steps: row.steps,
-    files: files.filter((f) => f.runId === row.id).map(({ id, name, size, contentType, output }) => ({ id, name, size, contentType, output })),
+    files: files.filter((f) => f.runId === row.id).map(({ id, name, size, contentType, template }) => ({ id, name, size, contentType, template })),
     startedAt: row.startedAt.toISOString(),
     finishedAt: row.finishedAt?.toISOString() ?? null,
   }));

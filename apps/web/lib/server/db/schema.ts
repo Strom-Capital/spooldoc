@@ -274,7 +274,8 @@ export const runs = pgTable(
     trigger: text('trigger').notNull(),
     splf: jsonb('splf').$type<SpooledFileId>().notNull(),
     status: text('status').notNull().default('running'),
-    documents: integer('documents').notNull().default(0),
+    /** How many page groups the definition found in the spooled file. */
+    pageGroups: integer('page_groups').notNull().default(0),
     error: text('error'),
     steps: jsonb('steps').$type<RunStep[]>().notNull().default([]),
     createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
@@ -295,25 +296,25 @@ export const runs = pgTable(
 );
 
 /** A file a run delivered to the Spooldoc destination. */
-export const runOutputs = pgTable(
-  'run_outputs',
+export const runFiles = pgTable(
+  'run_files',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     runId: uuid('run_id')
       .notNull()
       .references(() => runs.id, { onDelete: 'cascade' }),
-    documentIndex: integer('document_index').notNull(),
-    /** The label of the job output the file was rendered for; null for runs from before outputs. */
-    output: text('output'),
-    /** The output's place in the job version's outputs, to list files in that order. */
-    outputIndex: integer('output_index').notNull().default(0),
+    pageGroupIndex: integer('page_group_index').notNull(),
+    /** The name of the job template the file was rendered with. */
+    template: text('template').notNull(),
+    /** The template's place in the job version's templates, to list files in that order. */
+    templateIndex: integer('template_index').notNull().default(0),
     name: text('name').notNull(),
     contentType: text('content_type').notNull(),
     size: integer('size').notNull(),
     content: bytea('content').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex('run_outputs_name_idx').on(t.runId, t.name)],
+  (t) => [uniqueIndex('run_files_name_idx').on(t.runId, t.name)],
 );
 
 const providerList = sql.raw(AI_PROVIDER_IDS.map((id) => `'${id}'`).join(', '));
@@ -390,7 +391,7 @@ export const assets = pgTable(
 /**
  * A Word template file, uploaded or made by the AI assistant. A row never changes (a
  * trigger refuses updates): uploading again, or a change by the assistant, adds a row,
- * so a job version keeps the exact file it ran with. Outputs point at it with
+ * so a job version keeps the exact file it ran with. Templates point at it with
  * `{ kind: 'docx', fileId }`; a file no draft or version points at is deleted after the
  * retention, unless a file a draft uses names it as its previous one.
  */
@@ -405,7 +406,7 @@ export const templateFiles = pgTable(
     content: bytea('content').notNull(),
     /** `upload`, or `assistant` for a file the AI assistant wrote or edited. */
     madeBy: text('made_by', { enum: ['upload', 'assistant'] }).notNull().default('upload'),
-    /** The file the output used before the assistant made this one; null for an upload or the starter template. Not a foreign key: the cleanup may delete it. */
+    /** The file the template used before the assistant made this one; null for an upload or the starter template. Not a foreign key: the cleanup may delete it. */
     previousId: uuid('previous_id'),
     createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

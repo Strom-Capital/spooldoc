@@ -10,8 +10,8 @@ use each.
 ## Spooldoc download
 
 The built-in destination keeps every file in Spooldoc's database. The
-files appear on the run in the [job log](job-log.md), a PDF, an HTML file
-or both per document for each [output](jobs.md#outputs), named after the
+files appear on the run in the [job log](job-log.md), a file per document
+in each format of its [template](jobs.md#templates), named after the
 definition's `output.name`, and can be downloaded from there. They are deleted with the run when it passes the
 retention period.
 

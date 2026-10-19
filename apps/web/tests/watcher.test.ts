@@ -148,7 +148,7 @@ describe('watcher', () => {
     clock += 31_000;
     await watcher.tick();
     const [run] = await runRows();
-    expect(run).toMatchObject({ status: 'success', trigger: 'watch', documents: 6 });
+    expect(run).toMatchObject({ status: 'success', trigger: 'watch', pageGroups: 6 });
     expect(fake().actions()).toEqual(['holdSpooledFile']);
 
     // Still READY on the fake (it does not change status): the job remembers the file.

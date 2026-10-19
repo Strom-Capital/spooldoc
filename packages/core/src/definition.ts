@@ -70,7 +70,7 @@ export const fieldAnchorSchema = z
   .describe("Exactly one of { after, length? }, { regex, group? } or { line, column, length }");
 export type FieldAnchor = z.infer<typeof fieldAnchorSchema>;
 
-/** Which pages of a document a field is read from: `first` (default), `last`, `all` (first match on any page) or a page number. */
+/** Which pages of a page group a field is read from: `first` (default), `last`, `all` (first match on any page) or a page number. */
 export const pageRuleSchema = z.union([z.enum(["first", "last", "all"]), positiveInt]);
 export type PageRule = z.infer<typeof pageRuleSchema>;
 
@@ -153,7 +153,7 @@ export type XmlValue = z.infer<typeof xmlValueSchema>;
 
 export const xmlSourceSchema = z
   .object({
-    document: z.string().min(1).describe("Root element name of one document"),
+    pageGroup: z.string().min(1).describe("Name of the element that holds one page group"),
     fields: z.record(identifier, xmlValueSchema).optional().describe("Field name to slash path from the root"),
     groups: z
       .record(
@@ -184,7 +184,7 @@ export const definitionSchema = z
     xml: xmlSourceSchema.optional(),
     output: z
       .object({
-        name: z.string().min(1).describe("File name of each document, with tags such as {d.doc.invoiceNo}"),
+        name: z.string().min(1).describe("File name of each document, with tags such as {d.pageGroup.invoiceNo}"),
         title: z.string().optional(),
       })
       .strict()
@@ -211,7 +211,7 @@ export const definitionSchema = z
     d.text?.records?.forEach((r, i) => add(r.name, ["text", "records", i, "name"]));
   });
 
-/** A document definition: how to find documents and values in a spooled file. */
+/** A definition: how to find the page groups of a spooled file and the values in them. */
 export type Definition = z.infer<typeof definitionSchema>;
 
 /** Thrown when a definition is not valid YAML or does not match the schema. */

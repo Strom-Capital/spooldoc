@@ -26,9 +26,9 @@ export interface CleanupResult {
   templateFiles: number;
 }
 
-/** True when a job spec (a draft or a version) has an output with this Word template file. */
+/** True when a job spec (a draft or a version) has a template with this Word file. */
 const usesFile = (spec: SQL, fileId: SQL): SQL =>
-  sql`${spec} @> jsonb_build_object('render', jsonb_build_object('outputs', jsonb_build_array(jsonb_build_object('template', jsonb_build_object('fileId', ${fileId}::text)))))`;
+  sql`${spec} @> jsonb_build_object('render', jsonb_build_object('templates', jsonb_build_array(jsonb_build_object('fileId', ${fileId}::text))))`;
 
 /**
  * Mark runs failed that are still `running` but whose process stopped: their heartbeat
