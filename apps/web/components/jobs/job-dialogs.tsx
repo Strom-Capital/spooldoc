@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
-import { api, errorText } from '@/lib/client/api';
+import { api, errorText, shownError, type ShownError } from '@/lib/client/api';
 import { filterParams, splfKey } from '@/lib/job-spec';
 import type { RunView, SpooledFileView } from '@/lib/types';
 import { useJob } from './job-provider';
@@ -113,7 +113,7 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
   const [showAll, setShowAll] = useState(false);
   const [files, setFiles] = useState<SpooledFileView[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ShownError | null>(null);
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<RunView[] | null>(null);
   const source = activeSpec?.source;
@@ -128,7 +128,7 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
       `/api/servers/${source.serverId}/queues/${encodeURIComponent(source.library)}/${encodeURIComponent(source.queue)}/files?${params}`,
     ).then(
       (data) => !cancelled && setFiles(data.files),
-      (err) => !cancelled && setError(errorText(err)),
+      (err) => !cancelled && setError(shownError(err)),
     );
     return () => {
       cancelled = true;
@@ -156,7 +156,7 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
       const data = await api<{ runs: RunView[] }>(`/api/jobs/${job.id}/runs`, { method: 'POST', body: { splfs: chosen } });
       setResults(data.runs);
     } catch (err) {
-      setError(errorText(err));
+      setError(shownError(err));
     } finally {
       setBusy(false);
     }
@@ -255,7 +255,7 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
                 Show held and processed files
               </Label>
             </div>
-            {error && <ErrorNote>{error}</ErrorNote>}
+            {error && <ErrorNote detail={error.detail}>{error.message}</ErrorNote>}
             <div className="max-h-80 overflow-auto rounded-md border">
               {files === null && !error ? (
                 <div className="flex items-center gap-2 p-3 text-muted-foreground text-sm">

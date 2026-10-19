@@ -6,12 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Spinner } from '@/components/ui/spinner';
-import { api, errorText } from '@/lib/client/api';
+import { api, shownError, type ShownError } from '@/lib/client/api';
 import type { QueueView } from '@/lib/types';
 
 /** The visible output queues of a server, loaded once per server. */
-export function useQueues(serverId: string | null): { queues: QueueView[] | null; error: string | null } {
-  const [state, setState] = useState<{ serverId: string | null; queues: QueueView[] | null; error: string | null }>({
+export function useQueues(serverId: string | null): { queues: QueueView[] | null; error: ShownError | null } {
+  const [state, setState] = useState<{ serverId: string | null; queues: QueueView[] | null; error: ShownError | null }>({
     serverId: null,
     queues: null,
     error: null,
@@ -23,7 +23,7 @@ export function useQueues(serverId: string | null): { queues: QueueView[] | null
     let cancelled = false;
     api<{ queues: QueueView[] }>(`/api/servers/${serverId}/queues?visible=1`).then(
       (data) => !cancelled && setState({ serverId, queues: data.queues, error: null }),
-      (err) => !cancelled && setState({ serverId, queues: null, error: errorText(err) }),
+      (err) => !cancelled && setState({ serverId, queues: null, error: shownError(err) }),
     );
     return () => {
       cancelled = true;
@@ -67,7 +67,7 @@ export function QueueSelect({
                 <Spinner /> Loading queues...
               </div>
             )}
-            {error && <p className="p-3 text-destructive text-sm">{error}</p>}
+            {error && <p className="p-3 text-destructive text-sm">{error.message}</p>}
             <CommandEmpty>No queue matches.</CommandEmpty>
             <CommandGroup>
               {queues?.map((queue) => {

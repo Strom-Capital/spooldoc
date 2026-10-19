@@ -1,9 +1,10 @@
+import { ConnectionError } from '@spooldoc/ibmi';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { samples, servers } from '@/lib/server/db/schema';
 import type { QueueView, SpooledFileView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
-import { FakeConnection, loadSample } from './helpers/fake-connection';
+import { FakeConnection, GOOD_PASSWORD, loadSample } from './helpers/fake-connection';
 import { db, insertServer } from './helpers/fixtures';
 import { appRequest, connections, params } from './helpers/mocks';
 
@@ -93,6 +94,29 @@ describe('queues', () => {
     await answer('');
     await answer('?limit=999999');
     expect(limits().slice(-2)).toEqual([201, 5001]);
+  });
+});
+
+describe('IBM i errors', () => {
+  it('answer with what to do, the message ID and the system\'s own text, without the password', async () => {
+    conn.failures.set(
+      'listSpooledFiles',
+      new ConnectionError('notfound', `Output queue ${library}/${queue} does not exist on ibmi.example.com. Point the job's source at another queue. (CPF2105)`, {
+        messageId: 'CPF2105',
+        detail: `CPF2105 Object ${queue} in ${library} type *OUTQ not found. ${GOOD_PASSWORD}`,
+      }),
+    );
+    const response = await filesRoute.GET(
+      appRequest(`/api/servers/${serverId}/queues/${library}/${queue}/files`, { headers: auth }),
+      params({ id: serverId, lib: library, name: queue }),
+    );
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({
+      error: `Output queue ${library}/${queue} does not exist on ibmi.example.com. Point the job's source at another queue. (CPF2105)`,
+      code: 'notfound',
+      messageId: 'CPF2105',
+      detail: `CPF2105 Object ${queue} in ${library} type *OUTQ not found. ***`,
+    });
   });
 });
 

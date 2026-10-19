@@ -6,11 +6,11 @@ import { ErrorNote } from '@/components/page';
 import { SpoolViewer } from '@/components/spool-viewer';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
-import { api, errorText } from '@/lib/client/api';
+import { api, shownError, type ShownError } from '@/lib/client/api';
 import type { SampleView } from '@/lib/client/render';
 import type { SpooledFileView } from '@/lib/types';
 
-type Loaded = { sample: SampleView; warnings: string[] } | { error: string };
+type Loaded = { sample: SampleView; warnings: string[] } | { error: ShownError };
 
 /** The pages of a spooled file on a queue, read from the IBM i when opened. Reading changes nothing on the queue. */
 export function SpoolFileDialog({
@@ -36,7 +36,7 @@ export function SpoolFileDialog({
       signal: controller.signal,
     }).then(
       (data) => setLoaded(data),
-      (err) => !controller.signal.aborted && setLoaded({ error: errorText(err) }),
+      (err) => !controller.signal.aborted && setLoaded({ error: shownError(err) }),
     );
     return () => controller.abort();
   }, [serverId, library, queue, file]);
@@ -59,7 +59,9 @@ export function SpoolFileDialog({
             <Spinner /> Reading the spooled file...
           </div>
         )}
-        {loaded && 'error' in loaded && <ErrorNote className="m-4">{loaded.error}</ErrorNote>}
+        {loaded && 'error' in loaded && <ErrorNote className="m-4" detail={loaded.error.detail}>
+            {loaded.error.message}
+          </ErrorNote>}
         {loaded && 'sample' in loaded && (
           <>
             {loaded.warnings.length > 0 && (

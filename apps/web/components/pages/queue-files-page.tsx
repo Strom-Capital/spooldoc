@@ -10,7 +10,7 @@ import { SkeletonRows } from '@/components/skeleton-rows';
 import { SpoolFileDialog } from '@/components/spool-file-dialog';
 import { TableEmpty } from '@/components/table-empty';
 import { Button } from '@/components/ui/button';
-import { api, errorText, isAbort } from '@/lib/client/api';
+import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
 import { SPOOLED_FILE_LIST, type SpooledFileView } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { NewJobButton } from './new-job-button';
@@ -42,7 +42,7 @@ export function QueueFilesPage({
   const [limit, setLimit] = useState<number>(SPOOLED_FILE_LIST.page);
   // Load more keeps the filters and toasts nothing; new filters start from the first page.
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ShownError | null>(null);
   const [loading, setLoading] = useState(true);
   const [nonce, setNonce] = useState(0);
   const [viewing, setViewing] = useState<SpooledFileView | null>(null);
@@ -90,7 +90,7 @@ export function QueueFilesPage({
               description: errorText(err),
             });
           }
-          setError(errorText(err));
+          setError(shownError(err));
           setFiles(null);
           setMore(false);
         }
@@ -187,7 +187,7 @@ export function QueueFilesPage({
             spellCheck={false}
           />
         </div>
-        {error && <ErrorNote>{error}</ErrorNote>}
+        {error && <ErrorNote detail={error.detail}>{error.message}</ErrorNote>}
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-muted-foreground">

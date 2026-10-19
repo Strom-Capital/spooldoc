@@ -53,7 +53,7 @@ export function ifsPath(ref: QueueRef, type: "OUTQ" | "DTAQ"): string {
  */
 export async function openJt400Connection(creds: Credentials): Promise<Connection> {
   const secrets = [creds.password];
-  const fail = (err: unknown, context?: string): ConnectionError => toConnectionError(err, secrets, context);
+  const fail = (err: unknown, context?: string): ConnectionError => toConnectionError(err, secrets, context, { host: creds.host, user: creds.user });
 
   let db: Jt400Db;
   let system: JavaObject;
