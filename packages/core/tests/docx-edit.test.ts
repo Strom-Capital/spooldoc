@@ -164,5 +164,14 @@ describe("pdfPageCount", () => {
     expect(pdfPageCount(pdf("1 0 obj<</Count 3/Kids[]/Type/Pages>>endobj"))).toBe(3);
     expect(pdfPageCount(pdf("3 0 obj << /Type /Page >> endobj 4 0 obj << /Type /Page >> endobj"))).toBe(2);
     expect(pdfPageCount(pdf("1 0 obj << /Type /ObjStm >> endobj"))).toBeNull();
+    // A /Count outside a page tree does not count.
+    expect(pdfPageCount(pdf("1 0 obj << /Type /Outlines /Count 40 >> endobj 2 0 obj << /Type /Pages /Count 3 >> endobj"))).toBe(3);
+  });
+
+  it("stays fast on input made to slow a regular expression down", () => {
+    const hostile = new TextEncoder().encode(`/Count 9${"0".repeat(200_000)}${"/Count 9 ".repeat(20_000)}`);
+    const started = performance.now();
+    expect(pdfPageCount(hostile)).toBeNull();
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 });
