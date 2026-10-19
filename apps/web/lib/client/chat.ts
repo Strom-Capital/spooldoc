@@ -1,5 +1,6 @@
 import type {
   ListJobsResult,
+  OutputChangeResult,
   ReadJobFilesResult,
   ReadPageResult,
   RenderPreviewResult,
@@ -62,8 +63,8 @@ export function toolSummary(part: ToolPartLike): ToolSummary {
       const out = part.output as WriteTemplateResult;
       if (!('path' in out)) return { text: `Template not saved: ${firstLine(out.error)}`, tone: 'warn' };
       return out.errors.length === 0
-        ? { text: 'Wrote template: no errors', tone: 'ok' }
-        : { text: `Wrote template: ${plural(out.errors.length, 'error')}`, tone: 'warn' };
+        ? { text: `Wrote template of ${out.output}: no errors`, tone: 'ok' }
+        : { text: `Wrote template of ${out.output}: ${plural(out.errors.length, 'error')}`, tone: 'warn' };
     }
     case 'render_preview': {
       if (!done(part.state)) return { text: 'Rendering', tone: 'running' };
@@ -71,9 +72,21 @@ export function toolSummary(part: ToolPartLike): ToolSummary {
       if (!out.ok) return { text: `Not rendered: ${firstLine(out.error)}`, tone: 'warn' };
       const errors = out.templateErrors.length > 0 ? `, ${plural(out.templateErrors.length, 'template error')}` : '';
       return {
-        text: `Rendered: ${out.hits.found} found, ${out.hits.missing} missing${errors}`,
+        text: `Rendered ${out.output}: ${out.hits.found} found, ${out.hits.missing} missing${errors}`,
         tone: out.hits.missing > 0 || errors ? 'warn' : 'ok',
       };
+    }
+    case 'add_output': {
+      if (!done(part.state)) return { text: 'Adding an output', tone: 'running' };
+      const out = part.output as OutputChangeResult;
+      if (!out.ok) return { text: `Output not added: ${firstLine(out.error)}`, tone: 'warn' };
+      return { text: `Added output ${out.output.label}: ${out.output.formats.map((f) => f.toUpperCase()).join(' and ')}`, tone: 'ok' };
+    }
+    case 'remove_output': {
+      if (!done(part.state)) return { text: 'Removing an output', tone: 'running' };
+      const out = part.output as OutputChangeResult;
+      if (!out.ok) return { text: `Output not removed: ${firstLine(out.error)}`, tone: 'warn' };
+      return { text: `Removed output ${out.output.label}`, tone: 'ok' };
     }
     case 'list_jobs': {
       if (!done(part.state)) return { text: 'Listing jobs', tone: 'running' };
@@ -85,7 +98,8 @@ export function toolSummary(part: ToolPartLike): ToolSummary {
       if (!done(part.state)) return { text: 'Reading another job', tone: 'running' };
       const out = part.output as ReadJobFilesResult;
       if (!out.ok) return { text: firstLine(out.error), tone: 'warn' };
-      const files = [out.definitionYaml !== null && 'definition', out.templateHtml !== null && 'template'].filter(Boolean);
+      const templates = out.outputs.filter((output) => output.templateHtml !== null).length;
+      const files = [out.definitionYaml !== null && 'definition', templates > 0 && plural(templates, 'template')].filter(Boolean);
       return { text: `Read job ${out.name}: ${files.length > 0 ? files.join(' and ') : 'no files yet'}`, tone: 'ok' };
     }
     default:
@@ -93,12 +107,13 @@ export function toolSummary(part: ToolPartLike): ToolSummary {
   }
 }
 
-/** True when a finished tool call saved a file, so the editors should drop their drafts. */
-export function savedFile(part: ToolPartLike): 'yaml' | 'html' | null {
+/** What a finished tool call changed in the draft, so the editors should drop their drafts: null when nothing. */
+export function savedFile(part: ToolPartLike): 'yaml' | 'html' | 'outputs' | null {
   if (!done(part.state)) return null;
   const out = (part.output ?? {}) as { ok?: boolean; path?: string };
   if (part.toolName === 'write_definition' && out.ok === true) return 'yaml';
   if (part.toolName === 'write_template' && typeof out.path === 'string') return 'html';
+  if ((part.toolName === 'add_output' || part.toolName === 'remove_output') && out.ok === true) return 'outputs';
   return null;
 }
 

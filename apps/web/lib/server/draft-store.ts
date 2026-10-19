@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { eq } from 'drizzle-orm';
-import { jobSpecSchema, type JobSpec } from '@/lib/job-spec';
+import { jobSpecSchema, type JobOutput, type JobSpec } from '@/lib/job-spec';
 import type { DraftStore } from './chat';
 import { getDb, type Tx } from './db';
 import { jobs } from './db/schema';
@@ -32,7 +32,7 @@ export async function updateDraft(jobId: string, change: (draft: JobSpec) => Job
   });
 }
 
-/** The chat tools' view of a job's draft. */
+/** The chat tools' view of a job's draft: its definition and its outputs. */
 export function draftStore(jobId: string): DraftStore {
   const read = async (): Promise<JobSpec> => {
     const row = await getJobRow(jobId);
@@ -41,10 +41,27 @@ export function draftStore(jobId: string): DraftStore {
     }
     return jobSpecSchema.parse(row.draft);
   };
+  const changeOutputs = async (change: (outputs: JobOutput[]) => JobOutput[]): Promise<JobOutput[]> => {
+    let saved: JobOutput[] = [];
+    await updateDraft(jobId, (draft) => {
+      // Parsed again, so a change the schema refuses (no outputs, a bad label) is not saved.
+      saved = jobSpecSchema.shape.render.parse({ outputs: change(draft.render.outputs) }).outputs;
+      return { ...draft, render: { outputs: saved } };
+    });
+    return saved;
+  };
   return {
     readDefinition: async () => (await read()).extract.definition,
-    readTemplate: async () => (await read()).render.template,
+    readOutputs: async () => (await read()).render.outputs,
     writeDefinition: (yaml) => updateDraft(jobId, (draft) => ({ ...draft, extract: { ...draft.extract, definition: yaml } })),
-    writeTemplate: (html) => updateDraft(jobId, (draft) => ({ ...draft, render: { ...draft.render, template: html } })),
+    writeTemplate: async (outputId, html) => {
+      await changeOutputs((outputs) => {
+        if (!outputs.some((output) => output.id === outputId)) {
+          throw new Error('The output is gone.');
+        }
+        return outputs.map((output) => (output.id === outputId ? { ...output, template: { kind: 'html', source: html } } : output));
+      });
+    },
+    changeOutputs,
   };
 }

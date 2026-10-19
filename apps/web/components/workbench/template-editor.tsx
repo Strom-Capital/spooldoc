@@ -10,7 +10,7 @@ import { StartFromJobDialog } from './start-from-job-dialog';
 import { useWorkbench } from './workbench-provider';
 
 /**
- * The HTML template (Nunjucks) of the job. Without one the preview uses a starter
+ * The HTML template (Nunjucks) of the output shown. Without one the preview uses a starter
  * template generated from the definition, which can be copied in to edit, as can
  * another job's template.
  */
@@ -35,7 +35,7 @@ export function TemplateEditor() {
           </Button>
         )}
         {!readOnly && (
-          <Button size="sm" variant="ghost" onClick={() => setStartFrom(true)} title="Copy another job's template, and on request its definition, into this draft">
+          <Button size="sm" variant="ghost" onClick={() => setStartFrom(true)} title="Copy a template of another job into this output, and on request its definition into this draft">
             <FolderInputIcon />
             Start from job
           </Button>
@@ -44,7 +44,7 @@ export function TemplateEditor() {
       {startFrom && <StartFromJobDialog onClose={() => setStartFrom(false)} />}
       {html === null && (
         <EditorMessage tone="note">
-          The job has no template yet. The preview uses a starter template generated from the definition.
+          This output has no template yet. The preview uses a starter template generated from the definition.
         </EditorMessage>
       )}
       {error && <EditorMessage tone="error">{error}</EditorMessage>}

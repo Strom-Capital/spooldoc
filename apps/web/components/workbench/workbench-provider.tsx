@@ -14,6 +14,9 @@ export interface WorkbenchState {
   /** The definition and template shown and rendered. */
   yaml: string;
   html: string | null;
+  /** The job output whose template `html` is, and picking another. */
+  outputId: string;
+  setOutputId(id: string): void;
   readOnly: boolean;
   setYaml(yaml: string): void;
   setHtml(html: string | null): void;
@@ -42,14 +45,17 @@ const WorkbenchContext = createContext<WorkbenchState | null>(null);
 /** How long to wait after typing before rendering again. */
 const RENDER_DELAY_MS = 400;
 
-/** `value`, once it has not changed for `ms`. */
-function useDebounced<T>(value: T, ms: number): T {
-  const [settled, setSettled] = useState(value);
+/** `value`, once it has not changed for `ms`; at once when `key` changes. */
+function useDebounced<T>(value: T, ms: number, key: unknown): T {
+  const [settled, setSettled] = useState({ value, key });
+  if (key !== settled.key) {
+    setSettled({ value, key });
+  }
   useEffect(() => {
-    const timer = setTimeout(() => setSettled(value), ms);
+    const timer = setTimeout(() => setSettled({ value, key }), ms);
     return () => clearTimeout(timer);
-  }, [value, ms]);
-  return settled;
+  }, [value, ms, key]);
+  return key === settled.key ? settled.value : value;
 }
 
 /**
@@ -62,6 +68,8 @@ export function WorkbenchProvider({
   sampleId,
   yaml,
   html,
+  outputId,
+  setOutputId,
   readOnly,
   setYaml,
   setHtml,
@@ -72,6 +80,8 @@ export function WorkbenchProvider({
   sampleId: string | null;
   yaml: string;
   html: string | null;
+  outputId: string;
+  setOutputId(id: string): void;
   readOnly: boolean;
   setYaml(yaml: string): void;
   setHtml(html: string | null): void;
@@ -93,8 +103,8 @@ export function WorkbenchProvider({
     setSelectedHit(null);
   }
 
-  // Text changes render after a pause; a new file, document or reload at once.
-  const text = useDebounced(JSON.stringify({ yaml, html }), RENDER_DELAY_MS);
+  // Text changes render after a pause; a new file, document, output or reload at once.
+  const text = useDebounced(JSON.stringify({ yaml, html, outputId }), RENDER_DELAY_MS, outputId);
   const requestKey = JSON.stringify([jobId, sampleId, documentIndex, nonce, text]);
 
   useEffect(() => {
@@ -102,7 +112,7 @@ export function WorkbenchProvider({
       return;
     }
     let cancelled = false;
-    const body = JSON.parse(text) as { yaml: string; html: string | null };
+    const body = JSON.parse(text) as { yaml: string; html: string | null; outputId: string };
     api<RenderResult>(`/api/jobs/${jobId}/render`, { method: 'POST', body: { sampleId, ...body, document: documentIndex } }).then(
       (render) => !cancelled && setResult({ key: requestKey, render, error: null }),
       (err: unknown) => !cancelled && setResult((prev) => ({ key: requestKey, render: prev?.render ?? null, error: errorText(err) })),
@@ -124,6 +134,8 @@ export function WorkbenchProvider({
         sampleId,
         yaml,
         html,
+        outputId,
+        setOutputId,
         readOnly,
         setYaml,
         setHtml,

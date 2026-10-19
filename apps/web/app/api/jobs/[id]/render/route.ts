@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { findOutput } from '@/lib/job-spec';
 import { assetResolver } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
 import { errorResponse, json, readJson } from '@/lib/server/http';
@@ -16,6 +17,8 @@ const renderSchema = z.object({
   html: z.string().max(MAX_TEXT).nullable().optional(),
   document: z.number().int().nonnegative().optional(),
   sampleId: z.string().uuid().optional(),
+  /** The output whose draft template is rendered when `html` is missing; missing means the first. */
+  outputId: z.string().max(40).optional(),
 });
 
 /** Render the preview sample with the draft (or unsaved editor text). */
@@ -37,6 +40,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return errorResponse(404, 'Pick a spooled file to preview first.');
   }
   const yaml = body.data.yaml ?? draft.extract.definition;
-  const html = body.data.html === undefined ? draft.render.template : body.data.html;
+  // Unsaved editor text wins, so an output added a moment ago renders before its draft is saved.
+  let html = body.data.html;
+  if (html === undefined) {
+    const output = findOutput(draft.render.outputs, body.data.outputId);
+    if (!output) {
+      return errorResponse(404, `The job has no output ${body.data.outputId}.`);
+    }
+    html = output.template.source;
+  }
   return json(renderSample(sample, { yaml, html, document: body.data.document, asset: await assetResolver() }));
 }

@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { AssetResolver } from '@spooldoc/core';
 import { and, asc, eq, sql } from 'drizzle-orm';
-import type { JobSpec } from '@/lib/job-spec';
+import { jobSpecSchema, type JobSpec } from '@/lib/job-spec';
 import type { AssetView } from '@/lib/types';
 import { getDb } from './db';
 import { assets, jobs, jobVersions } from './db/schema';
@@ -62,7 +62,11 @@ export async function listAssets(): Promise<AssetView[]> {
     .from(jobs)
     .leftJoin(jobVersions, and(eq(jobVersions.jobId, jobs.id), eq(jobVersions.number, jobs.activeVersion)))
     .orderBy(asc(jobs.name));
-  const templates = (spec: JobSpec | null) => spec?.render?.template ?? null;
+  // Stored specs may be from before outputs; parsing the render part migrates them.
+  const templates = (spec: JobSpec | null): string[] => {
+    const render = jobSpecSchema.shape.render.safeParse(spec?.render);
+    return render.success ? render.data.outputs.flatMap((output) => output.template.source ?? []) : [];
+  };
   return rows.map((row) => ({
     id: row.id,
     name: row.name,
@@ -71,7 +75,7 @@ export async function listAssets(): Promise<AssetView[]> {
     size: row.size,
     updatedAt: row.updatedAt.toISOString(),
     jobs: jobRows
-      .filter((job) => templateUsesAsset(templates(job.draft), row.name) || templateUsesAsset(templates(job.active), row.name))
+      .filter((job) => [...templates(job.draft), ...templates(job.active)].some((html) => templateUsesAsset(html, row.name)))
       .map((job) => ({ id: job.id, name: job.name })),
   }));
 }

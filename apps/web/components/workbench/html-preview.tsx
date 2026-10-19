@@ -27,9 +27,10 @@ async function download(response: Response, fallback: string): Promise<void> {
  * buttons that download it as HTML or as a PDF rendered from the text in the editors.
  *
  * @param header - Controls for the start of the pane header
+ * @param fileName - The file name (without extension) of a document's files, from its name
  */
-export function HtmlPreview({ header }: { header?: ReactNode }) {
-  const { render, jobId, documentIndex, yaml, html } = useWorkbench();
+export function HtmlPreview({ header, fileName = (name) => name }: { header?: ReactNode; fileName?(documentName: string): string }) {
+  const { render, jobId, documentIndex, yaml, html, outputId } = useWorkbench();
   const { pdf } = useAppInfo();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +44,7 @@ export function HtmlPreview({ header }: { header?: ReactNode }) {
   /** The rendered HTML of this document as a file, named like the PDF. */
   function onHtml() {
     if (!render?.html) return;
-    const name = render.names?.[documentIndex] ?? `document-${documentIndex + 1}`;
+    const name = fileName(render.names?.[documentIndex] ?? `document-${documentIndex + 1}`);
     void download(new Response(render.html, { headers: { 'content-disposition': `attachment; filename="${name}.html"` } }), `${name}.html`);
   }
 
@@ -54,7 +55,7 @@ export function HtmlPreview({ header }: { header?: ReactNode }) {
       const response = await fetch(`/api/jobs/${jobId}/preview-pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ yaml, html, document: documentIndex }),
+        body: JSON.stringify({ yaml, html, document: documentIndex, outputId }),
       });
       if (!response.ok) {
         const data = (await response.json().catch(() => ({}))) as { error?: string };

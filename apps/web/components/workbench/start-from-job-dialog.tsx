@@ -11,16 +11,17 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import type { JobOutputFiles } from '@/lib/chat-types';
 import { api, errorText, isAbort } from '@/lib/client/api';
 import type { JobSummary } from '@/lib/types';
 import { useWorkbench } from './workbench-provider';
 
-/** What `/api/jobs/[id]/files` answers: a job's definition and template, nothing else. */
+/** What `/api/jobs/[id]/files` answers: a job's definition and outputs, nothing else. */
 interface JobFilesView {
   id: string;
   name: string;
   definitionYaml: string;
-  templateHtml: string | null;
+  outputs: JobOutputFiles[];
 }
 
 /** The `type:` of a definition YAML, read without parsing it. */
@@ -29,15 +30,17 @@ function typeOf(yaml: string): string | null {
 }
 
 /**
- * Copy another job's template, and on request its definition, into this job's draft.
- * The files come from the other job's active version, or its draft when it has no
- * version. Mount it when it opens, so it starts empty each time.
+ * Copy the template of one of another job's outputs into the output shown, and on
+ * request the other job's definition into this job's draft. The files come from the
+ * other job's active version, or its draft when it has no version. Mount it when it
+ * opens, so it starts empty each time.
  */
 export function StartFromJobDialog({ onClose }: { onClose(): void }) {
   const { jobId, setYaml, setHtml } = useWorkbench();
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
   const [chosen, setChosen] = useState('');
   const [loaded, setLoaded] = useState<JobFilesView | null>(null);
+  const [outputId, setOutputId] = useState('');
   const [withDefinition, setWithDefinition] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -66,7 +69,8 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
   const files = loaded?.id === chosen ? loaded : null;
   const type = files ? typeOf(files.definitionYaml) : null;
   const hasDefinition = !!files?.definitionYaml.trim();
-  const hasTemplate = files?.templateHtml !== null && files?.templateHtml !== undefined;
+  const source = files ? (files.outputs.find((o) => o.id === outputId) ?? files.outputs[0]) : undefined;
+  const hasTemplate = source?.templateHtml !== null && source?.templateHtml !== undefined;
   const copies = files ? [hasTemplate && 'template', withDefinition && hasDefinition && 'definition'].filter(Boolean) : [];
 
   function copy() {
@@ -74,7 +78,7 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
       return;
     }
     if (hasTemplate) {
-      setHtml(files.templateHtml);
+      setHtml(source.templateHtml);
     }
     if (withDefinition && hasDefinition) {
       setYaml(files.definitionYaml);
@@ -89,7 +93,7 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
         <DialogHeader>
           <DialogTitle>Start from another job</DialogTitle>
           <DialogDescription>
-            Copies the chosen job&apos;s template into this draft, replacing the current one. Its definition can come along too.
+            Copies a template of the chosen job into this output, replacing the current one. Its definition can come along too.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
@@ -100,7 +104,13 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
             ) : jobs && jobs.length === 0 ? (
               <p className="text-muted-foreground text-sm">There are no other jobs yet.</p>
             ) : (
-              <Select value={chosen} onValueChange={setChosen}>
+              <Select
+                value={chosen}
+                onValueChange={(id) => {
+                  setChosen(id);
+                  setOutputId('');
+                }}
+              >
                 <SelectTrigger id="start-from-job" className="w-full" aria-label="Job">
                   <SelectValue placeholder="Pick a job" />
                 </SelectTrigger>
@@ -124,10 +134,28 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
               <Spinner /> Reading the job&apos;s files...
             </div>
           )}
+          {files && files.outputs.length > 1 && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="start-from-output">Output to copy</Label>
+              <Select value={source?.id ?? ''} onValueChange={setOutputId}>
+                <SelectTrigger id="start-from-output" className="w-full" aria-label="Output to copy">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {files.outputs.map((output) => (
+                    <SelectItem key={output.id} value={output.id}>
+                      {output.label}
+                      <span className="text-muted-foreground">{output.templateHtml === null ? 'Starter template' : 'Custom template'}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {files && (
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm" aria-label="Files of the chosen job">
               <dt className="text-muted-foreground">Template</dt>
-              <dd>{hasTemplate ? 'Yes' : 'None, the job uses the starter template'}</dd>
+              <dd>{hasTemplate ? 'Yes' : 'None, it uses the starter template'}</dd>
               <dt className="text-muted-foreground">Definition</dt>
               <dd>{hasDefinition ? (type ?? 'Yes') : 'None yet'}</dd>
             </dl>

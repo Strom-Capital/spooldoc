@@ -24,6 +24,17 @@ const STEP_LABEL: Record<string, string> = { capture: 'Capture', extract: 'Extra
 
 const RETRIED: Record<RunStatus, string> = { running: 'started', success: 'succeeded', warning: 'done with warnings', failed: 'failed', skipped: 'skipped' };
 
+/** A run's files by the job output they were rendered for, in the run's order. Labels only when there are several outputs. */
+function fileGroups(files: RunView['files']): { output: string | null; label: string | null; files: RunView['files'] }[] {
+  const groups: { output: string | null; label: string | null; files: RunView['files'] }[] = [];
+  for (const file of files) {
+    const group = groups.find((g) => g.output === file.output);
+    if (group) group.files.push(file);
+    else groups.push({ output: file.output, label: file.output, files: [file] });
+  }
+  return groups.length > 1 ? groups : groups.map((group) => ({ ...group, label: null }));
+}
+
 function runDuration(run: RunView): string {
   return run.finishedAt ? duration(new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime()) : '';
 }
@@ -254,18 +265,18 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                   <td className="tabular px-3 py-2 text-right">{run.documents}</td>
                   <td className="px-3 py-2">
                     <div className="flex max-w-xs flex-wrap gap-x-2 gap-y-0.5">
-                      {run.outputs.slice(0, 3).map((output) => (
+                      {run.files.slice(0, 3).map((file) => (
                         <a
-                          key={output.id}
-                          href={`/api/runs/${run.id}/files/${output.id}`}
+                          key={file.id}
+                          href={`/api/runs/${run.id}/files/${file.id}`}
                           onClick={(event) => event.stopPropagation()}
                           className="inline-flex items-center gap-1 text-primary text-xs hover:underline"
                         >
                           <DownloadIcon className="size-3" />
-                          {output.name}
+                          {file.name}
                         </a>
                       ))}
-                      {run.outputs.length > 3 && <span className="text-muted-foreground text-xs">and {run.outputs.length - 3} more</span>}
+                      {run.files.length > 3 && <span className="text-muted-foreground text-xs">and {run.files.length - 3} more</span>}
                     </div>
                   </td>
                 </tr>
@@ -339,23 +350,35 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                 </div>
                 <div>
                   <h3 className="mb-2 font-medium text-sm">Files</h3>
-                  {open.outputs.length === 0 ? (
+                  {open.files.length === 0 ? (
                     <p className="text-muted-foreground text-sm">None delivered.</p>
                   ) : (
-                    <ul className="flex flex-col gap-1">
-                      {open.outputs.map((output) => (
-                        <li key={output.id} className="flex items-center gap-2 text-sm">
-                          <a href={`/api/runs/${open.id}/files/${output.id}`} className="inline-flex min-w-0 items-center gap-1 text-primary hover:underline">
-                            <DownloadIcon className="size-3.5 shrink-0" />
-                            <span className="truncate">{output.name}</span>
-                          </a>
-                          <a href={`/api/runs/${open.id}/files/${output.id}?inline=1`} target="_blank" rel="noopener noreferrer" className="text-muted-foreground text-xs hover:underline">
-                            Open
-                          </a>
-                          <span className="ml-auto text-muted-foreground text-xs">{bytes(output.size)}</span>
-                        </li>
+                    <div className="flex flex-col gap-3">
+                      {fileGroups(open.files).map((group) => (
+                        <section key={group.output ?? ''} aria-label={group.label ? `${group.label} files` : 'Files'}>
+                          {group.label && <h4 className="mb-1 text-muted-foreground text-xs">{group.label}</h4>}
+                          <ul className="flex flex-col gap-1">
+                            {group.files.map((file) => (
+                              <li key={file.id} className="flex items-center gap-2 text-sm">
+                                <a href={`/api/runs/${open.id}/files/${file.id}`} className="inline-flex min-w-0 items-center gap-1 text-primary hover:underline">
+                                  <DownloadIcon className="size-3.5 shrink-0" />
+                                  <span className="truncate">{file.name}</span>
+                                </a>
+                                <a
+                                  href={`/api/runs/${open.id}/files/${file.id}?inline=1`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-muted-foreground text-xs hover:underline"
+                                >
+                                  Open
+                                </a>
+                                <span className="ml-auto text-muted-foreground text-xs">{bytes(file.size)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
                       ))}
-                    </ul>
+                    </div>
                   )}
                 </div>
               </div>

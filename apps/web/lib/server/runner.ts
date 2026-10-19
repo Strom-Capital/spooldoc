@@ -3,12 +3,12 @@ import 'server-only';
 import { extract, matchProblems, parseDefinition, starterTemplate, type Definition, type Sample, type SpooledFileId } from '@spooldoc/core';
 import type { Connection } from '@spooldoc/ibmi';
 import { and, eq } from 'drizzle-orm';
-import { jobSpecSchema, splfKey, type JobSpec } from '@/lib/job-spec';
+import { jobSpecSchema, outputFileName, splfKey, type JobSpec } from '@/lib/job-spec';
 import { assetResolver } from './assets';
 import { getDb } from './db';
 import { jobVersions, runs, watchSeen, type RunStep } from './db/schema';
 import { destinationFor, type OutputFile } from './destinations';
-import { htmlToPdf, renderDocuments } from './documents';
+import { htmlToPdf, renderDocuments, type RenderedDocument } from './documents';
 import { redact } from './http';
 import { connectServer } from './ibmi';
 import { log } from './log';
@@ -69,7 +69,7 @@ export async function startRun(request: RunRequest): Promise<{ id: string; seq: 
 
 /**
  * Process one spooled file with a job version: capture, extract, render every document
- * to the version's formats (PDF, HTML or both), deliver, then hold, move or delete the file as the version says. Every step is
+ * with each output's template to that output's formats (PDF, HTML or both), deliver, then hold, move or delete the file as the version says. Every step is
  * recorded on the run; a failure stops the run and is stored, never thrown. A file the
  * definition's `match` rules do not accept ends the run as `skipped`, untouched. The
  * finish step runs only after everything was delivered, and a failure there gives `warning`.
@@ -159,8 +159,7 @@ export async function executeRun(runId: string, request: RunRequest, connection?
     const files: OutputFile[] = await step(
       'render',
       async () => {
-        const html = spec.render.template ?? starterTemplate(def);
-        const rendered = renderDocuments(def, html, docs, sample, await assetResolver());
+        const asset = await assetResolver();
         const names = new Set<string>();
         const unique = (base: string, ext: string) => {
           let name = `${base}.${ext}`;
@@ -169,13 +168,23 @@ export async function executeRun(runId: string, request: RunRequest, connection?
           return name;
         };
         const out: OutputFile[] = [];
-        for (const doc of rendered) {
-          for (const format of spec.render.formats) {
-            out.push(
-              format === 'pdf'
-                ? { documentIndex: doc.index, name: unique(doc.name, 'pdf'), contentType: 'application/pdf', content: await pdfRenderer(doc.html, sample.attributes.pageWidth) }
-                : { documentIndex: doc.index, name: unique(doc.name, 'html'), contentType: 'text/html; charset=utf-8', content: new TextEncoder().encode(doc.html) },
-            );
+        for (const [outputIndex, output] of spec.render.outputs.entries()) {
+          let rendered: RenderedDocument[];
+          try {
+            rendered = renderDocuments(def, output.template.source ?? starterTemplate(def), docs, sample, asset);
+          } catch (err) {
+            throw new Error(`The "${output.label}" output's template has an error: ${err instanceof Error ? err.message : String(err)}`);
+          }
+          for (const doc of rendered) {
+            const base = outputFileName(doc.name, spec.render.outputs, output);
+            const file = { documentIndex: doc.index, output: output.label, outputIndex };
+            for (const format of output.formats) {
+              out.push(
+                format === 'pdf'
+                  ? { ...file, name: unique(base, 'pdf'), contentType: 'application/pdf', content: await pdfRenderer(doc.html, sample.attributes.pageWidth) }
+                  : { ...file, name: unique(base, 'html'), contentType: 'text/html; charset=utf-8', content: new TextEncoder().encode(doc.html) },
+              );
+            }
           }
         }
         return out;

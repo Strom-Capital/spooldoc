@@ -123,7 +123,8 @@ export interface RunView {
   documents: number;
   error: string | null;
   steps: RunStepView[];
-  outputs: { id: string; name: string; size: number; contentType: string }[];
+  /** The delivered files, with the label of the job output each was rendered for (null before outputs). */
+  files: { id: string; name: string; size: number; contentType: string; output: string | null }[];
   startedAt: string;
   finishedAt: string | null;
 }

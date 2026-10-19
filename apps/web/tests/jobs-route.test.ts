@@ -62,6 +62,17 @@ async function readyJob(): Promise<string> {
   return id;
 }
 
+/** An output of the job, the first unless given an id and label. */
+const output = ({ id = 'main', label = 'Document', source = template as string | null, formats = ['pdf'] as ('pdf' | 'html')[] } = {}) => ({
+  id,
+  label,
+  template: { kind: 'html' as const, source },
+  formats,
+});
+
+/** A second output: the invoice lines as HTML. */
+const LINES = output({ id: 'lines', label: 'Lines', source: '<ul>{% for l in doc.lines %}<li>{{ l.line }}</li>{% endfor %}</ul>', formats: ['html'] });
+
 /** The fake IBM i connection behind the test server. */
 const fake = (): FakeConnection => connections.get('ibmi.example.com|DEMOUSER')!;
 
@@ -138,6 +149,26 @@ describe('jobs', () => {
     expect(starter.template.generated).toBe(true);
   });
 
+  it("renders the draft template of the output asked for, the first by default", async () => {
+    const id = await readyJob();
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output(), LINES] } } }), params({ id }));
+    const first = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, {}), params({ id }))).json();
+    expect(first.html).toContain('<title>Invoice 260101</title>');
+    const lines = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { outputId: 'lines' }), params({ id }))).json();
+    expect(lines.html).toMatch(/^<ul><li>/);
+    const unknown = await renderRoute.POST(post(`/api/jobs/${id}/render`, { outputId: 'nope' }), params({ id }));
+    expect(unknown.status).toBe(404);
+    expect((await unknown.json()).error).toBe('The job has no output nope.');
+    // An output added a moment ago renders with the editor's text before its draft is saved.
+    const unsaved = await renderRoute.POST(post(`/api/jobs/${id}/render`, { outputId: 'new', html: null }), params({ id }));
+    expect(unsaved.status).toBe(200);
+
+    const pdf = await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, { outputId: 'lines' }), params({ id }));
+    expect(pdf.headers.get('content-disposition')).toBe('attachment; filename="invoice-260101-lines.pdf"');
+    expect(renderPdf.mock.calls[0]![0]).toMatch(/^<ul><li>/);
+    expect((await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, { outputId: 'nope' }), params({ id }))).status).toBe(404);
+  });
+
   it('downloads a preview PDF named after the output name, and reports problems', async () => {
     const id = await readyJob();
     const response = await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, { document: 1 }), params({ id }));
@@ -210,15 +241,20 @@ describe('jobs', () => {
 });
 
 describe('files', () => {
-  it("serves a job's definition and template from its active version, else its draft, and nothing else", async () => {
+  it("serves a job's definition and outputs from its active version, else its draft, and nothing else", async () => {
     const id = await readyJob();
     const fromDraft = await (await filesRoute.GET(get(`/api/jobs/${id}/files`), params({ id }))).json();
-    expect(fromDraft).toEqual({ id, name: `${library}/${queue}`, definitionYaml: yaml, templateHtml: template });
+    expect(fromDraft).toEqual({
+      id,
+      name: `${library}/${queue}`,
+      definitionYaml: yaml,
+      outputs: [{ id: 'main', label: 'Document', formats: ['pdf'], templateHtml: template }],
+    });
 
     expect((await versions.POST(post(`/api/jobs/${id}/versions`, { note: 'v1' }), params({ id }))).status).toBe(201);
-    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { template: '<p>draft</p>', formats: ['pdf'] } } }), params({ id }));
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output({ source: '<p>draft</p>' }), LINES] } } }), params({ id }));
     const fromVersion = await (await filesRoute.GET(get(`/api/jobs/${id}/files`), params({ id }))).json();
-    expect(fromVersion.templateHtml).toBe(template);
+    expect(fromVersion.outputs.map((o: { templateHtml: string }) => o.templateHtml)).toEqual([template]);
 
     expect((await filesRoute.GET(get('/api/jobs/not-a-job/files'), params({ id: 'not-a-job' }))).status).toBe(404);
     expect((await filesRoute.GET(appRequest(`/api/jobs/${id}/files`), params({ id }))).status).toBe(401);
@@ -258,12 +294,12 @@ describe('runs', () => {
       ['deliver', true],
       ['finish', true],
     ]);
-    expect(run!.outputs.map((o) => o.name)).toContain('invoice-260101.pdf');
-    expect(run!.outputs).toHaveLength(6);
+    expect(run!.files.map((f) => f.name)).toContain('invoice-260101.pdf');
+    expect(run!.files).toHaveLength(6);
     expect(fake().actions()).toEqual(['holdSpooledFile']);
     expect(await db().select().from(watchSeen)).toHaveLength(1);
 
-    const file = await fileRoute.GET(get(`/api/runs/${run!.id}/files/${run!.outputs[0]!.id}`), params({ id: run!.id, file: run!.outputs[0]!.id }));
+    const file = await fileRoute.GET(get(`/api/runs/${run!.id}/files/${run!.files[0]!.id}`), params({ id: run!.id, file: run!.files[0]!.id }));
     expect(file.headers.get('content-type')).toBe('application/pdf');
     expect(new Uint8Array(await file.arrayBuffer())).toEqual(PDF_BYTES);
     for (const spy of spies) expect(spy).not.toHaveBeenCalled();
@@ -276,10 +312,10 @@ describe('runs', () => {
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
 
     expect(run!.status).toBe('success');
-    expect(run!.outputs).toHaveLength(12);
-    expect(run!.outputs.slice(0, 2).map((o) => o.name)).toEqual(['invoice-260101.pdf', 'invoice-260101.html']);
+    expect(run!.files).toHaveLength(12);
+    expect(run!.files.slice(0, 2).map((f) => f.name)).toEqual(['invoice-260101.pdf', 'invoice-260101.html']);
     expect(run!.steps.find((s) => s.step === 'render')?.note).toBe('6 PDFs and 6 HTML files');
-    const html = run!.outputs.find((o) => o.name === 'invoice-260101.html')!;
+    const html = run!.files.find((f) => f.name === 'invoice-260101.html')!;
     const file = await fileRoute.GET(get(`/api/runs/${run!.id}/files/${html.id}?inline=1`), params({ id: run!.id, file: html.id }));
     expect(file.headers.get('content-type')).toBe('text/html; charset=utf-8');
     expect(file.headers.get('content-security-policy')).toMatch(/^sandbox;/);
@@ -305,9 +341,38 @@ describe('runs', () => {
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
     expect(run!.status).toBe('success');
-    const html = run!.outputs.find((o) => o.name === 'invoice-260101.html')!;
+    const html = run!.files.find((f) => f.name === 'invoice-260101.html')!;
     const file = await fileRoute.GET(get(`/api/runs/${run!.id}/files/${html.id}?inline=1`), params({ id: run!.id, file: html.id }));
     expect(await file.text()).toContain(uri);
+  });
+
+  it("makes every output's files, names the others after their label and groups them by output", async () => {
+    const id = await readyJob();
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output(), LINES] } } }), params({ id }));
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
+
+    expect(run!.status).toBe('success');
+    expect(run!.files).toHaveLength(12);
+    expect(run!.files.map((f) => f.output)).toEqual([...Array(6).fill('Document'), ...Array(6).fill('Lines')]);
+    expect(run!.files[0]).toMatchObject({ name: 'invoice-260101.pdf', contentType: 'application/pdf' });
+    expect(run!.files[6]).toMatchObject({ name: 'invoice-260101-lines.html', contentType: 'text/html; charset=utf-8' });
+    expect(run!.steps.find((s) => s.step === 'render')?.note).toBe('6 PDFs and 6 HTML files');
+  });
+
+  it("fails the run with the output's name when its template has an error", async () => {
+    const id = await readyJob();
+    await jobRoute.PATCH(
+      patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output(), output({ id: 'lines', label: 'Lines', source: "{{ asset('stamp') }}" })] } } }),
+      params({ id }),
+    );
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
+
+    expect(run!.status).toBe('failed');
+    expect(run!.error).toBe('The "Lines" output\'s template has an error: Document 1: There is no asset named "stamp". Upload it on the Assets page.');
+    expect(run!.files).toEqual([]);
+    expect(fake().actions()).toEqual([]);
   });
 
   it('makes only HTML when PDF is off', async () => {
@@ -315,7 +380,7 @@ describe('runs', () => {
     await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { template, formats: ['html'] } } }), params({ id }));
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
-    expect(run!.outputs.map((o) => o.contentType)).toEqual(Array(6).fill('text/html; charset=utf-8'));
+    expect(run!.files.map((f) => f.contentType)).toEqual(Array(6).fill('text/html; charset=utf-8'));
     expect(renderPdf).not.toHaveBeenCalled();
   });
 
@@ -404,7 +469,7 @@ describe('runs', () => {
       ['capture', true, `${sample.pages.length} pages`],
       ['extract', true, 'Not for this definition'],
     ]);
-    expect(run!.outputs).toEqual([]);
+    expect(run!.files).toEqual([]);
     expect(fake().actions()).toEqual([]);
     expect(await db().select().from(watchSeen)).toHaveLength(1);
     const skipped = await (await runLog.GET(get('/api/runs?status=skipped'))).json();
@@ -417,7 +482,7 @@ describe('runs', () => {
     fake().failures.set('holdSpooledFile', Object.assign(new Error('Not authorized to spooled file.'), { name: 'ConnectionError', code: 'authority' }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
     expect(run!.status).toBe('warning');
-    expect(run!.outputs).toHaveLength(6);
+    expect(run!.files).toHaveLength(6);
     expect(run!.error).toMatch(/Delivered, but the spooled file was not handled/);
   });
 

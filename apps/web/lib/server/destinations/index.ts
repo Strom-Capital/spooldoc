@@ -8,6 +8,9 @@ import { getDb } from '../db';
 /** A file a destination receives. */
 export interface OutputFile {
   documentIndex: number;
+  /** The label of the job output the file was rendered for, and its place in the job's outputs. */
+  output: string;
+  outputIndex: number;
   name: string;
   contentType: string;
   content: Uint8Array;
@@ -34,6 +37,8 @@ export const spooldocDestination: Destination = {
       files.map((file) => ({
         runId,
         documentIndex: file.documentIndex,
+        output: file.output,
+        outputIndex: file.outputIndex,
         name: file.name,
         contentType: file.contentType,
         size: file.content.byteLength,

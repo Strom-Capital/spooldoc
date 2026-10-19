@@ -20,7 +20,10 @@ import { z } from 'zod';
 import type {
   FieldReport,
   JobListing,
+  JobOutputFiles,
   ListJobsResult,
+  OutputChangeResult,
+  OutputListing,
   ReadJobFilesResult,
   ReadPageResult,
   RenderPreviewResult,
@@ -28,6 +31,7 @@ import type {
   WriteDefinitionResult,
   WriteTemplateResult,
 } from '@/lib/chat-types';
+import { findOutput, labelTaken, newOutput, OUTPUT_FORMATS, type JobOutput } from '@/lib/job-spec';
 
 /** Limits for the page preview in the instructions. */
 export interface InstructionsConfig {
@@ -42,8 +46,8 @@ export interface InstructionsInput {
   sample: Sample;
   /** The job's definition YAML, or null when there is none yet. */
   definitionYaml: string | null;
-  /** The job's template HTML, or null when there is none yet. */
-  templateHtml: string | null;
+  /** The job's outputs, each with its formats and template (null for the starter template). */
+  outputs: JobOutput[];
   /** Mask values in the page text (SPOOLDOC_MASK). */
   masked: boolean;
   /** Uploaded images and fonts the template can print with `asset('name')`. */
@@ -63,7 +67,7 @@ export const DATA_NOT_INSTRUCTIONS =
 
 /** When the model may look at other jobs. Tests look for it. */
 export const OTHER_JOBS_RULE =
-  'Use list_jobs and read_job_files only when the user asks to start from or reuse another job; then adapt what you take to this sample and save it with write_definition and write_template.';
+  'Use list_jobs and read_job_files only when the user asks to start from or reuse another job; then adapt what you take to this sample and save it with write_definition and write_template (and add_output for an output this job does not have).';
 
 const PREFIX = 4;
 
@@ -103,12 +107,12 @@ const fence = (lang: string, body: string): string => `\`\`\`${lang}\n${body.rep
 /**
  * The system instructions for the chat: the task, the definition and template rules,
  * the sample's metadata, the first pages as numbered text (masked when masking is on)
- * and the current definition and template.
+ * and the current definition and outputs with their templates.
  *
  * @param input - The sample, its linked files and the masking setting
  * @returns The instructions text
  */
-export function buildInstructions({ sample, definitionYaml, templateHtml, masked, assets = [], config = {} }: InstructionsInput): string {
+export function buildInstructions({ sample, definitionYaml, outputs, masked, assets = [], config = {} }: InstructionsInput): string {
   const width = sample.attributes.pageWidth;
   const pages = visiblePages(sample, masked);
   const maxPages = config.previewPages ?? 3;
@@ -137,7 +141,7 @@ export function buildInstructions({ sample, definitionYaml, templateHtml, masked
 How to work:
 1. Read the pages below. Propose a document definition in YAML and save it with write_definition.
 2. Read the extraction report it returns. Fix fields that are missing, empty when they should not be, or hold the wrong text, and write the definition again.
-3. Write an HTML template with write_template, then check it with render_preview.
+3. Write an HTML template with write_template, then check it with render_preview. A job has one or more outputs, each with its own template and formats; both tools take the output, and default to the first.
 4. Repeat until nothing that should be found is missing.
 5. End with a short summary of what you did and anything the user should check.
 When the layout is ambiguous (where a document starts, which page is a cover page, what a value means), ask the user instead of guessing.
@@ -185,10 +189,12 @@ Rules:
 
 - read_sample_page: the numbered text of any page${masked ? ' (masked)' : ''}.
 - write_definition: saves the YAML as the job's definition and returns the extraction report.
-- write_template: saves the job's template and returns the visible text of document 1.
-- render_preview: renders any document with the job's definition and template and returns the counts and its visible text.
-- list_jobs: the other jobs with their definition type and whether they have a template.
-- read_job_files: another job's definition YAML and template HTML.
+- write_template: saves the template of one output (\`output\`: its id or name, default the first) and returns the visible text of document 1.
+- render_preview: renders any document with the job's definition and one output's template and returns the counts and its visible text.
+- add_output: adds an output with a name and formats, using the starter template until you write one. Only when the user asks for another set of files, such as the lines of an invoice as a separate document.
+- remove_output: removes an output and its template. Only when the user asks; the last output cannot be removed.
+- list_jobs: the other jobs with their definition type, outputs and whether they have a template.
+- read_job_files: another job's definition YAML and the template HTML of each of its outputs.
 ${OTHER_JOBS_RULE}
 Values in tool results are ${masked ? 'masked like the pages' : 'shown as extracted'}.`,
 
@@ -214,9 +220,13 @@ ${fence('text', `${ruler(width)}\n${preview.join('\n')}`)}${
 
 ${definitionYaml ? fence('yaml', definitionYaml) : 'None yet.'}`,
 
-    `## Current template
+    `## Current outputs
 
-${templateHtml ? fence('html', templateHtml) : 'None yet.'}`,
+Each document of a run becomes the files of every output. The first output's files are named after the document; the others add their name, so a document named \`invoice\` gives \`invoice.pdf\` and \`invoice-lines.pdf\`.
+
+${outputs.map((output, index) => `### ${index + 1}. ${output.label} (id \`${output.id}\`): ${formatNames(output.formats)}
+
+${output.template.source ? fence('html', output.template.source) : 'No template yet: the starter template generated from the definition is used.'}`).join('\n\n')}`,
   ].join('\n\n');
 }
 
@@ -276,23 +286,28 @@ export function trimHistory<M extends UIMessage>(messages: M[], limits: HistoryL
   return first > 0 ? kept.slice(first) : kept;
 }
 
-/** Where the tools read and write the definition and template: the job's draft. */
+/** Where the tools read and write the definition and the outputs' templates: the job's draft. */
 export interface DraftStore {
   readDefinition(): Promise<string>;
-  /** Null when the job has no template yet (the starter template is used). */
-  readTemplate(): Promise<string | null>;
+  /** The job's outputs, in order. */
+  readOutputs(): Promise<JobOutput[]>;
   writeDefinition(yaml: string): Promise<void>;
-  writeTemplate(html: string): Promise<void>;
+  /** Save the template of the output with this id. */
+  writeTemplate(outputId: string, html: string): Promise<void>;
+  /**
+   * Change the outputs in one step and return them as saved. `change` throws an Error,
+   * with a message for the model, when the change cannot be made.
+   */
+  changeOutputs(change: (outputs: JobOutput[]) => JobOutput[]): Promise<JobOutput[]>;
 }
 
-/** The definition and template of a job: its active version's when it has one, else its draft's. */
+/** The definition and outputs of a job: its active version's when it has one, else its draft's. */
 export interface JobFiles {
   id: string;
   name: string;
   /** The definition YAML; empty when the job has none yet. */
   definitionYaml: string;
-  /** Null when the job has no template of its own. */
-  templateHtml: string | null;
+  outputs: JobOutputFiles[];
 }
 
 /**
@@ -474,17 +489,45 @@ export function definitionType(yaml: string): string | null {
   }
 }
 
-/** A job as `list_jobs` reports it: its id, name, definition type and whether it has a template. */
+/** A job as `list_jobs` reports it: its id, name, definition type, outputs and whether it has a template. */
 export function jobListing(job: JobFiles): JobListing {
-  return { id: job.id, name: job.name, type: definitionType(job.definitionYaml), hasTemplate: job.templateHtml !== null };
+  return {
+    id: job.id,
+    name: job.name,
+    type: definitionType(job.definitionYaml),
+    outputs: job.outputs.map((output) => output.label),
+    hasTemplate: job.outputs.some((output) => output.templateHtml !== null),
+  };
 }
+
+/** An output's files as another job's reader hands them over. */
+export function outputFiles(output: JobOutput): JobOutputFiles {
+  return { id: output.id, label: output.label, formats: output.formats, templateHtml: output.template.source };
+}
+
+/** An output as tool results report it. */
+function outputListing(output: JobOutput): OutputListing {
+  return { id: output.id, label: output.label, formats: output.formats, template: output.template.source === null ? 'starter' : 'saved' };
+}
+
+/** "PDF and HTML". */
+function formatNames(formats: readonly string[]): string {
+  return formats.map((format) => format.toUpperCase()).join(' and ');
+}
+
+/** Why there is no output `key`, with the outputs there are. */
+function noOutput(key: string, outputs: JobOutput[]): ToolFailure {
+  return fail(`There is no output "${key}". The job's outputs are ${outputs.map((output) => `${output.label} (id ${output.id})`).join(', ')}.`);
+}
+
+const outputParam = z.string().min(1).max(40).optional().describe("The output's id or name (default: the first output)");
 
 /** The `path` tool results report for the job's definition and template. */
 export const DRAFT_PATHS = { definition: 'definition', template: 'template' } as const;
 
 /**
  * The tools the chat model can call. They read the sample and write the job draft's
- * definition and template; none of them reaches the IBM i. Every write is validated,
+ * definition and the outputs and their templates; none of them reaches the IBM i. Every write is validated,
  * and results carry only (masked) extraction data.
  *
  * @param input - The sample, the draft store, the masking setting and the other jobs' files
@@ -492,6 +535,17 @@ export const DRAFT_PATHS = { definition: 'definition', template: 'template' } as
 export function buildTools({ sample: current, store, masked, assets = [], jobs }: ToolsInput) {
   async function readSample(): Promise<Sample | ToolFailure> {
     return current;
+  }
+
+  /** The output `key` names, or the first. */
+  async function pickOutput(key: string | undefined): Promise<JobOutput | ToolFailure> {
+    let outputs: JobOutput[];
+    try {
+      outputs = await store.readOutputs();
+    } catch (error) {
+      return fail(`Could not read the job's outputs: ${message(error)}`);
+    }
+    return findOutput(outputs, key) ?? noOutput(key ?? '', outputs);
   }
 
   async function linked(): Promise<{ type: string; def: Definition } | ToolFailure> {
@@ -570,9 +624,9 @@ export function buildTools({ sample: current, store, masked, assets = [], jobs }
 
     write_template: tool({
       description:
-        "Save the HTML template (Nunjucks) as the job's template, render the first document and return any errors and its visible text.",
-      inputSchema: z.object({ html: z.string().min(1).max(500_000).describe('The complete HTML template') }),
-      execute: async ({ html }): Promise<WriteTemplateResult> => {
+        "Save the HTML template (Nunjucks) as the template of one of the job's outputs (the first unless `output` names another), render the first document and return any errors and its visible text.",
+      inputSchema: z.object({ html: z.string().min(1).max(500_000).describe('The complete HTML template'), output: outputParam }),
+      execute: async ({ html, output: key }): Promise<WriteTemplateResult> => {
         const sample = await readSample();
         if ('ok' in sample) {
           return sample;
@@ -581,8 +635,12 @@ export function buildTools({ sample: current, store, masked, assets = [], jobs }
         if ('ok' in before) {
           return before;
         }
+        const output = await pickOutput(key);
+        if ('ok' in output) {
+          return output;
+        }
         try {
-          await store.writeTemplate(html);
+          await store.writeTemplate(output.id, html);
         } catch (error) {
           return fail(`Could not save the template: ${message(error)}`);
         }
@@ -593,20 +651,21 @@ export function buildTools({ sample: current, store, masked, assets = [], jobs }
         try {
           documents = extract(current.def, sample).documents;
         } catch (error) {
-          return { ok: false, path, errors: [`Extraction failed: ${message(error)}`], warnings, textPreview: '' };
+          return { ok: false, path, output: output.label, errors: [`Extraction failed: ${message(error)}`], warnings, textPreview: '' };
         }
         const rendered = renderDocument(html, documents, 0, sample, masked, assets);
-        return { ok: rendered.errors.length === 0, path, errors: rendered.errors, warnings, textPreview: rendered.textPreview };
+        return { ok: rendered.errors.length === 0, path, output: output.label, errors: rendered.errors, warnings, textPreview: rendered.textPreview };
       },
     }),
 
     render_preview: tool({
       description:
-        "Render a document with the job's definition and template and return the document count, hit counts (found, missing, empty), missing fields, template errors and the visible text of the document.",
+        "Render a document with the job's definition and one output's template (the first unless `output` names another) and return the document count, hit counts (found, missing, empty), missing fields, template errors and the visible text of the document.",
       inputSchema: z.object({
         document: z.number().int().min(0).optional().describe('0-based document index (default 0)'),
+        output: outputParam,
       }),
-      execute: async ({ document }): Promise<RenderPreviewResult> => {
+      execute: async ({ document, output: key }): Promise<RenderPreviewResult> => {
         const sample = await readSample();
         if ('ok' in sample) {
           return sample;
@@ -621,7 +680,11 @@ export function buildTools({ sample: current, store, masked, assets = [], jobs }
         } catch (error) {
           return fail(`Extraction failed: ${message(error)}`);
         }
-        const saved = await store.readTemplate().catch(() => null);
+        const output = await pickOutput(key);
+        if ('ok' in output) {
+          return output;
+        }
+        const saved = output.template.source;
         const html = saved ?? starterTemplate(current.def);
         const index = Math.min(document ?? 0, Math.max(0, result.documents.length - 1));
         const rendered = renderDocument(html, result.documents, index, sample, masked, assets);
@@ -631,6 +694,7 @@ export function buildTools({ sample: current, store, masked, assets = [], jobs }
         }
         return {
           ok: true,
+          output: output.label,
           document: index,
           documents: result.documents.length,
           template: saved === null ? 'starter' : 'saved',
@@ -642,9 +706,56 @@ export function buildTools({ sample: current, store, masked, assets = [], jobs }
       },
     }),
 
+    add_output: tool({
+      description:
+        "Add an output to the job: another set of files made from each document, with its own template and formats. It uses the starter template until write_template writes one. Only when the user asks for another output.",
+      inputSchema: z.object({
+        label: z.string().trim().min(1).max(40).describe('A short name, such as "Lines". Other outputs\' files add it to their names.'),
+        formats: z.array(z.enum(OUTPUT_FORMATS)).min(1).optional().describe('The formats to make (default PDF)'),
+      }),
+      execute: async ({ label, formats }): Promise<OutputChangeResult> => {
+        let added: JobOutput | undefined;
+        try {
+          const outputs = await store.changeOutputs((outputs) => {
+            if (labelTaken(outputs, label)) {
+              throw new Error(`There is already an output named "${label}". Pick another name.`);
+            }
+            added = newOutput(outputs, label, formats);
+            return [...outputs, added];
+          });
+          return { ok: true, output: outputListing(added!), outputs: outputs.map(outputListing) };
+        } catch (error) {
+          return fail(message(error));
+        }
+      },
+    }),
+
+    remove_output: tool({
+      description: 'Remove one of the job\'s outputs and its template. The last output cannot be removed. Only when the user asks.',
+      inputSchema: z.object({ output: z.string().min(1).max(40).describe("The output's id or name") }),
+      execute: async ({ output: key }): Promise<OutputChangeResult> => {
+        let removed: JobOutput | undefined;
+        try {
+          const outputs = await store.changeOutputs((outputs) => {
+            removed = findOutput(outputs, key) ?? undefined;
+            if (!removed) {
+              throw new Error(noOutput(key, outputs).error);
+            }
+            if (outputs.length === 1) {
+              throw new Error('A job needs at least one output, so the last one cannot be removed.');
+            }
+            return outputs.filter((output) => output !== removed);
+          });
+          return { ok: true, output: outputListing(removed!), outputs: outputs.map(outputListing) };
+        } catch (error) {
+          return fail(message(error));
+        }
+      },
+    }),
+
     list_jobs: tool({
       description:
-        'List the other jobs with their id, name, definition type and whether they have a template, to pick one to start from. Only when the user asks to reuse another job.',
+        'List the other jobs with their id, name, definition type, outputs and whether they have a template, to pick one to start from. Only when the user asks to reuse another job.',
       inputSchema: z.object({}),
       execute: async (): Promise<ListJobsResult> => {
         if (!jobs) {
@@ -660,7 +771,7 @@ export function buildTools({ sample: current, store, masked, assets = [], jobs }
 
     read_job_files: tool({
       description:
-        "Read another job's definition YAML and template HTML (its active version's, else its draft's) to start this job from them. Only when the user asks to reuse that job.",
+        "Read another job's definition YAML and each of its outputs with its formats and template HTML (its active version's, else its draft's) to start this job from them. Only when the user asks to reuse that job.",
       inputSchema: z.object({ id: z.string().min(1).max(64).describe('The job id from list_jobs') }),
       execute: async ({ id }): Promise<ReadJobFilesResult> => {
         if (!jobs) {
@@ -680,7 +791,7 @@ export function buildTools({ sample: current, store, masked, assets = [], jobs }
           id: job.id,
           name: job.name,
           definitionYaml: job.definitionYaml.trim() ? job.definitionYaml : null,
-          templateHtml: job.templateHtml,
+          outputs: job.outputs,
         };
       },
     }),

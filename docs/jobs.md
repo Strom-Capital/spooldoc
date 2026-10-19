@@ -22,7 +22,7 @@ inspector.
 | Source | The server, the output queue, and filters on spooled file name, user data, job name, job user and form type. Each filter is a "contains" match; empty means any file on the queue. |
 | Trigger | On demand, or Watching the queue. See [Watching a queue](#watching-a-queue). |
 | Extract | The [definition](definitions.md): the YAML that turns pages into JSON. |
-| Render | The [template](templates.md) and the output formats, PDF and HTML. The starter template renders every field and table of the definition until you write your own. |
+| Render | The outputs: each has a name, a [template](templates.md) and the formats it makes, PDF, HTML or both. The starter template renders every field and table of the definition until you write your own. See [Outputs](#outputs). |
 | Destination | Where the files go. See [Destinations](destinations.md). |
 | Finish | What happens to the spooled file after every document was delivered. |
 
@@ -40,6 +40,26 @@ the definition and the template to the draft, reads the extraction report
 and renders the result, and the page view, JSON and preview update as it
 works. Everything it writes can be edited by hand.
 
+## Outputs
+
+Each document a run extracts becomes the files of every output of the
+job. A new job has one output, Document, that makes a PDF. Add another
+when the same data needs a second set of files, for example an invoice
+as a PDF and its lines as a separate HTML page.
+
+The render step's header picks the output that the template editor and
+the preview show, and holds its format switches, Add output and a menu to
+rename or remove it. The last output cannot be removed. The pipeline
+shows one output as its template and formats, and several as "2 outputs"
+with each name and its formats.
+
+The first output's files are named after the document, as in
+`invoice-260101.pdf`. Every other output adds its name, so a Lines output
+gives `invoice-260101-lines.html`. Two outputs cannot have the same name.
+
+Jobs saved before outputs have one output, Document, with their template
+and formats, and their old versions still run.
+
 ## Versions
 
 The job you edit is the draft. Saving a version takes a fixed copy of the
@@ -49,9 +69,9 @@ run is logged against the version it used. Restoring a version copies it
 back into the draft. A draft that differs from the active version is
 marked, so you know what runs and what you are still working on.
 
-A version must be complete: a server and queue, a definition, and a
-destination, plus the queue to move files to when the finish action is
-Move.
+A version must be complete: a server and queue, a definition, outputs
+with different names, and a destination, plus the queue to move files to
+when the finish action is Move.
 
 ## Running on demand
 

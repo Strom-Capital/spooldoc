@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { ChatPanel } from '@/components/workbench/chat-panel';
 import { DefinitionEditor } from '@/components/workbench/definition-editor';
 import { HtmlPreview } from '@/components/workbench/html-preview';
@@ -9,26 +9,36 @@ import { PageView } from '@/components/workbench/page-view';
 import { PaneTabs, SplitPanes } from '@/components/workbench/split-panes';
 import { TemplateEditor } from '@/components/workbench/template-editor';
 import { useWorkbench, WorkbenchProvider } from '@/components/workbench/workbench-provider';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Spinner } from '@/components/ui/spinner';
-import { OUTPUT_FORMATS, type OutputFormat } from '@/lib/job-spec';
+import { outputFileName } from '@/lib/job-spec';
 import { useJob } from './job-provider';
+import { OutputControls } from './output-controls';
 import { PreviewPicker } from './preview-picker';
 
-/** The workbench state for the job's spec and preview spooled file, around the builder. */
+/** The workbench state for the job's spec, the picked output and the preview spooled file, around the builder. */
 export function JobWorkbench({ children }: { children: React.ReactNode }) {
   const { job, spec, readOnly, updateDraft, refresh } = useJob();
+  const outputs = spec.render.outputs;
+  const [picked, setPicked] = useState<string | null>(null);
+  // A picked output that is gone (removed, or not in the version shown) falls back to the first.
+  const output = outputs.find((o) => o.id === picked) ?? outputs[0]!;
   const setYaml = useCallback((yaml: string) => updateDraft({ extract: { definition: yaml } }), [updateDraft]);
   const setHtml = useCallback(
-    (html: string | null) => updateDraft({ render: { ...spec.render, template: html } }, { debounce: html !== null }),
-    [updateDraft, spec.render],
+    (html: string | null) =>
+      updateDraft(
+        { render: { outputs: outputs.map((o) => (o.id === output.id ? { ...o, template: { kind: 'html', source: html } } : o)) } },
+        { debounce: html !== null },
+      ),
+    [updateDraft, outputs, output.id],
   );
   return (
     <WorkbenchProvider
       jobId={job.id}
       sampleId={spec.preview.sampleId}
       yaml={spec.extract.definition}
-      html={spec.render.template}
+      html={output.template.source}
+      outputId={output.id}
+      setOutputId={setPicked}
       readOnly={readOnly}
       setYaml={setYaml}
       setHtml={setHtml}
@@ -107,44 +117,15 @@ export function ExtractStep() {
   );
 }
 
-const FORMAT_LABEL: Record<OutputFormat, string> = { pdf: 'PDF', html: 'HTML' };
-
-/** Which files each document becomes: PDF, HTML or both (at least one). */
-function OutputFormats() {
-  const { spec, readOnly, updateDraft } = useJob();
-  const formats = spec.render.formats;
-  const toggle = (format: OutputFormat, on: boolean) => {
-    const next = on ? [...formats, format] : formats.filter((f) => f !== format);
-    if (next.length > 0) updateDraft({ render: { ...spec.render, formats: OUTPUT_FORMATS.filter((f) => next.includes(f)) } }, { debounce: false });
-  };
-  return (
-    <div role="group" aria-label="Output formats" className="flex items-center gap-3 text-sm">
-      <span className="text-muted-foreground text-xs">Output</span>
-      {OUTPUT_FORMATS.map((format) => {
-        const checked = formats.includes(format);
-        return (
-          <label key={format} className="flex items-center gap-1.5">
-            <Checkbox
-              checked={checked}
-              disabled={readOnly || (checked && formats.length === 1)}
-              onCheckedChange={(on) => toggle(format, on === true)}
-              aria-label={`Make ${FORMAT_LABEL[format]} files`}
-            />
-            {FORMAT_LABEL[format]}
-          </label>
-        );
-      })}
-    </div>
-  );
-}
-
-/** Render: the template (and the JSON for field names) next to the HTML preview, with PDF and HTML downloads. */
+/** Render: the picked output's template (and the JSON for field names) next to its HTML preview, with PDF and HTML downloads. */
 export function RenderStep() {
-  const { tab, setTab } = useWorkbench();
+  const { tab, setTab, outputId, setOutputId } = useWorkbench();
+  const { spec } = useJob();
+  const output = spec.render.outputs.find((o) => o.id === outputId) ?? spec.render.outputs[0]!;
   const current = tab === 'definition' ? 'template' : tab;
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <StepHeader end={<OutputFormats />} />
+      <StepHeader end={<OutputControls output={output} onPick={setOutputId} />} />
       <div className="min-h-0 flex-1">
         <SplitPanes
           labels={['Template and JSON', 'Preview']}
@@ -161,7 +142,7 @@ export function RenderStep() {
               <div className="min-h-0 flex-1">{current === 'json' ? <JsonView /> : <TemplateEditor />}</div>
             </div>
           }
-          right={<HtmlPreview />}
+          right={<HtmlPreview fileName={(name) => outputFileName(name, spec.render.outputs, output)} />}
         />
       </div>
     </div>
