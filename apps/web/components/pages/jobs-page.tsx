@@ -9,6 +9,7 @@ import { ErrorNote, Page } from '@/components/page';
 import { RunStatusBadge } from '@/components/run-status';
 import { Button } from '@/components/ui/button';
 import { api, errorText } from '@/lib/client/api';
+import { pollWhileVisible } from '@/lib/client/poll';
 import { ago } from '@/lib/client/format';
 import type { JobSummary } from '@/lib/types';
 import { NewJobButton } from './new-job-button';
@@ -35,10 +36,10 @@ export function JobsPage() {
         (err) => !cancelled && setError(errorText(err)),
       );
     void fetchJobs();
-    const timer = setInterval(() => void fetchJobs(), 15_000);
+    const stop = pollWhileVisible(() => void fetchJobs(), 15_000);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      stop();
     };
   }, []);
 

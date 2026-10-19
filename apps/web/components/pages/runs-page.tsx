@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Spinner } from '@/components/ui/spinner';
 import { api, errorText } from '@/lib/client/api';
+import { pollWhileVisible } from '@/lib/client/poll';
 import { bytes, dateTime, duration, splfLabel } from '@/lib/client/format';
 import type { JobSummary, RunStatus, RunView } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -78,10 +79,10 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
         (err) => !cancelled && setError(errorText(err)),
       );
     void fetchRuns();
-    const timer = setInterval(() => void fetchRuns(), 10_000);
+    const stop = pollWhileVisible(() => void fetchRuns(), 10_000);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      stop();
     };
   }, [current]);
 
@@ -105,7 +106,11 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
     }
   }
 
+  // The run being retried: a retry runs the whole file again and can take minutes.
+  const [retrying, setRetrying] = useState<string | null>(null);
+
   async function retry(run: RunView) {
+    setRetrying(run.id);
     try {
       const fresh = await api<RunView>(`/api/runs/${run.id}/retry`, { method: 'POST' });
       const text = `Run #${fresh.seq}: ${RETRIED[fresh.status]}`;
@@ -116,6 +121,8 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
       await load();
     } catch (err) {
       toast.error(`Could not retry run #${run.seq}`, { description: errorText(err) });
+    } finally {
+      setRetrying(null);
     }
   }
 
@@ -292,9 +299,9 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                 <div className="flex items-center justify-between gap-2">
                   <RunStatusBadge status={open.status} />
                   {(open.status === 'failed' || open.status === 'warning' || open.status === 'skipped') && (
-                    <Button variant="outline" size="sm" onClick={() => retry(open)}>
-                      <RotateCcwIcon />
-                      Retry
+                    <Button variant="outline" size="sm" onClick={() => retry(open)} disabled={retrying !== null}>
+                      {retrying === open.id ? <Spinner /> : <RotateCcwIcon />}
+                      {retrying === open.id ? 'Retrying...' : 'Retry'}
                     </Button>
                   )}
                 </div>
