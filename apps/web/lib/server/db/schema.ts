@@ -21,6 +21,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { AI_PROVIDER_IDS, EFFORT_IDS } from '../../ai-providers';
 import type { JobSpec } from '../../job-spec';
+import type { CarboneCheck } from '../../types';
 
 const bytea = customType<{ data: Buffer; driverData: Buffer | Uint8Array }>({
   dataType: () => 'bytea',
@@ -253,6 +254,8 @@ export interface RunStep {
   ok: boolean;
   ms: number;
   error?: string;
+  /** The system's own text behind `error`, such as Carbone's message, kept for support. */
+  detail?: string;
   note?: string;
 }
 
@@ -326,10 +329,23 @@ export const settings = pgTable(
     retentionDays: integer('retention_days').notNull().default(90),
     /** The provider the chat uses. Null turns the chat off. */
     aiProvider: text('ai_provider'),
+    /** Where documents are rendered: a Carbone server of the user's own (`onprem`) or Carbone Cloud. */
+    carboneMode: text('carbone_mode').notNull().default('onprem'),
+    /** The on-prem Carbone server. Null is the Compose service, http://carbone:4000. */
+    carboneUrl: text('carbone_url'),
+    /** The Carbone Cloud API key, encrypted with SPOOLDOC_SECRET_KEY. */
+    carboneApiKeyEnc: text('carbone_api_key_enc'),
+    /** Spooldoc's ES512 private key for Carbone tokens, encrypted. Made on first use. */
+    carboneKeyEnc: text('carbone_key_enc'),
+    /** The public key Carbone checks the tokens with, as PEM. */
+    carbonePublicKey: text('carbone_public_key'),
+    /** The last connection check: version, edition, or what went wrong. */
+    carboneCheck: jsonb('carbone_check').$type<CarboneCheck>(),
     ...timestamps,
   },
   (t) => [
     check('settings_single_row', sql`${t.id} = 1`),
+    check('settings_carbone_mode_check', sql`${t.carboneMode} in ('onprem', 'cloud')`),
     check('settings_ai_provider_check', sql`${t.aiProvider} in (${providerList})`),
     check('settings_poll_check', sql`${t.pollSeconds} between 5 and 3600`),
     check('settings_safety_check', sql`${t.safetyCheckSeconds} between 60 and 86400`),
@@ -355,7 +371,7 @@ export const aiProviders = pgTable(
   ],
 );
 
-/** An image or font that templates print with `asset('name')`, as a data URI. */
+/** An image or font that templates print with `{asset('name')}`, as a data URI. */
 export const assets = pgTable(
   'assets',
   {

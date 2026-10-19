@@ -15,6 +15,7 @@ export const CHAT_TOOL_NAMES = [
   'remove_output',
   'list_jobs',
   'read_job_files',
+  'read_carbone_reference',
 ] as const;
 export type ChatToolName = (typeof CHAT_TOOL_NAMES)[number];
 
@@ -111,3 +112,6 @@ export interface JobOutputFiles {
 
 /** `read_job_files`. */
 export type ReadJobFilesResult = { ok: true; id: string; name: string; definitionYaml: string | null; outputs: JobOutputFiles[] } | ToolFailure;
+
+/** `read_carbone_reference`: one reference file of the Carbone Skill. */
+export type ReadCarboneReferenceResult = { ok: true; name: string; text: string } | ToolFailure;

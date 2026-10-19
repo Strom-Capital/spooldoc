@@ -3,9 +3,9 @@ title: "Deployment"
 description: "Run Spooldoc with Docker or Docker Compose: the image, ports, network to the IBM i, secrets, backups and upgrades."
 ---
 
-The container image holds the web app, a Java runtime for jt400 and
-Chromium for PDFs, and runs on amd64 and arm64. It needs a Postgres
-database and three environment variables.
+The container image holds the web app and a Java runtime for jt400, and
+runs on amd64 and arm64. It needs a Postgres database, three environment
+variables and a [Carbone](carbone.md) server to render documents.
 
 Every release publishes the image to `ghcr.io/strom-capital/spooldoc`,
 tagged with its version (`0.1.0`), its minor line (`0.1`) and `latest`.
@@ -107,7 +107,8 @@ them before you upgrade, and pin `X.Y.Z` rather than following `latest`.
 
 ## Sizing
 
-A run reads one spooled file, extracts and renders in the Node process,
-and spends most of its time in Chromium for PDFs, so memory goes with the
-size of the reports. `UV_THREADPOOL_SIZE` is set to 16 in the image because
+A run reads one spooled file and extracts in the Node process, so memory
+goes with the size of the reports. Carbone renders: an HTML to PDF render
+takes tens of milliseconds, and the Carbone container uses about 500 MB of
+memory. Its `full` image is about 560 MB to download. `UV_THREADPOOL_SIZE` is set to 16 in the image because
 jt400 calls block a thread pool thread.

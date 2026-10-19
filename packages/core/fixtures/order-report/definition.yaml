@@ -38,5 +38,5 @@ text:
         - { name: typeText, line: 2, column: 20, length: 30 }
         - { name: message, line: 3, column: 19, length: 80 }
 output:
-  name: "order-report-{{ runDate }}"
+  name: "order-report-{d.doc.runDate}"
   title: Open order lines by customer

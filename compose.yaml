@@ -3,8 +3,14 @@
 # release such as 0.1.0, latest otherwise. docker compose up --build -d builds the
 # image from this checkout instead and tags it with the same name.
 # .env next to this file holds the settings (see apps/web/.env.example);
-# BETTER_AUTH_SECRET and SPOOLDOC_SECRET_KEY are required; the chat model is set
-# in the app under Settings. Chromium is set by the image.
+# BETTER_AUTH_SECRET and SPOOLDOC_SECRET_KEY are required; the chat model and the
+# Carbone connection are set in the app under Settings.
+#
+# Carbone renders every document. Spooldoc reaches it at http://carbone:4000, inside
+# this network only, and signs each request with its own key. On first start, copy
+# the public key from Settings, under Rendering, into CARBONE_AUTHENTICATION_PUBLIC_KEY
+# in .env (one line, as shown), run docker compose up -d carbone, and click Check
+# again. CARBONE_LICENSE in .env turns on Carbone's Enterprise features.
 #
 # For development, start only the database (docker compose up -d db) and set
 # DATABASE_URL=postgres://spooldoc:spooldoc@localhost:5433/spooldoc in
@@ -28,6 +34,14 @@ services:
       retries: 10
     restart: unless-stopped
 
+  carbone:
+    image: carbone/carbone-ee:full-5.15.5-fonts
+    environment:
+      CARBONE_AUTHENTICATION: "true"
+      CARBONE_AUTHENTICATION_PUBLIC_KEY: ${CARBONE_AUTHENTICATION_PUBLIC_KEY:-}
+      CARBONE_LICENSE: ${CARBONE_LICENSE:-}
+    restart: unless-stopped
+
   web:
     image: ghcr.io/strom-capital/spooldoc:${SPOOLDOC_VERSION:-latest}
     build: .
@@ -39,6 +53,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      carbone:
+        condition: service_started
     restart: unless-stopped
 
 volumes:

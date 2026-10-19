@@ -19,7 +19,6 @@ export interface AppConfig {
   mask: boolean;
   /** Code page used when a spooled file has no CHRID and the job CCSID is not supported. */
   defaultCcsid?: number;
-  chromiumPath?: string;
   /** Lower-cased hosts the connect form may use. Empty means any host. */
   allowedHosts: string[];
   /** How much the server logs to stdout. */
@@ -66,7 +65,6 @@ const envSchema = z.object({
   SPOOLDOC_DEFAULT_CCSID: optional.pipe(
     z.string().regex(/^\d+$/, 'SPOOLDOC_DEFAULT_CCSID must be a number such as 273 or 37').optional(),
   ),
-  SPOOLDOC_CHROMIUM_PATH: optional,
   SPOOLDOC_ALLOWED_HOSTS: optional,
   SPOOLDOC_LOG_LEVEL: optional.pipe(
     z
@@ -103,7 +101,6 @@ export function getConfig(): AppConfig {
     watcher: isTrue(env.SPOOLDOC_WATCHER, true),
     mask: isTrue(env.SPOOLDOC_MASK, true),
     defaultCcsid: env.SPOOLDOC_DEFAULT_CCSID ? Number(env.SPOOLDOC_DEFAULT_CCSID) : undefined,
-    chromiumPath: env.SPOOLDOC_CHROMIUM_PATH,
     allowedHosts: (env.SPOOLDOC_ALLOWED_HOSTS ?? '')
       .split(',')
       .map((host) => host.trim().toLowerCase())

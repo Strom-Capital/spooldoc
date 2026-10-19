@@ -1,14 +1,25 @@
 import 'server-only';
 
-import { extract, matchProblems, parseDefinition, starterTemplate, type Definition, type Sample, type SpooledFileId } from '@spooldoc/core';
+import {
+  checkTemplate,
+  extract,
+  isCarboneError,
+  matchProblems,
+  parseDefinition,
+  problemText,
+  templateData,
+  type Definition,
+  type Sample,
+  type SpooledFileId,
+} from '@spooldoc/core';
 import type { Connection } from '@spooldoc/ibmi';
 import { and, eq } from 'drizzle-orm';
 import { jobSpecSchema, outputFileName, splfKey, type JobSpec } from '@/lib/job-spec';
-import { assetResolver } from './assets';
+import { assetNames, assetResolver } from './assets';
 import { getDb } from './db';
 import { jobVersions, runs, watchSeen, type RunStep } from './db/schema';
 import { destinationFor, type OutputFile } from './destinations';
-import { htmlToPdf, renderDocuments, type RenderedDocument } from './documents';
+import { documentRenderer, fileNameFor, outputTemplate } from './documents';
 import { redact } from './http';
 import { connectServer } from './ibmi';
 import { log } from './log';
@@ -24,16 +35,6 @@ export interface RunRequest {
   userId?: string | null;
 }
 
-/** Turns HTML into PDF bytes; replaced in tests. */
-export type PdfRenderer = (html: string, pageWidth: number) => Promise<Uint8Array>;
-
-let pdfRenderer: PdfRenderer = htmlToPdf;
-
-/** Use another PDF renderer, for tests. */
-export function setPdfRenderer(next: PdfRenderer | null): void {
-  pdfRenderer = next ?? htmlToPdf;
-}
-
 /** Ends a run as skipped: the file is not one the definition is for. The file is left alone. */
 class SkipRun extends Error {}
 
@@ -41,10 +42,15 @@ class StepError extends Error {
   constructor(
     readonly step: RunStep['step'],
     message: string,
+    /** The system's own text, such as Carbone's, kept for support. */
+    readonly detail?: string,
   ) {
     super(message);
   }
 }
+
+/** Shown as it is: the problem is the Carbone server, not the template. */
+const SERVER_KINDS = ['unreachable', 'timeout', 'auth', 'server'];
 
 const firstLine = (error: unknown, secrets: string[]): string => redact(error, secrets);
 
@@ -69,7 +75,8 @@ export async function startRun(request: RunRequest): Promise<{ id: string; seq: 
 
 /**
  * Process one spooled file with a job version: capture, extract, render every document
- * with each output's template to that output's formats (PDF, HTML or both), deliver, then hold, move or delete the file as the version says. Every step is
+ * with each output's template to that output's formats (PDF, HTML or both) with Carbone,
+ * deliver, then hold, move or delete the file as the version says. Every step is
  * recorded on the run; a failure stops the run and is stored, never thrown. A file the
  * definition's `match` rules do not accept ends the run as `skipped`, untouched. The
  * finish step runs only after everything was delivered, and a failure there gives `warning`.
@@ -94,8 +101,9 @@ export async function executeRun(runId: string, request: RunRequest, connection?
       return value;
     } catch (err) {
       const message = err instanceof StepError ? err.message : firstLine(err, secrets);
-      steps.push({ step: name, ok: false, ms: Math.round(performance.now() - started), error: message });
-      throw new StepError(name, message);
+      const detail = err instanceof StepError ? err.detail : isCarboneError(err) ? err.detail : undefined;
+      steps.push({ step: name, ok: false, ms: Math.round(performance.now() - started), error: message, ...(detail ? { detail } : {}) });
+      throw new StepError(name, message, detail);
     }
   };
 
@@ -159,7 +167,9 @@ export async function executeRun(runId: string, request: RunRequest, connection?
     const files: OutputFile[] = await step(
       'render',
       async () => {
+        const render = await documentRenderer();
         const asset = await assetResolver();
+        const assets = (await assetNames()).map((entry) => entry.name);
         const names = new Set<string>();
         const unique = (base: string, ext: string) => {
           let name = `${base}.${ext}`;
@@ -169,20 +179,30 @@ export async function executeRun(runId: string, request: RunRequest, connection?
         };
         const out: OutputFile[] = [];
         for (const [outputIndex, output] of spec.render.outputs.entries()) {
-          let rendered: RenderedDocument[];
-          try {
-            rendered = renderDocuments(def, output.template.source ?? starterTemplate(def), docs, sample, asset);
-          } catch (err) {
-            throw new Error(`The "${output.label}" output's template has an error: ${err instanceof Error ? err.message : String(err)}`);
+          // Checked once per output: Carbone prints some mistakes without an error.
+          const template = outputTemplate(output.template.source, def);
+          const problems = checkTemplate(template, def, { assets });
+          if (problems.length > 0) {
+            const count = problems.length === 1 ? '1 problem' : `${problems.length} problems`;
+            throw new StepError('render', `The "${output.label}" output's template has ${count}. ${problemText(problems.slice(0, 3)).replace(/\n/g, ' ')}`);
           }
-          for (const doc of rendered) {
-            const base = outputFileName(doc.name, spec.render.outputs, output);
-            const file = { documentIndex: doc.index, output: output.label, outputIndex };
+          for (const [index, doc] of docs.entries()) {
+            const base = outputFileName(fileNameFor(def, doc, index, sample.splf.name.toLowerCase()), spec.render.outputs, output);
+            const file = { documentIndex: index, output: output.label, outputIndex };
+            const data = templateData(template, doc, docs, sample);
             for (const format of output.formats) {
+              let content: Uint8Array;
+              try {
+                content = await render({ template, data, format, pageWidth: sample.attributes.pageWidth, asset });
+              } catch (err) {
+                if (isCarboneError(err) && SERVER_KINDS.includes(err.kind)) throw err;
+                const text = err instanceof Error ? err.message : String(err);
+                throw new StepError('render', `The "${output.label}" output, document ${index + 1}: ${text}`, isCarboneError(err) ? err.detail : undefined);
+              }
               out.push(
                 format === 'pdf'
-                  ? { ...file, name: unique(base, 'pdf'), contentType: 'application/pdf', content: await pdfRenderer(doc.html, sample.attributes.pageWidth) }
-                  : { ...file, name: unique(base, 'html'), contentType: 'text/html; charset=utf-8', content: new TextEncoder().encode(doc.html) },
+                  ? { ...file, name: unique(base, 'pdf'), contentType: 'application/pdf', content }
+                  : { ...file, name: unique(base, 'html'), contentType: 'text/html; charset=utf-8', content },
               );
             }
           }

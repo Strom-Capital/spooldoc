@@ -11,7 +11,8 @@ overview and the architecture diagram, see the [project README](../README.md).
 | [Queues](queues.md) | Output queues and spooled files |
 | [Jobs](jobs.md) | The job builder, versions, triggers, finish actions |
 | [Definitions](definitions.md) | The YAML that turns pages into JSON |
-| [Templates](templates.md) | HTML templates, filters, assets, PDF layout |
+| [Templates](templates.md) | HTML templates with Carbone tags, the template check, assets, PDF layout |
+| [Carbone](carbone.md) | The Carbone server, Settings, Community and Enterprise |
 | [AI assistant](ai-assistant.md) | Models, tools, masking |
 | [Destinations](destinations.md) | Where documents go |
 | [Job log](job-log.md) | Runs, statuses, retry, retention |

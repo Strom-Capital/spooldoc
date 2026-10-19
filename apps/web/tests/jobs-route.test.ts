@@ -1,22 +1,16 @@
+import { CarboneError } from '@spooldoc/core';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { assets, jobs, jobVersions, queueHealth, runOutputs, runs, watchSeen } from '@/lib/server/db/schema';
 import type { JobDetail, JobSummary, RunView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
+import { fakeCarbone, fakeRenderer, PDF_BYTES } from './helpers/carbone';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, loadSample } from './helpers/fake-connection';
 import { db, insertServer } from './helpers/fixtures';
 import { appRequest, connections, params, spyConsole } from './helpers/mocks';
 
-const PDF_BYTES = new TextEncoder().encode('%PDF-1.7 fixed');
-const renderPdf = vi.fn<(html: string, options?: { format?: string; landscape?: boolean }) => Promise<Uint8Array>>(async () => PDF_BYTES);
-
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
-vi.mock('@/lib/server/pdf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/pdf')>()),
-  loadPdf: async () => ({ renderPdf }),
-  pdfAvailable: async () => true,
-}));
 
 const jobsRoute = await import('@/app/api/jobs/route');
 const jobRoute = await import('@/app/api/jobs/[id]/route');
@@ -30,6 +24,10 @@ const runsRoute = await import('@/app/api/jobs/[id]/runs/route');
 const filesRoute = await import('@/app/api/jobs/[id]/files/route');
 const runLog = await import('@/app/api/runs/route');
 const fileRoute = await import('@/app/api/runs/[id]/files/[file]/route');
+
+const { setDocumentRenderer } = await import('@/lib/server/documents');
+const { CARBONE_NOT_CONNECTED } = await import('@/lib/server/render');
+const { getRendering } = await import('@/lib/server/rendering');
 
 const sample = loadSample('invoice');
 const yaml = fixtureText('invoice', 'definition.yaml');
@@ -71,7 +69,10 @@ const output = ({ id = 'main', label = 'Document', source = template as string |
 });
 
 /** A second output: the invoice lines as HTML. */
-const LINES = output({ id: 'lines', label: 'Lines', source: '<ul>{% for l in doc.lines %}<li>{{ l.line }}</li>{% endfor %}</ul>', formats: ['html'] });
+const LINES = output({ id: 'lines', label: 'Lines', source: '<ul><li>{d.doc.lines[i].line}</li><li>{d.doc.lines[i+1]}</li></ul>', formats: ['html'] });
+
+/** What the fake Carbone was sent for its n-th render. */
+const sent = (n = 0) => fakeCarbone.mock.calls[n]![0];
 
 /** The fake IBM i connection behind the test server. */
 const fake = (): FakeConnection => connections.get('ibmi.example.com|DEMOUSER')!;
@@ -79,7 +80,6 @@ const fake = (): FakeConnection => connections.get('ibmi.example.com|DEMOUSER')!
 beforeEach(async () => {
   await resetTables(db());
   connections.clear();
-  renderPdf.mockClear();
   auth = await signedIn();
   serverId = await insertServer();
 });
@@ -143,8 +143,11 @@ describe('jobs', () => {
     expect(result.extract.documents).toHaveLength(6);
     expect(result.html).toContain('260102');
 
-    const unsaved = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { html: '<p>{{ doc.invoiceNo }}</p>' }), params({ id }))).json();
-    expect(unsaved.html).toBe('<p>260101</p>');
+    const unsaved = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { html: '<p>{d.doc.invoiceNo}</p>' }), params({ id }))).json();
+    expect(unsaved.html).toContain('<p>260101</p>');
+    // A Nunjucks template from before Carbone is converted before it is checked and sent.
+    const old = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { html: '<p>{{ doc.invoiceNo }}</p>' }), params({ id }))).json();
+    expect(old.html).toContain('<p>260101</p>');
     const starter = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { html: null }), params({ id }))).json();
     expect(starter.template.generated).toBe(true);
   });
@@ -155,7 +158,7 @@ describe('jobs', () => {
     const first = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, {}), params({ id }))).json();
     expect(first.html).toContain('<title>Invoice 260101</title>');
     const lines = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { outputId: 'lines' }), params({ id }))).json();
-    expect(lines.html).toMatch(/^<ul><li>/);
+    expect(lines.html).toContain('<ul><li>');
     const unknown = await renderRoute.POST(post(`/api/jobs/${id}/render`, { outputId: 'nope' }), params({ id }));
     expect(unknown.status).toBe(404);
     expect((await unknown.json()).error).toBe('The job has no output nope.');
@@ -165,7 +168,8 @@ describe('jobs', () => {
 
     const pdf = await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, { outputId: 'lines' }), params({ id }));
     expect(pdf.headers.get('content-disposition')).toBe('attachment; filename="invoice-260101-lines.pdf"');
-    expect(renderPdf.mock.calls[0]![0]).toMatch(/^<ul><li>/);
+    const pdfCall = fakeCarbone.mock.calls.map((call) => call[0]).find((input) => input.format === 'pdf')!;
+    expect(pdfCall.template).toMatch(/^<ul><li>/);
     expect((await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, { outputId: 'nope' }), params({ id }))).status).toBe(404);
   });
 
@@ -175,12 +179,14 @@ describe('jobs', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('content-disposition')).toBe('attachment; filename="invoice-260102.pdf"');
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(PDF_BYTES);
-    expect(renderPdf.mock.calls[0]?.[1]).toEqual({ format: 'A4', landscape: false });
+    // The HTML is rendered and checked first, then the PDF, with the page width for the paper rule.
+    expect(sent(1)).toMatchObject({ format: 'pdf', pageWidth: sample.attributes.pageWidth });
+    expect(sent(1).data.doc.invoiceNo).toBe('260102');
 
     expect((await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, { document: 50 }), params({ id }))).status).toBe(400);
-    const broken = await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, { html: '{% if %}' }), params({ id }));
+    const broken = await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, { html: '<p>{d.doc.invoiceNumber}</p>' }), params({ id }));
     expect(broken.status).toBe(422);
-    expect((await broken.json()).templateErrors.length).toBeGreaterThan(0);
+    expect((await broken.json()).templateErrors).toEqual(['Template line 1: {d.doc.invoiceNumber} is not in the data. Did you mean {d.doc.invoiceNo}?']);
   });
 
   it('takes stock again when a watching job gets a version with the backlog on', async () => {
@@ -326,17 +332,21 @@ describe('runs', () => {
     const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
     await db().insert(assets).values({ name: 'logo', contentType: 'image/png', size: png.length, content: png });
     const uri = `data:image/png;base64,${png.toString('base64')}`;
-    const withLogo = template.replace('<body>', `<body><img src="{{ asset('logo') }}" alt="">`);
+    const withLogo = template.replace('<body>', `<body><img src="{asset('logo')}" alt="">`);
     const id = await readyJob();
     await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { template: withLogo, formats: ['html', 'pdf'] } } }), params({ id }));
 
     const preview = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, {}), params({ id }))).json();
     expect(preview.html).toContain(`<img src="${uri}" alt="">`);
-    const missing = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { html: "{{ asset('stamp') }}" }), params({ id }))).json();
+    const missing = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { html: "{asset('stamp')}" }), params({ id }))).json();
     expect(missing.template.error).toContain('There is no asset named "stamp"');
+    expect(missing.template.problems).toEqual([{ line: 1, message: expect.stringContaining('There is no asset named "stamp"') }]);
 
+    fakeCarbone.mockClear();
     expect((await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, {}), params({ id }))).status).toBe(200);
-    expect(renderPdf.mock.calls[0]![0]).toContain(uri);
+    expect(sent(1).format).toBe('pdf');
+    expect(sent(1).template).toContain(`<img src="{asset('logo')}" alt="">`);
+    expect(sent(1).asset?.('logo')).toBe(uri);
 
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
@@ -363,16 +373,66 @@ describe('runs', () => {
   it("fails the run with the output's name when its template has an error", async () => {
     const id = await readyJob();
     await jobRoute.PATCH(
-      patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output(), output({ id: 'lines', label: 'Lines', source: "{{ asset('stamp') }}" })] } } }),
+      patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output(), output({ id: 'lines', label: 'Lines', source: "<p>{asset('stamp')}</p>" })] } } }),
       params({ id }),
     );
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
 
     expect(run!.status).toBe('failed');
-    expect(run!.error).toBe('The "Lines" output\'s template has an error: Document 1: There is no asset named "stamp". Upload it on the Assets page.');
+    expect(run!.error).toBe(
+      'The "Lines" output\'s template has 1 problem. Line 1: There is no asset named "stamp". Upload it on the Assets page, or fix the name in {asset(\'stamp\')}.',
+    );
     expect(run!.files).toEqual([]);
     expect(fake().actions()).toEqual([]);
+  });
+
+  it('says Carbone is not connected in the preview, and fails a run with what to do when it cannot be reached', async () => {
+    const id = await readyJob();
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    setDocumentRenderer(null);
+    const refused = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND', message: 'getaddrinfo ENOTFOUND carbone' } });
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(refused)));
+    try {
+      const preview = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, {}), params({ id }))).json();
+      expect(preview.carbone).toEqual({ error: CARBONE_NOT_CONNECTED });
+      expect(preview.html).toBeUndefined();
+      expect(preview.extract.documents).toHaveLength(6);
+      expect((await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, {}), params({ id }))).status).toBe(503);
+
+      const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
+      expect(run!.status).toBe('failed');
+      expect(run!.error).toBe(
+        'Could not reach Carbone at http://carbone:4000. Check that the Carbone service runs and that the URL in Settings, under Rendering, is right.',
+      );
+      expect(run!.steps.find((step) => step.step === 'render')).toMatchObject({ ok: false, detail: 'ENOTFOUND: getaddrinfo ENOTFOUND carbone' });
+      expect(fake().actions()).toEqual([]);
+      // Noted, so Settings and the setup checklist show it before the next check.
+      expect((await getRendering()).check).toMatchObject({ ok: false, error: run!.error });
+    } finally {
+      vi.unstubAllGlobals();
+      setDocumentRenderer(fakeRenderer);
+    }
+  });
+
+  it('fails a run with the line of each problem the tag check finds, before anything is sent to Carbone', async () => {
+    const id = await readyJob();
+    const typo = template.replace('{d.doc.customerName}', '{d.doc.customerNam}');
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { template: typo, formats: ['pdf'] } } }), params({ id }));
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
+    expect(run!.status).toBe('failed');
+    expect(run!.error).toMatch(/^The "Document" output's template has 1 problem\. Line \d+: \{d\.doc\.customerNam\} is not in the data\. Did you mean \{d\.doc\.customerName\}\?$/);
+    expect(fakeCarbone).not.toHaveBeenCalled();
+  });
+
+  it('keeps Carbone\'s own text with a template error Carbone finds', async () => {
+    const id = await readyJob();
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    fakeCarbone.mockRejectedValueOnce(new CarboneError('template', 'A loop in the template has no end row.', { detail: 'The marker {d.doc.lines[i].item} has no corresponding [i+1]' }));
+    const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
+    expect(run!.error).toBe('The "Document" output, document 1: A loop in the template has no end row.');
+    expect(run!.steps.find((step) => step.step === 'render')?.detail).toBe('The marker {d.doc.lines[i].item} has no corresponding [i+1]');
   });
 
   it('makes only HTML when PDF is off', async () => {
@@ -381,7 +441,7 @@ describe('runs', () => {
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
     expect(run!.files.map((f) => f.contentType)).toEqual(Array(6).fill('text/html; charset=utf-8'));
-    expect(renderPdf).not.toHaveBeenCalled();
+    expect(fakeCarbone.mock.calls.map((call) => call[0].format)).toEqual(Array(6).fill('html'));
   });
 
   it('moves or deletes the file, or leaves it, as the version says', async () => {

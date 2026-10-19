@@ -7,8 +7,8 @@ name: Release Please
 #
 # Each release also publishes the Docker image to ghcr.io/strom-capital/spooldoc
 # for linux/amd64 and linux/arm64, tagged X.Y.Z, X.Y and latest. Each
-# architecture builds on its own native runner (the JDK addon and Chromium make
-# emulation far too slow), pushes by digest, and one job joins the digests into
+# architecture builds on its own native runner (the JDK addon makes emulation far
+# too slow), pushes by digest, and one job joins the digests into
 # a multi-arch manifest.
 
 on:

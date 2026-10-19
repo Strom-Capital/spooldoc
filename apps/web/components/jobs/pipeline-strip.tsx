@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useAppInfo } from '@/components/app-info';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
 import { cn } from '@/lib/utils';
 import { useJob, type Step } from './job-provider';
@@ -135,6 +136,7 @@ function FitOnResize() {
 function useSteps(): StepInfo[] {
   const { spec, job, servers, destinations } = useJob();
   const { render, sampleId, outputId } = useWorkbench();
+  const { rendering } = useAppInfo();
   const server = servers.find((s) => s.id === spec.source.serverId);
   const hasSource = !!spec.source.serverId && !!spec.source.library && !!spec.source.queue;
   const extract = render?.extract;
@@ -196,14 +198,18 @@ function useSteps(): StepInfo[] {
       title: 'Render',
       icon: FileTextIcon,
       detail: outputs.length > 1 ? `${outputs.length} outputs` : outputs[0]!.template.source === null ? 'Starter template' : 'Custom template',
-      sub: render?.template?.error
-        ? outputs.length > 1
-          ? `The ${picked?.label} template has errors`
-          : 'Template has errors'
-        : outputs.length > 1
-          ? outputs.map((o) => `${o.label}: ${formatList(o.formats)}`).join(', ')
-          : formatList(outputs[0]!.formats),
-      status: render?.template?.error ? 'error' : render?.html ? 'ok' : 'unset',
+      sub: !rendering
+        ? 'Connect Carbone in Settings'
+        : render?.template?.error
+          ? outputs.length > 1
+            ? `The ${picked?.label} template has errors`
+            : 'Template has errors'
+          : render?.carbone
+            ? 'Carbone did not answer'
+            : outputs.length > 1
+              ? outputs.map((o) => `${o.label}: ${formatList(o.formats)}`).join(', ')
+              : formatList(outputs[0]!.formats),
+      status: !rendering || render?.carbone ? 'warn' : render?.template?.error ? 'error' : render?.html ? 'ok' : 'unset',
     },
     {
       step: 'destination',

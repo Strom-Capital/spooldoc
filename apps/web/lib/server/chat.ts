@@ -1,6 +1,8 @@
 import 'server-only';
 
 import {
+  checkTemplate,
+  convertNunjucks,
   definitionJsonSchema,
   extract,
   maskPages,
@@ -8,8 +10,8 @@ import {
   matchesSample,
   pageText,
   parseDefinition,
-  renderTemplate,
   starterTemplate,
+  templateData,
   type Definition,
   type ExtractResult,
   type Sample,
@@ -25,6 +27,7 @@ import type {
   OutputChangeResult,
   OutputListing,
   ReadJobFilesResult,
+  ReadCarboneReferenceResult,
   ReadPageResult,
   RenderPreviewResult,
   ToolFailure,
@@ -32,6 +35,9 @@ import type {
   WriteTemplateResult,
 } from '@/lib/chat-types';
 import { findOutput, labelTaken, newOutput, OUTPUT_FORMATS, type JobOutput } from '@/lib/job-spec';
+import type { CarboneCheck } from '@/lib/types';
+import { CARBONE_REFERENCES, CARBONE_SKILL, CARBONE_SKILL_SOURCE, type CarboneReference } from './carbone-skill.generated';
+import type { DocumentRenderer } from './documents';
 
 /** Limits for the page preview in the instructions. */
 export interface InstructionsConfig {
@@ -50,8 +56,10 @@ export interface InstructionsInput {
   outputs: JobOutput[];
   /** Mask values in the page text (SPOOLDOC_MASK). */
   masked: boolean;
-  /** Uploaded images and fonts the template can print with `asset('name')`. */
+  /** Uploaded images and fonts the template can print with `{asset('name')}`. */
   assets?: ChatAsset[];
+  /** The last check of the Carbone server: whether it works, and its edition. */
+  carbone?: CarboneCheck | null;
   config?: InstructionsConfig;
 }
 
@@ -112,7 +120,7 @@ const fence = (lang: string, body: string): string => `\`\`\`${lang}\n${body.rep
  * @param input - The sample, its linked files and the masking setting
  * @returns The instructions text
  */
-export function buildInstructions({ sample, definitionYaml, outputs, masked, assets = [], config = {} }: InstructionsInput): string {
+export function buildInstructions({ sample, definitionYaml, outputs, masked, assets = [], carbone = null, config = {} }: InstructionsInput): string {
   const width = sample.attributes.pageWidth;
   const pages = visiblePages(sample, masked);
   const maxPages = config.previewPages ?? 3;
@@ -170,20 +178,26 @@ Rules:
 - \`split.field\`: for a run that prints many documents back to back, a new document starts on each page where this field's value changes. The field must be in \`fields\`.
 - \`skipFirstPage: true\` drops a parameter or banner page.
 - \`match\` (splf, queue, userData, page1 regex) says which spooled files the definition is for.
-- \`output.name\` is a Nunjucks pattern for file names, such as \`invoice-{{ invoiceNo }}\`.
+- \`output.name\` is the file name of each document, with plain tags for its fields and no formatters, such as \`invoice-{d.doc.invoiceNo}\`.
 - Field names: letters, digits and underscores, starting with a letter; camelCase.`,
 
     `## Template
 
-- Nunjucks (Jinja syntax) with autoescape on. \`{{ doc }}\` is the current document, \`documents\` is every document of the run, \`sample\` holds \`id\` and \`splf\`.
-- Filters: \`money(currency?)\` (two decimals, thousands separator), \`date(format?)\` (default \`dd.MM.yyyy\`; tokens yyyy, MM, dd), \`pad(width, side?, char?)\`.
-- One complete HTML page for A4: \`@page { size: A4; margin: 15mm; }\`, all CSS in one \`<style>\` element, no external fonts, images or stylesheets, no scripts.
-- Images and fonts come only from the uploaded assets: \`asset('name')\` prints one as a data URI, as in \`<img src="{{ asset('logo') }}" alt="">\` or \`@font-face { font-family: "Brand"; src: url("{{ asset('brand-font') }}"); }\`. A name that is not uploaded is a template error, so use only the names listed here. ${
+- One complete HTML page in Carbone's template language. The data is \`d\` = \`{ doc, documents, sample }\`: \`{d.doc.invoiceNo}\` prints a field of the current document, \`d.documents\` holds every document of the spooled file, and \`d.sample\` holds \`id\` and \`splf\`.
+- Repeat a table row with a row of \`[i]\` tags and, right after it, an end row with \`[i+1]\`, which Carbone removes: \`<tr><td>{d.doc.lines[i].item}</td></tr>\` then \`<tr><td>{d.doc.lines[i+1]}</td></tr>\`.
+- Show a part only when a field has a value: \`{d.doc.address2:ifNEM:showBegin}{d.doc.address2}<br>{d.doc.address2:showEnd}\`.
+- Format dates with \`:formatD('DD.MM.YYYY')\` and amounts with \`:formatN(2)\` (\`1,234.50\`). Pad with \`:padl(6)\` or \`:padr(6, '0')\`.
+- Inside tags use straight single quotes only, never double or curly quotes. Never write Nunjucks or Jinja (\`{{ }}\`, \`{% %}\`).
+- Use only the fields the definition extracts. Spooldoc checks every tag against the definition before it renders, and a tag it does not know is an error with its line.
+- A4: \`@page { size: A4; margin: 15mm; }\`, all CSS in one \`<style>\` element, no external fonts, images or stylesheets, no scripts. Keep \`carbone-pdf-header, carbone-pdf-footer, carbone-pdf-options { display: none; }\` in the style, so a PDF header or footer does not show in HTML output.
+- Images and fonts come only from the uploaded assets: \`{asset('name')}\` prints one as a data URI, as in \`<img src="{asset('logo')}" alt="">\` or \`@font-face { font-family: "Brand"; src: url("{asset('brand-font')}"); }\`. A name that is not uploaded is a template error, so use only the names listed here. ${
       assets.length === 0
         ? 'No assets are uploaded yet; the user uploads them on the Assets page.'
         : `Uploaded: ${assets.map((asset) => `\`${asset.name}\` (${asset.kind})`).join(', ')}.`
     }
-- Show every field the definition extracts, laid out like a clean version of the printed document.`,
+- ${carboneLine(carbone)}
+- Show every field the definition extracts, laid out like a clean version of the printed document.
+- The Carbone syntax reference is below. Read a reference file it names with read_carbone_reference when you need more. Spooldoc's templates are HTML only.`,
 
     `## Tools
 
@@ -195,6 +209,7 @@ Rules:
 - remove_output: removes an output and its template. Only when the user asks; the last output cannot be removed.
 - list_jobs: the other jobs with their definition type, outputs and whether they have a template.
 - read_job_files: another job's definition YAML and the template HTML of each of its outputs.
+- read_carbone_reference: one reference file of the Carbone syntax reference, such as formatters or html-templates.
 ${OTHER_JOBS_RULE}
 Values in tool results are ${masked ? 'masked like the pages' : 'shown as extracted'}.`,
 
@@ -227,7 +242,24 @@ Each document of a run becomes the files of every output. The first output's fil
 ${outputs.map((output, index) => `### ${index + 1}. ${output.label} (id \`${output.id}\`): ${formatNames(output.formats)}
 
 ${output.template.source ? fence('html', output.template.source) : 'No template yet: the starter template generated from the definition is used.'}`).join('\n\n')}`,
+
+    `## Carbone syntax reference
+
+The Carbone Skill ${CARBONE_SKILL_SOURCE.version} by Carbone (${CARBONE_SKILL_SOURCE.repository}, Apache-2.0). Its reference files are read with read_carbone_reference.
+
+${CARBONE_SKILL}`,
   ].join('\n\n');
+}
+
+/** What the model is told about the Carbone server: which features it may use, or that templates are checked but not rendered. */
+function carboneLine(carbone: CarboneCheck | null): string {
+  if (!carbone?.ok) {
+    return 'Carbone is not connected, so templates are checked but not rendered. Use only Community Edition features.';
+  }
+  if (carbone.edition === 'community') {
+    return 'The Carbone server runs the Community Edition. Do not use Enterprise features: aggregators such as :aggSum, :drop, :keep, :html, :barcode, :color, :chart or dynamic pictures.';
+  }
+  return 'The Carbone server has the Enterprise features, but prefer the Community Edition ones when they do the job.';
 }
 
 /** How much of the thread goes to the model. The rest stays in the stored thread only. */
@@ -327,8 +359,10 @@ export interface ToolsInput {
   store: DraftStore;
   /** Mask values in page text and tool results (SPOOLDOC_MASK). */
   masked: boolean;
-  /** Names `asset('name')` accepts. Renders print a placeholder for them, never the file. */
+  /** Names `{asset('name')}` accepts. Renders print a placeholder for them, never the file. */
   assets?: ChatAsset[];
+  /** Renders with Carbone; null when Carbone is not connected, so templates are only checked. */
+  renderer?: DocumentRenderer | null;
   /** The other jobs' definitions and templates. Without it, list_jobs reports no jobs. */
   jobs?: JobFilesReader;
 }
@@ -457,24 +491,44 @@ function templateWarnings(html: string): string[] {
   return out;
 }
 
-/** Render one document and return its errors and visible text. */
-function renderDocument(
-  html: string,
+/** A placeholder data URI for an asset: the model never gets the file. */
+const ASSET_PLACEHOLDER = 'data:,';
+
+/**
+ * Check a template, render one document to HTML with Carbone, and return the problems and
+ * the visible text. Without Carbone only the check runs.
+ */
+async function renderDocument(
+  template: string,
+  def: Definition,
   documents: Record<string, unknown>[],
   index: number,
   sample: Sample,
   masked: boolean,
   assets: ChatAsset[],
-): { errors: string[]; textPreview: string } {
+  renderer: DocumentRenderer | null,
+): Promise<{ errors: string[]; textPreview: string }> {
+  const html = convertNunjucks(template);
+  const problems = checkTemplate(html, def, { assets: assets.map((asset) => asset.name) });
+  if (problems.length > 0) {
+    return { errors: problems.map((p) => `Line ${p.line}: ${p.message}`), textPreview: '' };
+  }
   const shown = masked ? (documents.map(maskDocument) as Record<string, unknown>[]) : documents;
   const doc = shown[index];
   if (!doc) {
     return { errors: ['The definition finds no documents, so there is nothing to render.'], textPreview: '' };
   }
+  if (!renderer) {
+    return { errors: ['Carbone is not connected, so the template was checked but not rendered. The user sets it up in Settings, under Rendering.'], textPreview: '' };
+  }
   const names = new Set(assets.map((asset) => asset.name));
-  const asset = (name: string) => (names.has(name) ? 'data:,' : undefined);
-  const rendered = renderTemplate(html, { doc, documents: shown, sample: { id: sample.id, splf: sample.splf } }, { asset });
-  return { errors: rendered.errors, textPreview: truncate(visibleText(rendered.html), 1500) };
+  try {
+    const out = await renderer({ template: html, data: templateData(html, doc, shown, sample), format: 'html', asset: (name) => (names.has(name) ? ASSET_PLACEHOLDER : undefined) });
+    return { errors: [], textPreview: truncate(visibleText(Buffer.from(out).toString('utf8')), 1500) };
+  } catch (error) {
+    const detail = error instanceof Error && 'detail' in error && typeof error.detail === 'string' ? ` Carbone said: ${error.detail}` : '';
+    return { errors: [`${message(error)}${detail}`], textPreview: '' };
+  }
 }
 
 /** The definition type of a job's YAML, or null when there is none or it does not parse. */
@@ -532,7 +586,7 @@ export const DRAFT_PATHS = { definition: 'definition', template: 'template' } as
  *
  * @param input - The sample, the draft store, the masking setting and the other jobs' files
  */
-export function buildTools({ sample: current, store, masked, assets = [], jobs }: ToolsInput) {
+export function buildTools({ sample: current, store, masked, assets = [], renderer = null, jobs }: ToolsInput) {
   async function readSample(): Promise<Sample | ToolFailure> {
     return current;
   }
@@ -624,7 +678,7 @@ export function buildTools({ sample: current, store, masked, assets = [], jobs }
 
     write_template: tool({
       description:
-        "Save the HTML template (Nunjucks) as the template of one of the job's outputs (the first unless `output` names another), render the first document and return any errors and its visible text.",
+        "Save the HTML template (Carbone tags) as the template of one of the job's outputs (the first unless `output` names another), check it, render the first document and return any errors, by line, and its visible text.",
       inputSchema: z.object({ html: z.string().min(1).max(500_000).describe('The complete HTML template'), output: outputParam }),
       execute: async ({ html, output: key }): Promise<WriteTemplateResult> => {
         const sample = await readSample();
@@ -653,7 +707,7 @@ export function buildTools({ sample: current, store, masked, assets = [], jobs }
         } catch (error) {
           return { ok: false, path, output: output.label, errors: [`Extraction failed: ${message(error)}`], warnings, textPreview: '' };
         }
-        const rendered = renderDocument(html, documents, 0, sample, masked, assets);
+        const rendered = await renderDocument(html, current.def, documents, 0, sample, masked, assets, renderer);
         return { ok: rendered.errors.length === 0, path, output: output.label, errors: rendered.errors, warnings, textPreview: rendered.textPreview };
       },
     }),
@@ -687,7 +741,7 @@ export function buildTools({ sample: current, store, masked, assets = [], jobs }
         const saved = output.template.source;
         const html = saved ?? starterTemplate(current.def);
         const index = Math.min(document ?? 0, Math.max(0, result.documents.length - 1));
-        const rendered = renderDocument(html, result.documents, index, sample, masked, assets);
+        const rendered = await renderDocument(html, current.def, result.documents, index, sample, masked, assets, renderer);
         const hits = { found: 0, missing: 0, empty: 0 };
         for (const hit of result.hits) {
           hits[hit.status]++;
@@ -794,6 +848,15 @@ export function buildTools({ sample: current, store, masked, assets = [], jobs }
           outputs: job.outputs,
         };
       },
+    }),
+
+    read_carbone_reference: tool({
+      description:
+        'Read one reference file of the Carbone syntax reference (the Carbone Skill): formatters, loops, conditions, HTML templates and more. Use it to check a formatter or a pattern before writing it.',
+      inputSchema: z.object({
+        name: z.enum(Object.keys(CARBONE_REFERENCES) as [CarboneReference, ...CarboneReference[]]).describe('The reference, as SKILL.md names it without references/ and .md'),
+      }),
+      execute: async ({ name }): Promise<ReadCarboneReferenceResult> => ({ ok: true, name, text: CARBONE_REFERENCES[name] }),
     }),
   };
 }

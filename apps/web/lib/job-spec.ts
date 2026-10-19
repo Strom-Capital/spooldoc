@@ -1,3 +1,4 @@
+import { convertNunjucks } from '@spooldoc/core/convert';
 import { z } from 'zod';
 
 /** An IBM i object name: 1 to 10 characters, upper-cased. */
@@ -57,8 +58,19 @@ export const OUTPUT_ID = /^[a-z0-9-]{1,40}$/;
 const outputSchema = z.object({
   id: z.string().regex(OUTPUT_ID, 'Use lowercase letters, digits and dashes for an output id'),
   label: z.string().trim().min(1, 'Name the output').max(40, 'Use at most 40 characters for an output name'),
-  /** `source: null` is the starter template generated from the definition. */
-  template: z.object({ kind: z.literal('html'), source: z.string().max(500_000).nullable().default(null) }),
+  /**
+   * `source: null` is the starter template generated from the definition. A Nunjucks
+   * template from before Carbone is converted to Carbone tags when it is read.
+   */
+  template: z.object({
+    kind: z.literal('html'),
+    source: z
+      .string()
+      .max(500_000)
+      .nullable()
+      .default(null)
+      .transform((source) => (source === null ? null : convertNunjucks(source))),
+  }),
   formats: z
     .array(z.enum(OUTPUT_FORMATS))
     .min(1, 'Pick at least one format')

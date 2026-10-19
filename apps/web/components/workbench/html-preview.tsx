@@ -1,12 +1,14 @@
 'use client';
 
 import { FileCodeIcon, FileDownIcon } from 'lucide-react';
+import Link from 'next/link';
 import { useState, type ReactNode } from 'react';
 import { useAppInfo } from '@/components/app-info';
+import { ErrorNote } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ApiError } from '@/lib/client/api';
+import { ApiError, shownError, type ShownError } from '@/lib/client/api';
 import { DocumentSelect } from './document-select';
 import { useWorkbench } from './workbench-provider';
 
@@ -24,19 +26,20 @@ async function download(response: Response, fallback: string): Promise<void> {
 
 /**
  * The rendered HTML of the current document in a sandboxed iframe (no scripts), and
- * buttons that download it as HTML or as a PDF rendered from the text in the editors.
+ * buttons that download it as HTML or as a PDF rendered by Carbone from the text in the
+ * editors. Without a working Carbone server it says where to set one up.
  *
  * @param header - Controls for the start of the pane header
  * @param fileName - The file name (without extension) of a document's files, from its name
  */
 export function HtmlPreview({ header, fileName = (name) => name }: { header?: ReactNode; fileName?(documentName: string): string }) {
   const { render, jobId, documentIndex, yaml, html, outputId } = useWorkbench();
-  const { pdf } = useAppInfo();
+  const { rendering } = useAppInfo();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const ready = pdf && !!render?.html;
-  const hint = !pdf
-    ? 'Set SPOOLDOC_CHROMIUM_PATH to render PDFs'
+  const [error, setError] = useState<ShownError | null>(null);
+  const ready = rendering && !!render?.html;
+  const hint = !rendering
+    ? 'Connect Carbone in Settings to render documents'
     : !render?.html
       ? 'Nothing to print yet: fix the definition or the template first.'
       : 'Download this document as a PDF';
@@ -58,12 +61,12 @@ export function HtmlPreview({ header, fileName = (name) => name }: { header?: Re
         body: JSON.stringify({ yaml, html, document: documentIndex, outputId }),
       });
       if (!response.ok) {
-        const data = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new ApiError(response.status, data.error ?? `PDF failed (HTTP ${response.status}).`);
+        const data = (await response.json().catch(() => ({}))) as { error?: string; detail?: string };
+        throw new ApiError(response.status, data.error ?? `Could not make the PDF (HTTP ${response.status}).`, { detail: data.detail });
       }
       await download(response, `document-${documentIndex + 1}.pdf`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'PDF failed.');
+      setError(shownError(err));
     } finally {
       setBusy(false);
     }
@@ -91,13 +94,20 @@ export function HtmlPreview({ header, fileName = (name) => name }: { header?: Re
         </Tooltip>
       </div>
       {error && (
-        <p role="alert" className="border-b bg-destructive/10 px-3 py-1.5 text-destructive text-xs">
-          {error}
-        </p>
+        <ErrorNote detail={error.detail} className="rounded-none border-x-0 border-t-0 py-1.5 text-xs">
+          {error.message}
+        </ErrorNote>
       )}
       <div className="min-h-0 flex-1 bg-muted/30 p-2">
         {render?.html ? (
           <iframe title="Rendered document" sandbox="" srcDoc={render.html} className="h-full w-full rounded border bg-white" />
+        ) : render?.carbone ? (
+          <ErrorNote detail={render.carbone.detail} className="m-1">
+            {render.carbone.error}{' '}
+            <Link href="/settings#rendering" className="underline underline-offset-2">
+              Open Settings
+            </Link>
+          </ErrorNote>
         ) : (
           <p className="p-2 text-muted-foreground text-sm">
             {render?.template?.error

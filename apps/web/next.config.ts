@@ -11,8 +11,8 @@ const nextConfig: NextConfig = {
   turbopack: { root: path.resolve(here, '../..') },
   outputFileTracingRoot: path.resolve(here, '../..'),
   // Loaded by Node at runtime, never bundled: the jt400 bridge starts a JVM through
-  // the native `java` addon, and playwright-core launches Chromium for PDFs.
-  serverExternalPackages: ['@spooldoc/ibmi', 'node-jt400', 'java', 'playwright-core'],
+  // the native `java` addon.
+  serverExternalPackages: ['@spooldoc/ibmi', 'node-jt400', 'java'],
   async headers() {
     return [
       {

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Spooldoc web app: Next.js with the jt400 driver (a JVM through the native `java`
-# addon) and Chromium for PDFs. Works on amd64 and arm64. Needs a Postgres database
-# (DATABASE_URL); see compose.yaml.
+# addon). Works on amd64 and arm64. Needs a Postgres database (DATABASE_URL) and a
+# Carbone server to render documents; see compose.yaml.
 
 FROM node:22-bookworm AS build
 RUN apt-get update \
@@ -31,7 +31,7 @@ FROM node:22-bookworm-slim
 RUN mkdir -p /usr/share/man/man1 \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
-      openjdk-17-jre-headless chromium fonts-liberation fonts-dejavu-core fonts-noto-core ca-certificates \
+      openjdk-17-jre-headless ca-certificates \
  && rm -rf /var/lib/apt/lists/* \
  && ln -s "/usr/lib/jvm/java-17-openjdk-$(dpkg --print-architecture)" /opt/java
 # The `java` addon links libjvm.so with an rpath into the JDK of the build stage; the
@@ -40,7 +40,6 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     JAVA_HOME=/opt/java \
     LD_LIBRARY_PATH=/opt/java/lib/server \
-    SPOOLDOC_CHROMIUM_PATH=/usr/bin/chromium \
     UV_THREADPOOL_SIZE=16 \
     PORT=3000 \
     HOSTNAME=0.0.0.0

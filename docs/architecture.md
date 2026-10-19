@@ -4,9 +4,10 @@ description: "What happens in a run, how the queue watcher works, the packages a
 ---
 
 Spooldoc is one web app (Next.js) with a Postgres database. It connects to
-IBM i systems through jt400, so the host needs a Java runtime. PDFs render
-in a headless Chromium on the same host. The container image holds all
-three.
+IBM i systems through jt400, so the host needs a Java runtime; the
+container image holds both. Documents are rendered by a
+[Carbone](carbone.md) server that Spooldoc calls over HTTP: the `carbone`
+service of the Compose file, another server of yours, or Carbone Cloud.
 
 ```mermaid
 flowchart LR
@@ -24,6 +25,7 @@ flowchart LR
     end
     outq --> watcher
     dtaq -.-> watcher
+    run --> carbone[Carbone]
     run --> dest[Destination]
     assistant -.-> model[Model provider]
 ```
@@ -44,9 +46,11 @@ where a run stopped.
    and is left alone. Then the fields, tables and records are read from
    the pages, or from the XML when the spooled file holds XML, and the
    pages are split into documents. See [Definitions](definitions.md).
-3. **Render.** Each document goes through the HTML template, with uploaded
-   assets embedded as data URIs, and then through Chromium for PDF when the
-   job's formats include PDF. See [Templates](templates.md).
+3. **Render.** Spooldoc checks each output's template against the
+   definition, then sends it to Carbone once per document and format, with
+   the document's JSON as the data and uploaded assets written in as data
+   URIs. Carbone answers with the HTML file or the PDF. See
+   [Templates](templates.md).
 4. **Deliver.** Every file goes to the job's destination in the run's
    transaction. See [Destinations](destinations.md).
 5. **Finish.** Only after every document was delivered, the spooled file
@@ -96,9 +100,9 @@ sends to another data queue. See [Jobs](jobs.md#watching-a-queue).
 
 | Package | What it holds |
 |---------|---------------|
-| `packages/core` | Pure TypeScript, no UI and no IBM i dependency: the capture format, the *SCS parser with EBCDIC decode tables, definitions in YAML, text and XML extraction, Nunjucks templates, PDF rendering through an optional Chromium, value masking for model prompts and a file workspace. Tested against the demo spooled files in `packages/core/fixtures`. |
+| `packages/core` | Pure TypeScript, no UI and no IBM i dependency: the capture format, the *SCS parser with EBCDIC decode tables, definitions in YAML, text and XML extraction, the Carbone client with Spooldoc's tag check, starter templates and the Nunjucks converter, value masking for model prompts and a file workspace. Tested against the demo spooled files in `packages/core/fixtures`. |
 | `packages/ibmi` | Connects to an IBM i through jt400: lists output queues and spooled files with SQL services, reads a spooled file, holds, moves and deletes it, reads data queue entries and runs CL commands. The root export does not load Java; `@spooldoc/ibmi/jt400` is the driver (one JVM per process, cached connections). `scripts/capture.ts` captures a sample from the command line. |
-| `apps/web` | The web app. `lib/server` holds config, the database (Drizzle schema and migrations), sign-in, the IBM i connection (`ibmi.ts` is the only module that loads jt400), rendering, the job runner, destinations and the queue watcher, started from `instrumentation.ts`. Route handlers are under `app/api`, the job builder under `components/jobs`. |
+| `apps/web` | The web app. `lib/server` holds config, the database (Drizzle schema and migrations), sign-in, the IBM i connection (`ibmi.ts` is the only module that loads jt400), the Carbone connection and rendering, the job runner, destinations and the queue watcher, started from `instrumentation.ts`. Route handlers are under `app/api`, the job builder under `components/jobs`. |
 | `demo-spool` | CL and RPG sources that create output queues and print invented documents on any IBM i, for demos and end-to-end tests. |
 
 ## Data

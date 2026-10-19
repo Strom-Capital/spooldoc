@@ -1,7 +1,7 @@
 {
   "name": "@spooldoc/core",
   "version": "0.2.0",
-  "description": "Spooldoc core: IBM i spooled files to JSON documents and templates",
+  "description": "Spooldoc core: IBM i spooled files to JSON documents, and Carbone templates",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -21,9 +21,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./pdf": {
-      "types": "./dist/pdf.d.ts",
-      "import": "./dist/pdf.js"
+    "./convert": {
+      "types": "./dist/convert.d.ts",
+      "import": "./dist/convert.js"
     }
   },
   "files": [
@@ -40,22 +40,11 @@
   },
   "dependencies": {
     "fast-xml-parser": "^5.11.2",
-    "nunjucks": "^3.2.4",
     "yaml": "^2.9.1",
     "zod": "^4.6.7"
   },
-  "peerDependencies": {
-    "playwright-core": "^1.64.1"
-  },
-  "peerDependenciesMeta": {
-    "playwright-core": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@types/node": "^22.20.5",
-    "@types/nunjucks": "^3.2.6",
-    "playwright-core": "^1.64.1",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "vitest": "^5.0.5"

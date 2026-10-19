@@ -1,5 +1,6 @@
 import { parse as parseYaml, stringify as stringifyYaml, YAMLParseError } from "yaml";
 import { z } from "zod";
+import { namePatternProblems } from "./template.js";
 
 const identifier = z
   .string()
@@ -181,7 +182,13 @@ export const definitionSchema = z
     source: z.enum(["text", "xml"]),
     text: textSourceSchema.optional(),
     xml: xmlSourceSchema.optional(),
-    output: z.object({ name: z.string().min(1), title: z.string().optional() }).strict().optional(),
+    output: z
+      .object({
+        name: z.string().min(1).describe("File name of each document, with tags such as {d.doc.invoiceNo}"),
+        title: z.string().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((d, ctx) => {
@@ -190,6 +197,9 @@ export const definitionSchema = z
     const split = d.text?.split?.field;
     if (split && !d.text?.fields?.some((f) => f.name === split)) {
       ctx.addIssue({ code: "custom", message: `split field \`${split}\` is not in \`fields\``, path: ["text", "split", "field"] });
+    }
+    for (const problem of d.output?.name ? namePatternProblems(d.output.name) : []) {
+      ctx.addIssue({ code: "custom", message: problem, path: ["output", "name"] });
     }
     const names = new Set<string>();
     const add = (name: string, path: (string | number)[]): void => {

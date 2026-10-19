@@ -1,13 +1,13 @@
+import { isCarboneError, templateData } from '@spooldoc/core';
 import { z } from 'zod';
 import { findOutput, outputFileName } from '@/lib/job-spec';
-import { assetResolver } from '@/lib/server/assets';
+import { assetNames, assetResolver } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
-import { fileNameFor, htmlToPdf, tryDefinition } from '@/lib/server/documents';
+import { fileNameFor, previewRenderer, tryDefinition } from '@/lib/server/documents';
 import { errorResponse, json, readJson } from '@/lib/server/http';
 import { draftAndSample } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
-import { pdfErrorStatus } from '@/lib/server/pdf';
-import { renderSample } from '@/lib/server/render';
+import { CARBONE_NOT_CONNECTED, renderSample } from '@/lib/server/render';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,9 +22,9 @@ const pdfSchema = z.object({
 });
 
 /**
- * One document of the preview sample as a PDF, from the draft or unsaved editor text.
- * 400 when there is no such document, 422 with `templateErrors` when the definition or
- * template fails, 501 without Chromium.
+ * One document of the preview sample as a PDF, from the draft or unsaved editor text,
+ * rendered by Carbone. 400 when there is no such document, 422 with `templateErrors` when
+ * the definition or template fails, 503 when Carbone is not connected or does not answer.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const auth = await guard(request);
@@ -51,11 +51,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!output) {
     return errorResponse(404, `The job has no output ${body.data.outputId}.`);
   }
+  const renderer = await previewRenderer();
+  if (!renderer) {
+    return errorResponse(503, CARBONE_NOT_CONNECTED);
+  }
   const html = body.data.html === undefined ? output.template.source : body.data.html;
   const { document } = body.data;
-  const result = renderSample(sample, { yaml, html, document, asset: await assetResolver() });
+  const asset = await assetResolver();
+  const assets = (await assetNames()).map((entry) => entry.name);
+  // Checks the template and renders the HTML first, so a PDF is only made from a template that works.
+  const result = await renderSample(sample, { yaml, html, document, asset, assets, renderer });
+  if (result.carbone) {
+    return json({ error: result.carbone.error, ...(result.carbone.detail ? { detail: result.carbone.detail } : {}) }, { status: 503 });
+  }
   if (result.definition?.error || result.template?.error || !result.extract) {
-    return json({ error: 'The definition or the template has errors.', templateErrors: result.errors }, { status: 422 });
+    return json(
+      { error: 'The definition or the template has errors.', templateErrors: result.errors, ...(result.template?.detail ? { detail: result.template.detail } : {}) },
+      { status: 422 },
+    );
   }
   const documents = result.extract.documents;
   if (document >= documents.length) {
@@ -66,7 +79,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         : `There is no document ${document + 1}: this spooled file has ${documents.length}.`,
     );
   }
-  if (!result.html) {
+  if (!result.html || !result.template) {
     return json({ error: 'Nothing to render.', templateErrors: result.errors }, { status: 422 });
   }
   const filename = outputFileName(
@@ -74,8 +87,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     draft.render.outputs,
     output,
   );
+  const template = result.template.html;
   try {
-    const pdf = await htmlToPdf(result.html, sample.attributes.pageWidth);
+    const pdf = await renderer({
+      template,
+      data: templateData(template, documents[document] ?? {}, documents, sample),
+      format: 'pdf',
+      pageWidth: sample.attributes.pageWidth,
+      asset,
+    });
     return new Response(Buffer.from(pdf), {
       headers: {
         'Content-Type': 'application/pdf',
@@ -84,7 +104,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       },
     });
   } catch (error) {
-    const { status, message } = pdfErrorStatus(error);
-    return errorResponse(status, message);
+    const message = error instanceof Error ? error.message : 'Carbone could not render the PDF.';
+    const detail = isCarboneError(error) ? error.detail : undefined;
+    const status = isCarboneError(error) && ['template', 'edition', 'file'].includes(error.kind) ? 422 : 503;
+    return json({ error: message, ...(detail ? { detail } : {}) }, { status });
   }
 }

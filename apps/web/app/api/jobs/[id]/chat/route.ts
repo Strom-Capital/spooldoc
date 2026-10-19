@@ -4,6 +4,7 @@ import { assetNames } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
 import { buildInstructions, buildTools, hasContent, trimHistory } from '@/lib/server/chat';
 import { getConfig } from '@/lib/server/config';
+import { previewRenderer } from '@/lib/server/documents';
 import { draftStore } from '@/lib/server/draft-store';
 import { errorResponse, json, readJson, redact } from '@/lib/server/http';
 import { clearChat, readChat, saveChat } from '@/lib/server/job-chat';
@@ -12,6 +13,7 @@ import { draftAndSample } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
 import { log } from '@/lib/server/log';
 import { createModel } from '@/lib/server/models';
+import { getRendering } from '@/lib/server/rendering';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -94,9 +96,10 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
         outputs: draft.render.outputs,
         masked: config.mask,
         assets,
+        carbone: (await getRendering()).check,
       }),
       messages: await convertToModelMessages(trimHistory(messages), { ignoreIncompleteToolCalls: true }),
-      tools: buildTools({ sample, store: draftStore(job.id), masked: config.mask, assets, jobs: jobFilesReader(job.id) }),
+      tools: buildTools({ sample, store: draftStore(job.id), masked: config.mask, assets, renderer: await previewRenderer(), jobs: jobFilesReader(job.id) }),
       stopWhen: isStepCount(MAX_STEPS),
       abortSignal: request.signal,
       // The client gets the error from the stream; the server log gets it here, redacted.

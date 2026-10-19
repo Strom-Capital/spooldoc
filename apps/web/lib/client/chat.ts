@@ -1,5 +1,6 @@
 import type {
   ListJobsResult,
+  ReadCarboneReferenceResult,
   OutputChangeResult,
   ReadJobFilesResult,
   ReadPageResult,
@@ -101,6 +102,13 @@ export function toolSummary(part: ToolPartLike): ToolSummary {
       const templates = out.outputs.filter((output) => output.templateHtml !== null).length;
       const files = [out.definitionYaml !== null && 'definition', templates > 0 && plural(templates, 'template')].filter(Boolean);
       return { text: `Read job ${out.name}: ${files.length > 0 ? files.join(' and ') : 'no files yet'}`, tone: 'ok' };
+    }
+    case 'read_carbone_reference': {
+      const name = (part.input as { name?: string } | undefined)?.name ?? '';
+      if (!done(part.state)) return { text: `Reading the Carbone reference ${name}`.trim(), tone: 'running' };
+      const out = part.output as ReadCarboneReferenceResult;
+      if (!out.ok) return { text: firstLine(out.error), tone: 'warn' };
+      return { text: `Read the Carbone reference ${out.name}`, tone: 'ok' };
     }
     default:
       return { text: done(part.state) ? part.toolName : `Running ${part.toolName}`, tone: done(part.state) ? 'ok' : 'running' };

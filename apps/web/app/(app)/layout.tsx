@@ -6,7 +6,7 @@ import { AppShell } from '@/components/app-shell';
 import { currentUser } from '@/lib/server/auth';
 import { getConfig } from '@/lib/server/config';
 import { describeModel } from '@/lib/server/models';
-import { pdfAvailable } from '@/lib/server/pdf';
+import { renderingReady } from '@/lib/server/rendering';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +18,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }
   // The sidebar starts as an icon rail until the user expands it (the sidebar keeps the choice in this cookie).
   const sidebarOpen = (await cookies()).get('sidebar_state')?.value === 'true';
-  const info = { user, model: await describeModel(), masking: getConfig().mask, pdf: await pdfAvailable() };
+  const info = { user, model: await describeModel(), masking: getConfig().mask, rendering: await renderingReady() };
   return (
     <AppInfoProvider value={info}>
       <AppShell sidebarOpen={sidebarOpen}>{children}</AppShell>
