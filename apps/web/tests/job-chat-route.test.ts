@@ -2,7 +2,7 @@ import type { UIMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { jobChats, jobs, jobVersions } from '@/lib/server/db/schema';
+import { jobChats, jobs, jobVersions, templateFiles } from '@/lib/server/db/schema';
 import { jobSpecSchema, versionSpec } from '@/lib/job-spec';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
@@ -17,6 +17,8 @@ vi.mock('@/lib/server/models', async (importOriginal) => ({
 }));
 
 const { GET, POST, DELETE } = await import('@/app/api/jobs/[id]/chat/route');
+const { setDocumentRenderer } = await import('@/lib/server/documents');
+const { fakeRenderer, PDF_BYTES } = await import('./helpers/carbone');
 const { storeSample } = await import('@/lib/server/samples');
 
 /** One part of a model stream, taken from the mock model's own types. */
@@ -24,8 +26,8 @@ type LanguageModelV4StreamPart = Awaited<ReturnType<MockLanguageModelV4['doStrea
 
 const FAKE_KEY = 'sk-ant-fake-0123456789abcdef-do-not-leak';
 
-/** What `createModel` returns: the model, the effort from Settings and the key to redact. */
-const withKey = (model: MockLanguageModelV4, reasoning = 'provider-default') => ({ model, reasoning, secrets: [FAKE_KEY] });
+/** What `createModel` returns: the model, which one it is, the effort from Settings and the key to redact. */
+const withKey = (model: MockLanguageModelV4, reasoning = 'provider-default') => ({ model, info: { provider: 'local', id: 'mock' }, reasoning, secrets: [FAKE_KEY] });
 const sample = loadSample('invoice');
 const yaml = fixtureText('invoice', 'definition.yaml');
 const html = fixtureText('invoice', 'template.html');
@@ -138,14 +140,17 @@ describe('POST /api/jobs/[id]/chat', () => {
     expect(instructions).not.toContain('260101');
     expect(model.doStreamCalls[0]?.tools?.map((t) => t.name).sort()).toEqual([
       'add_output',
+      'edit_word_template',
       'list_jobs',
       'read_carbone_reference',
       'read_job_files',
       'read_sample_page',
+      'read_word_template',
       'remove_output',
       'render_preview',
       'write_definition',
       'write_template',
+      'write_word_template',
     ]);
   });
 
@@ -158,6 +163,40 @@ describe('POST /api/jobs/[id]/chat', () => {
     expect((await draft()).render.outputs[0]!.template).toEqual({ kind: 'html', source: html });
     const output = parts.find((p) => p.type === 'tool-output-available')?.output as { ok: boolean; path: string; errors: string[] };
     expect(output).toMatchObject({ ok: true, path: 'template', output: 'Document', errors: [] });
+  });
+
+  it('designs and edits a Word template as new files, and shows the model the PDF once', async () => {
+    await setDefinition(yaml);
+    setDocumentRenderer(fakeRenderer);
+    const design = { sections: [{ children: [{ type: 'Paragraph', text: 'Invoice {d.doc.invoiceNo}' }] }] };
+    const model = scriptedModel(
+      toolStep('write_word_template', { design, name: 'invoice.docx' }),
+      toolStep('edit_word_template', { edits: [{ part: 'word/document.xml', find: '>Invoice ', replace: '>Sales invoice ' }] }),
+      textStep('Done.'),
+    );
+    createModel.mockResolvedValue({ ...withKey(model), info: { provider: 'anthropic', id: 'claude-mock' } });
+    try {
+      await chunks(await chat());
+    } finally {
+      setDocumentRenderer(null);
+    }
+
+    const files = await db().select().from(templateFiles).orderBy(templateFiles.createdAt);
+    expect(files).toHaveLength(2);
+    const [first, second] = files;
+    expect(first).toMatchObject({ name: 'invoice.docx', madeBy: 'assistant', previousId: null, createdBy: expect.any(String) });
+    expect(second).toMatchObject({ name: 'invoice.docx', madeBy: 'assistant', previousId: first!.id });
+    expect((await draft()).render.outputs[0]).toMatchObject({ template: { kind: 'docx', fileId: second!.id }, formats: ['pdf'] });
+
+    // The step after each call has the PDF; the stored thread has the results' text only.
+    const toolResult = (call: number) =>
+      (model.doStreamCalls[call]!.prompt.at(-1) as { content: { output: { type: string; value: { type: string; mediaType?: string }[] } }[] }).content[0]!.output;
+    expect(toolResult(1).type).toBe('content');
+    expect(toolResult(1).value[1]).toMatchObject({ type: 'file', mediaType: 'application/pdf' });
+    expect(toolResult(2).value[1]).toMatchObject({ type: 'file', mediaType: 'application/pdf' });
+    const thread = JSON.stringify(await storedThread());
+    expect(thread).toContain('"view":"pdf"');
+    expect(thread).not.toContain(Buffer.from(PDF_BYTES).toString('base64'));
   });
 
   it('adds an output and writes its template through the draft store', async () => {

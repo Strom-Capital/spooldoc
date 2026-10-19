@@ -2,8 +2,11 @@ import { prepareHtml, type DocumentRender } from '@spooldoc/core';
 import { vi } from 'vitest';
 import type { DocumentRenderer } from '@/lib/server/documents';
 
-/** What the fake Carbone answers for every PDF. */
-export const PDF_BYTES = new TextEncoder().encode('%PDF-1.7 fixed');
+/** What the fake Carbone answers for every PDF: one page. */
+export const PDF_BYTES = new TextEncoder().encode('%PDF-1.7 << /Type /Pages /Count 1 >> fixed');
+
+/** What the fake Carbone answers for every PNG. */
+export const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 const escape = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -17,13 +20,14 @@ function valueAt(data: unknown, path: string): unknown {
 }
 
 /**
- * Stands in for Carbone, so no test needs a server: a PDF is `PDF_BYTES`; a DOCX is the
+ * Stands in for Carbone, so no test needs a server: a PDF is `PDF_BYTES`, a PNG `PNG_BYTES`; a DOCX is the
  * Word template as it was sent, tags and all; HTML is the template as Spooldoc would send
  * it, with plain `{d.path}` tags filled in (no loops or formatters). The calls say what
  * Spooldoc sent. Carbone itself is tested in packages/core/tests/carbone-live.test.ts.
  */
 export const fakeCarbone = vi.fn<(input: DocumentRender) => Promise<Uint8Array>>(async (input) => {
   if (input.format === 'pdf') return PDF_BYTES;
+  if (input.format === 'png') return PNG_BYTES;
   if (input.kind === 'docx') return input.template;
   const html = prepareHtml(input.template, { asset: input.asset }).replace(/\{d\.([\w.]+)\}/g, (_tag, path: string) => {
     const value = valueAt(input.data, path);

@@ -10,6 +10,9 @@ export const CHAT_TOOL_NAMES = [
   'read_sample_page',
   'write_definition',
   'write_template',
+  'write_word_template',
+  'read_word_template',
+  'edit_word_template',
   'render_preview',
   'add_output',
   'remove_output',
@@ -20,7 +23,15 @@ export const CHAT_TOOL_NAMES = [
 export type ChatToolName = (typeof CHAT_TOOL_NAMES)[number];
 
 /** Tools whose result changes what the workbench shows. */
-export const SYNC_TOOLS: readonly ChatToolName[] = ['write_definition', 'write_template', 'render_preview', 'add_output', 'remove_output'];
+export const SYNC_TOOLS: readonly ChatToolName[] = [
+  'write_definition',
+  'write_template',
+  'write_word_template',
+  'edit_word_template',
+  'render_preview',
+  'add_output',
+  'remove_output',
+];
 
 /** A tool call that could not do its work; the model reads `error` and tries again. */
 export interface ToolFailure {
@@ -58,7 +69,7 @@ export interface OutputListing {
   id: string;
   label: string;
   formats: OutputFormat[];
-  /** An HTML template, or a Word template the user uploads. */
+  /** An HTML template, or a Word template. */
   kind: TemplateKind;
   /** `starter` when the output has no template of its own yet. */
   template: 'saved' | 'starter';
@@ -67,6 +78,45 @@ export interface OutputListing {
 /** `write_template`. `output` is the label of the output written. */
 export type WriteTemplateResult =
   | { ok: boolean; path: string; output: string; errors: string[]; warnings: string[]; textPreview: string }
+  | ToolFailure;
+
+/**
+ * What the model was shown of a rendered Word template, besides its text: a PDF of every
+ * page, a PNG of page 1 when the document has more pages than a preview takes, or nothing
+ * when the model takes no files or the render failed.
+ */
+export type WordView = 'pdf' | 'png' | null;
+
+/** A Word template file the assistant made, as tool results report it. */
+export interface WordFileListing {
+  id: string;
+  name: string;
+  size: number;
+}
+
+/**
+ * `write_word_template` and `edit_word_template`: the file saved, the tag check's and
+ * Carbone's errors, the text of document 1 and what the model was shown of it.
+ */
+export type WordTemplateResult =
+  | {
+      ok: boolean;
+      output: string;
+      file: WordFileListing;
+      errors: string[];
+      textPreview: string;
+      view: WordView;
+      /** Pages of document 1, when it was rendered to PDF. */
+      pages: number | null;
+      /** Why the model sees less than every page, when it does. */
+      note?: string;
+    }
+  | ToolFailure;
+
+/** `read_word_template`: the parts of the file, or one part's XML from `from`. */
+export type ReadWordTemplateResult =
+  | { ok: true; output: string; file: string | null; parts: { name: string; size: number }[] }
+  | { ok: true; output: string; file: string | null; part: string; size: number; from: number; xml: string; more: boolean }
   | ToolFailure;
 
 /** `add_output` and `remove_output`: the output added or removed, and the job's outputs after. */
@@ -86,6 +136,10 @@ export type RenderPreviewResult =
       missing: string[];
       templateErrors: string[];
       textPreview: string;
+      /** For a Word template: what the model was shown of the document, its pages and why it sees less. */
+      view?: WordView;
+      pages?: number | null;
+      note?: string;
     }
   | ToolFailure;
 

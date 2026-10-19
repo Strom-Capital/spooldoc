@@ -16,14 +16,17 @@ const ICONS = {
   error: <XIcon className="size-3.5 text-destructive" />,
 };
 
-/** The input of a write tool as code (YAML or HTML), any other input as JSON. */
+/** The input of a write tool as code (YAML, HTML, a Word design as JSON), any other input as JSON. */
 function ToolCallInput({ input }: { input: unknown }) {
-  const value = (input ?? {}) as { yaml?: unknown; html?: unknown };
+  const value = (input ?? {}) as { yaml?: unknown; html?: unknown; design?: unknown };
   if (typeof value.yaml === 'string') {
     return <CodeBlock code={value.yaml} language="yaml" className="max-h-80" />;
   }
   if (typeof value.html === 'string') {
     return <CodeBlock code={value.html} language="html" className="max-h-80" />;
+  }
+  if (value.design && typeof value.design === 'object') {
+    return <CodeBlock code={JSON.stringify(value.design, null, 2)} language="json" className="max-h-80" />;
   }
   return <ToolInput input={input} />;
 }

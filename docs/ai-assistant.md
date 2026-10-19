@@ -6,7 +6,7 @@ description: "The chat beside the job builder: which models it uses, what it can
 The AI assistant sits beside the workbench in the job builder. Ask it for a
 definition and it reads the sample pages, writes the YAML to the job's
 draft, reads the extraction report, fixes missing fields, then writes a
-template and renders it. The page view, the JSON and the preview update as
+template and renders it: HTML, or a Word template it designs or edits. The page view, the JSON and the preview update as
 it works, and everything it writes can be edited by hand. Without a model
 set, the job builder works as before and the assistant points to Settings.
 
@@ -35,7 +35,7 @@ request can read one back.
 
 ## What it can do
 
-The assistant works through nine tools: six on the job's draft and its
+The assistant works through twelve tools: nine on the job's draft and its
 preview sample, two that read other jobs' files, and one that reads the
 Carbone syntax reference:
 
@@ -44,8 +44,11 @@ Carbone syntax reference:
 | `read_sample_page` | Reads one page of the sample as numbered lines. The first three pages are in its instructions already. |
 | `write_definition` | Saves the definition YAML to the draft, runs the extraction on the sample and returns the report: documents found, each field with its status, missing fields, warnings and the first document as JSON. |
 | `write_template` | Saves the HTML template of one [output](jobs.md#outputs), the first unless it names another, checks it, renders the first document with Carbone and returns any errors, by line, and its visible text. Without a working Carbone server it only checks. It refuses an output with a Word template. |
-| `render_preview` | Renders a document with one output's template, HTML or Word, again after a change to the definition, and returns what the check finds and the visible text. |
-| `add_output` | Adds an output with an HTML template, a name and formats. It uses the starter template until the assistant writes one. |
+| `write_word_template` | Designs a [Word template](templates.md#word-templates) for one output and saves it as a new file the output uses. Returns what the check and Carbone find, the text of the first document and, for models that take files, the document itself. |
+| `read_word_template` | Lists the parts of an output's Word template (the body, headers and footers), or reads one part's XML. |
+| `edit_word_template` | Changes an output's Word template, yours or the starter template, by replacing text in its XML, and saves the result as a new file. Returns what `write_word_template` returns. |
+| `render_preview` | Renders a document with one output's template, HTML or Word, again after a change to the definition, and returns what the check finds and the visible text. For a Word template it also shows models that take files the document. |
+| `add_output` | Adds an output with an HTML or Word template, a name and formats. It uses the starter template until the assistant writes one. |
 | `remove_output` | Removes an output and its template. The last output cannot be removed. |
 | `list_jobs` | Lists the other jobs with their definition type, outputs and whether they have a template. |
 | `read_job_files` | Reads another job's definition YAML and the template HTML of each of its outputs, from its active version or else its draft, so a new job can start from them. |
@@ -60,10 +63,57 @@ No tool reaches the IBM i, the job log or any other spooled file, and
 nothing it writes is a version: save one yourself when the result is
 right.
 
-The assistant does not change a [Word template](templates.md#word-templates):
-only you do, in Word. It reads the template's text, checks its tags
-against the definition, explains render errors and suggests tags to type
-or paste in.
+## Word templates
+
+Ask for a Word template ("make a Word invoice with our logo, in dark
+blue") and the assistant designs one: page size and margins, headers and
+footers, a different first page, named styles, fonts, colours, spacing,
+borders, shaded table rows, merged cells, page numbers and the PNG and
+JPEG images uploaded under Assets. It then renders the first document and
+looks at the result, and changes the design until it reads well.
+Its instructions include guidance on document design: a clear order of
+importance, whitespace, one accent colour, right-aligned amounts, and
+layouts that still read when printed in black and white.
+
+It writes the design as data, in the shape of the
+[docx](https://docx.js.org) library's options, and Spooldoc builds the
+`.docx` from it. Only the parts of the library listed in
+[templates](templates.md#word-templates-by-the-assistant) are allowed, and
+no code the model writes runs on the server.
+
+To change a Word template you made yourself, it edits the file instead of
+designing a new one, so everything else in it stays as you made it: it
+reads the XML of the body, a header or a footer and replaces the text it
+needs to. Text Word split over several runs with the same formatting is
+joined first, so a tag can be found. An edit that would break the file is
+refused, and nothing is saved.
+
+**What it looks at.** After each design or edit the assistant gets the
+first document as it prints, as a PDF of every page made the way a run
+makes it. The first page of a document often differs from the rest, with
+the letterhead and the address on page 1 and the running header,
+continued table and totals after it, so it checks them all. A document of
+more than five pages comes as a picture of page 1, with a note to check
+the later pages on a shorter document. The model gets the file in the
+next steps of the answer it is working on, not again later, and the
+conversation stores only the text of the result. Models from Anthropic,
+OpenAI and Google take files, directly or through OpenRouter and the
+Vercel AI Gateway; other models, and a local model, get the text of the
+document only. Values in the document are masked when
+[masking](#masking) is on. Pictures, such as your logo, are as they are
+in the file.
+
+**Nothing is overwritten.** Each design or edit is saved as a new file,
+and the output uses it from then on. Your earlier file is kept, and the
+Word panel says when the assistant made the current file and offers
+**Use previous file**, or **Use starter template** when there was none. A
+saved version keeps the file it ran with. The assistant changes an HTML
+output to Word only while it still uses the HTML starter template;
+otherwise it asks you to switch the output in the render step, or adds a
+Word output when you ask for one.
+
+The file is an ordinary Word document: open it in Word, change it and
+upload it again, or ask the assistant for the next change.
 
 The assistant writes [Carbone tags](templates.md). Its instructions hold
 the [Carbone Skill](https://github.com/carboneio/carbone-skill) by Carbone
@@ -82,7 +132,9 @@ What the model receives:
 - The job's current definition, its outputs with their formats and
   templates (the text of a Word template, paragraph by paragraph), the
   names of the uploaded assets, and the Carbone edition.
-- Tool results: the extraction report and the rendered text.
+- Tool results: the extraction report and the rendered text, and for a
+  Word template, the rendered document (see
+  [Word templates](#word-templates)).
 - On request, other jobs' definitions and templates: layout, not
   customer data. Nothing else of a job (its server, destination, finish
   settings, runs or samples) is readable.
@@ -100,7 +152,8 @@ part of a long conversation goes to the model with each message (the last
 20 messages, within a character budget, older tool results dropped first);
 the model's instructions carry the current definition, outputs,
 templates and sample pages, so nothing it needs is lost. The stored messages hold what
-the model saw: with masking on, the tool results are masked too.
+the model saw, except the rendered Word documents: with masking on, the
+tool results are masked too.
 
 ## Masking
 

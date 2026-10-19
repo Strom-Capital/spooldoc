@@ -1,12 +1,13 @@
 import 'server-only';
 
 import { eq } from 'drizzle-orm';
-import { jobSpecSchema, type JobOutput, type JobSpec } from '@/lib/job-spec';
+import { jobSpecSchema, withTemplate, type JobOutput, type JobSpec } from '@/lib/job-spec';
 import type { DraftStore } from './chat';
 import { getDb, type Tx } from './db';
 import { jobs } from './db/schema';
 import { getJobRow, type JobRow } from './jobs';
 import { UUID } from './servers';
+import { storeTemplateFile, templateFileView } from './template-files';
 
 /**
  * A job row locked until the transaction ends, so a read-change-write of its draft
@@ -32,8 +33,12 @@ export async function updateDraft(jobId: string, change: (draft: JobSpec) => Job
   });
 }
 
-/** The chat tools' view of a job's draft: its definition and its outputs. */
-export function draftStore(jobId: string): DraftStore {
+/**
+ * The chat tools' view of a job's draft: its definition and its outputs.
+ *
+ * @param userId - Who is chatting, recorded on the Word template files the assistant makes
+ */
+export function draftStore(jobId: string, userId: string | null = null): DraftStore {
   const read = async (): Promise<JobSpec> => {
     const row = await getJobRow(jobId);
     if (!row) {
@@ -63,5 +68,26 @@ export function draftStore(jobId: string): DraftStore {
       });
     },
     changeOutputs,
+    writeWordTemplate: (outputId, file) =>
+      getDb().transaction(async (tx) => {
+        const row = await lockJobRow(tx, jobId);
+        if (!row) {
+          throw new Error('The job is gone.');
+        }
+        const draft = jobSpecSchema.parse(row.draft);
+        const output = draft.render.outputs.find((o) => o.id === outputId);
+        if (!output) {
+          throw new Error('The output is gone.');
+        }
+        if (output.template.kind === 'html' && output.template.source !== null) {
+          throw new Error(
+            `The ${output.label} output has an HTML template of its own. Ask the user to switch it to a Word template in the app first, or to add a Word output (add_output with kind docx).`,
+          );
+        }
+        const saved = await storeTemplateFile(tx, { ...file, userId, madeBy: 'assistant' });
+        const outputs = draft.render.outputs.map((o) => (o.id === outputId ? withTemplate(o, { kind: 'docx', fileId: saved.id }) : o));
+        await tx.update(jobs).set({ draft: { ...draft, render: { outputs } } }).where(eq(jobs.id, jobId));
+        return templateFileView(saved);
+      }),
   };
 }

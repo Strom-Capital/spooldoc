@@ -54,11 +54,13 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
   XML-in-spool.
 - **HTML and Word templates**: [Carbone](https://carbone.io) tags with your
   logos, images and fonts, rendered to PDF, HTML or DOCX by a Carbone server
-  of your own or Carbone Cloud. A Word template is made in Word and uploaded.
-  Spooldoc checks every tag against the definition first.
+  of your own or Carbone Cloud. A Word template is made in Word and uploaded,
+  or designed by the AI assistant. Spooldoc checks every tag against the
+  definition first.
 - **AI assistant**: Anthropic, Google, OpenAI, OpenRouter, Vercel AI
   Gateway or a local model writes the first definition and template, reads
-  the extraction report and fixes what is missing. Values are masked before
+  the extraction report and fixes what is missing. It designs and edits Word
+  templates too, looking at every page it renders. Values are masked before
   page text leaves the server.
 - **Job log**: every run with its steps, errors and files; retention you set.
 - **One Compose file**: the web app with its Java runtime, Postgres and

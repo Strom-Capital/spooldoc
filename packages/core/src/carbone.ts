@@ -188,7 +188,7 @@ export async function carboneStatus(server: CarboneServer): Promise<{ version: s
 export interface CarboneRenderRequest {
   template: string | Uint8Array;
   data: unknown;
-  convertTo: "html" | "pdf" | "txt" | "docx";
+  convertTo: "html" | "pdf" | "txt" | "docx" | "png";
   /** `C` (Chromium) for HTML to PDF; `I` (ICE) or `L` (LibreOffice) for Word to PDF. */
   converter?: "C" | "L" | "O" | "I";
   /**

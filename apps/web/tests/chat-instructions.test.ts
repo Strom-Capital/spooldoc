@@ -123,24 +123,45 @@ describe('buildInstructions', () => {
 describe('Word templates in the instructions', () => {
   const word = [{ id: 'letter', label: 'Letter', template: { kind: 'docx' as const, fileId: '00000000-0000-4000-8000-000000000001' }, formats: ['pdf' as const, 'docx' as const] }];
 
-  it("shows an uploaded file's text by part and what the tag check finds, and says the model cannot change it", async () => {
+  it("shows a file's text by part and what the tag check finds, and how to change it", async () => {
     const bad = await starterDocx(parseDefinition(yaml.replace('name: invoiceNo,', 'name: invoiceNumber,').replace('field: invoiceNo }', 'field: invoiceNumber }')));
     const notes = await wordTemplates(word, yaml, async () => ({ name: 'letter.docx', content: bad }));
     const text = buildInstructions({ sample, definitionYaml: yaml, outputs: word, masked: false, wordTemplates: notes });
     expect(text).toContain('### 1. Letter (id `letter`): PDF and DOCX');
-    expect(text).toContain('A Word template, `letter.docx`, uploaded by the user.');
+    expect(text).toContain('A Word template file, `letter.docx`.');
     expect(text).toContain('body: Invoice Number\t{d.doc.invoiceNumber}');
     expect(text).toContain('footer: Page  of ');
     expect(text).toContain('- body: {d.doc.invoiceNumber} is not in the data. Did you mean {d.doc.invoiceNo}?');
-    expect(text).toContain('You cannot change it, and write_template refuses it.');
+    expect(text).toContain('edit_word_template changes the file there is, the user\'s own included');
+    expect(text).toContain('You get the text of document 1 after each write or edit, not a picture');
+    expect(text).not.toContain('a PDF of every page');
+    expect(text).toContain('## Designing a document');
+  });
+
+  it('tells a model that takes files that it sees every page, and names the images it can place', () => {
+    const text = buildInstructions({
+      sample,
+      definitionYaml: yaml,
+      outputs: word,
+      masked: false,
+      visual: true,
+      assets: [
+        { name: 'logo', kind: 'image' },
+        { name: 'brand', kind: 'font' },
+      ],
+    });
+    expect(text).toContain('you get document 1 as it prints: a PDF of every page');
+    expect(text).toContain('Look at every page: the first page of a document often differs from the rest');
+    expect(text).toContain('Uploaded images: `logo`; only PNG and JPEG ones can be placed.');
+    expect(text).toContain('and for Word, the document as it prints');
   });
 
   it('shows the starter template, or why the file cannot be read', async () => {
     const starter = await wordTemplates([{ ...word[0]!, template: { kind: 'docx', fileId: null } }], yaml, async () => null);
     expect(buildInstructions({ sample, definitionYaml: yaml, outputs: word, masked: false, wordTemplates: { letter: starter.letter! } })).toContain(
-      'No Word template uploaded yet: the Word starter template generated from the definition is used.',
+      'No Word template file yet: the Word starter template generated from the definition is used.',
     );
     const gone = await wordTemplates(word, yaml, async () => null);
-    expect(gone.letter).toEqual({ error: 'The uploaded file is gone; the user uploads the template again.' });
+    expect(gone.letter).toEqual({ error: 'The file is gone; write a new one with write_word_template, or the user uploads one.' });
   });
 });

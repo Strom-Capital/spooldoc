@@ -20,6 +20,8 @@ export interface ModelInfo {
 /** A model ready for `streamText`, with its reasoning level and the key to redact from errors. */
 export interface ChatModel {
   model: LanguageModel;
+  /** Which model it is. */
+  info: ModelInfo;
   reasoning: Effort;
   secrets: string[];
 }
@@ -49,6 +51,24 @@ async function resolve(): Promise<Resolved | null> {
 export async function describeModel(): Promise<ModelInfo | null> {
   const resolved = await resolve();
   return resolved ? { provider: resolved.provider, id: resolved.id } : null;
+}
+
+/** Model vendors whose current models read PDFs and images in tool results. */
+const FILE_VENDORS = ['anthropic', 'openai', 'google'] as const;
+
+/**
+ * True when the model takes files (a PDF, a PNG) in tool results, so a Word render can
+ * show it the document. The Anthropic, OpenAI and Google providers do. Behind the
+ * Gateway or OpenRouter, only those vendors' models (`anthropic/...`) are trusted to; a
+ * model that cannot read a file would fail the whole answer. The local provider sends
+ * a file as base64 text, so it gets the text only.
+ */
+export function takesFiles(model: ModelInfo): boolean {
+  if ((FILE_VENDORS as readonly string[]).includes(model.provider)) return true;
+  if (model.provider === 'gateway' || model.provider === 'openrouter') {
+    return FILE_VENDORS.some((vendor) => model.id.startsWith(`${vendor}/`));
+  }
+  return false;
 }
 
 /** OpenRouter reads the effort from its model settings, not the call, and has no `max`. */
@@ -86,5 +106,5 @@ export async function createModel(): Promise<ChatModel | null> {
         return createOpenAICompatible({ name: 'local', baseURL: resolved.baseUrl ?? '', ...(apiKey ? { apiKey } : {}) })(id);
     }
   })();
-  return { model, reasoning: effort, secrets: apiKey ? [apiKey] : [] };
+  return { model, info: { provider: resolved.provider, id }, reasoning: effort, secrets: apiKey ? [apiKey] : [] };
 }

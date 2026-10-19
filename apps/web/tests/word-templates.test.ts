@@ -2,7 +2,7 @@ import { parseDefinition, readDocx, starterDocx } from '@spooldoc/core';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { jobs, templateFiles, user } from '@/lib/server/db/schema';
-import type { JobDetail, RunView, TemplateFileView } from '@/lib/types';
+import type { JobDetail, RunView, TemplateFileDetails, TemplateFileView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { fakeCarbone, fakeRenderer, PDF_BYTES } from './helpers/carbone';
 import { resetTables } from './helpers/db';
@@ -85,11 +85,11 @@ describe('uploading a Word template', () => {
     const response = await upload(id, goodDocx);
     expect(response.status).toBe(201);
     const saved = (await response.json()) as TemplateFileView;
-    expect(saved).toMatchObject({ name: 'invoice.docx', size: goodDocx.length });
+    expect(saved).toMatchObject({ name: 'invoice.docx', size: goodDocx.length, madeBy: 'upload', previousId: null });
     expect((await job(id)).draft.render.outputs[0]).toMatchObject({ template: { kind: 'docx', fileId: saved.id }, formats: ['pdf'] });
 
     const info = await fileInfo.GET(get(`/api/template-files/${saved.id}`), params({ id: saved.id }));
-    expect(await info.json()).toEqual(saved);
+    expect(await info.json()).toEqual({ ...saved, previous: null });
     const bytes = await fileBytes.GET(get(`/api/template-files/${saved.id}/file`), params({ id: saved.id }));
     expect(bytes.headers.get('content-type')).toBe(DOCX);
     expect(bytes.headers.get('content-disposition')).toBe(`attachment; filename="invoice.docx"; filename*=UTF-8''invoice.docx`);
@@ -240,6 +240,8 @@ describe('template files', () => {
     const refused = { cause: expect.objectContaining({ message: expect.stringMatching(/cannot be changed/) }) };
     await expect(db().update(templateFiles).set({ name: 'other.docx' })).rejects.toMatchObject(refused);
     await expect(db().update(templateFiles).set({ content: Buffer.from('PK2') })).rejects.toMatchObject(refused);
+    await expect(db().update(templateFiles).set({ madeBy: 'assistant' })).rejects.toMatchObject(refused);
+    await expect(db().update(templateFiles).set({ previousId: file!.id })).rejects.toMatchObject(refused);
     await db().delete(user).where(eq(user.id, userId));
     expect(await db().select({ id: templateFiles.id, createdBy: templateFiles.createdBy }).from(templateFiles)).toEqual([{ id: file!.id, createdBy: null }]);
   });
@@ -262,5 +264,33 @@ describe('template files', () => {
     // Deleting the job lets its files go too.
     await db().delete(jobs).where(eq(jobs.id, id));
     expect((await cleanUp(30, NOW))?.templateFiles).toBe(2);
+  });
+
+  it("keeps a file the assistant replaced while the draft's file names it, and says so in the file's details", async () => {
+    const id = await readyJob();
+    const insert = async (values: Partial<typeof templateFiles.$inferInsert>) =>
+      (await db().insert(templateFiles).values({ name: 't.docx', contentType: DOCX, size: 2, content: Buffer.from('PK'), createdAt: daysAgo(100), ...values }).returning())[0]!;
+    const older = await insert({ name: 'older.docx' });
+    const replaced = await insert({ name: 'mine.docx', previousId: older.id });
+    const current = await insert({ name: 'mine.docx', madeBy: 'assistant', previousId: replaced.id });
+    await jobRoute.PATCH(
+      patch(`/api/jobs/${id}`, { draft: { render: { outputs: [{ id: 'main', label: 'Document', template: { kind: 'docx', fileId: current.id }, formats: ['pdf'] }] } } }),
+      params({ id }),
+    );
+    const details = (await (await fileInfo.GET(get(`/api/template-files/${current.id}`), params({ id: current.id }))).json()) as TemplateFileDetails;
+    expect(details).toMatchObject({ id: current.id, madeBy: 'assistant', previousId: replaced.id, previous: { id: replaced.id, name: 'mine.docx', madeBy: 'upload' } });
+
+    // The replaced file stays; the one before it, which no used file names, goes.
+    expect((await cleanUp(30, NOW))?.templateFiles).toBe(1);
+    expect((await db().select({ id: templateFiles.id }).from(templateFiles)).map((row) => row.id).sort()).toEqual([current.id, replaced.id].sort());
+
+    // Once the draft uses the replaced file again, nothing names it, and the assistant's file goes.
+    await jobRoute.PATCH(
+      patch(`/api/jobs/${id}`, { draft: { render: { outputs: [{ id: 'main', label: 'Document', template: { kind: 'docx', fileId: replaced.id }, formats: ['pdf'] }] } } }),
+      params({ id }),
+    );
+    expect((await cleanUp(30, NOW))?.templateFiles).toBe(1);
+    const gone = (await (await fileInfo.GET(get(`/api/template-files/${replaced.id}`), params({ id: replaced.id }))).json()) as TemplateFileDetails;
+    expect(gone).toMatchObject({ previousId: older.id, previous: null });
   });
 });

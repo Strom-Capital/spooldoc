@@ -2,21 +2,32 @@ import 'server-only';
 
 import { DOCX_CONTENT_TYPE, MAX_DOCX_BYTES, docxProblem } from '@spooldoc/core';
 import { eq } from 'drizzle-orm';
-import type { TemplateFileView } from '@/lib/types';
+import type { TemplateFileDetails, TemplateFileView } from '@/lib/types';
 import { getDb, type Db, type Tx } from './db';
 import { templateFiles } from './db/schema';
 import { UUID } from './servers';
 
-/** An uploaded Word template, with its bytes. */
+/** A Word template file, with its bytes. */
 export type TemplateFileRow = typeof templateFiles.$inferSelect;
 
 /** Why a Word template a job points at can't be used: the file is not there. */
 export const TEMPLATE_FILE_GONE = 'The Word template file is gone. Upload the template again.';
 
+type ViewColumns = Pick<TemplateFileRow, 'id' | 'name' | 'size' | 'createdAt' | 'madeBy' | 'previousId'>;
+
 /** A template file without its bytes. */
-export function templateFileView(row: Pick<TemplateFileRow, 'id' | 'name' | 'size' | 'createdAt'>): TemplateFileView {
-  return { id: row.id, name: row.name, size: row.size, createdAt: row.createdAt.toISOString() };
+export function templateFileView(row: ViewColumns): TemplateFileView {
+  return { id: row.id, name: row.name, size: row.size, createdAt: row.createdAt.toISOString(), madeBy: row.madeBy, previousId: row.previousId };
 }
+
+const VIEW = {
+  id: templateFiles.id,
+  name: templateFiles.name,
+  size: templateFiles.size,
+  createdAt: templateFiles.createdAt,
+  madeBy: templateFiles.madeBy,
+  previousId: templateFiles.previousId,
+};
 
 /** One template file with its bytes, or null. */
 export async function getTemplateFile(id: string, db: Db | Tx = getDb()): Promise<TemplateFileRow | null> {
@@ -25,17 +36,16 @@ export async function getTemplateFile(id: string, db: Db | Tx = getDb()): Promis
   return row ?? null;
 }
 
-/** One template file without its bytes, or null. */
-export async function getTemplateFileView(id: string): Promise<TemplateFileView | null> {
+/** One template file without its bytes, with the file it replaced when that is still kept; or null. */
+export async function getTemplateFileView(id: string): Promise<TemplateFileDetails | null> {
   if (!UUID.test(id)) return null;
-  const [row] = await getDb()
-    .select({ id: templateFiles.id, name: templateFiles.name, size: templateFiles.size, createdAt: templateFiles.createdAt })
-    .from(templateFiles)
-    .where(eq(templateFiles.id, id));
-  return row ? templateFileView(row) : null;
+  const [row] = await getDb().select(VIEW).from(templateFiles).where(eq(templateFiles.id, id));
+  if (!row) return null;
+  const [previous] = row.previousId ? await getDb().select(VIEW).from(templateFiles).where(eq(templateFiles.id, row.previousId)) : [];
+  return { ...templateFileView(row), previous: previous ? templateFileView(previous) : null };
 }
 
-/** A file name as uploaded, without folders and control characters; `template.docx` when nothing is left. */
+/** A file name without folders and control characters; `template.docx` when nothing is left. */
 function cleanName(name: string): string {
   const base = name.split(/[\\/]/).pop() ?? '';
   const clean = base.replace(/[\u0000-\u001f\u007f"]/g, '').trim().slice(0, 200);
@@ -74,11 +84,31 @@ export async function readTemplateUpload(request: Request): Promise<{ content: B
   return { content, name: cleanName(file instanceof File ? file.name : ''), form };
 }
 
-/** Stores an uploaded Word template as a new row. */
-export async function storeTemplateFile(db: Db | Tx, input: { name: string; content: Buffer; userId: string | null }): Promise<TemplateFileRow> {
+/** What `storeTemplateFile` stores. */
+export interface NewTemplateFile {
+  name: string;
+  content: Uint8Array;
+  userId: string | null;
+  /** Default `upload`. */
+  madeBy?: TemplateFileRow['madeBy'];
+  /** The file the output used before; for a file the assistant made. */
+  previousId?: string | null;
+}
+
+/** Stores a Word template as a new row. */
+export async function storeTemplateFile(db: Db | Tx, input: NewTemplateFile): Promise<TemplateFileRow> {
+  const content = Buffer.from(input.content);
   const [row] = await db
     .insert(templateFiles)
-    .values({ name: input.name, contentType: DOCX_CONTENT_TYPE, size: input.content.length, content: input.content, createdBy: input.userId })
+    .values({
+      name: cleanName(input.name),
+      contentType: DOCX_CONTENT_TYPE,
+      size: content.length,
+      content,
+      madeBy: input.madeBy ?? 'upload',
+      previousId: input.previousId ?? null,
+      createdBy: input.userId,
+    })
     .returning();
   return row!;
 }

@@ -1,4 +1,4 @@
-import { extract, parseDefinition, starterDocx, type HtmlRender } from '@spooldoc/core';
+import { extract, parseDefinition, readDocx, starterDocx, type HtmlRender } from '@spooldoc/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type {
   JobOutputFiles,
@@ -6,20 +6,25 @@ import type {
   OutputChangeResult,
   ReadJobFilesResult,
   ReadPageResult,
+  ReadWordTemplateResult,
   RenderPreviewResult,
+  WordTemplateResult,
   WriteDefinitionResult,
   WriteTemplateResult,
 } from '@/lib/chat-types';
-import { jobSpecSchema, type JobOutput } from '@/lib/job-spec';
+import { jobSpecSchema, withTemplate, type JobOutput } from '@/lib/job-spec';
 import { buildTools, visibleText, type DraftStore, type JobFiles, type JobFilesReader } from '@/lib/server/chat';
 import type { DocumentRenderer } from '@/lib/server/documents';
-import { fakeCarbone, fakeRenderer } from './helpers/carbone';
+import type { TemplateFileView } from '@/lib/types';
+import { fakeCarbone, fakeRenderer, PDF_BYTES, PNG_BYTES } from './helpers/carbone';
 import { fixtureText, loadSample } from './helpers/fake-connection';
 
 const sample = loadSample('invoice');
 const yaml = fixtureText('invoice', 'definition.yaml');
 const template = fixtureText('invoice', 'template.html');
 const options = { toolCallId: 'call-1', messages: [] };
+/** A 40 x 10 PNG header, enough for the docx library to place. */
+const PNG_LOGO = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAACgAAAAKCAIAAABaL8vzAAAAEklEQVR4nGM4ceIEAAS0AlkWLoFAAAAAAElFTkSuQmCC', 'base64'));
 
 /** A job draft in memory: a definition and outputs, checked by the spec schema as the draft store does. */
 /** An output's HTML template text; undefined for a Word template. */
@@ -48,6 +53,19 @@ class MemoryDraft implements DraftStore {
     this.outputs = jobSpecSchema.shape.render.parse({ outputs: change(this.outputs) }).outputs;
     return this.outputs;
   }
+  /** The Word files the assistant saved, by id, as the database would keep them. */
+  files = new Map<string, { name: string; content: Uint8Array; previousId: string | null }>();
+  async writeWordTemplate(outputId: string, file: { name: string; content: Uint8Array; previousId: string | null }): Promise<TemplateFileView> {
+    const output = this.outputs.find((o) => o.id === outputId);
+    if (!output) throw new Error('The output is gone.');
+    if (output.template.kind === 'html' && output.template.source !== null) throw new Error(`The ${output.label} output has an HTML template of its own.`);
+    const id = `00000000-0000-4000-8000-${String(this.files.size + 1).padStart(12, '0')}`;
+    this.files.set(id, file);
+    await this.changeOutputs((outputs) => outputs.map((o) => (o.id === outputId ? withTemplate(o, { kind: 'docx', fileId: id }) : o)));
+    return { id, name: file.name, size: file.content.length, createdAt: new Date(0).toISOString(), madeBy: 'assistant', previousId: file.previousId };
+  }
+  /** Reads a file the assistant saved, as the chat route's `templateFile` does. */
+  readFile = async (id: string) => this.files.get(id) ?? null;
 }
 
 let store: MemoryDraft;
@@ -396,7 +414,7 @@ describe('read_job_files', () => {
 describe('Word templates', () => {
   const wordOutput = (fileId: string | null): JobOutput[] => [{ id: 'main', label: 'Document', template: { kind: 'docx', fileId }, formats: ['pdf', 'docx'] }];
   const withFile = (bytes: Uint8Array | null) =>
-    buildTools({ sample, store, masked: false, renderer: fakeRenderer, templateFile: async (id) => (id === 'file-1' ? bytes : null) });
+    buildTools({ sample, store, masked: false, renderer: fakeRenderer, templateFile: async (id) => (id === 'file-1' && bytes ? { name: 'invoice.docx', content: bytes } : null) });
 
   it('never writes over a Word template', async () => {
     await call(tools().write_definition, { yaml });
@@ -404,7 +422,7 @@ describe('Word templates', () => {
     const result = await call<WriteTemplateResult>(tools().write_template, { html: '<p>{d.doc.invoiceNo}</p>' });
     expect(result).toEqual({
       ok: false,
-      error: 'The Document output uses a Word template, which only the user changes, in Word. Suggest the tags to type or paste in instead, or check it with render_preview.',
+      error: 'The Document output uses a Word template. Change it with edit_word_template, or design a new one with write_word_template.',
     });
     expect(store.outputs[0]!.template).toEqual({ kind: 'docx', fileId: null });
   });
@@ -413,7 +431,7 @@ describe('Word templates', () => {
     await call(tools().write_definition, { yaml });
     store.outputs = wordOutput('00000000-0000-4000-8000-000000000001');
     const bytes = await starterDocx(parseDefinition(yaml));
-    const reader = buildTools({ sample, store, masked: false, renderer: fakeRenderer, templateFile: async () => bytes });
+    const reader = buildTools({ sample, store, masked: false, renderer: fakeRenderer, templateFile: async () => ({ name: 'invoice.docx', content: bytes }) });
     const result = await call<RenderPreviewResult>(reader.render_preview, {});
     if (!result.ok) throw new Error(result.error);
     expect(result).toMatchObject({ template: 'saved', templateErrors: [] });
@@ -432,6 +450,185 @@ describe('Word templates', () => {
     const bad = await starterDocx(parseDefinition(yaml.replace('name: invoiceNo,', 'name: invoiceNumber,').replace('field: invoiceNo }', 'field: invoiceNumber }')));
     const result = await call<RenderPreviewResult>(withFile(bad).render_preview, {});
     expect(result).toMatchObject({ ok: true, templateErrors: ['body: {d.doc.invoiceNumber} is not in the data. Did you mean {d.doc.invoiceNo}?'] });
-    expect(await call(withFile(null).render_preview, {})).toEqual({ ok: false, error: 'The Word template of the Document output is gone. The user uploads it again.' });
+    expect(await call(withFile(null).render_preview, {})).toEqual({
+      ok: false,
+      error: 'The Word template of the Document output is gone. Write a new one with write_word_template, or the user uploads one.',
+    });
+  });
+});
+
+describe('Word templates by the assistant', () => {
+  /** A small design: a title, the invoice number, and the lines as a loop. */
+  const design = {
+    styles: { default: { document: { run: { font: 'Arial', size: 20 } } } },
+    sections: [
+      {
+        footers: { default: { children: [{ type: 'Paragraph', children: [{ type: 'TextRun', text: 'Page ' }, { type: 'PageNumber', field: 'PAGE' }] }] } },
+        children: [
+          { type: 'Paragraph', children: [{ type: 'TextRun', text: 'Invoice {d.doc.invoiceNo}', bold: true, size: '18pt' }] },
+          {
+            type: 'Table',
+            rows: [
+              { type: 'TableRow', children: [{ type: 'TableCell', children: [{ type: 'Paragraph', text: '{d.doc.lines[i].item}' }] }] },
+              { type: 'TableRow', children: [{ type: 'TableCell', children: [{ type: 'Paragraph', text: '{d.doc.lines[i+1]}' }] }] },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const wordOutput = (fileId: string | null): JobOutput[] => [{ id: 'main', label: 'Document', template: { kind: 'docx', fileId }, formats: ['pdf', 'docx'] }];
+  const word = (input: Partial<Parameters<typeof buildTools>[0]> = {}) =>
+    buildTools({ sample, store, masked: false, renderer: fakeRenderer, templateFile: store.readFile, ...input });
+  const modelOutput = (t: { toModelOutput?: unknown }, output: unknown, toolCallId = options.toolCallId) =>
+    (t.toModelOutput as (o: { toolCallId: string; input: unknown; output: unknown }) => unknown)({ toolCallId, input: {}, output });
+
+  beforeEach(async () => {
+    await call(tools().write_definition, { yaml });
+  });
+
+  it('designs a template, saves it as a new file the output uses and reports its text', async () => {
+    const result = await call<WordTemplateResult>(word().write_word_template, { design });
+    if (!('file' in result)) throw new Error(result.error);
+    expect(result).toMatchObject({ ok: true, output: 'Document', errors: [], view: null, pages: null, file: { name: 'invoice.docx' } });
+    expect(result.textPreview).toContain('Invoice {d.doc.invoiceNo}');
+    // The HTML starter output became a Word one.
+    expect(store.outputs[0]).toMatchObject({ template: { kind: 'docx', fileId: result.file.id }, formats: ['pdf'] });
+    const saved = store.files.get(result.file.id)!;
+    expect(saved.previousId).toBeNull();
+    expect(readDocx(saved.content).fields).toEqual(['PAGE']);
+  });
+
+  it('shows the model every page as a PDF, once, in the step after the call', async () => {
+    const tools = word({ visual: true });
+    const result = await call<WordTemplateResult>(tools.write_word_template, { design });
+    expect(result).toMatchObject({ ok: true, view: 'pdf', pages: 1 });
+    expect(fakeCarbone.mock.calls.at(-1)![0]).toMatchObject({ kind: 'docx', format: 'pdf' });
+    const shown = modelOutput(tools.write_word_template, result) as { type: string; value: { type: string; mediaType?: string; data?: { data: Uint8Array } }[] };
+    expect(shown.type).toBe('content');
+    expect(JSON.parse((shown.value[0] as unknown as { text: string }).text)).toEqual(result);
+    expect(shown.value[1]).toMatchObject({ type: 'file', mediaType: 'application/pdf', data: { type: 'data', data: PDF_BYTES } });
+    // A later request has the result's text only.
+    expect(modelOutput(word({ visual: true }).write_word_template, result)).toEqual({ type: 'json', value: result });
+    expect(modelOutput(tools.write_word_template, result, 'another-call')).toEqual({ type: 'json', value: result });
+  });
+
+  it('shows page 1 as a PNG when the document has more pages than a preview takes', async () => {
+    const long = new TextEncoder().encode('%PDF-1.7 << /Type /Pages /Count 9 >>');
+    const renderer: DocumentRenderer = async (input) => (input.format === 'pdf' ? long : fakeRenderer(input));
+    const tools = word({ visual: true, renderer });
+    const result = await call<WordTemplateResult>(tools.write_word_template, { design });
+    expect(result).toMatchObject({
+      ok: true,
+      view: 'png',
+      pages: 9,
+      note: 'Document 1 has 9 pages, so you see page 1 only. To check the later pages, render a document with fewer pages (render_preview with document).',
+    });
+    const shown = modelOutput(tools.write_word_template, result) as { value: unknown[] };
+    expect(shown.value[1]).toMatchObject({ type: 'file', mediaType: 'image/png', data: { type: 'data', data: PNG_BYTES } });
+  });
+
+  it('renders the preview with masked values when masking is on', async () => {
+    await call(word({ visual: true, masked: true }).write_word_template, { design });
+    const pdf = fakeCarbone.mock.calls.findLast(([input]) => input.format === 'pdf')![0];
+    expect((pdf.data.doc as { invoiceNo: string }).invoiceNo).toMatch(/^9+$/);
+  });
+
+  it('places uploaded images and refuses a design with problems, saving nothing', async () => {
+    const images = async () => new Map([['logo', { data: PNG_LOGO, type: 'png' as const, width: 40, height: 10 }]]);
+    const withLogo = { ...design, sections: [{ children: [{ type: 'Paragraph', children: [{ type: 'ImageRun', asset: 'logo', width: 120 }] }] }] };
+    const result = await call<WordTemplateResult>(word({ images }).write_word_template, { design: withLogo, name: 'Lasku' });
+    if (!('file' in result)) throw new Error(result.error);
+    expect(result.file.name).toBe('Lasku.docx');
+    const bad = await call<WordTemplateResult>(word({ images }).write_word_template, {
+      design: { sections: [{ children: [{ type: 'Paragraph', children: [{ type: 'ImageRun', asset: 'missing' }] }, { type: 'Script' }] }] },
+    });
+    expect(bad).toEqual({
+      ok: false,
+      error:
+        'The design has problems, nothing was saved:\nsections[0].children[0].children[0].asset: There is no PNG or JPEG asset "missing". Use one of the uploaded image assets.\nsections[0].children[1]: "Script" is not allowed here. Use "Paragraph", "Table".',
+    });
+    expect(store.files.size).toBe(1);
+  });
+
+  it("keeps the file it replaces as the new file's previous one, and its name", async () => {
+    store.outputs = wordOutput(null);
+    const first = await call<WordTemplateResult>(word().write_word_template, { design, name: 'sales.docx' });
+    const second = await call<WordTemplateResult>(word().write_word_template, { design });
+    if (!('file' in first) || !('file' in second)) throw new Error('not saved');
+    expect(second.file.name).toBe('sales.docx');
+    expect(store.files.get(second.file.id)!.previousId).toBe(first.file.id);
+    expect(store.outputs[0]!.template).toEqual({ kind: 'docx', fileId: second.file.id });
+  });
+
+  it('does not replace an HTML template of the HTML output', async () => {
+    await call(tools().write_template, { html: template });
+    const result = await call<WordTemplateResult>(word().write_word_template, { design });
+    expect(result).toEqual({ ok: false, error: 'Could not save the Word template: The Document output has an HTML template of its own.' });
+    expect(store.html).toBe(template);
+  });
+
+  it('reads the parts of the file and one part, in pieces', async () => {
+    store.outputs = wordOutput(null);
+    const parts = await call<ReadWordTemplateResult>(word().read_word_template, {});
+    expect(parts).toMatchObject({ ok: true, output: 'Document', file: null, parts: [{ name: 'word/document.xml' }, { name: 'word/footer1.xml' }] });
+    const body = await call<ReadWordTemplateResult>(word().read_word_template, { part: 'word/document.xml' });
+    if (!body.ok || !('xml' in body)) throw new Error('no part');
+    expect(body).toMatchObject({ from: 0, more: false });
+    expect(body.xml).toContain('{d.doc.invoiceNo}');
+    const rest = await call<ReadWordTemplateResult>(word().read_word_template, { part: 'word/document.xml', from: body.size - 10 });
+    expect(rest).toMatchObject({ from: body.size - 10, xml: body.xml.slice(-10), more: false });
+    expect(await call(word().read_word_template, { part: 'word/styles.xml' })).toMatchObject({ ok: false, error: expect.stringMatching(/^There is no part "word\/styles.xml"/) });
+    store.outputs = jobSpecSchema.parse({}).render.outputs;
+    expect(await call(word().read_word_template, {})).toMatchObject({ ok: false, error: expect.stringMatching(/uses an HTML template/) });
+  });
+
+  it("edits the starter template or the output's file and saves the result as a new file", async () => {
+    store.outputs = wordOutput(null);
+    const fromStarter = await call<WordTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Invoice<', replace: '>Sales invoice<' }] });
+    if (!('file' in fromStarter)) throw new Error(fromStarter.error);
+    expect(fromStarter.textPreview.split('\n')[0]).toBe('Sales invoice');
+    expect(store.files.get(fromStarter.file.id)!.previousId).toBeNull();
+    const again = await call<WordTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Sales invoice<', replace: '>Invoice {d.doc.invoiceNo}<' }] });
+    if (!('file' in again)) throw new Error(again.error);
+    expect(store.files.get(again.file.id)).toMatchObject({ previousId: fromStarter.file.id, name: 'invoice.docx' });
+    expect(again.textPreview.split('\n')[0]).toBe('Invoice {d.doc.invoiceNo}');
+  });
+
+  it('refuses an edit it cannot make, and saves nothing', async () => {
+    store.outputs = wordOutput(null);
+    const missing = await call<WordTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: 'nowhere', replace: 'x' }] });
+    expect(missing).toMatchObject({ ok: false, error: expect.stringMatching(/^The text to find is not in word\/document.xml/) });
+    const broken = await call<WordTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Invoice<', replace: '>A & B<' }] });
+    expect(broken).toMatchObject({ ok: false, error: expect.stringMatching(/is not well-formed XML: A bare & in text/) });
+    expect(store.files.size).toBe(0);
+    expect(store.outputs[0]!.template).toEqual({ kind: 'docx', fileId: null });
+  });
+
+  it('runs a render the model calls next to an edit after the edit', async () => {
+    store.outputs = wordOutput(null);
+    const tools = word();
+    const edit = call<WordTemplateResult>(tools.edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Invoice<', replace: '>Sales invoice<' }] });
+    const render = call<RenderPreviewResult>(tools.render_preview, {});
+    const [edited, rendered] = await Promise.all([edit, render]);
+    expect(edited).toMatchObject({ ok: true });
+    expect(rendered).toMatchObject({ ok: true, template: 'saved' });
+    if (!rendered.ok) throw new Error(rendered.error);
+    expect(rendered.textPreview.split('\n')[0]).toBe('Sales invoice');
+  });
+
+  it('shows the model the Word document in render_preview too', async () => {
+    store.outputs = wordOutput(null);
+    const tools = word({ visual: true });
+    const result = await call<RenderPreviewResult>(tools.render_preview, {});
+    expect(result).toMatchObject({ ok: true, template: 'starter', view: 'pdf', pages: 1 });
+    expect((modelOutput(tools.render_preview, result) as { type: string }).type).toBe('content');
+  });
+
+  it('adds a Word output, and refuses a format its kind does not make', async () => {
+    const added = await call<OutputChangeResult>(tools().add_output, { label: 'Letter', kind: 'docx', formats: ['docx'] });
+    expect(added).toMatchObject({ ok: true, output: { label: 'Letter', kind: 'docx', formats: ['docx'], template: 'starter' } });
+    const wrong = await call<OutputChangeResult>(tools().add_output, { label: 'Web', kind: 'docx', formats: ['html'] });
+    expect(wrong).toEqual({ ok: false, error: 'A Word template makes PDF and DOCX files, not HTML.' });
   });
 });

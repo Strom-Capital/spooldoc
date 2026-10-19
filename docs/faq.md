@@ -64,7 +64,8 @@ template renders every field. See [Definitions](definitions.md).
 
 The page text of one preview spooled file, masked by default so digits
 and letters are replaced while the layout stays, plus the definition and
-template. Never credentials, never other spooled files. See
+template, and the documents it renders from a Word template. Never
+credentials, never other spooled files. See
 [AI assistant](ai-assistant.md#what-it-sees).
 
 ## The page shows `[` and `\` where Ä and Ö should be

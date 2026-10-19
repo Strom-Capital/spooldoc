@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { and, eq, inArray, isNotNull, isNull, lt, notExists, or, sql, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { getDb, getLocks } from './db';
 import { jobs, jobVersions, runs, samples, templateFiles } from './db/schema';
 import { log } from './log';
@@ -21,7 +22,7 @@ export const STALE_RUN_MS = 3 * 60_000;
 export interface CleanupResult {
   runs: number;
   samples: number;
-  /** Uploaded Word templates no job draft or version uses any more. */
+  /** Word template files no job draft or version uses any more. */
   templateFiles: number;
 }
 
@@ -49,8 +50,10 @@ export async function failStaleRuns(now: Date = new Date()): Promise<number> {
 /**
  * Delete what is older than the retention: runs that finished before the cutoff (their
  * files go with them), samples captured by runs that no longer exist, and preview samples
- * captured before the cutoff that no job draft points at, and Word templates uploaded
- * before the cutoff that no job draft or version uses. Runs still running are kept,
+ * captured before the cutoff that no job draft points at, and Word template files made
+ * before the cutoff that no job draft or version uses. A file the AI assistant replaced
+ * is kept while the file a draft uses names it as its previous one, so the Word panel
+ * can offer it back. Runs still running are kept,
  * and so are the `watch_seen` rows, which stop a spooled file from being processed again.
  * Runs a stopped process cut off are marked failed first (`failStaleRuns`), and kept for
  * the retention from then.
@@ -92,10 +95,18 @@ export async function cleanUp(retentionDays: number, now: Date = new Date()): Pr
       if (deleted.length < BATCH) break;
     }
 
+    const next = alias(templateFiles, 'next_file');
     const unusedFile = and(
       lt(templateFiles.createdAt, cutoff),
       notExists(db.select({ one: sql`1` }).from(jobs).where(usesFile(sql`${jobs.draft}`, sql`${templateFiles.id}`))),
       notExists(db.select({ one: sql`1` }).from(jobVersions).where(usesFile(sql`${jobVersions.spec}`, sql`${templateFiles.id}`))),
+      notExists(
+        db
+          .select({ one: sql`1` })
+          .from(next)
+          .innerJoin(jobs, usesFile(sql`${jobs.draft}`, sql`${next.id}`))
+          .where(eq(next.previousId, templateFiles.id)),
+      ),
     );
     for (;;) {
       const unused = db.select({ id: templateFiles.id }).from(templateFiles).where(unusedFile).limit(BATCH);
