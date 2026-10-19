@@ -11,7 +11,7 @@ import { SpoolFileDialog } from '@/components/spool-file-dialog';
 import { TableEmpty } from '@/components/table-empty';
 import { Button } from '@/components/ui/button';
 import { api, errorText, isAbort } from '@/lib/client/api';
-import type { SpooledFileView } from '@/lib/types';
+import { SPOOLED_FILE_LIST, type SpooledFileView } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { NewJobButton } from './new-job-button';
 
@@ -20,6 +20,8 @@ const key = (f: SpooledFileView) => `${f.jobNumber}/${f.jobUser}/${f.jobName}/${
 /**
  * The spooled files of one output queue: Refresh and New job in the header, "contains"
  * filters on the name and user data, and the table with its loading and empty states.
+ * The newest 200 files show first; when there are more, the page says so and Load more
+ * lists 200 more, up to 5000.
  */
 export function QueueFilesPage({
   serverId,
@@ -36,6 +38,10 @@ export function QueueFilesPage({
   const [userData, setUserData] = useState('');
   const [job, setJob] = useState('');
   const [files, setFiles] = useState<SpooledFileView[] | null>(null);
+  const [more, setMore] = useState(false);
+  const [limit, setLimit] = useState<number>(SPOOLED_FILE_LIST.page);
+  // Load more keeps the filters and toasts nothing; new filters start from the first page.
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [nonce, setNonce] = useState(0);
@@ -54,12 +60,14 @@ export function QueueFilesPage({
       if (name.trim()) params.set('name', name.trim());
       if (userData.trim()) params.set('userData', userData.trim());
       if (job.trim()) params.set('job', job.trim());
+      params.set('limit', String(limit));
       try {
-        const data = await api<{ files: SpooledFileView[] }>(
+        const data = await api<{ files: SpooledFileView[]; more: boolean }>(
           `/api/servers/${serverId}/queues/${encodeURIComponent(library)}/${encodeURIComponent(queue)}/files?${params}`,
           { signal: controller.signal },
         );
         setFiles(data.files);
+        setMore(data.more);
         setError(null);
         if (report) {
           reportFor.current = null;
@@ -84,10 +92,12 @@ export function QueueFilesPage({
           }
           setError(errorText(err));
           setFiles(null);
+          setMore(false);
         }
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
+          setLoadingMore(false);
         }
       }
     }, 300);
@@ -97,7 +107,18 @@ export function QueueFilesPage({
     };
     // `filtered` follows name and userData, which are dependencies already.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverId, library, queue, name, userData, job, nonce]);
+  }, [serverId, library, queue, name, userData, job, nonce, limit]);
+
+  /** Change a filter; new filters list from the newest files again. */
+  const filterBy = (set: (value: string) => void) => (value: string) => {
+    set(value);
+    setLimit(SPOOLED_FILE_LIST.page);
+  };
+
+  const loadMore = () => {
+    setLoadingMore(true);
+    setLimit((current) => Math.min(current + SPOOLED_FILE_LIST.page, SPOOLED_FILE_LIST.max));
+  };
 
   const refresh = useCallback(() => {
     reportFor.current = nonce + 1;
@@ -140,7 +161,7 @@ export function QueueFilesPage({
         <div className="flex flex-wrap gap-2">
           <Input
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) => filterBy(setName)(event.target.value)}
             placeholder="Name contains"
             aria-label="Spooled file name contains"
             title="Shows spooled files whose name contains this text"
@@ -149,7 +170,7 @@ export function QueueFilesPage({
           />
           <Input
             value={job}
-            onChange={(event) => setJob(event.target.value)}
+            onChange={(event) => filterBy(setJob)(event.target.value)}
             placeholder="Job contains"
             aria-label="Job contains"
             title="Shows spooled files whose job (number/user/name) contains this text"
@@ -158,7 +179,7 @@ export function QueueFilesPage({
           />
           <Input
             value={userData}
-            onChange={(event) => setUserData(event.target.value)}
+            onChange={(event) => filterBy(setUserData)(event.target.value)}
             placeholder="User data contains"
             aria-label="User data contains"
             title="Shows spooled files whose user data contains this text"
@@ -230,6 +251,7 @@ export function QueueFilesPage({
                         setName('');
                         setUserData('');
                         setJob('');
+                        setLimit(SPOOLED_FILE_LIST.page);
                       }}
                     >
                       <XIcon />
@@ -250,6 +272,20 @@ export function QueueFilesPage({
             </tbody>
           </table>
         </div>
+        {files && more && (
+          <div className="flex flex-wrap items-center gap-3 text-muted-foreground text-sm">
+            <span>
+              Showing the newest {files.length} {filtered ? 'matching ' : ''}spooled files. There are more on the queue.
+              {limit >= SPOOLED_FILE_LIST.max && ' Narrow the filters to find older ones.'}
+            </span>
+            {limit < SPOOLED_FILE_LIST.max && (
+              <Button variant="outline" size="sm" disabled={loading} onClick={loadMore}>
+                {loadingMore && <RefreshCwIcon className="animate-spin" />}
+                {loadingMore ? 'Loading...' : `Load ${SPOOLED_FILE_LIST.page} more`}
+              </Button>
+            )}
+          </div>
+        )}
       </div>
       {viewing && <SpoolFileDialog serverId={serverId} library={library} queue={queue} file={viewing} onClose={() => setViewing(null)} />}
     </Page>

@@ -1,6 +1,6 @@
 'use client';
 
-import { PauseIcon, PlayIcon, RadioIcon, WorkflowIcon } from 'lucide-react';
+import { CircleAlertIcon, PauseIcon, PlayIcon, RadioIcon, WorkflowIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -95,6 +95,12 @@ export function JobsPage() {
                     <Link href={`/jobs/${job.id}`} className="font-medium text-primary hover:underline">
                       {job.name}
                     </Link>
+                    {job.broken && (
+                      <div className="flex max-w-xs items-start gap-1 text-destructive text-xs" title={job.broken}>
+                        <CircleAlertIcon className="mt-px size-3.5 shrink-0" aria-hidden />
+                        <span className="line-clamp-2">{job.broken}</span>
+                      </div>
+                    )}
                   </td>
                   <td className="px-3 py-2.5">
                     {job.source.queue ? (

@@ -75,6 +75,25 @@ describe('queues', () => {
     expect((await files('')).length).toBeGreaterThan(0);
     expect(await files('?status=READY')).toEqual([]);
   });
+
+  it('says when the list of spooled files was cut off', async () => {
+    const answer = async (query: string) =>
+      (await (
+        await filesRoute.GET(appRequest(`/api/servers/${serverId}/queues/${library}/${queue}/files${query}`, { headers: auth }), params({ id: serverId, lib: library, name: queue }))
+      ).json()) as { files: SpooledFileView[]; more: boolean };
+    const first = await answer('');
+    // Three more files on the queue than the fixtures have.
+    for (const number of [101, 102, 103]) conn.samples.push({ ...sample, splf: { ...sample.splf, number } });
+    const total = first.files.length + 3;
+
+    expect(await answer(`?limit=${total - 1}`)).toMatchObject({ more: true, files: { length: total - 1 } });
+    expect(await answer(`?limit=${total}`)).toMatchObject({ more: false, files: { length: total } });
+    // One more than shown is asked for, to know; the default is 200 and the most 5000.
+    const limits = () => conn.calls.filter((c) => c.method === 'listSpooledFiles').map((c) => (c.args[1] as { limit: number }).limit);
+    await answer('');
+    await answer('?limit=999999');
+    expect(limits().slice(-2)).toEqual([201, 5001]);
+  });
 });
 
 describe('viewing a spooled file', () => {

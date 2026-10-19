@@ -4,8 +4,11 @@ description: "The job builder, versions, running on demand, watching a queue and
 ---
 
 A job is a pipeline from one output queue to a destination. The Jobs page
-lists them with their server, queue, trigger and last run. The job builder
-shows the pipeline as six steps, and each step opens an inspector.
+lists them with their server, queue, trigger and last run. A job whose
+active version or draft no longer matches the job format, after an upgrade
+for example, is listed with the reason instead of breaking the page. The
+job builder shows the pipeline as six steps, and each step opens an
+inspector.
 
 <p align="center">
   <picture>

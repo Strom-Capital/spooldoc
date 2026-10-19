@@ -32,6 +32,9 @@ export interface QueueView {
   dataQueue: { library: string; name: string } | null;
 }
 
+/** Spooled files a queue listing shows at first and per Load more, and the most one listing shows. */
+export const SPOOLED_FILE_LIST = { page: 200, max: 5000 } as const;
+
 /** A spooled file in a queue listing. */
 export interface SpooledFileView extends SpooledFileId {
   status: string;
@@ -76,6 +79,8 @@ export interface JobSummary {
   versions: number;
   lastWatchAt: string | null;
   lastWatchError: string | null;
+  /** Why the job's active version or draft cannot be read, when it cannot. */
+  broken: string | null;
   lastRun: { id: string; seq: number; status: RunStatus; startedAt: string } | null;
   updatedAt: string;
 }

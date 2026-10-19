@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { assets, jobs, queueHealth, runOutputs, runs, watchSeen } from '@/lib/server/db/schema';
-import type { JobDetail, RunView } from '@/lib/types';
+import { assets, jobs, jobVersions, queueHealth, runOutputs, runs, watchSeen } from '@/lib/server/db/schema';
+import type { JobDetail, JobSummary, RunView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, loadSample } from './helpers/fake-connection';
@@ -74,6 +74,30 @@ beforeEach(async () => {
 });
 
 describe('jobs', () => {
+  it('lists a job whose spec no longer reads as broken, with the reason, and the others as usual', async () => {
+    const good = await newJob();
+    const oldVersion = await newJob();
+    const oldDraft = await newJob();
+    const [row] = await db().select().from(jobs).where(eq(jobs.id, oldVersion));
+    // A version saved by an older release, with a trigger this one does not know.
+    await db().insert(jobVersions).values({ jobId: oldVersion, number: 1, spec: { ...row!.draft, trigger: { mode: 'sometimes' } } as never });
+    await db().update(jobs).set({ activeVersion: 1, name: 'Old version' }).where(eq(jobs.id, oldVersion));
+    await db().update(jobs).set({ draft: { source: 'MYLIB/INVOICES' } as never, name: 'Old draft' }).where(eq(jobs.id, oldDraft));
+
+    const response = await jobsRoute.GET(get('/api/jobs'));
+    expect(response.status).toBe(200);
+    const list = (await response.json()).jobs as JobSummary[];
+    const byId = new Map(list.map((j) => [j.id, j]));
+    expect(byId.get(good)).toMatchObject({ broken: null, source: { library, queue } });
+    expect(byId.get(oldVersion)).toMatchObject({
+      broken: expect.stringMatching(/^The active version cannot be read \(trigger\.mode: .+\)\. Save the job as a new version\.$/),
+      mode: 'manual',
+      // Shown from the draft meanwhile.
+      source: { library, queue },
+    });
+    expect(byId.get(oldDraft)).toMatchObject({ broken: expect.stringMatching(/^The draft cannot be read \(source: /), source: { library: '', queue: '' } });
+  });
+
   it('says on the job why its queue is polled instead of watched in real time', async () => {
     const id = await newJob();
     expect((await job(id)).realtimeError).toBeNull();
