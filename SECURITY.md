@@ -1,5 +1,12 @@
 # Security
 
+## Supported versions
+
+Security fixes go into the latest release only. Spooldoc does not patch
+older releases: a fix ships as a new release, so upgrade to get it.
+
+## Reporting a problem
+
 Please do not report security problems in public issues.
 
 Open a private security advisory on GitHub instead (the "Report a

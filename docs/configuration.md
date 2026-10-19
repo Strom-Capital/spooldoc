@@ -27,9 +27,7 @@ to `apps/web/.env.local` for development, or put the same variables in the
 
 The server refuses to start with a missing or malformed required variable
 and says which one. The chat model, its key and effort are not environment
-variables: they are set in the app. A version that read `ANTHROPIC_API_KEY`,
-`SPOOLDOC_MODEL` or `OPENAI_COMPATIBLE_*` no longer does; enter the key and
-model under Settings once.
+variables: they are set in the app under Settings.
 
 ## Settings in the app
 
