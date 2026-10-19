@@ -146,6 +146,25 @@ describe('real-time set-up', () => {
     expect((await getServerRow(serverId))?.dtaqName).toBe('SPLFDTAQ');
     expect((await getServerRow(serverId))?.dtaqOwned).toBe(false);
   });
+
+  it('refuses to adopt while other queues still send to the data queue Spooldoc reads', async () => {
+    const other = (await conn.listOutputQueues()).find((q) => !(q.library === library && q.name === queue));
+    if (!other) throw new Error('The fake needs a second queue.');
+    await db().update(servers).set({ dtaqLibrary: library, dtaqName: 'SPOOLDOC', dtaqOwned: true });
+    conn.dataQueues.set(`${other.library}/${other.name}`, { library, name: 'SPOOLDOC' });
+    conn.dataQueues.set(`${library}/${queue}`, { library, name: 'SPLFDTAQ' });
+
+    const refused = await setup({ adopt: true });
+    expect(refused.status).toBe(409);
+    expect((await refused.json()).queues).toEqual([{ library: other.library, name: other.name }]);
+    expect((await getServerRow(serverId))?.dtaqName).toBe('SPOOLDOC');
+    expect((await getServerRow(serverId))?.dtaqOwned).toBe(true);
+
+    conn.dataQueues.delete(`${other.library}/${other.name}`);
+    expect((await setup({ adopt: true })).status).toBe(200);
+    expect((await getServerRow(serverId))?.dtaqName).toBe('SPLFDTAQ');
+    expect((await getServerRow(serverId))?.dtaqOwned).toBe(false);
+  });
 });
 
 describe('switch to polling', () => {

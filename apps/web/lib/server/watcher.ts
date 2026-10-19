@@ -273,6 +273,7 @@ export class Watcher {
       // Reading takes entries off the data queue, so only one instance may read it.
       const release = await getLocks().tryLock(`dtaq:${reader.serverId}`);
       if (!release) {
+        // Another instance reads it: not an error, this one polls the queues meanwhile.
         reader.healthy = false;
         await sleep(30_000, reader);
         continue;
