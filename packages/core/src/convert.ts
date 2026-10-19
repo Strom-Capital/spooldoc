@@ -5,6 +5,8 @@
  * map is left as it was, so the tag check flags its line.
  */
 
+import { htmlTags } from "./html.js";
+
 /** Nunjucks syntax in a text: `{{ }}`, `{% %}` or `{# #}`, with what is between the delimiters. */
 export interface NunjucksSpan {
   start: number;
@@ -290,14 +292,38 @@ function condition(text: string, scope: Scope, roots: Roots): { path: string; te
     const p = path(not[1] as string, scope, roots);
     return p ? { path: p, test: "ifEM" } : undefined;
   }
-  const cmp = /^(.+?)\s*(==|!=|>=|<=|>|<)\s*(.+)$/.exec(text);
+  const cmp = comparison(text);
   if (cmp) {
-    const p = path(cmp[1] as string, scope, roots);
-    const value = literal(cmp[3] as string);
-    return p && value ? { path: p, test: `${COMPARE[cmp[2] as string]}(${value})` } : undefined;
+    const p = path(cmp.left, scope, roots);
+    const value = literal(cmp.right);
+    return p && value ? { path: p, test: `${COMPARE[cmp.op]}(${value})` } : undefined;
   }
   const p = path(text, scope, roots);
   return p ? { path: p, test: "ifNEM" } : undefined;
+}
+
+/** `a == 'x'` split at its first operator outside quotes, or undefined. A loop, since a regular expression with `.+?\s*` backtracks on long runs of spaces. */
+function comparison(text: string): { left: string; op: string; right: string } | undefined {
+  let quote: string | null = null;
+  for (let i = 1; i < text.length; i++) {
+    const c = text[i] as string;
+    if (quote) {
+      if (c === quote) quote = null;
+      continue;
+    }
+    if (c === "'" || c === '"') {
+      quote = c;
+      continue;
+    }
+    const two = text.slice(i, i + 2);
+    const op = ["==", "!=", ">=", "<="].includes(two) ? two : c === ">" || c === "<" ? c : undefined;
+    if (op) {
+      const left = text.slice(0, i).trim();
+      const right = text.slice(i + op.length).trim();
+      return left && right ? { left, op, right } : undefined;
+    }
+  }
+  return undefined;
 }
 
 /** The test negated, for an `else` block: `ifEQ('A')` gives `ifNE('A')`. */
@@ -309,20 +335,17 @@ function negate(test: string): string {
 /** The single element a loop repeats: `<tr ...>...</tr>` gives `tr`. Undefined for anything else. */
 function singleElement(html: string): string | undefined {
   const text = html.trim();
-  const open = /^<([a-zA-Z][\w-]*)\b[^>]*>/.exec(text);
+  const open = /^<([a-zA-Z][\w-]*)/.exec(text);
   if (!open) return undefined;
   const tag = (open[1] as string).toLowerCase();
-  if (!new RegExp(`</${tag}\\s*>$`, "i").test(text)) return undefined;
-  const opens = text.match(new RegExp(`<${tag}\\b`, "gi"))?.length ?? 0;
-  const closes = text.match(new RegExp(`</${tag}\\s*>`, "gi"))?.length ?? 0;
-  if (opens !== closes) return undefined;
   // The first element must close at the very end, not earlier (two sibling elements).
   let depth = 0;
-  for (const m of text.matchAll(new RegExp(`<(/?)${tag}\\b[^>]*>`, "gi"))) {
-    depth += m[1] ? -1 : 1;
-    if (depth === 0 && m.index + m[0].length < text.length) return undefined;
+  for (const t of htmlTags(text, tag)) {
+    depth += t.closing ? -1 : 1;
+    if (depth === 0) return t.end === text.length ? tag : undefined;
+    if (depth < 0) return undefined;
   }
-  return tag;
+  return undefined;
 }
 
 function render(nodes: Node[], scope: Scope, roots: Roots): string {

@@ -1,4 +1,4 @@
-import { nunjucksSpans } from "./convert.js";
+import { nunjucksSpans, type NunjucksSpan } from "./convert.js";
 import type { Definition } from "./definition.js";
 
 /**
@@ -185,13 +185,15 @@ function closest(path: string, known: Set<string>): string | undefined {
 /** `doc.lines[].amount` written back as a tag, `{d.doc.lines[i].amount}`. */
 const asTag = (path: string): string => `{d.${path.replace(/\[\]/g, "[i]")}}`;
 
-const NUNJUCKS_HELP: [RegExp, string][] = [
-  [/^\{\{/, "Write a Carbone tag such as {d.doc.invoiceNo} instead."],
-  [/^\{%\s*-?\s*(for|endfor)\b/, "Write a loop as a row with [i] and a row with [i+1] instead."],
-  [/^\{%\s*-?\s*(if|elif|else|endif)\b/, "Write a condition with :showBegin and :showEnd instead."],
-  [/^\{#/, "Write an HTML comment (<!-- -->) instead."],
-  [/^\{%/, "Carbone has no statements like this. See the template docs for what to use."],
-];
+/** What to write instead of a Nunjucks span. */
+function nunjucksHelp(span: NunjucksSpan): string {
+  if (span.kind === "{") return "Write a Carbone tag such as {d.doc.invoiceNo} instead.";
+  if (span.kind === "#") return "Write an HTML comment (<!-- -->) instead.";
+  const word = /^[a-z]+/i.exec(span.inner.replace(/^-/, "").trimStart())?.[0] ?? "";
+  if (word === "for" || word === "endfor") return "Write a loop as a row with [i] and a row with [i+1] instead.";
+  if (["if", "elif", "else", "endif"].includes(word)) return "Write a condition with :showBegin and :showEnd instead.";
+  return "Carbone has no statements like this. See the template docs for what to use.";
+}
 
 /**
  * Checks a Carbone HTML template before it is rendered:
@@ -215,8 +217,7 @@ export function checkTemplate(template: string, def?: Definition | null, options
   const spans = nunjucksSpans(template);
   for (const span of spans) {
     const raw = template.slice(span.start, span.end);
-    const help = NUNJUCKS_HELP.find(([re]) => re.test(raw))?.[1] ?? "";
-    add(span.start, `${short(raw)} is Nunjucks, which templates no longer use. ${help}`.trim());
+    add(span.start, `${short(raw)} is Nunjucks, which templates no longer use. ${nunjucksHelp(span)}`);
   }
   // An opening {{ or {% with no end is Nunjucks too.
   const matched = blank(template, spans.map((span) => [span.start, span.end]));

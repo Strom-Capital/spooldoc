@@ -1,5 +1,6 @@
 import { convertNamePattern } from "./convert.js";
 import type { Definition, ValueType } from "./definition.js";
+import { firstTag } from "./html.js";
 import { pageLayout } from "./pagesize.js";
 import { ASSET_TAG, templateUses } from "./tags.js";
 
@@ -32,11 +33,11 @@ export interface PrepareOptions {
   landscape?: boolean;
 }
 
-/** Inserts `html` after the first match of each pattern in turn, or at the start. */
-function insertAfter(text: string, patterns: RegExp[], html: string): string {
-  for (const re of patterns) {
-    const m = re.exec(text);
-    if (m) return text.slice(0, m.index + m[0].length) + html + text.slice(m.index + m[0].length);
+/** Inserts `html` after the first opening tag of each name in turn, or at the start. */
+function insertAfter(text: string, names: string[], html: string): string {
+  for (const name of names) {
+    const tag = firstTag(text, name);
+    if (tag) return text.slice(0, tag.end) + html + text.slice(tag.end);
   }
   return html + text;
 }
@@ -61,9 +62,10 @@ export function prepareHtml(template: string, options: PrepareOptions = {}): str
     html = `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n</head>\n<body>\n${html}\n</body>\n</html>\n`;
   }
   const style = `<style>${HIDE_PDF_ELEMENTS}</style>`;
-  html = /<\/head\s*>/i.test(html) ? html.replace(/<\/head\s*>/i, `${style}\n$&`) : insertAfter(html, [/<body\b[^>]*>/i, /<html\b[^>]*>/i], style);
+  const head = firstTag(html, "head", true);
+  html = head ? `${html.slice(0, head.start)}${style}\n${html.slice(head.start)}` : insertAfter(html, ["body", "html"], style);
   if (options.landscape && !/<carbone-pdf-options\b/i.test(html)) {
-    html = insertAfter(html, [/<body\b[^>]*>/i, /<html\b[^>]*>/i], '\n<carbone-pdf-options landscape="true"></carbone-pdf-options>');
+    html = insertAfter(html, ["body", "html"], '\n<carbone-pdf-options landscape="true"></carbone-pdf-options>');
   }
   return html;
 }
@@ -94,7 +96,13 @@ const NAME_TAG = /\{d\.([A-Za-z_][\w.[\]]*)\}/g;
 export function namePatternProblems(pattern: string): string[] {
   const converted = convertNamePattern(pattern);
   const rest = converted.replace(NAME_TAG, "");
-  if (/\{\{|\{%/.test(rest)) return [`write fields as {d.doc.invoiceNo}, not ${/\{[{%][^}]*[}%]?\}?/.exec(rest)?.[0] ?? "{{ }}"}`];
+  const nunjucks = [rest.indexOf("{{"), rest.indexOf("{%")].filter((i) => i !== -1);
+  if (nunjucks.length > 0) {
+    const start = Math.min(...nunjucks);
+    const close = rest.indexOf("}", start + 2);
+    const snippet = rest.slice(start, close === -1 ? start + 40 : rest[close + 1] === "}" ? close + 2 : close + 1);
+    return [`write fields as {d.doc.invoiceNo}, not ${snippet}`];
+  }
   if (/\{d[.:[]/.test(rest)) return ["file names take plain tags such as {d.doc.invoiceNo}, without formatters"];
   return [];
 }
