@@ -27,7 +27,7 @@ import { SkeletonRows } from '@/components/skeleton-rows';
 import { TableEmpty } from '@/components/table-empty';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { api, errorText, isAbort } from '@/lib/client/api';
+import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
 import type { QueueView, ServerView } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { NewJobButton } from './new-job-button';
@@ -49,7 +49,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   const [q, setQ] = useState('');
   // The rows and the server they belong to, so another server's rows are never shown.
   const [loaded, setLoaded] = useState<{ serverId: string; queues: QueueView[] } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ShownError | null>(null);
   const [loading, setLoading] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'library', desc: false });
@@ -58,7 +58,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   useEffect(() => {
     api<{ servers: ServerView[] }>('/api/servers').then(
       (data) => setServers(data.servers),
-      (err) => setError(errorText(err)),
+      (err) => setError(shownError(err)),
     );
   }, []);
 
@@ -95,7 +95,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
         setError(null);
       } catch (err) {
         if (!isAbort(err)) {
-          setError(errorText(err));
+          setError(shownError(err));
           setLoaded(null);
         }
       } finally {
@@ -221,7 +221,11 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
           </div>
         )}
       </div>
-      {error && <ErrorNote className="mb-4">{error}</ErrorNote>}
+      {error && (
+        <ErrorNote className="mb-4" detail={error.detail}>
+          {error.message}
+        </ErrorNote>
+      )}
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-muted-foreground">

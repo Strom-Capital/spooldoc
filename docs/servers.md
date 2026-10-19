@@ -37,6 +37,28 @@ Spooldoc connects through jt400 to the host server ports: 449 (port
 mapper) and 8470 to 8476 (central, database on 8471, network print, remote
 command and sign-on). See [Deployment](deployment.md#network).
 
+## When the IBM i says no
+
+Spooldoc reads the IBM i's error and says what went wrong and what to do
+next, with the message ID at the end, such as `(CPF2204)`. The IBM i's own
+text is under Details in the error box, for support. The same message
+goes into the job log, Needs attention and the server log.
+
+| What happens | What Spooldoc says to do |
+|--------------|--------------------------|
+| Wrong password (`CPF22E2`) | Check it on the Servers page. Repeated wrong passwords can disable the profile. |
+| Profile disabled (`CPF22E3`) | A security officer enables it with `CHGUSRPRF USRPRF(name) STATUS(*ENABLED)`. |
+| Password expired (`CPF22E4`) | Set a new one on the IBM i, then enter it on the Servers page. |
+| No password (`CPF22E5`) | Use a user profile with a password. |
+| No such user (`CPF2204`) | Check the user on the Servers page. |
+| Unknown host, refused, timed out | Check the host name, that the host servers run (`STRHOSTSVR SERVER(*ALL)`), and the ports below. |
+| No authority to an object | A security officer grants it, for example with `GRTOBJAUT ... AUT(*USE)` for the object named. |
+| No authority to a spooled file | Other users' spooled files need `*SPLCTL`, or `*JOBCTL` on a queue created with `OPRCTL(*YES)`. |
+| Output queue, library or data queue gone | Point the job's source at another queue, or turn on real-time watching again to create the data queue. |
+| Spooled file gone | Nothing to fix: it was deleted, printed or cleaned up before Spooldoc read it. |
+
+Errors Spooldoc does not recognize show the IBM i's text as it is.
+
 ## The data queue
 
 A server remembers one data queue, the one Spooldoc reads for real-time

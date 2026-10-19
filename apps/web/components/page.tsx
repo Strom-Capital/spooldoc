@@ -47,12 +47,23 @@ export function Page({
   );
 }
 
-/** A red message box for an error. */
-export function ErrorNote({ children, className }: { children: ReactNode; className?: string }) {
+/**
+ * A red message box for an error. `detail`, such as the IBM i's own message text, is
+ * kept behind a Details toggle so the message itself says what to do.
+ */
+export function ErrorNote({ children, detail, className }: { children: ReactNode; detail?: string; className?: string }) {
   return (
-    <p role="alert" className={cn('rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive text-sm', className)}>
+    <div role="alert" className={cn('rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive text-sm', className)}>
       {children}
-    </p>
+      {detail && (
+        <details className="mt-1.5 text-xs">
+          <summary className="cursor-pointer select-none rounded-sm opacity-80 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/40">
+            Details
+          </summary>
+          <p className="mt-1 whitespace-pre-wrap break-words font-mono opacity-90">{detail}</p>
+        </details>
+      )}
+    </div>
   );
 }
 

@@ -75,14 +75,15 @@ const HOST_REASONS: [string, RegExp][] = [
  * A readable message for an unreachable system, such as "Cannot reach
  * ibmi.example.com: unknown host", from the Java exception text. The host comes from
  * an `UnknownHostException` or from the JDBC driver's "(host)" detail; without one
- * the message names "the system". Undefined when no reason is recognized.
+ * the message names `fallbackHost`, else "the system". Undefined when no reason is recognized.
  */
-export function hostMessage(text: string): string | undefined {
+export function hostMessage(text: string, fallbackHost?: string): string | undefined {
   const reason = HOST_REASONS.find(([, re]) => re.test(text))?.[0];
   if (!reason) return undefined;
   const host =
     /UnknownHostException:\s*([^\s:]+)/.exec(text)?.[1] ??
     /cannot establish the connection\. \(([^()\s]+)\)/i.exec(text)?.[1] ??
+    fallbackHost ??
     "the system";
   return `Cannot reach ${host}: ${reason}`;
 }
@@ -105,17 +106,149 @@ export function summarize(text: string): string {
   return out.length > 500 ? `${out.slice(0, 497)}...` : out;
 }
 
+/** The first IBM i message ID in an error text, such as `CPF2204` or `SQL0551`. */
+export function messageIdOf(text: string): string | undefined {
+  return /\b(CP[FDI][0-9A-F]{4}|SQL\d{4,5}|MCH\d{4})\b/.exec(text)?.[1];
+}
+
+/** The system and user profile an error is about, to name them in the message. */
+export interface ErrorTarget {
+  host?: string;
+  user?: string;
+}
+
+/** An object named in a CPF or SQL message: "X in LIB type *OUTQ". */
+function objectOf(text: string): { name: string; library: string; type: string } | undefined {
+  const m = /(?:object\s+)?([A-Z0-9_$#@.]+) in (?:library\s+)?([A-Z0-9_$#@]+) type (\*[A-Z]+)/i.exec(text);
+  return m ? { name: m[1]!.toUpperCase(), library: m[2]!.toUpperCase(), type: m[3]!.toUpperCase() } : undefined;
+}
+
+/** A library named in a CPF message: "Library X not found." or "Not authorized to library X." */
+function libraryOf(text: string): string | undefined {
+  return /(?:\bLibrary ([A-Z0-9_$#@]+) not found|Not authorized to library ([A-Z0-9_$#@]+))/i.exec(text)?.slice(1).find(Boolean)?.toUpperCase();
+}
+
+const OBJECT_TYPES: Record<string, string> = {
+  "*OUTQ": "output queue",
+  "*DTAQ": "data queue",
+  "*LIB": "library",
+  "*FILE": "file",
+  "*USRPRF": "user profile",
+};
+
+const PORTS = "ports 449 and 8470 to 8476";
+
 /**
- * Converts anything thrown by the bridge into a `ConnectionError` with a code and a
- * short message, with every secret removed. A `ConnectionError` passes through
- * (its message is redacted again). The original error is not attached as `cause`,
- * since it may hold the password.
+ * What to tell the user about an IBM i error: what went wrong, in their terms, and what
+ * to do next. One line, since run and watch errors keep the first line. Undefined when
+ * there is nothing better to say than the system's own text.
+ *
+ * @param code - The class from `classifyError`
+ * @param text - The full error text, already redacted
+ * @param context - What was being done, such as "Spooled file X number 1 of job ..."
+ * @param target - The host and user profile, when known
  */
-export function toConnectionError(err: unknown, secrets: readonly string[], context?: string): ConnectionError {
+export function guidance(code: ConnectionErrorCode, text: string, context?: string, target: ErrorTarget = {}): string | undefined {
+  const user = target.user?.trim().toUpperCase();
+  const host = target.host?.trim();
+  const profile = user ?? "the user profile";
+  const system = host ?? "the IBM i";
+  const System = host ?? "The IBM i";
+  const Profile = user ?? "The user profile";
+
+  switch (code) {
+    case "auth":
+      if (/CPF22E3|profile (is )?disabled|profile .*disabled/i.test(text)) {
+        return `${user ? `The user profile ${user} is` : "The user profile is"} disabled on ${system}. A security officer can enable it with CHGUSRPRF USRPRF(${user ?? "name"}) STATUS(*ENABLED).`;
+      }
+      if (/CPF22E4|password (has )?expired/i.test(text)) {
+        return `The password of ${profile} has expired. Set a new one on the IBM i, then enter it for the server on the Servers page.`;
+      }
+      if (/CPF22E5|no password associated|password (is )?not set/i.test(text)) {
+        return `${Profile} has no password (PASSWORD(*NONE)), so it cannot sign on. Use a user profile with a password.`;
+      }
+      if (/CPF2204|user (id|profile) (is )?(not known|does not exist)|user profile .* not found/i.test(text)) {
+        return `There is no user profile ${user ?? "with that name"} on ${system}. Check the user on the Servers page.`;
+      }
+      if (/CPF22E2|password (is )?(not correct|incorrect)/i.test(text)) {
+        return `${System} did not accept the password for ${profile}. Check it on the Servers page; repeated wrong passwords can disable the profile.`;
+      }
+      return `${System} did not accept the user profile or password. Check them on the Servers page.`;
+
+    case "host": {
+      const reached = hostMessage(text, host);
+      if (!reached) return `Cannot reach ${system}. Check the host name on the Servers page, the network, and that a firewall lets ${PORTS} through.`;
+      if (/unknown host/.test(reached)) return `${reached}. Check the host name on the Servers page.`;
+      if (/refused/.test(reached)) return `${reached}. Check that the host servers run on the IBM i (STRHOSTSVR SERVER(*ALL)) and that ${PORTS} are open.`;
+      return `${reached}. Check the network and that a firewall lets ${PORTS} through.`;
+    }
+
+    case "authority": {
+      if (context?.startsWith("Spooled file") || /authorized to spooled file/i.test(text)) {
+        return `${Profile} is not authorized to this spooled file. Working with other users' spooled files needs *SPLCTL special authority, or *JOBCTL on an output queue created with OPRCTL(*YES).`;
+      }
+      const object = objectOf(text);
+      if (object) {
+        const kind = OBJECT_TYPES[object.type] ?? `object (${object.type})`;
+        return `${Profile} is not authorized to ${kind} ${object.library}/${object.name}. A security officer can grant it, for example with GRTOBJAUT OBJ(${object.library}/${object.name}) OBJTYPE(${object.type}) USER(${user ?? "name"}) AUT(*USE).`;
+      }
+      const library = libraryOf(text);
+      if (library) {
+        return `${Profile} is not authorized to library ${library}. A security officer can grant it with GRTOBJAUT OBJ(${library}) OBJTYPE(*LIB) USER(${user ?? "name"}) AUT(*USE).`;
+      }
+      return `${Profile} is not authorized to ${context ? lowerFirst(context) : "an object Spooldoc needs"}. A security officer can grant it; the details name the object.`;
+    }
+
+    case "notfound": {
+      if (context?.startsWith("Spooled file") || /CPF3C40|CPF3344|CPF3342|no longer in the system/i.test(text)) {
+        return `${context ?? "The spooled file"} is no longer on ${system}. It was deleted or printed, or its job's output was cleaned up.`;
+      }
+      const object = objectOf(text);
+      if (object?.type === "*OUTQ") {
+        return `Output queue ${object.library}/${object.name} does not exist on ${system}. If it was renamed or deleted, point the job's source at another queue.`;
+      }
+      if (object?.type === "*DTAQ") {
+        return `Data queue ${object.library}/${object.name} does not exist on ${system}. Turn on real-time watching for the queue again to create it.`;
+      }
+      if (object) {
+        const kind = OBJECT_TYPES[object.type] ?? `Object (${object.type})`;
+        return `${upperFirst(kind)} ${object.library}/${object.name} does not exist on ${system}.`;
+      }
+      const library = libraryOf(text);
+      if (library) {
+        return `Library ${library} does not exist on ${system}. Check the name, or change the job's source if the library was renamed.`;
+      }
+      return undefined;
+    }
+
+    default:
+      return undefined;
+  }
+}
+
+const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
+const upperFirst = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
+
+/**
+ * Converts anything thrown by the bridge into a `ConnectionError` with a code, a message
+ * that says what to do (see `guidance`), the IBM i message ID and the system's own text
+ * as `detail`, with every secret removed. Without guidance the message is the system's
+ * text, after the context. A `ConnectionError` passes through, redacted again. The
+ * original error is not attached as `cause`, since it may hold the password.
+ */
+export function toConnectionError(err: unknown, secrets: readonly string[], context?: string, target?: ErrorTarget): ConnectionError {
   const prefix = context ? `${context}: ` : "";
-  if (err instanceof ConnectionError) return new ConnectionError(err.code, redact(prefix + err.message, secrets));
+  if (err instanceof ConnectionError) {
+    return new ConnectionError(err.code, redact(prefix + err.message, secrets), {
+      messageId: err.messageId,
+      detail: err.detail === undefined ? undefined : redact(err.detail, secrets),
+    });
+  }
   const full = redact(errorText(err), secrets);
   const code = classifyError(full);
-  const message = (code === "host" && hostMessage(full)) || summarize(full);
-  return new ConnectionError(code, redact(prefix + message, secrets));
+  const messageId = messageIdOf(full);
+  const own = (code === "host" && hostMessage(full)) || summarize(full);
+  const advice = guidance(code, full, context, target);
+  const message = advice ? `${advice}${messageId ? ` (${messageId})` : ""}` : prefix + own;
+  return new ConnectionError(code, redact(message, secrets), { messageId, detail: redact(prefix + summarize(full), secrets) });
 }

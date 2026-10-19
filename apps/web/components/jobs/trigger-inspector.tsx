@@ -221,7 +221,7 @@ export function TriggerInspector() {
           {!library ? (
             <p className="text-muted-foreground text-sm">Pick the source queue first.</p>
           ) : queuesError ? (
-            <ErrorNote>{queuesError}</ErrorNote>
+            <ErrorNote detail={queuesError.detail}>{queuesError.message}</ErrorNote>
           ) : queues === null ? (
             <div className="flex flex-col gap-2" aria-label="Checking the queue" aria-busy>
               <Skeleton className="h-4 w-4/5" />

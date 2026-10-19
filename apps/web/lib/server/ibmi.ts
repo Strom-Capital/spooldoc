@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { noAnswerError, withDeadline, type Connection, type ConnectionErrorCode, type Credentials, type SystemInfo } from '@spooldoc/ibmi';
-import { errorResponse, redact } from './http';
+import { errorResponse, json, redact } from './http';
 import { getServerRow, serverCredentials, type ServerRow } from './servers';
 
 type Jt400Module = typeof import('@spooldoc/ibmi/jt400');
@@ -29,21 +29,35 @@ async function jt400(): Promise<Jt400Module> {
  * True for a `ConnectionError` from `@spooldoc/ibmi`. Checked by shape, since the
  * driver is loaded by Node and the bundled copy of the class is a different object.
  */
-export function isConnectionError(error: unknown): error is Error & { code: ConnectionErrorCode } {
+export function isConnectionError(error: unknown): error is Error & { code: ConnectionErrorCode; messageId?: string; detail?: string } {
   const code = (error as { code?: unknown } | null)?.code;
   return error instanceof Error && error.name === 'ConnectionError' && typeof code === 'string' && code in STATUS;
 }
 
 /**
+ * The IBM i message ID and the system's own text of an error, redacted, for a response
+ * or a log line. Empty for anything but a `ConnectionError`.
+ */
+export function ibmiFields(error: unknown, secrets: readonly string[] = []): { messageId?: string; detail?: string } {
+  if (!isConnectionError(error)) return {};
+  return {
+    ...(error.messageId ? { messageId: error.messageId } : {}),
+    ...(error.detail ? { detail: redact(new Error(error.detail), secrets) } : {}),
+  };
+}
+
+/**
  * Turn an error from the IBM i into a JSON response with the password removed:
- * 422 sign-on, 502 host, 404 not found, 403 authority, 500 anything else.
+ * 422 sign-on, 502 host, 404 not found, 403 authority, 500 anything else. The body is
+ * `{ error, code, messageId?, detail? }`: `error` says what to do, `detail` is the
+ * system's own text.
  *
  * @param error - What the connection threw
  * @param secrets - Values to blank out of the message
  */
 export function connectionErrorResponse(error: unknown, secrets: readonly string[]): Response {
   if (isConnectionError(error)) {
-    return errorResponse(STATUS[error.code], redact(error, secrets));
+    return json({ error: redact(error, secrets), code: error.code, ...ibmiFields(error, secrets) }, { status: STATUS[error.code] });
   }
   return errorResponse(500, redact(error, secrets));
 }

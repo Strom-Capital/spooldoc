@@ -100,12 +100,20 @@ export interface Connection {
 /** Why a connection call failed. */
 export type ConnectionErrorCode = "auth" | "host" | "notfound" | "authority" | "other";
 
-/** A failed connection call. The message never contains the password. */
+/**
+ * A failed connection call. The message says what went wrong and, where Spooldoc knows,
+ * what to do about it. `messageId` is the IBM i message, such as `CPF2204`, and `detail`
+ * the system's own text, for support. None of them contains the password.
+ */
 export class ConnectionError extends Error {
   readonly code: ConnectionErrorCode;
-  constructor(code: ConnectionErrorCode, message: string) {
+  readonly messageId?: string;
+  readonly detail?: string;
+  constructor(code: ConnectionErrorCode, message: string, info: { messageId?: string; detail?: string } = {}) {
     super(message);
     this.name = "ConnectionError";
     this.code = code;
+    if (info.messageId) this.messageId = info.messageId;
+    if (info.detail) this.detail = info.detail;
   }
 }

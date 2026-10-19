@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { api, errorText } from '@/lib/client/api';
+import { api, shownError, type ShownError } from '@/lib/client/api';
 import type { ServerView } from '@/lib/types';
 
 const selectClass =
@@ -31,7 +31,7 @@ export function ServerDialog({
   onSaved(server: ServerView): void;
 }) {
   const [libraries, setLibraries] = useState<string[]>(server?.libraries ?? []);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ShownError | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -50,7 +50,7 @@ export function ServerDialog({
         : await api<ServerView>('/api/servers', { method: 'POST', body });
       onSaved(saved);
     } catch (err) {
-      setError(errorText(err));
+      setError(shownError(err));
       setBusy(false);
     }
   }
@@ -122,7 +122,7 @@ export function ServerDialog({
             <TagInput id="server-libraries" value={libraries} onChange={setLibraries} placeholder="All libraries. Type a name and press Enter." />
             <p className="text-muted-foreground text-xs">Only output queues in these libraries are listed. Leave it empty to list every library.</p>
           </div>
-          {error && <ErrorNote>{error}</ErrorNote>}
+          {error && <ErrorNote detail={error.detail}>{error.message}</ErrorNote>}
         </form>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={busy}>

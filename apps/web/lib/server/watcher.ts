@@ -7,7 +7,7 @@ import { ibmiFilter, jobSpecSchema, splfKey, watchedStatuses, type JobSpec } fro
 import { getDb, getLocks } from './db';
 import { jobs, jobVersions, queueHealth, watchSeen } from './db/schema';
 import { redact } from './http';
-import { connectServer, type ServerConnection } from './ibmi';
+import { connectServer, ibmiFields, type ServerConnection } from './ibmi';
 import { log } from './log';
 import { cleanUp, failStaleRuns } from './retention';
 import { runJob } from './runner';
@@ -150,7 +150,7 @@ export class Watcher {
         opened = await this.deps.connect(serverId);
       } catch (error) {
         const message = redact(error);
-        this.report(`connect:${serverId}`, 'Could not connect to watch the queues of a server', { serverId, error: message });
+        this.report(`connect:${serverId}`, 'Could not connect to watch the queues of a server', { serverId, error: message, ...ibmiFields(error) });
         await markError(list.map((j) => j.jobId), message);
         // What real time last said stays until the server can be reached again.
         for (const queue of queues) health.set(queueKey(serverId, queue), 'keep');
@@ -164,7 +164,11 @@ export class Watcher {
       } catch (error) {
         // Which data queue each queue sends to is kept from the last read that worked.
         info = this.queueInfo.get(serverId)?.queues ?? [];
-        this.report(`queues:${serverId}`, 'Could not read the output queue list', { serverId, error: redact(error, [opened.password]) });
+        this.report(`queues:${serverId}`, 'Could not read the output queue list', {
+          serverId,
+          error: redact(error, [opened.password]),
+          ...ibmiFields(error, [opened.password]),
+        });
       }
       const dataQueue = opened.server.dtaqLibrary && opened.server.dtaqName ? { library: opened.server.dtaqLibrary, name: opened.server.dtaqName } : null;
       const live = queues.filter((q) => dataQueue && sameQueue(info.find((i) => sameQueue(i, q))?.dataQueue, dataQueue));
@@ -321,7 +325,12 @@ export class Watcher {
         this.resolve(`job:${job.jobId}`, 'Watching the job works again', { jobId: job.jobId });
       } catch (error) {
         const message = redact(error, [opened.password]);
-        this.report(`job:${job.jobId}`, 'Watching a job failed', { jobId: job.jobId, queue: `${queue.library}/${queue.name}`, error: message });
+        this.report(`job:${job.jobId}`, 'Watching a job failed', {
+          jobId: job.jobId,
+          queue: `${queue.library}/${queue.name}`,
+          error: message,
+          ...ibmiFields(error, [opened.password]),
+        });
         await markError([job.jobId], message);
       } finally {
         await release();
@@ -405,6 +414,7 @@ export class Watcher {
           serverId: reader.serverId,
           dataQueue,
           error: reader.lastError,
+          ...ibmiFields(error, [password]),
           retryInSeconds: backoff / 1000,
         });
         await sleep(backoff, reader);
