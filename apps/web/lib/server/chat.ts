@@ -449,8 +449,11 @@ export function hasContent(message: UIMessage): boolean {
  * The part of the thread the model gets: the newest messages, within the limits. The
  * instructions carry the current definition, template and pages, so an old tool result
  * says nothing the model cannot see there. Over the character budget, the oldest tool
- * calls and results go first (the words around them stay), then whole messages. Empty
- * messages are dropped, and the result starts with a user message as the providers want.
+ * calls and results go first, with the reasoning of the same answer (the words around
+ * them stay), then whole messages. Anthropic signs each thinking block with the tool
+ * calls around it and turns down a thread where they are split; a thread may leave
+ * thinking out, so it goes with them. Empty messages are dropped, and the result starts
+ * with a user message as the providers want.
  *
  * @param messages - The whole thread, oldest first
  * @param limits - The message and character limits
@@ -467,7 +470,7 @@ export function trimHistory<M extends UIMessage>(messages: M[], limits: HistoryL
       kept = kept.slice(1);
       continue;
     }
-    const stripped = { ...kept[index]!, parts: kept[index]!.parts.filter((part) => !isToolPart(part)) };
+    const stripped = { ...kept[index]!, parts: kept[index]!.parts.filter((part) => !isToolPart(part) && part.type !== 'reasoning') };
     kept = [...kept.slice(0, index), ...(hasContent(stripped) ? [stripped] : []), ...kept.slice(index + 1)];
   }
   const first = kept.findIndex((message) => message.role === 'user');

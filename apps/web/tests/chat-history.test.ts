@@ -18,6 +18,23 @@ function answer(id: string, size = 10): UIMessage {
   };
 }
 
+/** An answer from a model that thinks: each step a signed reasoning part, then a write_definition call; then text. */
+function thinkingAnswer(id: string, size = 10): UIMessage {
+  const signed = (text: string) => ({ type: 'reasoning', text, state: 'done', providerMetadata: { anthropic: { signature: `sig-${id}-${text}` } } });
+  return {
+    id,
+    role: 'assistant',
+    parts: [
+      { type: 'step-start' },
+      signed('first'),
+      { type: 'tool-write_definition', toolCallId: `call-${id}`, state: 'output-available', input: { yaml: 'type: x' }, output: { ok: true, preview: 'x'.repeat(size) } },
+      { type: 'step-start' },
+      signed('second'),
+      { type: 'text', text: `Answer ${id}`, state: 'done' },
+    ] as UIMessage['parts'],
+  };
+}
+
 const ids = (messages: UIMessage[]): string[] => messages.map((m) => m.id);
 const toolParts = (message: UIMessage): number => message.parts.filter((p) => p.type.startsWith('tool-')).length;
 
@@ -50,6 +67,15 @@ describe('trimHistory', () => {
     expect(toolParts(kept[3]!)).toBe(1);
     // The thread given is not changed.
     expect(toolParts(thread[1]!)).toBe(1);
+  });
+
+  it('drops the reasoning of an answer with its tool results, and leaves a newer answer as it was', () => {
+    // Signed thinking without the tool calls it was made with is turned down by Anthropic.
+    const thread = [user('u1'), thinkingAnswer('a1', 30_000), user('u2'), thinkingAnswer('a2', 30_000), user('u3')];
+    const kept = trimHistory(thread, { maxChars: 50_000 });
+    expect(ids(kept)).toEqual(['u1', 'a1', 'u2', 'a2', 'u3']);
+    expect(kept[1]?.parts.map((p) => p.type)).toEqual(['step-start', 'step-start', 'text']);
+    expect(kept[3]).toEqual(thread[3]);
   });
 
   it('then drops whole messages from the oldest, never the last one', () => {
