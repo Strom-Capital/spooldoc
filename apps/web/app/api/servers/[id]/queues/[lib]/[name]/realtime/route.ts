@@ -58,6 +58,27 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         return json({ ok: true });
       }
       if (adopt) {
+        // The server reads one data queue: switching would leave the queues that send to
+        // the current one unread, and forget whether Spooldoc created it.
+        if (server.dtaqLibrary && server.dtaqName) {
+          const current = { library: server.dtaqLibrary, name: server.dtaqName };
+          const using = (await conn.listOutputQueues({ libraries: server.libraries })).filter(
+            (q) => q.dataQueue?.library === current.library && q.dataQueue?.name === current.name,
+          );
+          if (using.length > 0) {
+            const names = using.map((q) => `${q.library}/${q.name}`);
+            return json(
+              {
+                ok: false,
+                error: `Spooldoc reads ${current.library}/${current.name}, which ${names.join(', ')} still ${names.length === 1 ? 'sends' : 'send'} to. Switch ${names.length === 1 ? 'it' : 'them'} to polling first.`,
+                dataQueue: current,
+                queues: using.map((q) => ({ library: q.library, name: q.name })),
+              },
+              { status: 409 },
+            );
+          }
+        }
+        // Not owned: Spooldoc did not create it, so it never detaches or deletes it.
         await save(info.dataQueue, false);
         return json({ ok: true });
       }
