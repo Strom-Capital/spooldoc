@@ -74,6 +74,13 @@ new ready spooled file, in one of two ways:
   default. Real-time queues are polled too, every safety check interval,
   in case an entry was missed. Both intervals are under Settings.
 
+When reading the data queue fails, for example because the data queue was
+deleted or the connection dropped, the queue is polled at the poll
+interval meanwhile and Spooldoc keeps trying to read it again. The trigger
+step and Needs attention on the Home page say why and since when, and the
+[server log](configuration.md#server-log) has each attempt. Once reading
+works again, the note goes away.
+
 Two more switches:
 
 - **Backlog.** When watching starts, Spooldoc takes stock of the queue.

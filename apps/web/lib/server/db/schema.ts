@@ -134,6 +134,30 @@ export const queuePrefs = pgTable(
   (t) => [primaryKey({ columns: [t.serverId, t.library, t.name] })],
 );
 
+/**
+ * Why a watched queue that sends to the server's data queue is polled instead of watched
+ * in real time, and since when. The watcher writes the row when real time stops working
+ * and clears the error when it works again.
+ */
+export const queueHealth = pgTable(
+  'queue_health',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    serverId: uuid('server_id')
+      .notNull()
+      .references(() => servers.id, { onDelete: 'cascade' }),
+    library: text('library').notNull(),
+    name: text('name').notNull(),
+    realtimeError: text('realtime_error'),
+    /** When real-time watching of the queue stopped working. */
+    realtimeErrorSince: timestamp('realtime_error_since', { withTimezone: true }),
+    /** The error dismissed on Home; it shows again when the error changes or clears and comes back. */
+    errorDismissed: text('error_dismissed'),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex('queue_health_queue_idx').on(t.serverId, t.library, t.name)],
+);
+
 /** Where a job delivers its documents. */
 export const destinations = pgTable(
   'destinations',
@@ -252,6 +276,8 @@ export const runs = pgTable(
     steps: jsonb('steps').$type<RunStep[]>().notNull().default([]),
     createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
     startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    /** Touched while the run is running; a running run whose heartbeat stopped was cut off. */
+    heartbeatAt: timestamp('heartbeat_at', { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp('finished_at', { withTimezone: true }),
     /** When a failed run was dismissed from Needs attention on Home. */
     dismissedAt: timestamp('dismissed_at', { withTimezone: true }),

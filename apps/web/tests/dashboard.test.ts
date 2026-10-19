@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { aiProviders, jobs, jobVersions, runs, servers, settings } from '@/lib/server/db/schema';
+import { aiProviders, jobs, jobVersions, queueHealth, runs, servers, settings } from '@/lib/server/db/schema';
 import type { DashboardView, RunStatus } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
@@ -91,8 +91,9 @@ describe('GET /api/dashboard', () => {
     expect(view.series.find((b) => b.at === `${localDay(new Date(now - HOUR), 'UTC')}T00:00`)).toMatchObject({ success: 2, warning: 1, skipped: 1 });
     expect(view.attention.servers.map((s) => s.name)).toEqual(['Broken']);
     expect(view.attention.jobs.map((j) => j.error)).toEqual(['Queue not found']);
-    expect(view.attention.runs).toHaveLength(2);
-    expect(view.attention.runs[0]!.jobName).toBe('Invoices');
+    // Failed and warning runs of the range, newest first; the warning delivered but did not finish.
+    expect(view.attention.runs.map((r) => r.status).sort()).toEqual(['failed', 'failed', 'warning']);
+    expect(view.attention.runs.at(-1)).toMatchObject({ status: 'failed', jobName: 'Invoices' });
 
     expect((await load('?range=90d&tz=UTC')).runs.success).toBe(3);
   });
@@ -134,26 +135,38 @@ describe('GET /api/dashboard', () => {
     const jobId = await insertJob(serverId);
     await db().update(jobs).set({ lastWatchError: 'Queue not found' }).where(eq(jobs.id, jobId));
     const runId = await insertRun(jobId, 'failed', new Date(Date.now() - HOUR));
+    const warningId = await insertRun(jobId, 'warning', new Date(Date.now() - 2 * HOUR));
+    const [queue] = await db()
+      .insert(queueHealth)
+      .values({ serverId, library: 'MYLIB', name: 'INVOICES', realtimeError: 'Data queue not found', realtimeErrorSince: new Date(Date.now() - HOUR) })
+      .returning({ id: queueHealth.id });
     const items = [
       { kind: 'server', id: serverId },
       { kind: 'job', id: jobId },
+      { kind: 'queue', id: queue!.id },
       { kind: 'run', id: runId },
+      { kind: 'run', id: warningId },
     ];
+    expect((await load('?tz=UTC')).attention.queues).toEqual([
+      expect.objectContaining({ id: queue!.id, serverName: 'Broken', library: 'MYLIB', name: 'INVOICES', error: 'Data queue not found' }),
+    ]);
     expect((await dismiss(items)).status).toBe(204);
     let view = await load('?tz=UTC');
-    expect(view.attention).toEqual({ servers: [], jobs: [], runs: [] });
+    expect(view.attention).toEqual({ servers: [], jobs: [], queues: [], runs: [] });
     expect(view.servers.failing).toBe(1);
 
     await db().update(servers).set({ lastError: 'Password expired' }).where(eq(servers.id, serverId));
+    await db().update(queueHealth).set({ realtimeError: 'Connection reset' }).where(eq(queueHealth.id, queue!.id));
     view = await load('?tz=UTC');
     expect(view.attention.servers.map((s) => s.error)).toEqual(['Password expired']);
+    expect(view.attention.queues.map((q) => q.error)).toEqual(['Connection reset']);
 
     expect((await dismiss([{ kind: 'run', id: runId }, { kind: 'job', id: jobId }], false)).status).toBe(204);
     view = await load('?tz=UTC');
     expect(view.attention.runs.map((r) => r.id)).toEqual([runId]);
     expect(view.attention.jobs.map((j) => j.error)).toEqual(['Queue not found']);
 
-    expect((await dismiss([{ kind: 'queue', id: runId }])).status).toBe(400);
+    expect((await dismiss([{ kind: 'bogus', id: runId }])).status).toBe(400);
   });
 
   it('needs a session', async () => {

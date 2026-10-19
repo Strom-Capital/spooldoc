@@ -90,6 +90,8 @@ export interface JobDetail {
   paused: boolean;
   lastWatchAt: string | null;
   lastWatchError: string | null;
+  /** Why the source queue is polled although it sends to the server's data queue, and since when. */
+  realtimeError: { error: string; since: string } | null;
   versions: { number: number; note: string; createdAt: string; createdBy: string | null }[];
   updatedAt: string;
 }
@@ -148,7 +150,7 @@ export interface SettingsView {
 
 /** An item of Needs attention on Home, to dismiss or bring back. */
 export interface AttentionItem {
-  kind: 'server' | 'job' | 'run';
+  kind: 'server' | 'job' | 'queue' | 'run';
   id: string;
 }
 
@@ -178,6 +180,9 @@ export interface DashboardView {
   attention: {
     servers: { id: string; name: string; error: string }[];
     jobs: { id: string; name: string; error: string }[];
-    runs: { id: string; seq: number; jobId: string; jobName: string; error: string | null; startedAt: string }[];
+    /** Queues that should be watched in real time but are polled, with why and since when. */
+    queues: { id: string; serverId: string; serverName: string; library: string; name: string; error: string; since: string }[];
+    /** Failed runs, and warning runs (delivered, but the finish step failed). */
+    runs: { id: string; seq: number; jobId: string; jobName: string; status: 'failed' | 'warning'; error: string | null; startedAt: string }[];
   };
 }

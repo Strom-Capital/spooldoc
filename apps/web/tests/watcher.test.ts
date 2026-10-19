@@ -2,7 +2,7 @@ import { encoderFor } from '@spooldoc/core';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptySpec, splfKey } from '@/lib/job-spec';
-import { jobs, jobVersions, runs, servers, settings, watchSeen } from '@/lib/server/db/schema';
+import { jobs, jobVersions, queueHealth, runs, servers, settings, watchSeen } from '@/lib/server/db/schema';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, loadSample } from './helpers/fake-connection';
 import { builtinDestination, db, insertServer, testDb } from './helpers/fixtures';
@@ -15,6 +15,10 @@ vi.mock('@/lib/server/pdf', async (importOriginal) => ({
 }));
 
 const { Watcher } = await import('@/lib/server/watcher');
+const { connectServer } = await import('@/lib/server/ibmi');
+const { setLogSink } = await import('@/lib/server/log');
+const { HEARTBEAT_MS } = await import('@/lib/server/retention');
+const { setPdfRenderer } = await import('@/lib/server/runner');
 
 const sample = loadSample('invoice');
 const { library, name: queue } = sample.attributes.queue;
@@ -55,7 +59,31 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await watcher.stop();
+  setLogSink(null);
+  process.env.SPOOLDOC_LOG_LEVEL = 'off';
 });
+
+/** Catch the log lines from here on. */
+function captureLog(): { level: string; msg: string; [field: string]: unknown }[] {
+  const lines: { level: string; msg: string }[] = [];
+  process.env.SPOOLDOC_LOG_LEVEL = 'info';
+  setLogSink((line) => lines.push(JSON.parse(line)));
+  return lines;
+}
+
+/** Watch the invoice queue in real time through MYLIB/SPOOLDOC, until the reader is connected. */
+async function realtimeJob(): Promise<void> {
+  await db().update(servers).set({ dtaqLibrary: library, dtaqName: 'SPOOLDOC' }).where(eq(servers.id, serverId));
+  await db().update(settings).set({ pollSeconds: 3600, safetyCheckSeconds: 86400 });
+  await watchingJob();
+  await watcher.tick();
+  fake().dataQueues.set(`${library}/${queue}`, { library, name: 'SPOOLDOC' });
+  clock += 61_000;
+  await vi.waitFor(async () => {
+    await watcher.tick();
+    expect(watcher.status.realtime).toBe(1);
+  });
+}
 
 describe('watcher', () => {
   it('first takes stock of the files already ready, then runs only new ones, once', async () => {
@@ -234,6 +262,101 @@ describe('watcher', () => {
     await watcher.tick();
     expect(watcher.status).toEqual({ realtime: 0, polled: 1 });
     expect(fake().calls.some((c) => c.method === 'readDataQueue')).toBe(false);
+  });
+
+  it('records why a real-time queue is polled and since when, and clears it once reading works again', async () => {
+    watcher = new Watcher({ now: () => clock, readWaitSeconds: 0, retryMs: 20 });
+    const log = captureLog();
+    await realtimeJob();
+    const failedAt = clock;
+    fake().failures.set('readDataQueue', new Error('CPF9801 Object SPOOLDOC in library MYLIB not found.'));
+    await vi.waitFor(async () => {
+      await watcher.tick();
+      const [row] = await db().select().from(queueHealth);
+      expect(row).toMatchObject({ serverId, library, name: queue, realtimeError: expect.stringMatching(/CPF9801/), realtimeErrorSince: new Date(failedAt) });
+    });
+    expect(watcher.status).toEqual({ realtime: 0, polled: 1 });
+    expect(log).toContainEqual(expect.objectContaining({ level: 'warn', msg: expect.stringMatching(/Real-time watching failed/), serverId, error: expect.stringMatching(/CPF9801/) }));
+
+    fake().failures.delete('readDataQueue');
+    await vi.waitFor(async () => {
+      await watcher.tick();
+      const [row] = await db().select().from(queueHealth);
+      expect(row).toMatchObject({ realtimeError: null, realtimeErrorSince: null });
+    });
+    expect(watcher.status.realtime).toBe(1);
+    expect(log).toContainEqual(expect.objectContaining({ level: 'info', msg: 'Real-time watching works again' }));
+  });
+
+  it('clears the real-time error of a queue no job watches any more', async () => {
+    await db().insert(queueHealth).values({ serverId, library, name: queue, realtimeError: 'Connection reset', realtimeErrorSince: new Date(), errorDismissed: 'Connection reset' });
+    await watcher.tick();
+    const [row] = await db().select().from(queueHealth);
+    expect(row).toMatchObject({ realtimeError: null, errorDismissed: null });
+  });
+
+  it('logs a server it cannot reach once, not on every tick, and when it is back', async () => {
+    let down = true;
+    watcher = new Watcher({
+      now: () => clock,
+      readWaitSeconds: 0,
+      connect: async (id) => {
+        if (down) throw new Error('Connection refused');
+        return connectServer(id);
+      },
+    });
+    const log = captureLog();
+    const jobId = await watchingJob();
+    await watcher.tick();
+    await watcher.tick();
+    expect(log.filter((line) => line.level === 'warn')).toEqual([
+      expect.objectContaining({ msg: 'Could not connect to watch the queues of a server', serverId, error: 'Connection refused' }),
+    ]);
+    const [job] = await db().select().from(jobs).where(eq(jobs.id, jobId));
+    expect(job!.lastWatchError).toBe('Connection refused');
+
+    down = false;
+    await watcher.tick();
+    expect(log.at(-1)).toMatchObject({ level: 'info', msg: 'Connected to the server again', serverId });
+  });
+
+  it('keeps which data queue a queue sends to when the queue list cannot be read', async () => {
+    const log = captureLog();
+    await realtimeJob();
+    fake().failures.set('listOutputQueues', new Error('SQL0204 OUTPUT_QUEUE_INFO not found'));
+    clock += 61_000;
+    await watcher.tick();
+    expect(watcher.status).toEqual({ realtime: 1, polled: 0 });
+    expect(log).toContainEqual(expect.objectContaining({ level: 'warn', msg: 'Could not read the output queue list', error: expect.stringMatching(/SQL0204/) }));
+  });
+
+  it('keeps the heartbeat of a run while it runs', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    let finish!: () => void;
+    const gate = new Promise<void>((resolve) => (finish = resolve));
+    setPdfRenderer(async () => {
+      await gate;
+      return new TextEncoder().encode('%PDF');
+    });
+    try {
+      await watchingJob({ backlog: true });
+      const conn = new FakeConnection();
+      connections.set('ibmi.example.com|DEMOUSER', conn);
+      conn.status.set(key, 'READY');
+      const ticking = watcher.tick();
+      await vi.waitFor(async () => expect((await runRows())[0]?.status).toBe('running'));
+      const before = (await runRows())[0]!.heartbeatAt.getTime();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      vi.advanceTimersByTime(HEARTBEAT_MS);
+      await vi.waitFor(async () => expect((await runRows())[0]!.heartbeatAt.getTime()).toBeGreaterThan(before));
+      finish();
+      await ticking;
+      expect((await runRows())[0]!.status).toBe('success');
+    } finally {
+      finish();
+      setPdfRenderer(null);
+      vi.useRealTimers();
+    }
   });
 });
 

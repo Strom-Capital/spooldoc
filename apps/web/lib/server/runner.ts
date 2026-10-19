@@ -11,6 +11,8 @@ import { destinationFor, type OutputFile } from './destinations';
 import { htmlToPdf, renderDocuments } from './documents';
 import { redact } from './http';
 import { connectServer } from './ibmi';
+import { log } from './log';
+import { HEARTBEAT_MS } from './retention';
 import { capture, storeSample } from './samples';
 
 /** What starts a run. */
@@ -96,6 +98,15 @@ export async function executeRun(runId: string, request: RunRequest, connection?
       throw new StepError(name, message);
     }
   };
+
+  // While the run runs, its heartbeat says the process is alive (see `failStaleRuns`).
+  const heartbeat = setInterval(() => {
+    db.update(runs)
+      .set({ heartbeatAt: new Date() })
+      .where(and(eq(runs.id, runId), eq(runs.status, 'running')))
+      .catch((err: unknown) => log.warn('Could not record a run heartbeat', { runId, error: redact(err, secrets) }));
+  }, HEARTBEAT_MS);
+  heartbeat.unref?.();
 
   try {
     const [version] = await db
@@ -204,6 +215,8 @@ export async function executeRun(runId: string, request: RunRequest, connection?
   } catch (err) {
     status = err instanceof SkipRun ? 'skipped' : 'failed';
     error = err instanceof Error ? err.message : String(err);
+  } finally {
+    clearInterval(heartbeat);
   }
 
   mergeCapture(steps);

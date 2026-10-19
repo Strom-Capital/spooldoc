@@ -165,8 +165,14 @@ function useSteps(): StepInfo[] {
       title: 'Trigger',
       icon: spec.trigger.mode === 'watch' ? RadioIcon : PlayIcon,
       detail: spec.trigger.mode === 'watch' ? 'Watching the queue' : 'On demand',
-      sub: job.paused ? 'Paused' : spec.trigger.mode === 'watch' && job.lastWatchError ? job.lastWatchError : undefined,
-      status: spec.trigger.mode === 'watch' && (job.lastWatchError || job.paused) ? 'warn' : 'ok',
+      sub: job.paused
+        ? 'Paused'
+        : spec.trigger.mode === 'watch' && job.lastWatchError
+          ? job.lastWatchError
+          : spec.trigger.mode === 'watch' && job.realtimeError
+            ? 'Polled: real-time watching stopped'
+            : undefined,
+      status: spec.trigger.mode === 'watch' && (job.lastWatchError || job.realtimeError || job.paused) ? 'warn' : 'ok',
     },
     {
       step: 'extract',

@@ -1,11 +1,11 @@
 import 'server-only';
 
 import { parseDefinition } from '@spooldoc/core';
-import { and, desc, eq, inArray, max, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, max, sql } from 'drizzle-orm';
 import { emptySpec, jobSpecSchema, missingParts, versionSpec, type JobSpec } from '@/lib/job-spec';
 import type { JobDetail, JobSummary, RunStatus } from '@/lib/types';
 import { getDb, type Db, type Tx } from './db';
-import { destinations, jobs, jobVersions, runs, servers } from './db/schema';
+import { destinations, jobs, jobVersions, queueHealth, runs, servers } from './db/schema';
 import { UUID } from './servers';
 
 export type JobRow = typeof jobs.$inferSelect;
@@ -41,23 +41,45 @@ export async function createJob(input: { serverId?: string; library?: string; qu
 
 /** A job with its version list. */
 export async function jobDetail(row: JobRow): Promise<JobDetail> {
-  const versions = await getDb()
-    .select({ number: jobVersions.number, note: jobVersions.note, createdAt: jobVersions.createdAt, createdBy: jobVersions.createdBy })
-    .from(jobVersions)
-    .where(eq(jobVersions.jobId, row.id))
-    .orderBy(desc(jobVersions.number));
+  const draft = jobSpecSchema.parse(row.draft);
+  const [versions, realtimeError] = await Promise.all([
+    getDb()
+      .select({ number: jobVersions.number, note: jobVersions.note, createdAt: jobVersions.createdAt, createdBy: jobVersions.createdBy })
+      .from(jobVersions)
+      .where(eq(jobVersions.jobId, row.id))
+      .orderBy(desc(jobVersions.number)),
+    sourceRealtimeError(row, draft),
+  ]);
   return {
     id: row.id,
     name: row.name,
     description: row.description,
-    draft: jobSpecSchema.parse(row.draft),
+    draft,
     activeVersion: row.activeVersion,
     paused: row.paused,
     lastWatchAt: row.lastWatchAt?.toISOString() ?? null,
     lastWatchError: row.lastWatchError,
+    realtimeError,
     versions: versions.map((v) => ({ ...v, createdAt: v.createdAt.toISOString() })),
     updatedAt: row.updatedAt.toISOString(),
   };
+}
+
+/**
+ * Why the queue the job reads from (by its active version, else the draft) is polled
+ * although it sends to the server's data queue, as the watcher recorded it.
+ */
+async function sourceRealtimeError(row: JobRow, draft: JobSpec): Promise<JobDetail['realtimeError']> {
+  const active = await activeSpec(row).catch(() => null);
+  const { serverId, library, queue } = (active ?? draft).source;
+  if (!serverId || !library || !queue) {
+    return null;
+  }
+  const [health] = await getDb()
+    .select({ error: queueHealth.realtimeError, since: queueHealth.realtimeErrorSince })
+    .from(queueHealth)
+    .where(and(eq(queueHealth.serverId, serverId), eq(queueHealth.library, library), eq(queueHealth.name, queue), isNotNull(queueHealth.realtimeError)));
+  return health?.error ? { error: health.error, since: (health.since ?? new Date()).toISOString() } : null;
 }
 
 /** The spec of a job's active version, or null when no version is active. */

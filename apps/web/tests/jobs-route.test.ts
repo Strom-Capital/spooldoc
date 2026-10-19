@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { assets, jobs, runOutputs, runs, watchSeen } from '@/lib/server/db/schema';
+import { assets, jobs, queueHealth, runOutputs, runs, watchSeen } from '@/lib/server/db/schema';
 import type { JobDetail, RunView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
@@ -74,6 +74,14 @@ beforeEach(async () => {
 });
 
 describe('jobs', () => {
+  it('says on the job why its queue is polled instead of watched in real time', async () => {
+    const id = await newJob();
+    expect((await job(id)).realtimeError).toBeNull();
+    const since = new Date('2026-10-18T08:00:00Z');
+    await db().insert(queueHealth).values({ serverId, library, name: queue, realtimeError: 'CPF9801 Data queue not found', realtimeErrorSince: since });
+    expect((await job(id)).realtimeError).toEqual({ error: 'CPF9801 Data queue not found', since: since.toISOString() });
+  });
+
   it('creates a job on a queue with the built-in destination, and changes draft parts on their own', async () => {
     const id = await newJob();
     const created = await job(id);

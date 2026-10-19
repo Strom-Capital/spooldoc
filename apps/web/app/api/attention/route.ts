@@ -6,7 +6,7 @@ import { readJson } from '@/lib/server/http';
 export const dynamic = 'force-dynamic';
 
 const dismissSchema = z.object({
-  items: z.array(z.object({ kind: z.enum(['server', 'job', 'run']), id: z.string().uuid() })).min(1).max(200),
+  items: z.array(z.object({ kind: z.enum(['server', 'job', 'queue', 'run']), id: z.string().uuid() })).min(1).max(200),
   dismissed: z.boolean().default(true),
 });
 
