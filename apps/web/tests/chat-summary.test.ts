@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatActivity, chatErrorText, savedFile, toolSummary } from '@/lib/client/chat';
+import { chatActivity, chatErrorText, savedFile, toolSummary, writtenTemplate } from '@/lib/client/chat';
 
 const done = (toolName: string, output: unknown, input: unknown = {}) => ({ toolName, state: 'output-available', input, output });
 
@@ -71,6 +71,17 @@ describe('savedFile', () => {
     expect(savedFile(done('write_word_template', { ok: false, template: 'Document', file: { id: 'f', name: 'a.docx', size: 1 }, errors: ['x'] }))).toBe('templates');
     expect(savedFile(done('edit_word_template', { ok: false, error: 'x' }))).toBeNull();
     expect(savedFile(done('read_word_template', { ok: true, parts: [] }))).toBeNull();
+  });
+});
+
+describe('writtenTemplate', () => {
+  it('names the template a finished write or add changed, and nothing for a render or a failure', () => {
+    expect(writtenTemplate(done('write_template', { ok: false, path: 'template', template: 'Lines', templateId: 'lines', errors: ['x'] }))).toBe('lines');
+    expect(writtenTemplate(done('write_word_template', { ok: true, template: 'Letter', templateId: 'letter', file: { id: 'f' } }))).toBe('letter');
+    expect(writtenTemplate(done('edit_word_template', { ok: false, error: 'x' }))).toBeNull();
+    expect(writtenTemplate(done('add_template', { ok: true, template: { id: 'lines' }, templates: [] }))).toBe('lines');
+    expect(writtenTemplate(done('render_preview', { ok: true, templateId: 'lines' }))).toBeNull();
+    expect(writtenTemplate({ toolName: 'write_template', state: 'input-available' })).toBeNull();
   });
 });
 

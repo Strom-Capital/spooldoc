@@ -191,8 +191,8 @@ export function WordTemplate() {
             tag with curly quotes as text.
           </li>
           <li>
-            Fields are the same tags as in HTML, such as <code className="font-mono text-foreground">{'{d.pageGroup.invoiceNo}'}</code>. The JSON tab
-            has the names.
+            Fields are the same tags as in HTML, such as <code className="font-mono text-foreground">{'{d.pageGroup.invoiceNo}'}</code>. JSON, at
+            the end of the template tabs, shows the names.
           </li>
           <li>
             Repeat a table row with a row of <code className="font-mono text-foreground">[i]</code> tags and, below it, a row with{' '}

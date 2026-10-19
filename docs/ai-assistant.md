@@ -43,7 +43,7 @@ Carbone syntax reference:
 |------|--------------|
 | `read_sample_page` | Reads one page of the sample as numbered lines. The first three pages are in its instructions already. |
 | `write_definition` | Saves the definition YAML to the draft, runs the extraction on the sample and returns the report: page groups found, each field with its status, missing fields, warnings and the first page group as JSON. |
-| `write_template` | Saves the HTML of one [template](jobs.md#templates), the first unless it names another, checks it, renders the first document with Carbone and returns any errors, by line, and its visible text. Without a working Carbone server it only checks. It refuses a Word template. |
+| `write_template` | Saves the HTML of one [template](jobs.md#templates), the open one unless it names another, checks it, renders the first document with Carbone and returns any errors, by line, and its visible text. Without a working Carbone server it only checks. It refuses a Word template. |
 | `write_word_template` | Designs a [Word template](templates.md#word-templates) and saves it as a new file the template uses. Returns what the check and Carbone find, the text of the first document and, for models that take files, the document itself. |
 | `read_word_template` | Lists the parts of a Word template (the body, headers and footers), or reads one part's XML. |
 | `edit_word_template` | Changes a Word template, yours or the starter template, by replacing text in its XML, and saves the result as a new file. Returns what `write_word_template` returns. |
@@ -54,7 +54,11 @@ Carbone syntax reference:
 | `read_job_files` | Reads another job's definition YAML and each of its templates, from its active version or else its draft, so a new job can start from them. |
 | `read_carbone_reference` | Reads one reference file of the Carbone syntax reference, such as the list of formatters. |
 
-The model adds or removes templates only when you ask for it. It uses the
+The assistant works on the template open in the render step: the
+prompt shows **Working on** and its name. Ask for another template by
+name ("add a footer to Lines") and it changes that one instead. When it
+writes or adds a template, the render step opens it, so you see what
+changed. The model adds or removes templates only when you ask for it. It uses the
 last two tools only when you ask it to start from or reuse another job ("start from the Invoices job's template"); it adapts what it
 takes to the sample and saves it with the write tools. The same copy
 without a model is "Start from job" in the template editor's bar.

@@ -49,11 +49,15 @@ template of the job. A new job has one template, Template 1, that makes
 a PDF. Add another when the same data needs a second document, for
 example an invoice as a PDF and its lines as a separate HTML page.
 
-The render step's header picks the template that the editor and the
-preview show, and holds its kind, its format switches, Add template and
-a menu to rename or remove it. An HTML template makes PDF and HTML
-files; a [Word template](templates.md#word-templates) makes PDF and DOCX
-files. Switching the kind starts the template from the other kind's
+The templates are tabs at the top of the render step, each with an icon
+for its kind: a code page for HTML, a text page for Word. Pointing at a
+tab shows its kind and formats. Pick a tab to open the template in the
+editor and the preview. **Add template** at the end of the row adds one,
+and **JSON** shows the extracted JSON in place of the editor, to look up
+field names. Below the tabs, the open template's kind, its format
+switches and a menu to rename or remove it. An HTML template makes PDF
+and HTML files; a [Word template](templates.md#word-templates) makes PDF
+and DOCX files. Switching the kind starts the template from the other kind's
 starter, and asks first when it has HTML or a Word file of its own;
 saved versions keep theirs. The last template cannot be removed. The
 pipeline shows one template as its kind and formats, and several as

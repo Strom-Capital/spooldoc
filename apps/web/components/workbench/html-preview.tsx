@@ -123,7 +123,7 @@ export function HtmlPreview({ header, fileName = (name) => name }: { header?: Re
         ) : (
           <p className="p-2 text-muted-foreground text-sm">
             {render?.template?.error
-              ? 'The template has errors; see the Template tab.'
+              ? 'The template has errors; see them in its editor.'
               : 'Nothing to show yet: the preview needs a definition that finds page groups.'}
           </p>
         )}

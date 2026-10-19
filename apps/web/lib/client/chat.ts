@@ -146,6 +146,19 @@ export function savedFile(part: ToolPartLike): 'yaml' | 'html' | 'templates' | n
   return null;
 }
 
+/**
+ * The template a finished tool call wrote or added, to open it in the render step: null
+ * for any other call, a failed one, or a render.
+ */
+export function writtenTemplate(part: ToolPartLike): string | null {
+  if (!done(part.state)) return null;
+  const out = (part.output ?? {}) as { ok?: boolean; path?: string; templateId?: unknown; file?: unknown; template?: { id?: unknown } };
+  if (part.toolName === 'write_template' && typeof out.path === 'string' && typeof out.templateId === 'string') return out.templateId;
+  if ((part.toolName === 'write_word_template' || part.toolName === 'edit_word_template') && typeof out.file === 'object' && typeof out.templateId === 'string') return out.templateId;
+  if (part.toolName === 'add_template' && out.ok === true && typeof out.template?.id === 'string') return out.template.id;
+  return null;
+}
+
 /** The text of a chat error: the server's `{ error }` for a refused request, or the stream's message. */
 export function chatErrorText(error: Error): string {
   try {

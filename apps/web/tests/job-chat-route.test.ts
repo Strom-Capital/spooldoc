@@ -165,6 +165,23 @@ describe('POST /api/jobs/[id]/chat', () => {
     expect(output).toMatchObject({ ok: true, path: 'template', template: 'Template 1', templateId: 'template-1', errors: [] });
   });
 
+  it('writes the template open in the job builder, the first when the one sent is gone', async () => {
+    await setDefinition(yaml);
+    const job = await draft();
+    await db()
+      .update(jobs)
+      .set({ draft: { ...job, render: { templates: [...job.render.templates, { id: 'lines', name: 'Lines', kind: 'html', source: null, formats: ['pdf'] }] } } })
+      .where(eq(jobs.id, jobId));
+    createModel.mockResolvedValue(withKey(scriptedModel(toolStep('write_template', { html }), textStep('Saved.'))));
+    await chunks(await chat({ messages, templateId: 'lines' }));
+    expect((await draft()).render.templates.map((t) => (t.kind === 'html' ? t.source : null))).toEqual([null, html]);
+
+    createModel.mockResolvedValue(withKey(scriptedModel(toolStep('write_template', { html: '<p>{d.pageGroup.invoiceNo}</p>' }), textStep('Saved.'))));
+    await chunks(await chat({ messages, templateId: 'gone' }));
+    expect((await draft()).render.templates.map((t) => (t.kind === 'html' ? t.source : null))).toEqual(['<p>{d.pageGroup.invoiceNo}</p>', html]);
+    expect((await chat({ messages, templateId: 'Not An Id' })).status).toBe(400);
+  });
+
   it('designs and edits a Word template as new files, and shows the model the PDF once', async () => {
     await setDefinition(yaml);
     setDocumentRenderer(fakeRenderer);

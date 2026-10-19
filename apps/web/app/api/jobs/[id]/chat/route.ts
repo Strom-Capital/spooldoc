@@ -1,5 +1,6 @@
 import { convertToModelMessages, generateId, isStepCount, streamText, type UIMessage } from 'ai';
 import { z } from 'zod';
+import { findTemplate, TEMPLATE_ID } from '@/lib/job-spec';
 import { assetNames, imageAssets } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
 import { buildInstructions, buildTools, hasContent, trimHistory, wordTemplates } from '@/lib/server/chat';
@@ -29,6 +30,8 @@ const chatRequest = z.object({
     .array(z.custom<UIMessage>((value) => typeof value === 'object' && value !== null && 'role' in value && 'parts' in value))
     .min(1)
     .max(500),
+  /** The template open in the job builder; the tools work on it unless the model names another. */
+  templateId: z.string().regex(TEMPLATE_ID, 'templateId: Use the id of one of the job\'s templates').optional(),
 });
 
 /** Anything that looks like an API key, in case a provider echoes one back. */
@@ -74,6 +77,8 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   if (!sample) {
     return errorResponse(400, 'Pick a spooled file to work on first.');
   }
+  // A template that is gone (removed, or never there) falls back to the first.
+  const openTemplate = (findTemplate(draft.render.templates, body.data.templateId ?? null) ?? draft.render.templates[0]!).id;
 
   let chat;
   try {
@@ -98,6 +103,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
         sample,
         definitionYaml: draft.extract.definition.trim() ? draft.extract.definition : null,
         templates: draft.render.templates,
+        openTemplate,
         masked,
         assets,
         carbone: (await getRendering()).check,
@@ -107,6 +113,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
       messages: await convertToModelMessages(trimHistory(messages), { ignoreIncompleteToolCalls: true }),
       tools: buildTools({
         sample,
+        openTemplate,
         store: draftStore(job.id, auth.user.id),
         masked,
         assets,

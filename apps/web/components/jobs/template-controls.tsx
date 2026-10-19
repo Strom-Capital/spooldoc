@@ -1,6 +1,6 @@
 'use client';
 
-import { MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { BracesIcon, FileCodeIcon, FileTextIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -20,8 +20,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PaneTabs } from '@/components/workbench/split-panes';
 import {
   FORMAT_FILES,
+  formatList,
   hasOwnContent,
   KIND_FORMATS,
   nameTaken,
@@ -35,11 +37,51 @@ import {
 import { useJob } from './job-provider';
 
 const KIND_LABEL: Record<TemplateKind, string> = { html: 'HTML template', docx: 'Word template' };
+const KIND_ICON = { html: FileCodeIcon, docx: FileTextIcon } as const;
 
 /**
- * The render step's template controls: which template the editor and preview show, its
- * kind (HTML or Word), the formats it makes (at least one), Add template, and a menu to
- * rename or remove it.
+ * The job's templates as tabs at the top of the render step, each with its kind's icon,
+ * then Add template and the JSON switch, which shows the extracted JSON in place of the
+ * template's editor.
+ */
+export function TemplateTabs({ template, onPick, json, onJson }: { template: JobTemplate; onPick(id: string): void; json: boolean; onJson(on: boolean): void }) {
+  const { spec, readOnly, updateDraft } = useJob();
+  const templates = spec.render.templates;
+
+  const add = () => {
+    const added = newTemplate(templates);
+    updateDraft({ render: { templates: [...templates, added] } }, { debounce: false });
+    onPick(added.id);
+    toast.success(`Added ${added.name}`);
+  };
+
+  return (
+    <PaneTabs
+      label="Templates"
+      tabs={templates.map((t) => ({ id: t.id, label: t.name, icon: KIND_ICON[t.kind], title: `${KIND_LABEL[t.kind]}: ${formatList(t.formats)}` }))}
+      value={template.id}
+      onChange={onPick}
+      end={
+        <>
+          {!readOnly && (
+            <Button size="sm" variant="ghost" onClick={add}>
+              <PlusIcon />
+              Add template
+            </Button>
+          )}
+          <Button size="sm" variant={json ? 'secondary' : 'ghost'} aria-pressed={json} onClick={() => onJson(!json)} title="Show the extracted JSON, for field names">
+            <BracesIcon />
+            JSON
+          </Button>
+        </>
+      }
+    />
+  );
+}
+
+/**
+ * The open template's controls in the render step's header: its kind (HTML or Word), the
+ * formats it makes (at least one), and a menu to rename or remove it.
  */
 export function TemplateControls({ template, onPick }: { template: JobTemplate; onPick(id: string): void }) {
   const { spec, readOnly, updateDraft } = useJob();
@@ -72,13 +114,6 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
     else switchKind(next as TemplateKind);
   };
 
-  const add = () => {
-    const added = newTemplate(templates);
-    save([...templates, added]);
-    onPick(added.id);
-    toast.success(`Added ${added.name}`);
-  };
-
   const remove = () => {
     const index = templates.findIndex((t) => t.id === template.id);
     const rest = templates.filter((t) => t.id !== template.id);
@@ -89,18 +124,6 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
 
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm">
-      <Select value={template.id} onValueChange={onPick}>
-        <SelectTrigger size="sm" className="max-w-48" aria-label="Template">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {templates.map((t) => (
-            <SelectItem key={t.id} value={t.id}>
-              {t.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
       <Select value={kind} onValueChange={pickKind} disabled={readOnly}>
         <SelectTrigger size="sm" aria-label={`Kind of ${template.name}`}>
           <SelectValue />
@@ -131,10 +154,6 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
       </div>
       {!readOnly && (
         <>
-          <Button size="sm" variant="ghost" onClick={add}>
-            <PlusIcon />
-            Add template
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon-sm" aria-label={`More actions for ${template.name}`}>

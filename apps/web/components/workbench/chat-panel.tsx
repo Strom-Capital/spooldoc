@@ -134,6 +134,7 @@ function ChatThread({
 }) {
   const [transport] = useState(() => new DefaultChatTransport({ api: `/api/jobs/${jobId}/chat` }));
   const { messages, setMessages, sendMessage, status, stop, error, clearError } = useChat({ transport, messages: initial });
+  const { templateId, templateName } = useWorkbench();
   const [draft, setDraft] = useState('');
   const [notice, setNotice] = useState(initialNotice);
   const [clearing, setClearing] = useState(false);
@@ -146,7 +147,8 @@ function ChatThread({
     if (!question || busy) return;
     setDraft('');
     clearError();
-    void sendMessage({ text: question });
+    // The assistant works on the template open in the render step, unless the message names another.
+    void sendMessage({ text: question }, { body: { templateId } });
   }
 
   /** Forget the thread on the server and on screen. Not while an answer runs: it is stored when it ends. */
@@ -262,7 +264,12 @@ function ChatThread({
               />
             </PromptInputBody>
             <PromptInputFooter>
-              <PromptInputTools className="min-w-0 truncate text-muted-foreground text-xs">{modelId}</PromptInputTools>
+              <PromptInputTools className="min-w-0 gap-2 text-muted-foreground text-xs">
+                <span className="truncate" title={`The assistant works on ${templateName} unless you name another template`}>
+                  Working on: <span className="font-medium text-foreground">{templateName}</span>
+                </span>
+                <span className="truncate">{modelId}</span>
+              </PromptInputTools>
               <PromptInputSubmit status={status} onStop={() => void stop()} disabled={!busy && !draft.trim()} />
             </PromptInputFooter>
           </PromptInput>

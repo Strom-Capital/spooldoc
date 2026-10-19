@@ -70,6 +70,8 @@ export interface InstructionsInput {
   definitionYaml: string | null;
   /** The job's templates, each with its formats and content (null for the starter). */
   templates: JobTemplate[];
+  /** The id of the template open in the job builder, which the tools work on by default. */
+  openTemplate?: string;
   /** Mask values in the page text (Settings, AI model). */
   masked: boolean;
   /** Uploaded images and fonts the template can print with `{asset('name')}`. */
@@ -213,6 +215,7 @@ export function buildInstructions({
   sample,
   definitionYaml,
   templates,
+  openTemplate,
   masked,
   assets = [],
   carbone = null,
@@ -225,6 +228,8 @@ export function buildInstructions({
   const maxPages = config.previewPages ?? 3;
   const maxLines = config.previewLines ?? 400;
   const a = sample.attributes;
+  // A template that is gone falls back to the first, as the tools do.
+  const open = templates.find((template) => template.id === openTemplate) ?? templates[0]!;
 
   const preview: string[] = [];
   let budget = maxLines;
@@ -248,7 +253,7 @@ export function buildInstructions({
 How to work:
 1. Read the pages below. Propose a definition in YAML and save it with write_definition.
 2. Read the extraction report it returns. Fix fields that are missing, empty when they should not be, or hold the wrong text, and write the definition again.
-3. Write the template: HTML with write_template, or a Word template with write_word_template or edit_word_template. Check it with render_preview. A job has one or more templates, each with its own content and formats; the tools take the template, and default to the first.
+3. Write the template: HTML with write_template, or a Word template with write_word_template or edit_word_template. Check it with render_preview. A job has one or more templates, each with its own content and formats. The user has ${open.name} open: work on it unless they name another template; the tools default to it. Add a template only when the user asks for another document, never to make a change they asked for in this one.
 4. Repeat until nothing that should be found is missing.
 5. End with a short summary of what you did and anything the user should check.
 When the layout is ambiguous (where a page group starts, which page is a cover page, what a value means), ask the user instead of guessing.
@@ -352,7 +357,7 @@ Business documents are read quickly, filed and often printed in black and white.
 
 - read_sample_page: the numbered text of any page${masked ? ' (masked)' : ''}.
 - write_definition: saves the YAML as the job's definition and returns the extraction report.
-- write_template: saves the HTML of one template (\`template\`: its id or name, default the first) and returns the visible text of the first document. Not for a Word template.
+- write_template: saves the HTML of one template (\`template\`: its id or name, default the open one) and returns the visible text of the first document. Not for a Word template.
 - write_word_template: designs a Word template from a JSON tree and saves it as a new file the template uses.
 - read_word_template: lists a Word template's parts, or returns one part's XML as edit_word_template matches it.
 - edit_word_template: replaces text in a Word template's XML and saves the result as a new file the template uses.
@@ -391,7 +396,7 @@ ${definitionYaml ? fence('yaml', definitionYaml) : 'None yet.'}`,
 
 Each page group of a run becomes a document through every template. The first template's files are named after the document; the others add their name, so a document named \`invoice\` gives \`invoice.pdf\` and \`invoice-lines.pdf\`.
 
-${templates.map((template, index) => `### ${index + 1}. ${template.name} (id \`${template.id}\`): ${KIND_NAMES[template.kind]}, ${formatList(template.formats)}
+${templates.map((template, index) => `### ${index + 1}. ${template.name} (id \`${template.id}\`): ${KIND_NAMES[template.kind]}, ${formatList(template.formats)}${template.id === open.id ? ' (open)' : ''}
 
 ${
   template.kind === 'docx'
@@ -524,6 +529,8 @@ export interface JobFilesReader {
 export interface ToolsInput {
   sample: Sample;
   store: DraftStore;
+  /** The id of the template open in the job builder: the default when a tool names none. */
+  openTemplate?: string;
   /** Mask values in page text and tool results (Settings, AI model). */
   masked: boolean;
   /** Names `{asset('name')}` accepts. Renders print a placeholder for them, never the file. */
@@ -840,7 +847,7 @@ function noTemplate(key: string, templates: JobTemplate[]): ToolFailure {
   return fail(`There is no template "${key}". The job's templates are ${templates.map((template) => `${template.name} (id ${template.id})`).join(', ')}.`);
 }
 
-const templateParam = z.string().min(1).max(40).optional().describe("The template's id or name (default: the first template)");
+const templateParam = z.string().min(1).max(40).optional().describe("The template's id or name (default: the one the user has open)");
 
 /** A file name that ends in `.docx`. */
 function docxName(name: string): string {
@@ -857,7 +864,7 @@ export const DRAFT_PATHS = { definition: 'definition', template: 'template' } as
  *
  * @param input - The sample, the draft store, the masking setting and the other jobs' files
  */
-export function buildTools({ sample: current, store, masked, assets = [], renderer = null, jobs, templateFile, images, visual = false }: ToolsInput) {
+export function buildTools({ sample: current, store, openTemplate, masked, assets = [], renderer = null, jobs, templateFile, images, visual = false }: ToolsInput) {
   async function readSample(): Promise<Sample | ToolFailure> {
     return current;
   }
@@ -948,7 +955,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
     };
   }
 
-  /** The template `key` names, or the first. */
+  /** The template `key` names, or else the open one, or the first when that is gone. */
   async function pickTemplate(key: string | undefined): Promise<JobTemplate | ToolFailure> {
     let templates: JobTemplate[];
     try {
@@ -956,7 +963,10 @@ export function buildTools({ sample: current, store, masked, assets = [], render
     } catch (error) {
       return fail(`Could not read the job's templates: ${message(error)}`);
     }
-    return findTemplate(templates, key) ?? noTemplate(key ?? '', templates);
+    if (key === undefined) {
+      return findTemplate(templates, openTemplate ?? null) ?? findTemplate(templates) ?? noTemplate('', templates);
+    }
+    return findTemplate(templates, key) ?? noTemplate(key, templates);
   }
 
   async function linked(): Promise<{ type: string; def: Definition } | ToolFailure> {
@@ -1035,7 +1045,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
     write_template: tool({
       description:
-        "Save the HTML (Carbone tags) of one of the job's templates (the first unless `template` names another), check it, render the first document and return any errors, by line, and its visible text.",
+        "Save the HTML (Carbone tags) of one of the job's templates (the open one unless `template` names another), check it, render the first document and return any errors, by line, and its visible text.",
       inputSchema: z.object({ html: z.string().min(1).max(500_000).describe('The complete HTML template'), template: templateParam }),
       execute: inTurn(async ({ html, template: key }): Promise<WriteTemplateResult> => {
         const sample = await readSample();
@@ -1075,7 +1085,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
     render_preview: tool({
       description:
-        "Render the document of one page group with the job's definition and one of its templates (the first unless `template` names another) and return the page group count, hit counts (found, missing, empty), missing fields, template errors and the visible text of the document.",
+        "Render the document of one page group with the job's definition and one of its templates (the open one unless `template` names another) and return the page group count, hit counts (found, missing, empty), missing fields, template errors and the visible text of the document.",
       inputSchema: z.object({
         pageGroup: z.number().int().min(0).optional().describe('0-based page group index (default 0)'),
         template: templateParam,
@@ -1136,7 +1146,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
     write_word_template: tool({
       description:
-        "Design one of the job's templates as a Word template (the first unless `template` names another) and save it as a new file the template uses: `design` is a JSON tree in the shape of the docx library's options (see Word templates in the instructions). Returns the tag check's and Carbone's errors, the text of the first document and, when you can see files, the first document as it prints. The user's earlier file is kept and can be put back.",
+        "Design one of the job's templates as a Word template (the open one unless `template` names another) and save it as a new file the template uses: `design` is a JSON tree in the shape of the docx library's options (see Word templates in the instructions). Returns the tag check's and Carbone's errors, the text of the first document and, when you can see files, the first document as it prints. The user's earlier file is kept and can be put back.",
       inputSchema: z.object({
         design: z.record(z.string(), z.unknown()).describe('The document: { styles?, sections: [{ properties?, headers?, footers?, children }] }'),
         name: z.string().trim().min(1).max(120).optional().describe("The file's name, such as invoice.docx (default: the current file's name, or the definition type)"),
@@ -1171,7 +1181,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
     read_word_template: tool({
       description:
-        "Read one of the job's Word templates (the first unless `template` names another): without `part`, the parts it has (word/document.xml, headers, footers) with their sizes; with `part`, that part's XML, with runs of the same formatting merged, as edit_word_template matches it. Long parts come in pieces: read on with `from`.",
+        "Read one of the job's Word templates (the open one unless `template` names another): without `part`, the parts it has (word/document.xml, headers, footers) with their sizes; with `part`, that part's XML, with runs of the same formatting merged, as edit_word_template matches it. Long parts come in pieces: read on with `from`.",
       inputSchema: z.object({
         part: z.string().min(1).max(60).optional().describe('A part, such as word/document.xml or word/header1.xml'),
         from: z.number().int().min(0).optional().describe('The character to start at (default 0)'),
@@ -1209,7 +1219,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
     edit_word_template: tool({
       description:
-        "Change one of the job's Word templates (the first unless `template` names another), the user's own file or the starter, and save the result as a new file the template uses. Each edit replaces `find`, which must occur exactly once in the part's XML as read_word_template shows it, with `replace`. The edits apply in order, all or none, and the XML must stay well-formed. Returns what write_word_template returns.",
+        "Change one of the job's Word templates (the open one unless `template` names another), the user's own file or the starter, and save the result as a new file the template uses. Each edit replaces `find`, which must occur exactly once in the part's XML as read_word_template shows it, with `replace`. The edits apply in order, all or none, and the XML must stay well-formed. Returns what write_word_template returns.",
       inputSchema: z.object({
         edits: z
           .array(

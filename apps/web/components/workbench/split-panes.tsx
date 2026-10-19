@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useRef, useState, useSyncExternalStore, type ComponentType, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 /** Below this viewport width the panes stack as tabs. */
@@ -98,26 +98,39 @@ export function SplitPanes({
   );
 }
 
-/** Tabs at the top of a pane. */
-export function PaneTabs<T extends string>({ tabs, value, onChange, end }: { tabs: { id: T; label: string }[]; value: T; onChange(tab: T): void; end?: ReactNode }) {
+/** One tab of `PaneTabs`: an optional icon before its label, and a tooltip. */
+export interface PaneTab<T extends string> {
+  id: T;
+  label: string;
+  icon?: ComponentType<{ className?: string }>;
+  title?: string;
+}
+
+/** Tabs at the top of a pane. A long row scrolls sideways; `end` stays on the right. */
+export function PaneTabs<T extends string>({ tabs, value, onChange, end, label }: { tabs: PaneTab<T>[]; value: T; onChange(tab: T): void; end?: ReactNode; label?: string }) {
   return (
-    <div role="tablist" className="flex h-10 shrink-0 items-end gap-1 border-b px-2">
-      {tabs.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          role="tab"
-          aria-selected={value === item.id}
-          onClick={() => onChange(item.id)}
-          className={cn(
-            '-mb-px border-b-2 px-3 py-2 text-sm',
-            value === item.id ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
-          )}
-        >
-          {item.label}
-        </button>
-      ))}
-      {end && <div className="ml-auto flex items-center self-center">{end}</div>}
+    <div className="flex h-10 shrink-0 items-end gap-1 border-b px-2">
+      <div role="tablist" aria-label={label} className="-mb-px flex min-w-0 items-end gap-1 overflow-x-auto">
+        {tabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={value === item.id}
+            aria-label={item.title ? item.label : undefined}
+            title={item.title}
+            onClick={() => onChange(item.id)}
+            className={cn(
+              'flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm',
+              value === item.id ? 'border-primary font-medium text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {item.icon && <item.icon className="size-4 shrink-0" />}
+            {item.label}
+          </button>
+        ))}
+      </div>
+      {end && <div className="ml-auto flex shrink-0 items-center gap-1 self-center">{end}</div>}
     </div>
   );
 }

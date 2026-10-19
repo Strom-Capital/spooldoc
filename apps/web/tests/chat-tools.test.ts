@@ -295,6 +295,35 @@ describe('render_preview', () => {
   });
 });
 
+describe('the open template', () => {
+  /** Two templates, Lines open, with the definition written. */
+  async function twoOpen(openTemplate: string) {
+    await call(tools().write_definition, { yaml });
+    await call(tools().add_template, { name: 'Lines' });
+    return buildTools({ sample, store, masked: false, renderer: fakeRenderer, openTemplate });
+  }
+
+  it('is what the tools work on when they name no template', async () => {
+    const open = await twoOpen('lines');
+    const written = await call<WriteTemplateResult>(open.write_template, { html: '<p>{d.pageGroup.invoiceNo}</p>' });
+    expect(written).toMatchObject({ ok: true, template: 'Lines', templateId: 'lines' });
+    expect(store.templates.map(htmlOf)).toEqual([null, '<p>{d.pageGroup.invoiceNo}</p>']);
+    expect(await call<RenderPreviewResult>(open.render_preview, {})).toMatchObject({ ok: true, template: 'Lines' });
+  });
+
+  it('gives way to a template the call names', async () => {
+    const open = await twoOpen('lines');
+    expect(await call<WriteTemplateResult>(open.write_template, { html: '<p>first</p>', template: 'Template 1' })).toMatchObject({ template: 'Template 1' });
+    expect(store.templates.map(htmlOf)).toEqual(['<p>first</p>', null]);
+  });
+
+  it('falls back to the first template when the open one is gone', async () => {
+    const open = await twoOpen('lines');
+    await call(open.remove_template, { template: 'lines' });
+    expect(await call<RenderPreviewResult>(open.render_preview, {})).toMatchObject({ ok: true, template: 'Template 1' });
+  });
+});
+
 describe('add_template and remove_template', () => {
   it('adds a template with the starter and the formats asked for', async () => {
     const result = await call<TemplateChangeResult>(tools().add_template, { name: 'Order lines', formats: ['html', 'pdf'] });

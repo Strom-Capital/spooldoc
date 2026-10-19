@@ -12,7 +12,7 @@ import { useWorkbench, WorkbenchProvider } from '@/components/workbench/workbenc
 import { Spinner } from '@/components/ui/spinner';
 import { templateFileName, withContent, type TemplateContent } from '@/lib/job-spec';
 import { useJob } from './job-provider';
-import { TemplateControls } from './template-controls';
+import { TemplateControls, TemplateTabs } from './template-controls';
 import { PreviewPicker } from './preview-picker';
 
 /** The workbench state for the job's spec, the picked template and the preview spooled file, around the builder. */
@@ -39,6 +39,7 @@ export function JobWorkbench({ children }: { children: React.ReactNode }) {
       yaml={spec.extract.definition}
       content={template}
       templateId={template.id}
+      templateName={template.name}
       setTemplateId={setPicked}
       readOnly={readOnly}
       setYaml={setYaml}
@@ -118,31 +119,20 @@ export function ExtractStep() {
   );
 }
 
-/** Render: the picked template (and the JSON for field names) next to its preview, with downloads of each format. */
+/** Render: the templates as tabs, the open one (or the JSON, for field names) next to its preview, with downloads of each format. */
 export function RenderStep() {
   const { tab, setTab, templateId, setTemplateId } = useWorkbench();
   const { spec } = useJob();
   const template = spec.render.templates.find((t) => t.id === templateId) ?? spec.render.templates[0]!;
-  const current = tab === 'definition' ? 'template' : tab;
+  const json = tab === 'json';
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <TemplateTabs template={template} onPick={setTemplateId} json={json} onJson={(on) => setTab(on ? 'json' : 'template')} />
       <StepHeader end={<TemplateControls template={template} onPick={setTemplateId} />} />
       <div className="min-h-0 flex-1">
         <SplitPanes
-          labels={['Template and JSON', 'Preview']}
-          left={
-            <div className="flex h-full min-h-0 flex-col">
-              <PaneTabs
-                tabs={[
-                  { id: 'template', label: 'Template' },
-                  { id: 'json', label: 'JSON' },
-                ]}
-                value={current}
-                onChange={setTab}
-              />
-              <div className="min-h-0 flex-1">{current === 'json' ? <JsonView /> : <TemplateEditor />}</div>
-            </div>
-          }
+          labels={[json ? 'JSON' : 'Template', 'Preview']}
+          left={json ? <JsonView /> : <TemplateEditor />}
           right={<HtmlPreview fileName={(name) => templateFileName(name, spec.render.templates, template)} />}
         />
       </div>

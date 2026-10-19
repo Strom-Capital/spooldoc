@@ -64,7 +64,7 @@ describe('buildInstructions', () => {
 
   it('holds the current YAML and every template with its kind, formats and content, and says none yet otherwise', () => {
     expect(clear).toContain('## Current definition\n\nNone yet.');
-    expect(clear).toContain('### 1. Template 1 (id `template-1`): HTML, PDF\n\nNo HTML yet: the starter template generated from the definition is used.');
+    expect(clear).toContain('### 1. Template 1 (id `template-1`): HTML, PDF (open)\n\nNo HTML yet: the starter template generated from the definition is used.');
     const withFiles = buildInstructions({
       sample,
       definitionYaml: yaml,
@@ -77,6 +77,16 @@ describe('buildInstructions', () => {
     expect(withFiles).toContain(yaml);
     expect(withFiles).toContain('<title>Invoice {d.pageGroup.invoiceNo}</title>');
     expect(withFiles).toContain('### 2. Lines (id `lines`): HTML, PDF and HTML\n\nNo HTML yet');
+  });
+
+  it('marks the open template and tells the model to work on it', () => {
+    const two = [...templates, { id: 'lines', name: 'Lines', kind: 'html' as const, source: null, formats: ['pdf' as const] }];
+    const text = buildInstructions({ sample, definitionYaml: null, templates: two, openTemplate: 'lines', masked: false });
+    expect(text).toContain('### 2. Lines (id `lines`): HTML, PDF (open)');
+    expect(text).not.toContain('Template 1 (id `template-1`): HTML, PDF (open)');
+    expect(text).toContain('The user has Lines open: work on it unless they name another template');
+    // Without one, or with one that is gone, the first is open.
+    expect(buildInstructions({ sample, definitionYaml: null, templates: two, openTemplate: 'gone', masked: false })).toContain('The user has Template 1 open');
   });
 
   it('names the tools that add and remove templates', () => {

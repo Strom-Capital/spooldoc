@@ -19,8 +19,9 @@ export interface WorkbenchState {
   html: string | null;
   /** The template as render and file requests send it: HTML text, or the Word template's file. */
   templateRequest: { html: string | null } | { docx: { fileId: string | null } };
-  /** The job template whose content this is, and picking another. */
+  /** The job template whose content this is, its name, and picking another. */
   templateId: string;
+  templateName: string;
   setTemplateId(id: string): void;
   readOnly: boolean;
   setYaml(yaml: string): void;
@@ -77,6 +78,7 @@ export function WorkbenchProvider({
   yaml,
   content,
   templateId,
+  templateName,
   setTemplateId,
   readOnly,
   setYaml,
@@ -89,6 +91,7 @@ export function WorkbenchProvider({
   yaml: string;
   content: TemplateContent;
   templateId: string;
+  templateName: string;
   setTemplateId(id: string): void;
   readOnly: boolean;
   setYaml(yaml: string): void;
@@ -150,6 +153,7 @@ export function WorkbenchProvider({
         html,
         templateRequest,
         templateId,
+        templateName,
         setTemplateId,
         readOnly,
         setYaml,

@@ -104,7 +104,7 @@ Carbone Enterprise. See [Community and Enterprise](carbone.md#community-and-ente
 
 Carbone renders some mistakes without an error: it prints nothing for a
 field that is not in the data, and prints quotes it does not accept. So
-Spooldoc checks each template before it renders, and the Template tab
+Spooldoc checks each template before it renders, and its editor
 lists each problem with its line (for a Word template, with its part:
 body, header or footer):
 
@@ -132,7 +132,7 @@ Until you upload one, the preview uses a Word starter template made from
 the definition, with the same layout as the HTML one and "Page 1 of 2" in
 the footer. To make your own:
 
-1. Choose Download starter template in the Template tab.
+1. Choose Download starter template above the template's editor.
 2. Open it in Word. Turn off smart quotes first (see below), then change
    the layout, add a logo and move the tags where you want them.
 3. Choose Upload template and pick the `.docx`.
