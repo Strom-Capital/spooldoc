@@ -1,6 +1,6 @@
 'use client';
 
-import { CloudIcon, DownloadIcon, FolderTreeIcon, MailIcon, ServerIcon, WebhookIcon, type LucideIcon } from 'lucide-react';
+import { DownloadIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { ErrorNote, Page } from '@/components/page';
@@ -9,15 +9,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { api, errorText } from '@/lib/client/api';
 import type { DestinationView } from '@/lib/types';
 
-const LATER: { title: string; text: string; icon: LucideIcon }[] = [
-  { title: 'SFTP', text: 'Upload documents to an SFTP server.', icon: ServerIcon },
-  { title: 'S3', text: 'Store documents in an S3 bucket.', icon: CloudIcon },
-  { title: 'IFS', text: 'Write documents to a folder in the IBM i IFS.', icon: FolderTreeIcon },
-  { title: 'Email', text: 'Send each document as an attachment.', icon: MailIcon },
-  { title: 'Webhook', text: 'Post documents and their JSON to a URL.', icon: WebhookIcon },
-];
-
-/** The destinations jobs can deliver to, and the ones that are coming. */
+/** The destinations jobs can deliver to, with the jobs that use each. */
 export function DestinationsPage() {
   const [destinations, setDestinations] = useState<DestinationView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,18 +58,6 @@ export function DestinationsPage() {
               )}
             </div>
           </section>
-        ))}
-      </div>
-      <h2 className="mt-8 mb-3 font-semibold text-muted-foreground text-sm">Coming later</h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {LATER.map((item) => (
-          <div key={item.title} className="rounded-lg border border-dashed p-4 text-muted-foreground">
-            <div className="flex items-center gap-2 font-medium text-foreground/70">
-              <item.icon className="size-4" aria-hidden />
-              {item.title}
-            </div>
-            <p className="mt-1 text-sm">{item.text}</p>
-          </div>
         ))}
       </div>
     </Page>

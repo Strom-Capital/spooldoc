@@ -17,7 +17,7 @@ describe('app login', () => {
 
     const second = await signUp('other@example.com');
     expect(second.status).toBe(403);
-    expect((await second.json()).message).toMatch(/Sign-up is closed/);
+    expect((await second.json()).message).toBe('Sign-up is closed: this Spooldoc has one account, created when it was set up. Sign in with that account.');
     expect(await userCount()).toBe(1);
   });
 

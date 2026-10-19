@@ -34,7 +34,7 @@ function createAuth() {
       // Anyone may create the first account; after that sign-up is closed.
       before: createAuthMiddleware(async (ctx) => {
         if (ctx.path === '/sign-up/email' && (await userCount()) > 0) {
-          throw new APIError('FORBIDDEN', { message: 'Sign-up is closed. Ask the administrator for an account.' });
+          throw new APIError('FORBIDDEN', { message: 'Sign-up is closed: this Spooldoc has one account, created when it was set up. Sign in with that account.' });
         }
       }),
     },
