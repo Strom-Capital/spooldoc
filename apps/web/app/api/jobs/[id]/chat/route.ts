@@ -1,6 +1,6 @@
 import { convertToModelMessages, generateId, isStepCount, streamText, type UIMessage } from 'ai';
 import { z } from 'zod';
-import { assetNames } from '@/lib/server/assets';
+import { assetNames, imageAssets } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
 import { buildInstructions, buildTools, hasContent, trimHistory, wordTemplates } from '@/lib/server/chat';
 import { getConfig } from '@/lib/server/config';
@@ -12,7 +12,7 @@ import { jobFilesReader } from '@/lib/server/job-files';
 import { draftAndSample } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
 import { log } from '@/lib/server/log';
-import { createModel } from '@/lib/server/models';
+import { createModel, takesFiles } from '@/lib/server/models';
 import { getRendering } from '@/lib/server/rendering';
 import { getTemplateFile } from '@/lib/server/template-files';
 
@@ -50,8 +50,9 @@ export async function GET(request: Request, { params }: Context): Promise<Respon
 /**
  * Stream the model's answer for one job. The model gets the job's preview spooled file
  * (page text masked by default), its metadata and the draft's definition and template,
- * the recent part of the thread, and tools that read the sample, write the draft and
- * read other jobs' definitions and templates. It never gets the login session or the
+ * the recent part of the thread, and tools that read the sample, write the draft
+ * (definitions, HTML templates, Word template files) and read other jobs' definitions
+ * and templates. It never gets the login session or the
  * IBM i connection. When the answer ends, the whole thread is stored with the job.
  */
 export async function POST(request: Request, { params }: Context): Promise<Response> {
@@ -83,9 +84,9 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   if (!chat) {
     return errorResponse(503, 'No model set up. Choose one in Settings.');
   }
-  const { model, reasoning, secrets } = chat;
+  const { model, info, reasoning, secrets } = chat;
   const assets = await assetNames();
-  const templateFile = async (fileId: string) => (await getTemplateFile(fileId))?.content ?? null;
+  const templateFile = getTemplateFile;
   const words = await wordTemplates(draft.render.outputs, draft.extract.definition, getTemplateFile);
   const safe = (error: unknown): string => redact(error, secrets).replace(KEY_PATTERN, '***');
 
@@ -101,16 +102,19 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
         assets,
         carbone: (await getRendering()).check,
         wordTemplates: words,
+        visual: takesFiles(info),
       }),
       messages: await convertToModelMessages(trimHistory(messages), { ignoreIncompleteToolCalls: true }),
       tools: buildTools({
         sample,
-        store: draftStore(job.id),
+        store: draftStore(job.id, auth.user.id),
         masked: config.mask,
         assets,
         renderer: await previewRenderer(),
         jobs: jobFilesReader(job.id),
         templateFile,
+        images: imageAssets,
+        visual: takesFiles(info),
       }),
       stopWhen: isStepCount(MAX_STEPS),
       abortSignal: request.signal,

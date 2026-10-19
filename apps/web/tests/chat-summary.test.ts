@@ -67,6 +67,41 @@ describe('savedFile', () => {
     expect(savedFile(done('render_preview', { ok: true }))).toBeNull();
     expect(savedFile(done('add_output', { ok: true }))).toBe('outputs');
     expect(savedFile(done('remove_output', { ok: false, error: 'x' }))).toBeNull();
+    expect(savedFile(done('write_word_template', { ok: false, output: 'Document', file: { id: 'f', name: 'a.docx', size: 1 }, errors: ['x'] }))).toBe('outputs');
+    expect(savedFile(done('edit_word_template', { ok: false, error: 'x' }))).toBeNull();
+    expect(savedFile(done('read_word_template', { ok: true, parts: [] }))).toBeNull();
+  });
+});
+
+describe('toolSummary for Word templates', () => {
+  const word = (fields: Record<string, unknown>) => ({
+    ok: true,
+    output: 'Document',
+    file: { id: 'f', name: 'invoice.docx', size: 9000 },
+    errors: [],
+    textPreview: '',
+    view: null,
+    pages: null,
+    ...fields,
+  });
+
+  it('says what was saved and what the assistant looked at', () => {
+    expect(toolSummary(done('write_word_template', word({ view: 'pdf', pages: 2 })))).toEqual({ text: 'Designed invoice.docx for Document, looked at 2 pages', tone: 'ok' });
+    expect(toolSummary(done('edit_word_template', word({ view: 'png', pages: 9 })))).toEqual({ text: 'Edited invoice.docx for Document, looked at page 1', tone: 'ok' });
+    expect(toolSummary(done('edit_word_template', word({})))).toEqual({ text: 'Edited invoice.docx for Document', tone: 'ok' });
+    expect(toolSummary(done('write_word_template', word({ ok: false, errors: ['a', 'b'] })))).toEqual({ text: 'Designed invoice.docx for Document: 2 errors', tone: 'warn' });
+    expect(toolSummary(done('write_word_template', { ok: false, error: 'The design has problems, nothing was saved:\nsections: x' }))).toEqual({
+      text: 'Word template not saved: The design has problems, nothing was saved:',
+      tone: 'warn',
+    });
+    expect(toolSummary({ toolName: 'write_word_template', state: 'input-available' })).toEqual({ text: 'Designing a Word template', tone: 'running' });
+  });
+
+  it('says which part was read', () => {
+    expect(toolSummary(done('read_word_template', { ok: true, output: 'Document', file: null, parts: [] })).text).toBe('Read the parts of the starter template');
+    expect(toolSummary(done('read_word_template', { ok: true, output: 'Document', file: 'mine.docx', part: 'word/header1.xml', size: 1, from: 0, xml: '', more: false })).text).toBe(
+      'Read word/header1.xml of mine.docx',
+    );
   });
 });
 

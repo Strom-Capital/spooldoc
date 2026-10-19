@@ -4,7 +4,7 @@ import { getTemplateFileView, TEMPLATE_FILE_GONE } from '@/lib/server/template-f
 
 export const dynamic = 'force-dynamic';
 
-/** An uploaded Word template's name, size and upload time; its bytes are at `/file`. */
+/** A Word template file's name, size, time, who made it and the file it replaced; its bytes are at `/file`. */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const auth = await guard(request);
   if ('response' in auth) {

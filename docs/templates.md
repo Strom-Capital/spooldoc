@@ -165,8 +165,9 @@ changes only the draft. Download template gives the uploaded file back.
 Spooldoc takes `.docx` files up to 10 MB; it refuses a Word 97-2003
 `.doc` and says to save it as a Word Document.
 
-The [AI assistant](ai-assistant.md) checks a Word template's tags and
-suggests tags to type in, but it never changes the file.
+The [AI assistant](ai-assistant.md#word-templates) can design a Word
+template for you, or change yours. Each change is a new file, and the
+Word panel offers your earlier file back.
 
 ### Tags in Word
 
@@ -203,6 +204,26 @@ size, not the size of the text around them in the footer.
 The PDF of a template with cross-references (PAGEREF or REF fields) is
 made with LibreOffice instead, which works them out itself. Tables of
 contents have not been tested: check the PDF before you rely on one.
+
+### Word templates by the assistant
+
+The assistant designs a Word template as data in the shape of the
+[docx](https://docx.js.org) library's options, and Spooldoc builds the
+file with these parts of the library only:
+
+| Part | What it can set |
+|------|-----------------|
+| The document | Named paragraph styles, the default font and spacing, the title and heading styles, different headers and footers on even pages. |
+| A section | Page size and orientation (A4 unless set), margins, a different first page, headers and footers. |
+| `Paragraph` | Text, a style or heading, a bullet, alignment, spacing, indents, borders, shading, tab stops, keep with next, keep lines together, a page break before. |
+| `TextRun` | Font, size, colour, bold, italics, underline, caps, small caps, letter spacing, superscript, subscript, highlight, shading, line breaks. |
+| `Tab`, `PageNumber` | A tab, and the PAGE and NUMPAGES fields, written the way Word writes them so the PDF prints them. |
+| `Table`, `TableRow`, `TableCell` | Widths, column widths, fixed layout, alignment, borders, cell padding, shading, vertical alignment, cells across columns and rows, header rows repeated on each page, rows kept on one page. |
+| `ImageRun` | A PNG or JPEG uploaded under Assets, by name, with a size in pixels. |
+
+Anything else in a design is refused with where it is, and nothing is
+saved. The tags, loops and optional lines are the ones in
+[Tags in Word](#tags-in-word).
 
 ## Logos, images and fonts
 
