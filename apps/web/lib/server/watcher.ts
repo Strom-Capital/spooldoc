@@ -4,11 +4,13 @@ import { parseSpooledFileEntry, type Connection, type OutputQueue, type QueueRef
 import type { SpooledFileId } from '@spooldoc/core';
 import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm';
 import { ibmiFilter, jobSpecSchema, splfKey, watchedStatuses, type JobSpec } from '@/lib/job-spec';
+import type { CarboneCheck } from '@/lib/types';
 import { getDb, getLocks } from './db';
 import { jobs, jobVersions, queueHealth, watchSeen } from './db/schema';
 import { redact } from './http';
 import { connectServer, ibmiFields, type ServerConnection } from './ibmi';
 import { log } from './log';
+import { renderingCheck } from './rendering';
 import { cleanUp, failStaleRuns } from './retention';
 import { runJob } from './runner';
 import { getSettings } from './settings';
@@ -26,6 +28,8 @@ export interface WatchedJob {
 export interface WatcherDeps {
   connect(serverId: string): Promise<ServerConnection>;
   run: typeof runJob;
+  /** The Carbone connection as a run would find it (see `renderingCheck`). */
+  carbone(): Promise<CarboneCheck>;
   now(): number;
   /** Seconds a data queue read waits for an entry. */
   readWaitSeconds: number;
@@ -33,7 +37,7 @@ export interface WatcherDeps {
   retryMs: number;
 }
 
-const defaultDeps: WatcherDeps = { connect: connectServer, run: runJob, now: Date.now, readWaitSeconds: 30, retryMs: 5_000 };
+const defaultDeps: WatcherDeps = { connect: connectServer, run: runJob, carbone: renderingCheck, now: Date.now, readWaitSeconds: 30, retryMs: 5_000 };
 
 /** How often the queue list (which data queue each queue sends to) is read again. */
 const QUEUE_INFO_MS = 60_000;
@@ -85,6 +89,7 @@ type Health = { error: string; since: Date } | null | 'keep';
  * server's data queue is watched in real time by one reader per server, and polled every
  * `safety_check_seconds` as a safety net; any other queue is polled every
  * `poll_seconds`. Every path ends in `dispatch`, which runs each new ready file once.
+ * While Carbone does not work, new files wait, unseen, and run once it works again.
  */
 export class Watcher {
   private readonly deps: WatcherDeps;
@@ -95,6 +100,8 @@ export class Watcher {
   private ticking: Promise<void> | null = null;
   private lastCleanup: number | null = null;
   private lastStaleCheck: number | null = null;
+  /** A file waits for Carbone: each tick checks whether it works again. */
+  private waitingForCarbone = false;
   /** The problem last logged per server or job, so a lasting one is logged once. */
   private readonly reported = new Map<string, string>();
   status = { realtime: 0, polled: 0 };
@@ -135,6 +142,12 @@ export class Watcher {
   private async doTick(): Promise<void> {
     const settings = await getSettings();
     const watched = await watchedJobs();
+    if (this.waitingForCarbone && (await this.deps.carbone()).ok) {
+      // Every queue is looked at on this tick, so the files that waited run now.
+      this.waitingForCarbone = false;
+      this.lastPoll.clear();
+      log.info('Carbone works again: running the spooled files that waited');
+    }
     const byServer = new Map<string, WatchedJob[]>();
     for (const job of watched) {
       const serverId = job.spec.source.serverId!;
@@ -271,12 +284,14 @@ export class Watcher {
    * Run every new ready file of a queue for each job watching it. With `entry`, only that
    * file (it just became ready). A job that has not taken stock since watching started
    * first records the files already there, without running them, unless its trigger
-   * has `backlog`: then those files are run too.
+   * has `backlog`: then those files are run too. While Carbone does not work, the files
+   * are left unseen and the job says they wait.
    */
   async dispatch(opened: ServerConnection, queue: QueueRef, list: WatchedJob[], entry: SpooledFileId | null): Promise<void> {
     for (const job of list) {
       const release = await getLocks().tryLock(`job:${job.jobId}`);
       if (!release) continue;
+      let waiting: string | null = null;
       try {
         const filter = job.spec.source.filter;
         let files: SpooledFileEntry[] = await opened.conn.listSpooledFiles(queue, {
@@ -314,6 +329,12 @@ export class Watcher {
           const done = new Set(seen.map((s) => s.key));
           // Oldest first, as the queue lists newest first.
           for (const file of files.filter((f) => !done.has(splfKey(f))).reverse()) {
+            // Checked before each file: a render that finds Carbone down stops the others.
+            const carbone = await this.deps.carbone();
+            if (!carbone.ok) {
+              waiting = carbone.error ?? 'The last check of Carbone failed.';
+              break;
+            }
             const splf = { name: file.name, number: file.number, jobName: file.jobName, jobUser: file.jobUser, jobNumber: file.jobNumber };
             await this.deps.run(
               { jobId: job.jobId, version: job.version, splf, trigger: 'watch' },
@@ -321,8 +342,15 @@ export class Watcher {
             );
           }
         }
-        await db.update(jobs).set({ lastWatchAt: new Date(this.deps.now()), lastWatchError: null, watchErrorDismissed: null }).where(eq(jobs.id, job.jobId));
-        this.resolve(`job:${job.jobId}`, 'Watching the job works again', { jobId: job.jobId });
+        if (waiting) {
+          this.waitingForCarbone = true;
+          const message = `New spooled files wait until Carbone works again. ${waiting}`;
+          this.report(`job:${job.jobId}`, 'Spooled files wait for Carbone', { jobId: job.jobId, error: message });
+          await db.update(jobs).set({ lastWatchAt: new Date(this.deps.now()), lastWatchError: message }).where(eq(jobs.id, job.jobId));
+        } else {
+          await db.update(jobs).set({ lastWatchAt: new Date(this.deps.now()), lastWatchError: null, watchErrorDismissed: null }).where(eq(jobs.id, job.jobId));
+          this.resolve(`job:${job.jobId}`, 'Watching the job works again', { jobId: job.jobId });
+        }
       } catch (error) {
         const message = redact(error, [opened.password]);
         this.report(`job:${job.jobId}`, 'Watching a job failed', {

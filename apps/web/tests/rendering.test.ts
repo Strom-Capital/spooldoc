@@ -9,7 +9,7 @@ import { appRequest } from './helpers/mocks';
 
 const route = await import('@/app/api/settings/route');
 const checkRoute = await import('@/app/api/settings/rendering/route');
-const { carboneServer, checkCarbone, renderingReady } = await import('@/lib/server/rendering');
+const { carboneServer, checkCarbone, FAILED_RECHECK_MS, renderingCheck, renderingReady } = await import('@/lib/server/rendering');
 
 let auth: Record<string, string>;
 const fetchMock = vi.fn<typeof fetch>();
@@ -107,6 +107,26 @@ describe('rendering settings', () => {
     const response = await route.PUT(appRequest('/api/settings', { method: 'PUT', body: { rendering }, headers: auth }));
     expect(response.status).toBe(400);
     expect(((await response.json()) as { error: string }).error).toContain(message);
+  });
+
+  it('checks again for a run when the last check failed more than a minute ago, not sooner', async () => {
+    fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+    const failed = (await put({ rendering: { mode: 'onprem', url: 'http://carbone:4000' } })).rendering.check!;
+    expect(failed).toMatchObject({ ok: false, error: expect.stringMatching(/Carbone/) });
+    fetchMock.mockClear();
+    carbone(COMMUNITY);
+    expect(await renderingCheck()).toEqual(failed);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const old = new Date(Date.now() - FAILED_RECHECK_MS - 1_000).toISOString();
+    await db().update(settings).set({ carboneCheck: { ...failed, at: old } });
+    expect(await renderingCheck()).toMatchObject({ ok: true, edition: 'community' });
+    expect(await renderingReady()).toBe(true);
+
+    // A check that works is not repeated.
+    const calls = fetchMock.mock.calls.length;
+    expect(await renderingCheck()).toMatchObject({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(calls);
   });
 
   it('needs a session to check again', async () => {

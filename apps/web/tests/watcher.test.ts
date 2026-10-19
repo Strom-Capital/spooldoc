@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptySpec, splfKey } from '@/lib/job-spec';
 import { jobs, jobVersions, queueHealth, runs, servers, settings, watchSeen } from '@/lib/server/db/schema';
+import type { CarboneCheck } from '@/lib/types';
 import { fakeRenderer } from './helpers/carbone';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, loadSample } from './helpers/fake-connection';
@@ -24,6 +25,14 @@ const key = splfKey(sample.splf);
 let serverId: string;
 let clock: number;
 let watcher: InstanceType<typeof Watcher>;
+/** What the watcher finds when it checks Carbone. */
+let carbone: CarboneCheck;
+const CARBONE_OK: CarboneCheck = { ok: true, at: new Date(0).toISOString(), version: '5.15.5', edition: 'community' };
+const CARBONE_DOWN: CarboneCheck = {
+  ok: false,
+  at: new Date(0).toISOString(),
+  error: 'Could not reach Carbone at http://carbone:4000. Start the Carbone service, or fix the URL under Rendering.',
+};
 
 const fake = (): FakeConnection => connections.get('ibmi.example.com|DEMOUSER')!;
 
@@ -51,7 +60,8 @@ beforeEach(async () => {
   connections.clear();
   serverId = await insertServer();
   clock = 1_000_000;
-  watcher = new Watcher({ now: () => clock, readWaitSeconds: 0 });
+  carbone = CARBONE_OK;
+  watcher = new Watcher({ now: () => clock, carbone: async () => carbone, readWaitSeconds: 0 });
 });
 
 afterEach(async () => {
@@ -145,6 +155,30 @@ describe('watcher', () => {
     clock += 31_000;
     await watcher.tick();
     expect(await runRows()).toHaveLength(1);
+  });
+
+  it('while Carbone does not work, leaves new files unseen and says why, then runs them once it works', async () => {
+    const log = captureLog();
+    const jobId = await watchingJob();
+    await watcher.tick(); // takes stock: nothing ready yet
+    carbone = CARBONE_DOWN;
+    fake().status.set(key, 'READY');
+    clock += 31_000;
+    await watcher.tick();
+    expect(await runRows()).toEqual([]);
+    expect(await db().select().from(watchSeen)).toEqual([]);
+    const [job] = await db().select().from(jobs).where(eq(jobs.id, jobId));
+    expect(job!.lastWatchError).toBe(`New spooled files wait until Carbone works again. ${CARBONE_DOWN.error}`);
+    expect(log).toContainEqual(expect.objectContaining({ level: 'warn', msg: 'Spooled files wait for Carbone', jobId }));
+
+    // Back before the next poll is due: the queue is looked at at once.
+    carbone = CARBONE_OK;
+    clock += 1_000;
+    await watcher.tick();
+    expect(await runRows()).toEqual([expect.objectContaining({ status: 'success', trigger: 'watch' })]);
+    const [after] = await db().select().from(jobs).where(eq(jobs.id, jobId));
+    expect(after!.lastWatchError).toBeNull();
+    expect(log).toContainEqual(expect.objectContaining({ level: 'info', msg: 'Carbone works again: running the spooled files that waited' }));
   });
 
   it('asks the IBM i only for ready files with the job filters', async () => {
@@ -262,7 +296,7 @@ describe('watcher', () => {
   });
 
   it('records why a real-time queue is polled and since when, and clears it once reading works again', async () => {
-    watcher = new Watcher({ now: () => clock, readWaitSeconds: 0, retryMs: 20 });
+    watcher = new Watcher({ now: () => clock, carbone: async () => carbone, readWaitSeconds: 0, retryMs: 20 });
     const log = captureLog();
     await realtimeJob();
     const failedAt = clock;
@@ -296,6 +330,7 @@ describe('watcher', () => {
     let down = true;
     watcher = new Watcher({
       now: () => clock,
+      carbone: async () => carbone,
       readWaitSeconds: 0,
       connect: async (id) => {
         if (down) throw new Error('Connection refused');

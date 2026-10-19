@@ -95,6 +95,19 @@ and you have a licence, check Carbone's log with
 `docker compose logs carbone`. Don't paste that log into an issue: with a
 licence, it prints the licensee's name and email.
 
+## When Carbone stops working
+
+A watched queue does not lose files while Carbone is down or refuses
+Spooldoc. The watcher starts no runs, and new spooled files wait on the
+queue. Each watching job says "New spooled files wait until Carbone works
+again", with the reason, in its trigger step and under Needs attention on
+Home. While files wait, Spooldoc checks Carbone again at most once a
+minute. Once it works, the files run, oldest first. See
+[Watching a queue](jobs.md#watching-a-queue).
+
+Only the render that first finds Carbone down fails. Retry it from the
+[Job log](job-log.md#retry).
+
 ## Errors
 
 | Message | What to do |

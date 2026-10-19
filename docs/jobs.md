@@ -104,6 +104,16 @@ step and Needs attention on the Home page say why and since when, and the
 [server log](configuration.md#server-log) has each attempt. Once reading
 works again, the note goes away.
 
+Every run renders with [Carbone](carbone.md). While Carbone does not work,
+the watcher starts no runs: new spooled files wait on the queue, and the
+trigger step, the Jobs list and Needs attention say "New spooled files
+wait until Carbone works again", with the reason. Before each file the
+watcher looks at the last check of Carbone, and checks again when the last
+check failed more than a minute ago. Once Carbone works, every waiting file
+runs, oldest first, and the note goes away. A render that finds Carbone
+down fails that one run, which you can retry from the
+[Job log](job-log.md#retry); the files after it wait.
+
 Two more switches:
 
 - **Backlog.** When watching starts, Spooldoc takes stock of the queue.
