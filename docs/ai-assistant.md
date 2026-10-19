@@ -149,7 +149,8 @@ and shown again when you come back to the job builder; it is deleted with
 the job. New chat in the panel header forgets it and starts another, while
 the definition and template it wrote stay in the draft. Only the recent
 part of a long conversation goes to the model with each message (the last
-20 messages, within a character budget, older tool results dropped first);
+20 messages, within a character budget, older tool results and the
+model's thinking around them dropped first);
 the model's instructions carry the current definition, outputs,
 templates and sample pages, so nothing it needs is lost. The stored messages hold what
 the model saw, except the rendered Word documents: with masking on, the
