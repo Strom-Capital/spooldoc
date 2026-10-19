@@ -65,5 +65,8 @@ export async function openTestDb(): Promise<TestDb> {
 export async function resetTables(db: Db): Promise<void> {
   await db.execute(sql`truncate table "user", servers, jobs, samples, runs, run_outputs, watch_seen, queue_prefs, ai_providers, assets cascade`);
   await db.execute(sql`delete from destinations where builtin = false`);
-  await db.execute(sql`update settings set poll_seconds = 30, safety_check_seconds = 300, retention_days = 90, ai_provider = null`);
+  await db.execute(sql`
+    update settings set poll_seconds = 30, safety_check_seconds = 300, retention_days = 90, ai_provider = null,
+      carbone_mode = 'onprem', carbone_url = null, carbone_api_key_enc = null, carbone_key_enc = null, carbone_public_key = null, carbone_check = null
+  `);
 }
