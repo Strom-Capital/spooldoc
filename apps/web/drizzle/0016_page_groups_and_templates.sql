@@ -9,6 +9,15 @@ ALTER TABLE "run_files" RENAME COLUMN "output" TO "template";--> statement-break
 UPDATE "run_files" SET "template" = 'Template 1' WHERE "template" IS NULL;--> statement-breakpoint
 ALTER TABLE "run_files" ALTER COLUMN "template" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "runs" RENAME COLUMN "documents" TO "page_groups";--> statement-breakpoint
+-- The extract step's note in the job log: "6 documents" is "6 page groups".
+UPDATE "runs" SET "steps" = (
+  SELECT jsonb_agg(CASE
+    WHEN s->>'step' = 'extract' AND s->>'note' ~ '^\d+ documents?$'
+      THEN jsonb_set(s, '{note}', to_jsonb(regexp_replace(s->>'note', 'document(s?)$', 'page group\1')))
+    ELSE s
+  END ORDER BY e.ord)
+  FROM jsonb_array_elements("steps") WITH ORDINALITY AS e(s, ord)
+) WHERE jsonb_typeof("steps") = 'array' AND jsonb_array_length("steps") > 0;--> statement-breakpoint
 
 -- Tags in templates and file name patterns: {d.doc.x} is {d.pageGroup.x}, d.documents is d.pageGroups, d.sample.splf is d.splf.
 CREATE FUNCTION pg_temp.spooldoc_tags(text text) RETURNS text AS $$

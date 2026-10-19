@@ -39,7 +39,7 @@ beforeAll(async () => {
   const [job] = (await client.query<{ id: string }>(`insert into jobs (name, draft) values ('Pick lists', $1) returning id`, [oldSpec])).rows;
   await client.query(`insert into job_versions (job_id, number, spec) values ($1, 1, $2)`, [job!.id, oldSpec]);
   await client.query(`insert into job_chats (job_id, messages) values ($1, '[]')`, [job!.id]);
-  const [run] = (await client.query<{ id: string }>(`insert into runs (job_id, version, trigger, splf, documents) values ($1, 1, 'manual', '{}', 5) returning id`, [job!.id])).rows;
+  const [run] = (await client.query<{ id: string }>(`insert into runs (job_id, version, trigger, splf, documents, steps) values ($1, 1, 'manual', '{}', 5, $2) returning id`, [job!.id, JSON.stringify([{ step: 'capture', ok: true, ms: 1, note: '5 pages' }, { step: 'extract', ok: true, ms: 1, note: '5 documents' }, { step: 'render', ok: true, ms: 1, note: '5 PDFs' }])])).rows;
   await client.query(`insert into run_outputs (run_id, document_index, output, output_index, name, content_type, size, content) values ($1, 0, null, 0, 'a.pdf', 'application/pdf', 1, '\\x00')`, [run!.id]);
 
   await client.exec(readFileSync(join(migrations, `${MIGRATION}.sql`), 'utf8').replaceAll('--> statement-breakpoint', ''));
@@ -69,6 +69,8 @@ describe('migration to page groups and templates', () => {
   it('renames the run files and counts, clears the chats and keeps versions unchangeable', async () => {
     expect((await client.query(`select template, template_index, page_group_index from run_files`)).rows).toEqual([{ template: 'Template 1', template_index: 0, page_group_index: 0 }]);
     expect((await client.query(`select page_groups from runs`)).rows).toEqual([{ page_groups: 5 }]);
+    const [run] = (await client.query<{ steps: { step: string; note: string }[] }>(`select steps from runs`)).rows;
+    expect(run!.steps.map((s) => s.note)).toEqual(['5 pages', '5 page groups', '5 PDFs']);
     expect((await client.query(`select * from job_chats`)).rows).toEqual([]);
     await expect(client.query(`update job_versions set note = 'x'`)).rejects.toThrow(/cannot be changed/);
   });
