@@ -25,6 +25,18 @@ export function fileNameFor(def: Definition | null, doc: Record<string, unknown>
 }
 
 /**
+ * A Nunjucks error on one line, as run errors are: "(unknown path)\n  Error: There is no asset ..."
+ * becomes "There is no asset ...".
+ */
+function oneLine(error: string): string {
+  return error
+    .split('\n')
+    .map((line) => line.trim().replace(/^Error: /, ''))
+    .filter((line) => line && line !== '(unknown path)')
+    .join(' ');
+}
+
+/**
  * Render every document of a sample to HTML, with `asset('name')` resolved by `asset`.
  *
  * @throws Error with the template errors when a document does not render
@@ -39,7 +51,7 @@ export function renderDocuments(
   return documents.map((doc, index) => {
     const rendered = renderTemplate(html, { doc, documents, sample: { id: sample.id, splf: sample.splf } }, { asset });
     if (rendered.errors.length > 0) {
-      throw new Error(`Document ${index + 1}: ${rendered.errors.join('; ')}`);
+      throw new Error(`Document ${index + 1}: ${rendered.errors.map(oneLine).join('; ')}`);
     }
     return { index, name: fileNameFor(def, doc, index, sample.splf.name.toLowerCase()), html: rendered.html };
   });

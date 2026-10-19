@@ -18,6 +18,7 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
 import { cn } from '@/lib/utils';
 import { useJob, type Step } from './job-provider';
+import { formatList } from './output-controls';
 
 /** How a step looks in the strip. */
 export type StepStatus = 'unset' | 'ok' | 'warn' | 'error';
@@ -133,13 +134,15 @@ function FitOnResize() {
 /** Title, detail line and status of each step, from the spec and the latest render. */
 function useSteps(): StepInfo[] {
   const { spec, job, servers, destinations } = useJob();
-  const { render, sampleId } = useWorkbench();
+  const { render, sampleId, outputId } = useWorkbench();
   const server = servers.find((s) => s.id === spec.source.serverId);
   const hasSource = !!spec.source.serverId && !!spec.source.library && !!spec.source.queue;
   const extract = render?.extract;
   const missing = extract ? new Set(extract.hits.filter((h) => h.status === 'missing').map((h) => h.name)).size : 0;
   const destination = destinations.find((d) => d.id === spec.destination.destinationId);
   const finish = spec.finish;
+  const outputs = spec.render.outputs;
+  const picked = outputs.find((o) => o.id === outputId) ?? outputs[0];
 
   const extractStatus: StepStatus = !spec.extract.definition.trim()
     ? 'unset'
@@ -192,8 +195,14 @@ function useSteps(): StepInfo[] {
       step: 'render',
       title: 'Render',
       icon: FileTextIcon,
-      detail: spec.render.template === null ? 'Starter template' : 'Custom template',
-      sub: render?.template?.error ? 'Template has errors' : spec.render.formats.map((f) => f.toUpperCase()).join(' and '),
+      detail: outputs.length > 1 ? `${outputs.length} outputs` : outputs[0]!.template.source === null ? 'Starter template' : 'Custom template',
+      sub: render?.template?.error
+        ? outputs.length > 1
+          ? `The ${picked?.label} template has errors`
+          : 'Template has errors'
+        : outputs.length > 1
+          ? outputs.map((o) => `${o.label}: ${formatList(o.formats)}`).join(', ')
+          : formatList(outputs[0]!.formats),
       status: render?.template?.error ? 'error' : render?.html ? 'ok' : 'unset',
     },
     {

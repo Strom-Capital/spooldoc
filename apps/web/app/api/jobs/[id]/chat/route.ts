@@ -91,7 +91,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
       instructions: buildInstructions({
         sample,
         definitionYaml: draft.extract.definition.trim() ? draft.extract.definition : null,
-        templateHtml: draft.render.template,
+        outputs: draft.render.outputs,
         masked: config.mask,
         assets,
       }),

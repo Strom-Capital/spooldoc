@@ -8,18 +8,18 @@ import { UUID } from './servers';
 
 type RunRow = typeof runs.$inferSelect;
 
-/** Runs as the API returns them, with job names and output files (without their bytes). */
+/** Runs as the API returns them, with job names and delivered files (without their bytes). */
 export async function runViews(rows: RunRow[]): Promise<RunView[]> {
   if (rows.length === 0) {
     return [];
   }
   const db = getDb();
   const ids = rows.map((row) => row.id);
-  const outputs = await db
-    .select({ id: runOutputs.id, runId: runOutputs.runId, name: runOutputs.name, size: runOutputs.size, contentType: runOutputs.contentType, documentIndex: runOutputs.documentIndex })
+  const files = await db
+    .select({ id: runOutputs.id, runId: runOutputs.runId, name: runOutputs.name, size: runOutputs.size, contentType: runOutputs.contentType, output: runOutputs.output })
     .from(runOutputs)
     .where(inArray(runOutputs.runId, ids))
-    .orderBy(runOutputs.documentIndex);
+    .orderBy(runOutputs.outputIndex, runOutputs.documentIndex);
   const jobRows = await db
     .select({ id: jobs.id, name: jobs.name })
     .from(jobs)
@@ -37,7 +37,7 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
     documents: row.documents,
     error: row.error,
     steps: row.steps,
-    outputs: outputs.filter((o) => o.runId === row.id).map(({ id, name, size, contentType }) => ({ id, name, size, contentType })),
+    files: files.filter((f) => f.runId === row.id).map(({ id, name, size, contentType, output }) => ({ id, name, size, contentType, output })),
     startedAt: row.startedAt.toISOString(),
     finishedAt: row.finishedAt?.toISOString() ?? null,
   }));

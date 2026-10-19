@@ -4,20 +4,22 @@ description: "The HTML templates that render each document, the filters and asse
 ---
 
 A template is an ordinary HTML page with [Nunjucks](https://mozilla.github.io/nunjucks/templating.html)
-tags (Jinja syntax). Each document the definition extracts is rendered
-through it once, to an HTML file, a PDF, or both, as the job's render step
-says. Until you write one, the starter template renders the fields in a
-header block and a table for each table, record or group.
+tags (Jinja syntax). Each output of a job has its own template. Each
+document the definition extracts is rendered through it once, to an HTML
+file, a PDF, or both, as the output's formats say. Until you write one,
+the starter template renders the fields in a header block and a table for
+each table, record or group. See [Outputs](jobs.md#outputs).
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/template-preview-dark.png">
-    <img src="assets/template-preview-light.png" alt="The render step: the HTML template in an editor on the left and the rendered invoice preview on the right, with PDF and HTML output switches" width="900">
+    <img src="assets/template-preview-light.png" alt="The render step of a job with two outputs: the Document output picked, with its PDF and HTML switches and Add output, its HTML template in an editor on the left and the rendered invoice preview on the right" width="900">
   </picture>
 </p>
 "Start from job" in the template editor's bar copies another job's
-template, and on request its definition, into the draft; the
-[AI assistant](ai-assistant.md) does the same when asked.
+template into the output shown, and on request its definition into the
+draft. When the other job has more than one output, pick the one to copy.
+The [AI assistant](ai-assistant.md) does the same when asked.
 
 ## The data
 
@@ -90,8 +92,12 @@ PDF is unavailable, and HTML output still works.
 
 Each document becomes a file named after the definition's `output.name`,
 such as `invoice-260102.pdf` and `invoice-260102.html`, or after the
-spooled file and a number when there is no name. See
-[Destinations](destinations.md).
+spooled file and a number when there is no name. The files of every
+output but the first add the output's name: `invoice-260102-lines.pdf`
+for an output named Lines. See [Destinations](destinations.md).
+
+A template that fails fails the run, and the error names the output and
+the document: `The "Lines" output's template has an error: Document 1: ...`.
 
 ## Safety
 

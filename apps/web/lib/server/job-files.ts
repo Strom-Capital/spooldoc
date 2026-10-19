@@ -2,13 +2,13 @@ import 'server-only';
 
 import { and, eq, ne } from 'drizzle-orm';
 import { jobSpecSchema } from '@/lib/job-spec';
-import type { JobFiles, JobFilesReader } from './chat';
+import { outputFiles, type JobFiles, type JobFilesReader } from './chat';
 import { getDb } from './db';
 import { jobs, jobVersions } from './db/schema';
 import { getJobRow, type JobRow } from './jobs';
 import { UUID } from './servers';
 
-/** The job's files from its active version when it has one, else from its draft. */
+/** The job's definition and outputs from its active version when it has one, else from its draft. */
 async function filesOf(row: JobRow): Promise<JobFiles> {
   let spec = jobSpecSchema.parse(row.draft);
   if (row.activeVersion !== null) {
@@ -20,11 +20,11 @@ async function filesOf(row: JobRow): Promise<JobFiles> {
       spec = jobSpecSchema.parse(version.spec);
     }
   }
-  return { id: row.id, name: row.name, definitionYaml: spec.extract.definition, templateHtml: spec.render.template };
+  return { id: row.id, name: row.name, definitionYaml: spec.extract.definition, outputs: spec.render.outputs.map(outputFiles) };
 }
 
 /**
- * The definition and template of one job, from its active version or else its draft.
+ * The definition and outputs of one job, from its active version or else its draft.
  * Null when there is no such job.
  */
 export async function readJobFiles(id: string): Promise<JobFiles | null> {
@@ -33,7 +33,7 @@ export async function readJobFiles(id: string): Promise<JobFiles | null> {
 }
 
 /**
- * The chat tools' view of the other jobs: their definitions and templates and nothing
+ * The chat tools' view of the other jobs: their definitions and outputs and nothing
  * else. Only jobs other than `jobId` are listed, and only files are read.
  */
 export function jobFilesReader(jobId: string): JobFilesReader {

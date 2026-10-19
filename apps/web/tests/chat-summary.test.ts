@@ -9,21 +9,41 @@ describe('toolSummary', () => {
     expect(
       toolSummary(done('write_definition', { ok: true, type: 'invoice', documents: 6, missing: ['a', 'b'], fields: [], warnings: [], preview: '' })),
     ).toEqual({ text: 'Wrote definition invoice: 6 documents, 2 missing', tone: 'warn' });
-    expect(toolSummary(done('write_template', { ok: true, path: 'templates/invoice.html', errors: [], warnings: [], textPreview: '' })).text).toBe(
-      'Wrote template: no errors',
+    expect(toolSummary(done('write_template', { ok: true, path: 'template', output: 'Lines', errors: [], warnings: [], textPreview: '' })).text).toBe(
+      'Wrote template of Lines: no errors',
     );
     expect(
       toolSummary(
-        done('render_preview', { ok: true, document: 0, documents: 6, template: 'saved', hits: { found: 37, missing: 0, empty: 2 }, missing: [], templateErrors: [], textPreview: '' }),
+        done('render_preview', {
+          ok: true,
+          output: 'Document',
+          document: 0,
+          documents: 6,
+          template: 'saved',
+          hits: { found: 37, missing: 0, empty: 2 },
+          missing: [],
+          templateErrors: [],
+          textPreview: '',
+        }),
       ),
-    ).toEqual({ text: 'Rendered: 37 found, 0 missing', tone: 'ok' });
-    expect(toolSummary(done('list_jobs', { ok: true, jobs: [{ id: 'a', name: 'A', type: 'invoice', hasTemplate: true }] }))).toEqual({
+    ).toEqual({ text: 'Rendered Document: 37 found, 0 missing', tone: 'ok' });
+    const lines = { id: 'lines', label: 'Lines', formats: ['pdf', 'html'], template: 'starter' };
+    expect(toolSummary(done('add_output', { ok: true, output: lines, outputs: [lines] }))).toEqual({ text: 'Added output Lines: PDF and HTML', tone: 'ok' });
+    expect(toolSummary(done('remove_output', { ok: true, output: lines, outputs: [] }))).toEqual({ text: 'Removed output Lines', tone: 'ok' });
+    expect(toolSummary(done('remove_output', { ok: false, error: 'A job needs at least one output, so the last one cannot be removed.' })).text).toBe(
+      'Output not removed: A job needs at least one output, so the last one cannot be removed.',
+    );
+    expect(toolSummary(done('list_jobs', { ok: true, jobs: [{ id: 'a', name: 'A', type: 'invoice', outputs: ['Document'], hasTemplate: true }] }))).toEqual({
       text: 'Listed 1 other job',
       tone: 'ok',
     });
-    expect(toolSummary(done('read_job_files', { ok: true, id: 'a', name: 'Invoices', definitionYaml: 'type: invoice', templateHtml: null })).text).toBe(
+    const output = (templateHtml: string | null) => ({ id: 'main', label: 'Document', formats: ['pdf'], templateHtml });
+    expect(toolSummary(done('read_job_files', { ok: true, id: 'a', name: 'Invoices', definitionYaml: 'type: invoice', outputs: [output(null)] })).text).toBe(
       'Read job Invoices: definition',
     );
+    expect(
+      toolSummary(done('read_job_files', { ok: true, id: 'a', name: 'Invoices', definitionYaml: 'type: invoice', outputs: [output('<p/>'), output('<p/>')] })).text,
+    ).toBe('Read job Invoices: definition and 2 templates');
     expect(toolSummary(done('read_job_files', { ok: false, error: 'There is no job x. Find the id with list_jobs.' }))).toEqual({
       text: 'There is no job x. Find the id with list_jobs.',
       tone: 'warn',
@@ -45,6 +65,8 @@ describe('savedFile', () => {
     expect(savedFile(done('write_definition', { ok: false, error: 'x' }))).toBeNull();
     expect(savedFile(done('write_template', { ok: false, path: 'templates/a.html', errors: ['x'] }))).toBe('html');
     expect(savedFile(done('render_preview', { ok: true }))).toBeNull();
+    expect(savedFile(done('add_output', { ok: true }))).toBe('outputs');
+    expect(savedFile(done('remove_output', { ok: false, error: 'x' }))).toBeNull();
   });
 });
 

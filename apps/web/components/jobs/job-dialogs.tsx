@@ -247,9 +247,9 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
                         : run.error ?? `${run.documents} ${run.documents === 1 ? 'document' : 'documents'} delivered`}
                     </div>
                   </div>
-                  {run.outputs.slice(0, 3).map((output) => (
-                    <a key={output.id} href={`/api/runs/${run.id}/files/${output.id}`} className="shrink-0 text-primary text-xs hover:underline">
-                      {output.name}
+                  {run.files.slice(0, 3).map((file) => (
+                    <a key={file.id} href={`/api/runs/${run.id}/files/${file.id}`} className="shrink-0 text-primary text-xs hover:underline">
+                      {file.name}
                     </a>
                   ))}
                 </li>

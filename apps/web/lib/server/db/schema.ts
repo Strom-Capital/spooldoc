@@ -300,6 +300,10 @@ export const runOutputs = pgTable(
       .notNull()
       .references(() => runs.id, { onDelete: 'cascade' }),
     documentIndex: integer('document_index').notNull(),
+    /** The label of the job output the file was rendered for; null for runs from before outputs. */
+    output: text('output'),
+    /** The output's place in the job version's outputs, to list files in that order. */
+    outputIndex: integer('output_index').notNull().default(0),
     name: text('name').notNull(),
     contentType: text('content_type').notNull(),
     size: integer('size').notNull(),

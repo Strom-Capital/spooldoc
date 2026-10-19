@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { findOutput, outputFileName } from '@/lib/job-spec';
 import { assetResolver } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
 import { fileNameFor, htmlToPdf, tryDefinition } from '@/lib/server/documents';
@@ -16,6 +17,8 @@ const pdfSchema = z.object({
   yaml: z.string().max(MAX_TEXT).optional(),
   html: z.string().max(MAX_TEXT).nullable().optional(),
   document: z.number().int().nonnegative().default(0),
+  /** The output whose template is the draft's; missing means the first. */
+  outputId: z.string().max(40).optional(),
 });
 
 /**
@@ -44,7 +47,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!yaml.trim()) {
     return errorResponse(400, 'Write a definition first.');
   }
-  const html = body.data.html === undefined ? draft.render.template : body.data.html;
+  const output = findOutput(draft.render.outputs, body.data.outputId);
+  if (!output) {
+    return errorResponse(404, `The job has no output ${body.data.outputId}.`);
+  }
+  const html = body.data.html === undefined ? output.template.source : body.data.html;
   const { document } = body.data;
   const result = renderSample(sample, { yaml, html, document, asset: await assetResolver() });
   if (result.definition?.error || result.template?.error || !result.extract) {
@@ -62,7 +69,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!result.html) {
     return json({ error: 'Nothing to render.', templateErrors: result.errors }, { status: 422 });
   }
-  const filename = fileNameFor(tryDefinition(yaml), documents[document] ?? {}, document, sample.splf.name.toLowerCase());
+  const filename = outputFileName(
+    fileNameFor(tryDefinition(yaml), documents[document] ?? {}, document, sample.splf.name.toLowerCase()),
+    draft.render.outputs,
+    output,
+  );
   try {
     const pdf = await htmlToPdf(result.html, sample.attributes.pageWidth);
     return new Response(Buffer.from(pdf), {

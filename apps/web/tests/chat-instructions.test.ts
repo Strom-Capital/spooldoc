@@ -1,14 +1,16 @@
 import { definitionJsonSchema } from '@spooldoc/core';
 import { describe, expect, it } from 'vitest';
+import { jobSpecSchema } from '@/lib/job-spec';
 import { buildInstructions, DATA_NOT_INSTRUCTIONS, OTHER_JOBS_RULE } from '@/lib/server/chat';
 import { fixtureText, loadSample } from './helpers/fake-connection';
 
 const sample = loadSample('invoice');
 const yaml = fixtureText('invoice', 'definition.yaml');
 const html = fixtureText('invoice', 'template.html');
+const outputs = jobSpecSchema.parse({}).render.outputs;
 
 describe('buildInstructions', () => {
-  const clear = buildInstructions({ sample, definitionYaml: null, templateHtml: null, masked: false });
+  const clear = buildInstructions({ sample, definitionYaml: null, outputs, masked: false });
 
   it('holds the definition JSON Schema', () => {
     expect(clear).toContain(JSON.stringify(definitionJsonSchema));
@@ -25,7 +27,7 @@ describe('buildInstructions', () => {
   });
 
   it('cuts the preview at the line budget', () => {
-    const short = buildInstructions({ sample, definitionYaml: null, templateHtml: null, masked: false, config: { previewLines: 20 } });
+    const short = buildInstructions({ sample, definitionYaml: null, outputs, masked: false, config: { previewLines: 20 } });
     expect(short).not.toContain('--- Page 2 of');
     expect(short).toContain('(page 1 cut after line 20; read it all with read_sample_page)');
   });
@@ -35,7 +37,7 @@ describe('buildInstructions', () => {
     const withAssets = buildInstructions({
       sample,
       definitionYaml: null,
-      templateHtml: null,
+      outputs,
       masked: false,
       assets: [
         { name: 'logo', kind: 'image' },
@@ -53,19 +55,34 @@ describe('buildInstructions', () => {
   });
 
   it('masks values when masking is on', () => {
-    const masked = buildInstructions({ sample, definitionYaml: null, templateHtml: null, masked: true });
+    const masked = buildInstructions({ sample, definitionYaml: null, outputs, masked: true });
     expect(masked).not.toContain('260101');
     expect(masked).toContain('999999');
     expect(masked).toContain('Invoice no');
     expect(masked).toContain('Masking is on');
   });
 
-  it('holds the current YAML and template when there are some, and says none yet otherwise', () => {
+  it('holds the current YAML and every output with its formats and template, and says none yet otherwise', () => {
     expect(clear).toContain('## Current definition\n\nNone yet.');
-    expect(clear).toContain('## Current template\n\nNone yet.');
-    const withFiles = buildInstructions({ sample, definitionYaml: yaml, templateHtml: html, masked: true });
+    expect(clear).toContain('### 1. Document (id `main`): PDF\n\nNo template yet: the starter template generated from the definition is used.');
+    const withFiles = buildInstructions({
+      sample,
+      definitionYaml: yaml,
+      outputs: [
+        { ...outputs[0]!, template: { kind: 'html', source: html } },
+        { id: 'lines', label: 'Lines', template: { kind: 'html', source: null }, formats: ['pdf', 'html'] },
+      ],
+      masked: true,
+    });
     expect(withFiles).toContain(yaml);
     expect(withFiles).toContain('<title>Invoice {{ doc.invoiceNo }}</title>');
+    expect(withFiles).toContain('### 2. Lines (id `lines`): PDF and HTML\n\nNo template yet');
+  });
+
+  it('names the tools that add and remove outputs', () => {
+    const tools = clear.slice(clear.indexOf('## Tools'), clear.indexOf('## This sample'));
+    expect(tools).toContain('- add_output: ');
+    expect(tools).toContain('- remove_output: ');
   });
 
   it('names the tools that read other jobs and says when to use them', () => {

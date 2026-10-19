@@ -44,13 +44,14 @@ was cut off". Retry it to run the file again.
 |------|--------------|
 | Capture | Reads the spooled file and stores it as a sample. |
 | Extract | Matches the file against the definition and reads the documents. |
-| Render | Renders each document to HTML and, when the job asks for it, PDF. |
+| Render | Renders each document with the template of each output, to the output's formats: HTML, PDF or both. |
 | Deliver | Hands every file to the destination. |
 | Finish | Holds, moves, deletes or leaves the spooled file. |
 
 Each step is recorded with its outcome, so a run shows where it stopped.
 The captured sample and the delivered files stay with the run while it is
-kept.
+kept. When the job has more than one output, the run's files are grouped
+by output.
 
 ## Retry
 

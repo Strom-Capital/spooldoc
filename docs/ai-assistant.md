@@ -35,20 +35,22 @@ request can read one back.
 
 ## What it can do
 
-The assistant works through six tools: four on the job's draft and its
+The assistant works through eight tools: six on the job's draft and its
 preview sample, two that read other jobs' files:
 
 | Tool | What it does |
 |------|--------------|
 | `read_sample_page` | Reads one page of the sample as numbered lines. The first three pages are in its instructions already. |
 | `write_definition` | Saves the definition YAML to the draft, runs the extraction on the sample and returns the report: documents found, each field with its status, missing fields, warnings and the first document as JSON. |
-| `write_template` | Saves the HTML template to the draft, renders the first document and returns any errors and its visible text. |
-| `render_preview` | Renders a document again after a change to the definition. |
-| `list_jobs` | Lists the other jobs with their definition type and whether they have a template. |
-| `read_job_files` | Reads another job's definition YAML and template HTML, from its active version or else its draft, so a new job can start from them. |
+| `write_template` | Saves the HTML template of one [output](jobs.md#outputs), the first unless it names another, renders the first document and returns any errors and its visible text. |
+| `render_preview` | Renders a document with one output's template again after a change to the definition. |
+| `add_output` | Adds an output with a name and formats. It uses the starter template until the assistant writes one. |
+| `remove_output` | Removes an output and its template. The last output cannot be removed. |
+| `list_jobs` | Lists the other jobs with their definition type, outputs and whether they have a template. |
+| `read_job_files` | Reads another job's definition YAML and the template HTML of each of its outputs, from its active version or else its draft, so a new job can start from them. |
 
-The model uses the last two only when you ask it to start from or reuse
-another job ("start from the Invoices job's template"); it adapts what it
+The model adds or removes outputs only when you ask for it. It uses the
+last two tools only when you ask it to start from or reuse another job ("start from the Invoices job's template"); it adapts what it
 takes to the sample and saves it with the write tools. The same copy
 without a model is "Start from job" in the template editor's bar.
 
@@ -64,8 +66,8 @@ What the model receives:
   400 lines) in the instructions, any other page on request.
 - The sample's metadata: spooled file name, queue, user data, page size
   and code page.
-- The job's current definition and template, and the names of the
-  uploaded assets.
+- The job's current definition, its outputs with their formats and
+  templates, and the names of the uploaded assets.
 - Tool results: the extraction report and the rendered text.
 - On request, other jobs' definitions and templates: layout, not
   customer data. Nothing else of a job (its server, destination, finish
@@ -82,8 +84,8 @@ the job. New chat in the panel header forgets it and starts another, while
 the definition and template it wrote stay in the draft. Only the recent
 part of a long conversation goes to the model with each message (the last
 20 messages, within a character budget, older tool results dropped first);
-the model's instructions carry the current definition, template and
-sample pages, so nothing it needs is lost. The stored messages hold what
+the model's instructions carry the current definition, outputs,
+templates and sample pages, so nothing it needs is lost. The stored messages hold what
 the model saw: with masking on, the tool results are masked too.
 
 ## Masking
