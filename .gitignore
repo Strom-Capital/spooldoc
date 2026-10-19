@@ -9,3 +9,4 @@ local/
 workspace/*
 !workspace/README.md
 .claude/
+.bob/
