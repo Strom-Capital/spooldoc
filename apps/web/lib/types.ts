@@ -64,6 +64,15 @@ export interface AssetView {
   jobs: { id: string; name: string }[];
 }
 
+/** An uploaded Word template, without its bytes. */
+export interface TemplateFileView {
+  id: string;
+  /** The file's name as uploaded. */
+  name: string;
+  size: number;
+  createdAt: string;
+}
+
 export type RunStatus ='running' | 'success' | 'warning' | 'failed' | 'skipped';
 
 /** A row of the jobs list. */
@@ -178,7 +187,7 @@ export interface SettingsView {
   retentionDays: number;
   watching: { realtime: number; polled: number };
   /** The last cleanup of old runs by this server process, if it did one. */
-  cleanup: { at: string; runs: number; samples: number; error?: string } | null;
+  cleanup: { at: string; runs: number; samples: number; templateFiles: number; error?: string } | null;
   ai: AiSettingsView;
   rendering: RenderingView;
 }

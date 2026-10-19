@@ -19,7 +19,8 @@ Spooled files into documents, for IBM i. Open output management.
 
 Spooldoc watches the output queues of your IBM i, turns each spooled file
 into a JSON document with a definition you write in YAML, renders it with an
-ordinary HTML template into PDF or HTML, and delivers the files. The JSON
+ordinary HTML template into PDF or HTML, or with a Word template into DOCX or
+PDF, and delivers the files. The JSON
 keeps reading the page and laying out the document apart, so a template
 never deals with lines and columns and a new look is just a new template. An AI
 assistant proposes the definition and the template from a sample spooled
@@ -51,9 +52,10 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 - **Definitions in YAML**: fields by label, pattern or position, tables,
   multi-line records, split keys for documents printed back to back, and
   XML-in-spool.
-- **HTML templates**: [Carbone](https://carbone.io) tags with your logos,
-  images and fonts, rendered to PDF or HTML by a Carbone server of your own
-  or Carbone Cloud. Spooldoc checks every tag against the definition first.
+- **HTML and Word templates**: [Carbone](https://carbone.io) tags with your
+  logos, images and fonts, rendered to PDF, HTML or DOCX by a Carbone server
+  of your own or Carbone Cloud. A Word template is made in Word and uploaded.
+  Spooldoc checks every tag against the definition first.
 - **AI assistant**: Anthropic, Google, OpenAI, OpenRouter, Vercel AI
   Gateway or a local model writes the first definition and template, reads
   the extraction report and fixes what is missing. Values are masked before
@@ -109,7 +111,7 @@ To run from source instead, see [Contributing](docs/contributing.md).
 | [Queues](docs/queues.md) | Output queues and spooled files |
 | [Jobs](docs/jobs.md) | The job builder, versions, triggers, finish actions |
 | [Definitions](docs/definitions.md) | The YAML that turns pages into JSON |
-| [Templates](docs/templates.md) | HTML templates, filters, assets, PDF layout |
+| [Templates](docs/templates.md) | HTML and Word templates, filters, assets, PDF layout |
 | [Carbone](docs/carbone.md) | The Carbone server, Settings, Community and Enterprise |
 | [AI assistant](docs/ai-assistant.md) | Models, tools, masking |
 | [Destinations](docs/destinations.md) | Where documents go |

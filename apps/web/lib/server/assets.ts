@@ -65,7 +65,7 @@ export async function listAssets(): Promise<AssetView[]> {
   // Stored specs may be from before outputs; parsing the render part migrates them.
   const templates = (spec: JobSpec | null): string[] => {
     const render = jobSpecSchema.shape.render.safeParse(spec?.render);
-    return render.success ? render.data.outputs.flatMap((output) => output.template.source ?? []) : [];
+    return render.success ? render.data.outputs.flatMap((output) => (output.template.kind === 'html' ? (output.template.source ?? []) : [])) : [];
   };
   return rows.map((row) => ({
     id: row.id,

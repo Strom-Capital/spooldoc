@@ -64,7 +64,7 @@ processed, so the watcher never runs a file a second time on its own.
 
 Settings holds how long runs are kept: 90 days by default, 1 to 3650. Once
 an hour the watcher deletes runs that finished longer ago, with their
-captured spooled files and delivered files, and preview samples no job
-uses. The record of which spooled files were processed is kept, so a file
+captured spooled files and delivered files, preview samples no job
+uses, and uploaded Word templates that no draft or version uses. The record of which spooled files were processed is kept, so a file
 is not run again after its run is gone. Runs are deleted in small batches
 so no single delete holds its locks for long.

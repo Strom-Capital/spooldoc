@@ -1,7 +1,8 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, errorText } from '@/lib/client/api';
+import type { OutputTemplate } from '@/lib/job-spec';
 import type { FieldHit, RenderResult } from '@/lib/client/render';
 
 /** Editor tabs: the Extract step shows the definition and the JSON, Render the template and the JSON. */
@@ -11,15 +12,22 @@ export interface WorkbenchState {
   jobId: string;
   /** The preview spooled file, or null when none is picked yet. */
   sampleId: string | null;
-  /** The definition and template shown and rendered. */
+  /** The definition and the template shown and rendered. */
   yaml: string;
+  template: OutputTemplate;
+  /** The HTML template's text; null for the starter template and for a Word template. */
   html: string | null;
+  /** The template as render and file requests send it: HTML text, or the Word template's file. */
+  templateRequest: { html: string | null } | { docx: { fileId: string | null } };
   /** The job output whose template `html` is, and picking another. */
   outputId: string;
   setOutputId(id: string): void;
   readOnly: boolean;
   setYaml(yaml: string): void;
+  /** Change the HTML template; null goes back to the starter template. */
   setHtml(html: string | null): void;
+  /** Use another template: switch kinds, or point at another Word file. */
+  setTemplate(template: OutputTemplate): void;
   render: RenderResult | null;
   /** A failed render request (the render result's own errors are in `render.errors`). */
   error: string | null;
@@ -33,7 +41,7 @@ export interface WorkbenchState {
   /** Sample page number shown in the page view. */
   page: number;
   setPage(page: number): void;
-  /** 0-based document shown in the JSON view and the HTML preview. */
+  /** 0-based document shown in the JSON view and the preview. */
   documentIndex: number;
   setDocumentIndex(index: number): void;
   tab: WorkbenchTab;
@@ -67,24 +75,24 @@ export function WorkbenchProvider({
   jobId,
   sampleId,
   yaml,
-  html,
+  template,
   outputId,
   setOutputId,
   readOnly,
   setYaml,
-  setHtml,
+  setTemplate,
   onDraftWritten,
   children,
 }: {
   jobId: string;
   sampleId: string | null;
   yaml: string;
-  html: string | null;
+  template: OutputTemplate;
   outputId: string;
   setOutputId(id: string): void;
   readOnly: boolean;
   setYaml(yaml: string): void;
-  setHtml(html: string | null): void;
+  setTemplate(template: OutputTemplate): void;
   onDraftWritten(): Promise<void>;
   children: ReactNode;
 }) {
@@ -103,8 +111,13 @@ export function WorkbenchProvider({
     setSelectedHit(null);
   }
 
-  // Text changes render after a pause; a new file, document, output or reload at once.
-  const text = useDebounced(JSON.stringify({ yaml, html, outputId }), RENDER_DELAY_MS, outputId);
+  const html = template.kind === 'html' ? template.source : null;
+  const fileId = template.kind === 'docx' ? template.fileId : null;
+  const templateRequest = useMemo(() => (template.kind === 'html' ? { html } : { docx: { fileId } }), [template.kind, html, fileId]);
+  const setHtml = useCallback((source: string | null) => setTemplate({ kind: 'html', source }), [setTemplate]);
+
+  // Text changes render after a pause; a new file, document, output, template kind or Word file, or a reload, at once.
+  const text = useDebounced(JSON.stringify({ yaml, ...templateRequest, outputId }), RENDER_DELAY_MS, `${outputId}:${template.kind}:${fileId}`);
   const requestKey = JSON.stringify([jobId, sampleId, documentIndex, nonce, text]);
 
   useEffect(() => {
@@ -112,7 +125,7 @@ export function WorkbenchProvider({
       return;
     }
     let cancelled = false;
-    const body = JSON.parse(text) as { yaml: string; html: string | null; outputId: string };
+    const body = JSON.parse(text) as Record<string, unknown>;
     api<RenderResult>(`/api/jobs/${jobId}/render`, { method: 'POST', body: { sampleId, ...body, document: documentIndex } }).then(
       (render) => !cancelled && setResult({ key: requestKey, render, error: null }),
       (err: unknown) => !cancelled && setResult((prev) => ({ key: requestKey, render: prev?.render ?? null, error: errorText(err) })),
@@ -133,12 +146,15 @@ export function WorkbenchProvider({
         jobId,
         sampleId,
         yaml,
+        template,
         html,
+        templateRequest,
         outputId,
         setOutputId,
         readOnly,
         setYaml,
         setHtml,
+        setTemplate,
         render,
         error,
         loading,

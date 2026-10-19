@@ -1,5 +1,6 @@
 import { convertNamePattern } from "./convert.js";
 import type { Definition, ValueType } from "./definition.js";
+import type { DocxTemplate } from "./docx.js";
 import { firstTag } from "./html.js";
 import { pageLayout } from "./pagesize.js";
 import { ASSET_TAG, templateUses } from "./tags.js";
@@ -17,9 +18,17 @@ export interface TemplateData {
 /**
  * The data for one document. `documents` is only sent when the template reads it, so a
  * spooled file with many documents does not send all of them with each one.
+ *
+ * @param template - An HTML template, or a Word template as `readDocx` reads it
  */
-export function templateData(template: string, doc: Record<string, unknown>, documents: Record<string, unknown>[], sample: { id: string; splf: unknown }): TemplateData {
-  return { doc, ...(templateUses(template, "documents") ? { documents } : {}), sample: { id: sample.id, splf: sample.splf } };
+export function templateData(
+  template: string | DocxTemplate,
+  doc: Record<string, unknown>,
+  documents: Record<string, unknown>[],
+  sample: { id: string; splf: unknown },
+): TemplateData {
+  const text = typeof template === "string" ? template : template.text;
+  return { doc, ...(templateUses(text, "documents") ? { documents } : {}), sample: { id: sample.id, splf: sample.splf } };
 }
 
 /** CSS that hides Carbone's PDF header, footer and options in HTML output; Carbone leaves those elements in. */
@@ -125,55 +134,41 @@ export function documentName(def: Definition, doc: Record<string, unknown>, inde
   return name.trim().replace(/[^A-Za-z0-9._-]+/g, "_") || fallback;
 }
 
-const label = (name: string): string =>
+/** A field name as a label: `invoiceNo` gives "Invoice No". */
+export const fieldLabel = (name: string): string =>
   name
     .replace(/_/g, " ")
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/^./, (c) => c.toUpperCase());
 
-interface Column {
+/** A field or column of a starter template, with its type. */
+export interface StarterColumn {
   name: string;
   type?: ValueType;
 }
 
-interface Block {
+/** A table, record or group of a starter template, with its columns. */
+export interface StarterBlock {
   name: string;
-  columns: Column[];
+  columns: StarterColumn[];
 }
 
 /** A tag for a value, formatted by its type: dates as `15.10.2026`, numbers with two decimals. */
-function valueTag(path: string, type?: ValueType): string {
+export function valueTag(path: string, type?: ValueType): string {
   if (type === "date") return `{${path}:formatD('DD.MM.YYYY')}`;
   if (type === "number") return `{${path}:formatN(2)}`;
   return `{${path}}`;
 }
 
-function tableHtml(block: Block): string {
-  const num = (c: Column): string => (c.type === "number" ? ' class="num"' : "");
-  const head = block.columns.map((c) => `<th${num(c)}>${label(c.name)}</th>`).join("");
-  const cells = block.columns.map((c) => `<td${num(c)}>${valueTag(`d.doc.${block.name}[i].${c.name}`, c.type)}</td>`).join("");
-  return [
-    `  <h2>${label(block.name)}</h2>`,
-    `  <table>`,
-    `    <thead><tr>${head}</tr></thead>`,
-    `    <tbody>`,
-    `      <tr>${cells}</tr>`,
-    `      <tr><td>{d.doc.${block.name}[i+1]}</td></tr>`,
-    `    </tbody>`,
-    `  </table>`,
-  ].join("\n");
-}
-
 const xmlType = (value: string | { type?: ValueType }): ValueType | undefined => (typeof value === "string" ? undefined : value.type);
 
 /**
- * A complete A4 HTML starter template for a definition, in Carbone tags: the fields in a
- * header block, each shown only when it has a value, and a table for each table, record or
- * group. Data is `d` = `{ doc, documents, sample }`.
+ * What a starter template shows for a definition: its title, the fields, and a table for
+ * each table, record or group. The HTML and the Word starter templates are built from it.
  */
-export function starterTemplate(def: Definition): string {
-  const fields: Column[] = [];
-  const blocks: Block[] = [];
+export function starterLayout(def: Definition): { title: string; fields: StarterColumn[]; blocks: StarterBlock[] } {
+  const fields: StarterColumn[] = [];
+  const blocks: StarterBlock[] = [];
   if (def.source === "text" && def.text) {
     for (const f of def.text.fields ?? []) fields.push({ name: f.name, type: f.type });
     for (const t of def.text.tables ?? []) blocks.push({ name: t.name, columns: t.columns.map((c) => ({ name: c.name, type: c.type })) });
@@ -184,9 +179,35 @@ export function starterTemplate(def: Definition): string {
       blocks.push({ name, columns: Object.entries(g.map).map(([column, value]) => ({ name: column, type: xmlType(value) })) });
     }
   }
-  const title = def.output?.title ?? label(def.type);
+  // A title from before Carbone (`Invoice {{ invoiceNo }}`) is converted like `output.name`.
+  return { title: def.output?.title ? convertNamePattern(def.output.title) : fieldLabel(def.type), fields, blocks };
+}
+
+function tableHtml(block: StarterBlock): string {
+  const num = (c: StarterColumn): string => (c.type === "number" ? ' class="num"' : "");
+  const head = block.columns.map((c) => `<th${num(c)}>${fieldLabel(c.name)}</th>`).join("");
+  const cells = block.columns.map((c) => `<td${num(c)}>${valueTag(`d.doc.${block.name}[i].${c.name}`, c.type)}</td>`).join("");
+  return [
+    `  <h2>${fieldLabel(block.name)}</h2>`,
+    `  <table>`,
+    `    <thead><tr>${head}</tr></thead>`,
+    `    <tbody>`,
+    `      <tr>${cells}</tr>`,
+    `      <tr><td>{d.doc.${block.name}[i+1]}</td></tr>`,
+    `    </tbody>`,
+    `  </table>`,
+  ].join("\n");
+}
+
+/**
+ * A complete A4 HTML starter template for a definition, in Carbone tags: the fields in a
+ * header block, each shown only when it has a value, and a table for each table, record or
+ * group. Data is `d` = `{ doc, documents, sample }`.
+ */
+export function starterTemplate(def: Definition): string {
+  const { title, fields, blocks } = starterLayout(def);
   const rows = fields
-    .map((f) => `    {d.doc.${f.name}:ifNEM:showBegin}<dt>${label(f.name)}</dt><dd>${valueTag(`d.doc.${f.name}`, f.type)}</dd>{d.doc.${f.name}:showEnd}`)
+    .map((f) => `    {d.doc.${f.name}:ifNEM:showBegin}<dt>${fieldLabel(f.name)}</dt><dd>${valueTag(`d.doc.${f.name}`, f.type)}</dd>{d.doc.${f.name}:showEnd}`)
     .join("\n");
   return `<!doctype html>
 <html lang="en">

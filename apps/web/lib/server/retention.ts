@@ -1,8 +1,8 @@
 import 'server-only';
 
-import { and, eq, inArray, isNotNull, isNull, lt, notExists, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, lt, notExists, or, sql, type SQL } from 'drizzle-orm';
 import { getDb, getLocks } from './db';
-import { jobs, runs, samples } from './db/schema';
+import { jobs, jobVersions, runs, samples, templateFiles } from './db/schema';
 import { log } from './log';
 
 /** Rows deleted per statement, so no single delete holds its locks for long. */
@@ -21,7 +21,13 @@ export const STALE_RUN_MS = 3 * 60_000;
 export interface CleanupResult {
   runs: number;
   samples: number;
+  /** Uploaded Word templates no job draft or version uses any more. */
+  templateFiles: number;
 }
+
+/** True when a job spec (a draft or a version) has an output with this Word template file. */
+const usesFile = (spec: SQL, fileId: SQL): SQL =>
+  sql`${spec} @> jsonb_build_object('render', jsonb_build_object('outputs', jsonb_build_array(jsonb_build_object('template', jsonb_build_object('fileId', ${fileId}::text)))))`;
 
 /**
  * Mark runs failed that are still `running` but whose process stopped: their heartbeat
@@ -43,7 +49,8 @@ export async function failStaleRuns(now: Date = new Date()): Promise<number> {
 /**
  * Delete what is older than the retention: runs that finished before the cutoff (their
  * files go with them), samples captured by runs that no longer exist, and preview samples
- * captured before the cutoff that no job draft points at. Runs still running are kept,
+ * captured before the cutoff that no job draft points at, and Word templates uploaded
+ * before the cutoff that no job draft or version uses. Runs still running are kept,
  * and so are the `watch_seen` rows, which stop a spooled file from being processed again.
  * Runs a stopped process cut off are marked failed first (`failStaleRuns`), and kept for
  * the retention from then.
@@ -58,7 +65,7 @@ export async function cleanUp(retentionDays: number, now: Date = new Date()): Pr
   try {
     const db = getDb();
     const cutoff = new Date(now.getTime() - retentionDays * DAY_MS);
-    const result: CleanupResult = { runs: 0, samples: 0 };
+    const result: CleanupResult = { runs: 0, samples: 0, templateFiles: 0 };
 
     await failStaleRuns(now);
 
@@ -82,6 +89,18 @@ export async function cleanUp(retentionDays: number, now: Date = new Date()): Pr
       const unused = db.select({ id: samples.id }).from(samples).where(or(runGone, unusedPreview)).limit(BATCH);
       const deleted = await db.delete(samples).where(inArray(samples.id, unused)).returning({ id: samples.id });
       result.samples += deleted.length;
+      if (deleted.length < BATCH) break;
+    }
+
+    const unusedFile = and(
+      lt(templateFiles.createdAt, cutoff),
+      notExists(db.select({ one: sql`1` }).from(jobs).where(usesFile(sql`${jobs.draft}`, sql`${templateFiles.id}`))),
+      notExists(db.select({ one: sql`1` }).from(jobVersions).where(usesFile(sql`${jobVersions.spec}`, sql`${templateFiles.id}`))),
+    );
+    for (;;) {
+      const unused = db.select({ id: templateFiles.id }).from(templateFiles).where(unusedFile).limit(BATCH);
+      const deleted = await db.delete(templateFiles).where(inArray(templateFiles.id, unused)).returning({ id: templateFiles.id });
+      result.templateFiles += deleted.length;
       if (deleted.length < BATCH) break;
     }
     return result;

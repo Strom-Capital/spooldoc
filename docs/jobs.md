@@ -30,7 +30,8 @@ inspector.
 
 The extract and render steps open the workbench: the sample's pages with
 the field hits highlighted, the definition, the extracted JSON, the
-template and the rendered HTML with a PDF preview. Pick a spooled file on
+template and the rendered document: the HTML of an HTML template, or the
+PDF of a Word template. Pick a spooled file on
 the queue as the preview sample; Spooldoc captures it into the database.
 Only drafts have a preview sample, and samples no job uses are deleted
 with the old runs.
@@ -48,8 +49,12 @@ when the same data needs a second set of files, for example an invoice
 as a PDF and its lines as a separate HTML page.
 
 The render step's header picks the output that the template editor and
-the preview show, and holds its format switches, Add output and a menu to
-rename or remove it. The last output cannot be removed. The pipeline
+the preview show, and holds its kind of template, its format switches,
+Add output and a menu to rename or remove it. An HTML template makes PDF
+and HTML files; a [Word template](templates.md#word-templates) makes PDF
+and DOCX files. Switching the kind starts the output from the other
+kind's starter template, and asks first when the output has a template of
+its own; saved versions keep theirs. The last output cannot be removed. The pipeline
 shows one output as its template and formats, and several as "2 outputs"
 with each name and its formats.
 

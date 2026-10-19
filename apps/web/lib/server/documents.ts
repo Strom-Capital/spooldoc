@@ -1,8 +1,11 @@
 import 'server-only';
 
 import { convertNunjucks, documentName, parseDefinition, renderDocument, starterTemplate, type Definition, type DocumentRender } from '@spooldoc/core';
+import type { OutputTemplate } from '@/lib/job-spec';
 import { log } from './log';
+import type { SampleTemplate } from './render';
 import { carboneServer, noteRenderFailure, renderingReady } from './rendering';
+import { getTemplateFile } from './template-files';
 
 /**
  * The file name of a document: the definition's `output.name`, or `<fallback>-<n>`.
@@ -21,6 +24,17 @@ export function fileNameFor(def: Definition | null, doc: Record<string, unknown>
 /** The Carbone template of an output: its own, converted from Nunjucks if it is from before Carbone, or the starter template. */
 export function outputTemplate(source: string | null | undefined, def: Definition): string {
   return source === null || source === undefined ? starterTemplate(def) : convertNunjucks(source);
+}
+
+/**
+ * An output's template as `renderSample` takes it: HTML as it is, a Word template with
+ * its file read. Null when the Word file is gone.
+ */
+export async function sampleTemplate(template: OutputTemplate): Promise<SampleTemplate | null> {
+  if (template.kind === 'html') return template;
+  if (template.fileId === null) return { kind: 'docx', file: null };
+  const file = await getTemplateFile(template.fileId);
+  return file ? { kind: 'docx', file } : null;
 }
 
 /** Renders one document to a file. */

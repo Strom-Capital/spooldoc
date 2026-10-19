@@ -7,6 +7,7 @@ export * from "./extract.js";
 export * from "./xmlspool.js";
 export * from "./template.js";
 export * from "./tags.js";
+export * from "./docx.js";
 export * from "./convert.js";
 export * from "./carbone.js";
 export * from "./render.js";

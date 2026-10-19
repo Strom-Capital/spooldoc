@@ -1,6 +1,7 @@
 import 'server-only';
 
 import {
+  checkDocx,
   checkTemplate,
   convertNunjucks,
   definitionJsonSchema,
@@ -10,9 +11,14 @@ import {
   matchesSample,
   pageText,
   parseDefinition,
+  readDocx,
+  starterDocx,
   starterTemplate,
   templateData,
   type Definition,
+  type DocxParagraph,
+  type DocxProblem,
+  type DocxTemplate,
   type ExtractResult,
   type Sample,
   type SamplePage,
@@ -34,7 +40,7 @@ import type {
   WriteDefinitionResult,
   WriteTemplateResult,
 } from '@/lib/chat-types';
-import { findOutput, labelTaken, newOutput, OUTPUT_FORMATS, type JobOutput } from '@/lib/job-spec';
+import { findOutput, formatList, hasOwnTemplate, HTML_FORMATS, labelTaken, newOutput, type JobOutput } from '@/lib/job-spec';
 import type { CarboneCheck } from '@/lib/types';
 import { CARBONE_REFERENCES, CARBONE_SKILL, CARBONE_SKILL_SOURCE, type CarboneReference } from './carbone-skill.generated';
 import type { DocumentRenderer } from './documents';
@@ -60,7 +66,75 @@ export interface InstructionsInput {
   assets?: ChatAsset[];
   /** The last check of the Carbone server: whether it works, and its edition. */
   carbone?: CarboneCheck | null;
+  /** What Spooldoc read from each Word output's template, by output id (`wordTemplates`). */
+  wordTemplates?: Record<string, WordTemplateNote>;
   config?: InstructionsConfig;
+}
+
+/**
+ * A Word output's template as the model sees it: the uploaded file's name (null for the
+ * starter template), its paragraphs with text, and what the tag check finds; or why it
+ * could not be read.
+ */
+export type WordTemplateNote = { name: string | null; paragraphs: DocxParagraph[]; problems: DocxProblem[] } | { error: string };
+
+/** Most characters of a Word template's paragraphs in the instructions. */
+const WORD_TEXT_MAX = 20_000;
+
+/**
+ * What the instructions say about each Word output's template: its paragraphs and the
+ * tag check's problems, read from the uploaded file or the starter template.
+ *
+ * @param read - The bytes and name of an uploaded template file, or null when it is gone
+ */
+export async function wordTemplates(
+  outputs: JobOutput[],
+  definitionYaml: string,
+  read: (fileId: string) => Promise<{ name: string; content: Uint8Array } | null>,
+): Promise<Record<string, WordTemplateNote>> {
+  let def: Definition | null = null;
+  try {
+    def = definitionYaml.trim() ? parseDefinition(definitionYaml) : null;
+  } catch {
+    // The template is still shown, without the field check.
+  }
+  const notes: Record<string, WordTemplateNote> = {};
+  for (const output of outputs) {
+    if (output.template.kind !== 'docx') continue;
+    try {
+      const file = output.template.fileId === null ? null : await read(output.template.fileId);
+      if (output.template.fileId !== null && !file) {
+        notes[output.id] = { error: 'The uploaded file is gone; the user uploads the template again.' };
+        continue;
+      }
+      if (!file && !def) {
+        notes[output.id] = { error: 'No file uploaded yet, and the starter template needs a definition that parses.' };
+        continue;
+      }
+      const template = readDocx(file ? file.content : await starterDocx(def!));
+      notes[output.id] = { name: file?.name ?? null, paragraphs: template.paragraphs, problems: checkDocx(template, def) };
+    } catch (error) {
+      notes[output.id] = { error: message(error) };
+    }
+  }
+  return notes;
+}
+
+/** A Word output's template in the instructions. */
+function wordTemplateText(note: WordTemplateNote | undefined): string {
+  if (!note) return 'A Word template. Its text is not available here.';
+  if ('error' in note) return `A Word template that could not be read: ${note.error}`;
+  const source =
+    note.name === null
+      ? 'No Word template uploaded yet: the Word starter template generated from the definition is used. Its text:'
+      : `A Word template, \`${note.name}\`, uploaded by the user. Its text, a paragraph per line, by part:`;
+  let text = note.paragraphs.map((p) => `${p.part}: ${p.text.replace(/\n/g, '\\n')}`).join('\n');
+  if (text.length > WORD_TEXT_MAX) text = `${text.slice(0, WORD_TEXT_MAX)}\n(cut after ${WORD_TEXT_MAX} characters)`;
+  const problems =
+    note.problems.length === 0
+      ? 'The tag check finds no problems.'
+      : `The tag check finds:\n${note.problems.map((p) => `- ${p.part}: ${p.message}`).join('\n')}`;
+  return `${source}\n\n${fence('text', text)}\n\n${problems}`;
 }
 
 /** An uploaded asset as the model knows it: its name and whether it is an image or a font. */
@@ -120,7 +194,7 @@ const fence = (lang: string, body: string): string => `\`\`\`${lang}\n${body.rep
  * @param input - The sample, its linked files and the masking setting
  * @returns The instructions text
  */
-export function buildInstructions({ sample, definitionYaml, outputs, masked, assets = [], carbone = null, config = {} }: InstructionsInput): string {
+export function buildInstructions({ sample, definitionYaml, outputs, masked, assets = [], carbone = null, wordTemplates: words = {}, config = {} }: InstructionsInput): string {
   const width = sample.attributes.pageWidth;
   const pages = visiblePages(sample, masked);
   const maxPages = config.previewPages ?? 3;
@@ -197,15 +271,25 @@ Rules:
     }
 - ${carboneLine(carbone)}
 - Show every field the definition extracts, laid out like a clean version of the printed document.
-- The Carbone syntax reference is below. Read a reference file it names with read_carbone_reference when you need more. Spooldoc's templates are HTML only.`,
+- The Carbone syntax reference is below. Read a reference file it names with read_carbone_reference when you need more. You write HTML templates only.`,
+
+    `## Word templates
+
+An output can use a Word template instead: a .docx the user made in Word and uploaded, which makes PDF and DOCX files. You cannot change it, and write_template refuses it. Work on its tags: check them against the definition, explain render errors, and suggest tags for the user to type or paste in Word. Its text is in Current outputs.
+- The tags and data are the same as in HTML: \`{d.doc.invoiceNo}\`, \`{d.doc.invoiceDate:formatD('DD.MM.YYYY')}\`.
+- A loop is a table row with \`[i]\` tags and, right after it, a row with \`{d.doc.lines[i+1]}\`. A loop stays in one part: the body, a header or a footer.
+- An optional line: \`{d.doc.address1}{d.doc.address2:ifEM:hideBegin}\`, then a line break (Shift+Enter), then \`{d.doc.address2}{d.doc.address2:hideEnd}\`.
+- Word types curly quotes by default, and Carbone prints a tag with them as text. Tell the user to turn off smart quotes (File, Options, Proofing, AutoCorrect Options, AutoFormat As You Type) before typing tags.
+- Pictures such as a logo are inserted in Word, set to In line with text, and are the same in every document; \`{asset('name')}\` is for HTML only.
+- Page numbers are Word's own fields (Insert, Page Number).`,
 
     `## Tools
 
 - read_sample_page: the numbered text of any page${masked ? ' (masked)' : ''}.
 - write_definition: saves the YAML as the job's definition and returns the extraction report.
-- write_template: saves the template of one output (\`output\`: its id or name, default the first) and returns the visible text of document 1.
-- render_preview: renders any document with the job's definition and one output's template and returns the counts and its visible text.
-- add_output: adds an output with a name and formats, using the starter template until you write one. Only when the user asks for another set of files, such as the lines of an invoice as a separate document.
+- write_template: saves the HTML template of one output (\`output\`: its id or name, default the first) and returns the visible text of document 1. Not for an output with a Word template.
+- render_preview: renders any document with the job's definition and one output's template, HTML or Word, and returns the counts, the tag check's problems and its visible text.
+- add_output: adds an output with an HTML template, a name and formats, using the starter template until you write one. Only when the user asks for another set of files, such as the lines of an invoice as a separate document. The user switches an output to a Word template in the app.
 - remove_output: removes an output and its template. Only when the user asks; the last output cannot be removed.
 - list_jobs: the other jobs with their definition type, outputs and whether they have a template.
 - read_job_files: another job's definition YAML and the template HTML of each of its outputs.
@@ -239,9 +323,15 @@ ${definitionYaml ? fence('yaml', definitionYaml) : 'None yet.'}`,
 
 Each document of a run becomes the files of every output. The first output's files are named after the document; the others add their name, so a document named \`invoice\` gives \`invoice.pdf\` and \`invoice-lines.pdf\`.
 
-${outputs.map((output, index) => `### ${index + 1}. ${output.label} (id \`${output.id}\`): ${formatNames(output.formats)}
+${outputs.map((output, index) => `### ${index + 1}. ${output.label} (id \`${output.id}\`): ${formatList(output.formats)}
 
-${output.template.source ? fence('html', output.template.source) : 'No template yet: the starter template generated from the definition is used.'}`).join('\n\n')}`,
+${
+  output.template.kind === 'docx'
+    ? wordTemplateText(words[output.id])
+    : output.template.source
+      ? fence('html', output.template.source)
+      : 'No template yet: the starter template generated from the definition is used.'
+}`).join('\n\n')}`,
 
     `## Carbone syntax reference
 
@@ -365,6 +455,8 @@ export interface ToolsInput {
   renderer?: DocumentRenderer | null;
   /** The other jobs' definitions and templates. Without it, list_jobs reports no jobs. */
   jobs?: JobFilesReader;
+  /** Reads an uploaded Word template's bytes, or null when the file is gone. */
+  templateFile?: (fileId: string) => Promise<Uint8Array | null>;
 }
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -531,6 +623,47 @@ async function renderDocument(
   }
 }
 
+/**
+ * Check a Word template, render one document to DOCX with Carbone (no conversion, so it is
+ * fast on every edition) and return the problems and the text of its paragraphs. Without
+ * Carbone only the check runs.
+ */
+async function renderWord(
+  bytes: Uint8Array,
+  def: Definition,
+  documents: Record<string, unknown>[],
+  index: number,
+  sample: Sample,
+  masked: boolean,
+  renderer: DocumentRenderer | null,
+): Promise<{ errors: string[]; textPreview: string }> {
+  let template: DocxTemplate;
+  try {
+    template = readDocx(bytes);
+  } catch (error) {
+    return { errors: [message(error)], textPreview: '' };
+  }
+  const problems = checkDocx(template, def);
+  if (problems.length > 0) {
+    return { errors: problems.map((p) => `${p.part}: ${p.message}`), textPreview: '' };
+  }
+  const shown = masked ? (documents.map(maskDocument) as Record<string, unknown>[]) : documents;
+  const doc = shown[index];
+  if (!doc) {
+    return { errors: ['The definition finds no documents, so there is nothing to render.'], textPreview: '' };
+  }
+  if (!renderer) {
+    return { errors: ['Carbone is not connected, so the template was checked but not rendered. The user sets it up in Settings, under Rendering.'], textPreview: '' };
+  }
+  try {
+    const out = await renderer({ kind: 'docx', template: bytes, data: templateData(template, doc, shown, sample), format: 'docx' });
+    return { errors: [], textPreview: truncate(readDocx(out).text, 1500) };
+  } catch (error) {
+    const detail = error instanceof Error && 'detail' in error && typeof error.detail === 'string' ? ` Carbone said: ${error.detail}` : '';
+    return { errors: [`${message(error)}${detail}`], textPreview: '' };
+  }
+}
+
 /** The definition type of a job's YAML, or null when there is none or it does not parse. */
 export function definitionType(yaml: string): string | null {
   if (!yaml.trim()) {
@@ -550,23 +683,20 @@ export function jobListing(job: JobFiles): JobListing {
     name: job.name,
     type: definitionType(job.definitionYaml),
     outputs: job.outputs.map((output) => output.label),
-    hasTemplate: job.outputs.some((output) => output.templateHtml !== null),
+    hasTemplate: job.outputs.some((output) => output.templateHtml !== null || output.fileId !== null),
   };
 }
 
 /** An output's files as another job's reader hands them over. */
 export function outputFiles(output: JobOutput): JobOutputFiles {
-  return { id: output.id, label: output.label, formats: output.formats, templateHtml: output.template.source };
+  const html = output.template.kind === 'html' ? output.template.source : null;
+  const fileId = output.template.kind === 'docx' ? output.template.fileId : null;
+  return { id: output.id, label: output.label, formats: output.formats, kind: output.template.kind, templateHtml: html, fileId };
 }
 
 /** An output as tool results report it. */
 function outputListing(output: JobOutput): OutputListing {
-  return { id: output.id, label: output.label, formats: output.formats, template: output.template.source === null ? 'starter' : 'saved' };
-}
-
-/** "PDF and HTML". */
-function formatNames(formats: readonly string[]): string {
-  return formats.map((format) => format.toUpperCase()).join(' and ');
+  return { id: output.id, label: output.label, formats: output.formats, kind: output.template.kind, template: hasOwnTemplate(output.template) ? 'saved' : 'starter' };
 }
 
 /** Why there is no output `key`, with the outputs there are. */
@@ -586,7 +716,7 @@ export const DRAFT_PATHS = { definition: 'definition', template: 'template' } as
  *
  * @param input - The sample, the draft store, the masking setting and the other jobs' files
  */
-export function buildTools({ sample: current, store, masked, assets = [], renderer = null, jobs }: ToolsInput) {
+export function buildTools({ sample: current, store, masked, assets = [], renderer = null, jobs, templateFile }: ToolsInput) {
   async function readSample(): Promise<Sample | ToolFailure> {
     return current;
   }
@@ -693,6 +823,11 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         if ('ok' in output) {
           return output;
         }
+        if (output.template.kind === 'docx') {
+          return fail(
+            `The ${output.label} output uses a Word template, which only the user changes, in Word. Suggest the tags to type or paste in instead, or check it with render_preview.`,
+          );
+        }
         try {
           await store.writeTemplate(output.id, html);
         } catch (error) {
@@ -738,10 +873,19 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         if ('ok' in output) {
           return output;
         }
-        const saved = output.template.source;
-        const html = saved ?? starterTemplate(current.def);
         const index = Math.min(document ?? 0, Math.max(0, result.documents.length - 1));
-        const rendered = await renderDocument(html, current.def, result.documents, index, sample, masked, assets, renderer);
+        let rendered: { errors: string[]; textPreview: string };
+        if (output.template.kind === 'docx') {
+          const fileId = output.template.fileId;
+          const bytes = fileId === null ? await starterDocx(current.def) : ((await templateFile?.(fileId).catch(() => null)) ?? null);
+          if (!bytes) {
+            return fail(`The Word template of the ${output.label} output is gone. The user uploads it again.`);
+          }
+          rendered = await renderWord(bytes, current.def, result.documents, index, sample, masked, renderer);
+        } else {
+          const html = output.template.source ?? starterTemplate(current.def);
+          rendered = await renderDocument(html, current.def, result.documents, index, sample, masked, assets, renderer);
+        }
         const hits = { found: 0, missing: 0, empty: 0 };
         for (const hit of result.hits) {
           hits[hit.status]++;
@@ -751,7 +895,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           output: output.label,
           document: index,
           documents: result.documents.length,
-          template: saved === null ? 'starter' : 'saved',
+          template: hasOwnTemplate(output.template) ? 'saved' : 'starter',
           hits,
           missing: missingNames(result),
           templateErrors: rendered.errors,
@@ -765,7 +909,11 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         "Add an output to the job: another set of files made from each document, with its own template and formats. It uses the starter template until write_template writes one. Only when the user asks for another output.",
       inputSchema: z.object({
         label: z.string().trim().min(1).max(40).describe('A short name, such as "Lines". Other outputs\' files add it to their names.'),
-        formats: z.array(z.enum(OUTPUT_FORMATS)).min(1).optional().describe('The formats to make (default PDF)'),
+        formats: z
+          .array(z.enum(HTML_FORMATS))
+          .min(1)
+          .optional()
+          .describe('The formats to make (default PDF)'),
       }),
       execute: async ({ label, formats }): Promise<OutputChangeResult> => {
         let added: JobOutput | undefined;

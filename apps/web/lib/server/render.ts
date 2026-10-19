@@ -1,9 +1,16 @@
 import 'server-only';
 
 import {
+  checkDocx,
   checkTemplate,
   convertNunjucks,
+  docxConverter,
   documentName,
+  readDocx,
+  starterDocx,
+  docxProblemText,
+  type DocxProblem,
+  type DocxTemplate,
   extract,
   isCarboneError,
   matchProblems,
@@ -19,8 +26,10 @@ import {
   type Sample,
   type TemplateProblem,
 } from '@spooldoc/core';
+import type { TemplateFileView } from '@/lib/types';
 import { getConfig } from './config';
 import type { DocumentRenderer } from './documents';
+import { templateFileView, type TemplateFileRow } from './template-files';
 
 /** A sample as the browser gets it: everything but the raw bytes. */
 export type SampleView = Omit<Sample, 'rawBase64'> & { codePageSource: CodePageSource | null };
@@ -28,22 +37,46 @@ export type SampleView = Omit<Sample, 'rawBase64'> & { codePageSource: CodePageS
 /** Why nothing was rendered when Carbone is not connected. */
 export const CARBONE_NOT_CONNECTED = 'Spooldoc renders documents with Carbone, which is not connected. Set it up in Settings, under Rendering.';
 
-/** What the workbench shows for a sample: definition, template, extracted JSON and rendered HTML. */
+/**
+ * The HTML template, and what is wrong with it: `problems` from Spooldoc's tag check, by
+ * line, or `error` from Carbone with its own text in `detail`. `generated` for the starter template.
+ */
+export interface HtmlTemplateResult {
+  kind: 'html';
+  html: string;
+  error?: string;
+  detail?: string;
+  problems?: TemplateProblem[];
+  generated?: boolean;
+}
+
+/**
+ * The Word template: the uploaded file (null for the starter template, `generated`), and
+ * what is wrong with it: `problems` from the tag check, by part, or `error` from Carbone.
+ */
+export interface DocxTemplateResult {
+  kind: 'docx';
+  file: TemplateFileView | null;
+  error?: string;
+  detail?: string;
+  problems?: DocxProblem[];
+  generated?: boolean;
+}
+
+/** What the workbench shows for a sample: definition, template, extracted JSON and the rendered document. */
 export interface RenderResult {
   sample: SampleView;
   definition?: { type: string; yaml: string; error?: string };
-  /**
-   * The template, and what is wrong with it: `problems` from Spooldoc's tag check, by
-   * line, or `error` from Carbone with its own text in `detail`.
-   */
-  template?: { html: string; error?: string; detail?: string; problems?: TemplateProblem[]; generated?: boolean };
+  template?: HtmlTemplateResult | DocxTemplateResult;
   /** Carbone is not connected or did not answer, so nothing was rendered. */
   carbone?: { error: string; detail?: string };
   extract?: ExtractResult;
   /** One name per extracted document, from the definition's `output.name`. */
   names?: string[];
-  /** The rendered HTML of document `document`. */
+  /** The rendered HTML of document `document`, from an HTML template. */
   html?: string;
+  /** Document `document` as a PDF in base64, from a Word template. */
+  pdf?: string;
   /** 0-based index of the rendered document. */
   document: number;
   /** Why the definition's `match` rules do not accept this file (runs skip such files). */
@@ -51,16 +84,19 @@ export interface RenderResult {
   errors: string[];
 }
 
-/** The definition, the template (null for the starter template) and the document to render. */
+/** An output's template for `renderSample`: HTML (null for the starter template) or a Word file (null for the starter). */
+export type SampleTemplate = { kind: 'html'; source: string | null } | { kind: 'docx'; file: TemplateFileRow | null };
+
+/** The definition, the template and the document to render. */
 export interface RenderInput {
   yaml: string;
-  html: string | null;
+  template: SampleTemplate;
   document?: number;
   /** Resolves `{asset('name')}` in the template. */
   asset?: AssetResolver;
   /** The uploaded asset names, for the tag check. */
   assets?: string[];
-  /** Renders the HTML; null when Carbone is not connected, so the render is not tried. */
+  /** Renders the document; null when Carbone is not connected, so the render is not tried. */
   renderer: DocumentRenderer | null;
 }
 
@@ -84,15 +120,31 @@ export function sampleView(sample: Sample): SampleView {
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
+/** A template ready to check and render: the HTML text, or the Word file's bytes as read. */
+type Prepared = { kind: 'html'; html: string } | { kind: 'docx'; bytes: Uint8Array; read: DocxTemplate };
+
+/** Carbone's error on the part it belongs to: the server, or the template. */
+function renderError(result: RenderResult, error: unknown): string {
+  const text = message(error);
+  const detail = isCarboneError(error) ? error.detail : undefined;
+  if (isCarboneError(error) && ['unreachable', 'timeout', 'auth', 'server'].includes(error.kind)) {
+    result.carbone = { error: text, ...(detail ? { detail } : {}) };
+  } else if (result.template) {
+    result.template.error = text;
+    if (detail) result.template.detail = detail;
+  }
+  return text;
+}
+
 /**
- * Render a sample with a definition and a template, to HTML with Carbone. Without a
- * template the starter template for the definition is used (flagged `generated`); a
- * Nunjucks template from before Carbone is converted. The template is checked before it
- * is rendered. Every problem is reported in `errors` and on the part it belongs to;
- * nothing is thrown.
+ * Render a sample with a definition and a template with Carbone: an HTML template to
+ * HTML, a Word template to a PDF. Without a template of its own the starter template for
+ * the definition is used (flagged `generated`); a Nunjucks template from before Carbone is
+ * converted. The template is checked before it is rendered. Every problem is reported in
+ * `errors` and on the part it belongs to; nothing is thrown.
  *
  * @param sample - The captured spooled file
- * @param input - Definition YAML, template HTML, the document index and the renderer
+ * @param input - Definition YAML, the template, the document index and the renderer
  */
 export async function renderSample(sample: Sample, input: RenderInput): Promise<RenderResult> {
   const errors: string[] = [];
@@ -101,26 +153,23 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
   if (!yaml.trim()) {
     return result;
   }
-  let type: string | undefined;
 
   let def: Definition | undefined;
   try {
     def = parseDefinition(yaml);
-    type ??= def.type;
-    result.definition = { type, yaml };
+    result.definition = { type: def.type, yaml };
   } catch (error) {
-    result.definition = { type: type ?? '', yaml, error: message(error) };
+    result.definition = { type: '', yaml, error: message(error) };
     errors.push(message(error));
   }
 
-  let html = input.html === null ? undefined : convertNunjucks(input.html);
-  let generated = false;
-  if (html === undefined && def) {
-    html = starterTemplate(def);
-    generated = true;
-  }
-  if (html !== undefined) {
-    result.template = { html, ...(generated ? { generated: true } : {}) };
+  let html: string | undefined;
+  if (input.template.kind === 'html') {
+    html = input.template.source === null ? (def ? starterTemplate(def) : undefined) : convertNunjucks(input.template.source);
+    if (html !== undefined) result.template = { kind: 'html', html, ...(input.template.source === null ? { generated: true } : {}) };
+  } else {
+    const file = input.template.file;
+    result.template = { kind: 'docx', file: file ? templateFileView(file) : null, ...(file ? {} : { generated: true }) };
   }
   if (!def) {
     return result;
@@ -141,33 +190,55 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
   const index = Math.min(Math.max(0, Math.trunc(input.document ?? 0)), Math.max(0, documents.length - 1));
   result.document = index;
   const doc = documents[index];
-  if (html === undefined || !doc || !result.template) {
+  if (!doc || !result.template) {
     return result;
   }
-  const problems = checkTemplate(html, def, { assets: input.assets });
-  if (problems.length > 0) {
-    result.template.problems = problems;
-    result.template.error = problemText(problems);
-    errors.push(...problems.map((p) => `Template line ${p.line}: ${p.message}`));
+
+  let prepared: Prepared;
+  if (input.template.kind === 'html' && html !== undefined && result.template.kind === 'html') {
+    const problems = checkTemplate(html, def, { assets: input.assets });
+    if (problems.length > 0) {
+      result.template.problems = problems;
+      result.template.error = problemText(problems);
+      errors.push(...problems.map((p) => `Template line ${p.line}: ${p.message}`));
+      return result;
+    }
+    prepared = { kind: 'html', html };
+  } else if (input.template.kind === 'docx' && result.template.kind === 'docx') {
+    try {
+      const bytes = input.template.file?.content ?? (await starterDocx(def));
+      prepared = { kind: 'docx', bytes, read: readDocx(bytes) };
+    } catch (error) {
+      result.template.error = message(error);
+      errors.push(message(error));
+      return result;
+    }
+    const problems = checkDocx(prepared.read, def);
+    if (problems.length > 0) {
+      result.template.problems = problems;
+      result.template.error = docxProblemText(problems);
+      errors.push(...problems.map((p) => `Template ${p.part}: ${p.message}`));
+      return result;
+    }
+  } else {
     return result;
   }
+
   if (!input.renderer) {
     result.carbone = { error: CARBONE_NOT_CONNECTED };
     return result;
   }
   try {
-    const out = await input.renderer({ template: html, data: templateData(html, doc, documents, sample), format: 'html', asset: input.asset });
-    result.html = Buffer.from(out).toString('utf8');
-  } catch (error) {
-    const text = message(error);
-    const detail = isCarboneError(error) ? error.detail : undefined;
-    if (isCarboneError(error) && ['unreachable', 'timeout', 'auth', 'server'].includes(error.kind)) {
-      result.carbone = { error: text, ...(detail ? { detail } : {}) };
+    if (prepared.kind === 'html') {
+      const out = await input.renderer({ template: prepared.html, data: templateData(prepared.html, doc, documents, sample), format: 'html', asset: input.asset });
+      result.html = Buffer.from(out).toString('utf8');
     } else {
-      result.template.error = text;
-      if (detail) result.template.detail = detail;
+      const data = templateData(prepared.read, doc, documents, sample);
+      const out = await input.renderer({ kind: 'docx', template: prepared.bytes, data, format: 'pdf', converter: docxConverter(prepared.read) });
+      result.pdf = Buffer.from(out).toString('base64');
     }
-    errors.push(text);
+  } catch (error) {
+    errors.push(renderError(result, error));
   }
   return result;
 }

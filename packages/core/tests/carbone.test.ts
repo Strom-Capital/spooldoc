@@ -81,7 +81,7 @@ describe("carboneRender", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(415, { success: false, error: "Template format not supported", code: "w118" }));
     const error = await failure(carboneRender(server, { template: "x", data: {}, convertTo: "html" }));
     expect(error).toMatchObject({ kind: "file", status: 415 });
-    expect(error.message).toMatch(/damaged or not an HTML document/);
+    expect(error.message).toMatch(/damaged, or not an HTML or Word document/);
   });
 
   it("says where to fix a refused token, or a refused Cloud key", async () => {
@@ -139,6 +139,19 @@ describe("renderDocument", () => {
     await renderDocument(server, { template: "<p>x</p>", data: { doc: {}, sample: { id: "S", splf: {} } }, format: "html", pageWidth: 198 });
     expect(Buffer.from(String(sent(1).template), "base64").toString()).not.toContain("landscape");
     expect(sent(1).converter).toBeUndefined();
+  });
+
+  it("sends a Word template's bytes: DOCX with hardRefresh false, PDF with ICE, or LibreOffice for PAGEREF fields", async () => {
+    fetchMock.mockImplementation(async () => fileResponse("PK"));
+    const template = new Uint8Array([0x50, 0x4b, 3, 4, 0xff]);
+    const data = { doc: {}, sample: { id: "S", splf: {} } };
+    await renderDocument(server, { kind: "docx", template, data, format: "docx" });
+    expect(sent()).toEqual({ template: Buffer.from(template).toString("base64"), data, convertTo: "docx", hardRefresh: false, lang: "en-us" });
+    await renderDocument(server, { kind: "docx", template, data, format: "pdf", converter: "I" });
+    expect(sent(1)).toMatchObject({ convertTo: "pdf", converter: "I" });
+    expect(sent(1).hardRefresh).toBeUndefined();
+    await renderDocument(server, { kind: "docx", template, data, format: "pdf", converter: "L" });
+    expect(sent(2).converter).toBe("L");
   });
 });
 

@@ -2,7 +2,7 @@ import { convertToModelMessages, generateId, isStepCount, streamText, type UIMes
 import { z } from 'zod';
 import { assetNames } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
-import { buildInstructions, buildTools, hasContent, trimHistory } from '@/lib/server/chat';
+import { buildInstructions, buildTools, hasContent, trimHistory, wordTemplates } from '@/lib/server/chat';
 import { getConfig } from '@/lib/server/config';
 import { previewRenderer } from '@/lib/server/documents';
 import { draftStore } from '@/lib/server/draft-store';
@@ -14,6 +14,7 @@ import { getJobRow } from '@/lib/server/jobs';
 import { log } from '@/lib/server/log';
 import { createModel } from '@/lib/server/models';
 import { getRendering } from '@/lib/server/rendering';
+import { getTemplateFile } from '@/lib/server/template-files';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
@@ -84,6 +85,8 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   }
   const { model, reasoning, secrets } = chat;
   const assets = await assetNames();
+  const templateFile = async (fileId: string) => (await getTemplateFile(fileId))?.content ?? null;
+  const words = await wordTemplates(draft.render.outputs, draft.extract.definition, getTemplateFile);
   const safe = (error: unknown): string => redact(error, secrets).replace(KEY_PATTERN, '***');
 
   try {
@@ -97,9 +100,18 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
         masked: config.mask,
         assets,
         carbone: (await getRendering()).check,
+        wordTemplates: words,
       }),
       messages: await convertToModelMessages(trimHistory(messages), { ignoreIncompleteToolCalls: true }),
-      tools: buildTools({ sample, store: draftStore(job.id), masked: config.mask, assets, renderer: await previewRenderer(), jobs: jobFilesReader(job.id) }),
+      tools: buildTools({
+        sample,
+        store: draftStore(job.id),
+        masked: config.mask,
+        assets,
+        renderer: await previewRenderer(),
+        jobs: jobFilesReader(job.id),
+        templateFile,
+      }),
       stopWhen: isStepCount(MAX_STEPS),
       abortSignal: request.signal,
       // The client gets the error from the stream; the server log gets it here, redacted.
