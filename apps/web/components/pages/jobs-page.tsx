@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleAlertIcon, PauseIcon, PlayIcon, RadioIcon, WorkflowIcon } from 'lucide-react';
+import { CircleAlertIcon, PauseIcon, PlayIcon, RadioIcon, Trash2Icon, WorkflowIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -109,6 +109,12 @@ export function JobsPage() {
                         <div className="font-mono text-muted-foreground text-xs">
                           {job.source.library}/{job.source.queue}
                         </div>
+                        {job.finish === 'delete' && job.activeVersion !== null && (
+                          <div className="mt-0.5 inline-flex items-center gap-1 text-destructive text-xs">
+                            <Trash2Icon className="size-3" aria-hidden />
+                            Deletes spooled files after delivery
+                          </div>
+                        )}
                       </>
                     ) : (
                       <span className="text-muted-foreground">Not set</span>

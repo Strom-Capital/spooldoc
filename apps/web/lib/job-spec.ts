@@ -126,6 +126,19 @@ export function missingParts(spec: JobSpec): string[] {
   return missing;
 }
 
+/**
+ * True when making `next` active would start deleting spooled files: it deletes and the
+ * active version (null when there is none) does not. That needs the user's confirmation.
+ */
+export function startsDeleting(next: JobSpec, active: JobSpec | null): boolean {
+  return next.finish.action === 'delete' && active?.finish.action !== 'delete';
+}
+
+/** What the user confirms before a version starts deleting the spooled files of a queue. */
+export function deleteNotice(spec: Pick<JobSpec, 'source'>): string {
+  return `Spooled files on ${spec.source.library}/${spec.source.queue} will be deleted from the IBM i after their documents are delivered.`;
+}
+
 /** A spec as stored in a version: the preview sample is dropped. */
 export function versionSpec(spec: JobSpec): JobSpec {
   return { ...spec, preview: { sampleId: null } };

@@ -3,7 +3,7 @@ import 'server-only';
 import { parseDefinition } from '@spooldoc/core';
 import { and, desc, eq, isNotNull, max, sql } from 'drizzle-orm';
 import type { ZodError } from 'zod';
-import { emptySpec, jobSpecSchema, missingParts, versionSpec, type JobSpec } from '@/lib/job-spec';
+import { deleteNotice, emptySpec, jobSpecSchema, missingParts, startsDeleting, versionSpec, type JobSpec } from '@/lib/job-spec';
 import type { JobDetail, JobSummary, RunStatus } from '@/lib/types';
 import { getDb, type Db, type Tx } from './db';
 import { destinations, jobs, jobVersions, queueHealth, runs, servers } from './db/schema';
@@ -174,6 +174,20 @@ export class IncompleteJobError extends Error {
 }
 
 /**
+ * Making a version active that deletes spooled files, when the active version did not,
+ * needs the user's confirmation: it is the one thing Spooldoc does that cannot be undone
+ * on the IBM i.
+ */
+export class ConfirmDeleteError extends Error {
+  readonly queue: string;
+  constructor(spec: JobSpec) {
+    super(deleteNotice(spec));
+    this.name = 'ConfirmDeleteError';
+    this.queue = `${spec.source.library}/${spec.source.queue}`;
+  }
+}
+
+/**
  * Problems that keep a spec from being saved as a version: missing parts and a
  * definition that does not parse.
  */
@@ -196,7 +210,10 @@ export function versionProblems(spec: JobSpec): string[] {
  * @throws IncompleteJobError when the draft is not complete
  * @returns The new version number
  */
-export async function saveVersion(job: JobRow, input: { note: string; activate: boolean; userId: string }): Promise<number> {
+export async function saveVersion(
+  job: JobRow,
+  input: { note: string; activate: boolean; userId: string; confirmDelete?: boolean },
+): Promise<number> {
   const spec = versionSpec(jobSpecSchema.parse(job.draft));
   const problems = versionProblems(spec);
   if (problems.length > 0) {
@@ -209,7 +226,7 @@ export async function saveVersion(job: JobRow, input: { note: string; activate: 
     const number = (last?.n ?? 0) + 1;
     await tx.insert(jobVersions).values({ jobId: job.id, number, spec, note: input.note, createdBy: input.userId });
     if (input.activate) {
-      await activate(tx, job, number, spec);
+      await activate(tx, job, number, spec, input.confirmDelete ?? false);
     }
     return number;
   });
@@ -219,9 +236,14 @@ export async function saveVersion(job: JobRow, input: { note: string; activate: 
  * Make a version the active one. Turning watching on (from a manual or no version)
  * starts it from now: the watcher first records the files already on the queue and
  * leaves them for Run now, unless the version's trigger has `backlog`, which runs them.
+ * A version that starts deleting spooled files throws `ConfirmDeleteError` unless
+ * `confirmDelete` is set.
  */
-async function activate(tx: Tx, job: JobRow, number: number, spec: JobSpec): Promise<void> {
+async function activate(tx: Tx, job: JobRow, number: number, spec: JobSpec, confirmDelete: boolean): Promise<void> {
   const before = await activeSpec(job, tx);
+  if (startsDeleting(spec, before) && !confirmDelete) {
+    throw new ConfirmDeleteError(spec);
+  }
   const startsWatching = spec.trigger.mode === 'watch' && before?.trigger.mode !== 'watch';
   // Turning the backlog or held files on while watching takes stock again: the waiting
   // files are run (backlog) or set aside (no backlog) with the new statuses.
@@ -240,7 +262,7 @@ async function activate(tx: Tx, job: JobRow, number: number, spec: JobSpec): Pro
 }
 
 /** Make an existing version active. Returns false when there is no such version. */
-export async function activateVersion(job: JobRow, number: number): Promise<boolean> {
+export async function activateVersion(job: JobRow, number: number, options: { confirmDelete?: boolean } = {}): Promise<boolean> {
   return getDb().transaction(async (tx) => {
     const [version] = await tx
       .select({ spec: jobVersions.spec })
@@ -249,7 +271,7 @@ export async function activateVersion(job: JobRow, number: number): Promise<bool
     if (!version) {
       return false;
     }
-    await activate(tx, job, number, jobSpecSchema.parse(version.spec));
+    await activate(tx, job, number, jobSpecSchema.parse(version.spec), options.confirmDelete ?? false);
     return true;
   });
 }

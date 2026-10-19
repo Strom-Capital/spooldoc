@@ -328,10 +328,54 @@ describe('runs', () => {
       connections.clear();
       const id = await readyJob();
       await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { finish } }), params({ id }));
-      await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+      await versions.POST(post(`/api/jobs/${id}/versions`, { confirmDelete: finish.action === 'delete' }), params({ id }));
       await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }));
       expect(fake().actions()).toEqual(expected);
     }
+  });
+
+  it('asks to confirm a version that starts deleting spooled files, and saves nothing until then', async () => {
+    const id = await readyJob();
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { finish: { action: 'delete', queue: null } } }), params({ id }));
+
+    const refused = await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({
+      error: `Spooled files on ${library}/${queue} will be deleted from the IBM i after their documents are delivered.`,
+      confirm: 'delete',
+      queue: `${library}/${queue}`,
+    });
+    const [before] = await db().select().from(jobs).where(eq(jobs.id, id));
+    expect(before!.activeVersion).toBe(1);
+    expect((await (await versions.GET(get(`/api/jobs/${id}/versions`), params({ id }))).json()).versions).toHaveLength(1);
+
+    // Saving without making it active needs no confirmation; making it active later does.
+    const saved = await (await versions.POST(post(`/api/jobs/${id}/versions`, { activate: false }), params({ id }))).json();
+    expect(saved.number).toBe(2);
+    expect((await activate.POST(post(`/api/jobs/${id}/versions/2/activate`), params({ id, n: '2' }))).status).toBe(409);
+    const activated = await activate.POST(post(`/api/jobs/${id}/versions/2/activate`, { confirmDelete: true }), params({ id, n: '2' }));
+    expect(activated.status).toBe(200);
+    expect((await activated.json()).activeVersion).toBe(2);
+
+    // Once a deleting version is active, the next deleting version needs no confirmation.
+    expect((await versions.POST(post(`/api/jobs/${id}/versions`, { note: 'still deletes' }), params({ id }))).status).toBe(201);
+  });
+
+  it('asks to confirm Delete on the first version too', async () => {
+    const id = await readyJob();
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { finish: { action: 'delete', queue: null } } }), params({ id }));
+    expect((await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }))).status).toBe(409);
+    expect((await versions.POST(post(`/api/jobs/${id}/versions`, { confirmDelete: true }), params({ id }))).status).toBe(201);
+  });
+
+  it('activates without a body, as before', async () => {
+    const id = await readyJob();
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    await versions.POST(post(`/api/jobs/${id}/versions`, { activate: false }), params({ id }));
+    const response = await activate.POST(appRequest(`/api/jobs/${id}/versions/2/activate`, { method: 'POST', headers: auth }), params({ id, n: '2' }));
+    expect(response.status).toBe(200);
+    expect((await response.json()).activeVersion).toBe(2);
   });
 
   it('fails a run for a file that is gone, without touching anything', async () => {
