@@ -1,4 +1,3 @@
-import { convertNunjucks } from '@spooldoc/core/convert';
 import { z } from 'zod';
 
 /** An IBM i object name: 1 to 10 characters, upper-cased. */
@@ -78,8 +77,7 @@ export const OUTPUT_ID = /^[a-z0-9-]{1,40}$/;
 
 /**
  * An output's template. HTML: `source: null` is the starter template generated from the
- * definition, and a Nunjucks template from before Carbone is converted to Carbone tags
- * when it is read. Word: `fileId` is an uploaded template file, which never changes, or
+ * definition. Word: `fileId` is an uploaded template file, which never changes, or
  * null for the Word starter template generated from the definition.
  */
 const templateSchema = z.discriminatedUnion('kind', [
@@ -89,8 +87,7 @@ const templateSchema = z.discriminatedUnion('kind', [
       .string()
       .max(500_000)
       .nullable()
-      .default(null)
-      .transform((source) => (source === null ? null : convertNunjucks(source))),
+      .default(null),
   }),
   z.object({ kind: z.literal('docx'), fileId: z.string().uuid().nullable().default(null) }),
 ]);
@@ -138,19 +135,6 @@ export function hasOwnTemplate(template: OutputTemplate): boolean {
 /** The output of a new job, and of a job saved before a job had several. */
 function firstOutput(): JobOutput {
   return { id: 'main', label: 'Document', template: { kind: 'html', source: null }, formats: ['pdf'] };
-}
-
-/**
- * A render part saved before outputs, `{ template, formats }` or the older `{ template, format }`,
- * as one output. Anything else is left to the schema.
- */
-function migrateRender(value: unknown): unknown {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || 'outputs' in value) {
-    return value;
-  }
-  const old = value as { template?: unknown; formats?: unknown; format?: unknown };
-  const formats = old.formats ?? (old.format === undefined ? ['pdf'] : [old.format]);
-  return { outputs: [{ ...firstOutput(), template: { kind: 'html', source: old.template ?? null }, formats }] };
 }
 
 /**
@@ -233,7 +217,7 @@ export const jobSpecSchema = z.object({
     .default({ mode: 'manual', backlog: false, includeHeld: false }),
   extract: z.object({ definition: z.string().max(200_000).default('') }).default({ definition: '' }),
   render: z
-    .preprocess(migrateRender, z.object({ outputs: z.array(outputSchema).min(1, 'Add at least one output') }))
+    .object({ outputs: z.array(outputSchema).min(1, 'Add at least one output') })
     .default(() => ({ outputs: [firstOutput()] })),
   destination: z.object({ destinationId: z.string().uuid().nullable().default(null) }).default({ destinationId: null }),
   finish: z

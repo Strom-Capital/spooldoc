@@ -1,5 +1,40 @@
-import { nunjucksSpans, type NunjucksSpan } from "./convert.js";
 import type { Definition } from "./definition.js";
+
+/** Nunjucks syntax in a text: `{{ }}`, `{% %}` or `{# #}`, with what is between the delimiters. */
+export interface NunjucksSpan {
+  start: number;
+  end: number;
+  kind: "{" | "%" | "#";
+  inner: string;
+}
+
+const CLOSE = { "{": "}}", "%": "%}", "#": "#}" } as const;
+
+/**
+ * The Nunjucks spans of a text, in order: each opener ends at the first closer of its kind
+ * after it. One pass with `indexOf`, since a regular expression such as `\{\{[\s\S]*?\}\}`
+ * is slow on a text with many openers and no closer.
+ */
+export function nunjucksSpans(text: string): NunjucksSpan[] {
+  const spans: NunjucksSpan[] = [];
+  // A kind with no closer after some opener has none after any later opener either.
+  const unclosed = new Set<string>();
+  let i = text.indexOf("{");
+  while (i !== -1 && i < text.length - 1) {
+    const kind = text[i + 1];
+    if ((kind === "{" || kind === "%" || kind === "#") && !unclosed.has(kind)) {
+      const close = text.indexOf(CLOSE[kind], i + 2);
+      if (close !== -1) {
+        spans.push({ start: i, end: close + 2, kind, inner: text.slice(i + 2, close) });
+        i = text.indexOf("{", close + 2);
+        continue;
+      }
+      unclosed.add(kind);
+    }
+    i = text.indexOf("{", i + 1);
+  }
+  return spans;
+}
 
 /**
  * Spooldoc's own check of a Carbone template, before every render. Carbone answers 200

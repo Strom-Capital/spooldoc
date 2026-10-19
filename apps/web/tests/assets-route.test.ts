@@ -54,9 +54,10 @@ describe('asset files', () => {
   });
 
   it('finds literal asset names in templates', () => {
-    expect(templateUsesAsset(`<img src="{{ asset('logo') }}">`, 'logo')).toBe(true);
-    expect(templateUsesAsset(`url("{{ asset( "logo" ) }}")`, 'logo')).toBe(true);
-    expect(templateUsesAsset(`{{ asset('logo-dark') }}`, 'logo')).toBe(false);
+    expect(templateUsesAsset(`<img src="{asset('logo')}">`, 'logo')).toBe(true);
+    expect(templateUsesAsset(`url("{asset( "logo" )}")`, 'logo')).toBe(true);
+    expect(templateUsesAsset(`{asset('logo-dark')}`, 'logo')).toBe(false);
+    expect(templateUsesAsset(`<img src="{{ asset('logo') }}">`, 'logo')).toBe(false);
     expect(templateUsesAsset(null, 'logo')).toBe(false);
   });
 });
@@ -113,7 +114,7 @@ describe('assets', () => {
 
   it('lists the jobs with an output whose template prints it', async () => {
     const serverId = await insertServer();
-    const lines = { id: 'lines', label: 'Lines', template: { kind: 'html' as const, source: `<img src="{{ asset('logo') }}">` }, formats: ['pdf' as const] };
+    const lines = { id: 'lines', label: 'Lines', template: { kind: 'html' as const, source: `<img src="{asset('logo')}">` }, formats: ['pdf' as const] };
     const jobId = await insertJob(serverId, { render: { outputs: [{ ...lines, id: 'main', label: 'Document', template: { kind: 'html', source: null } }, lines] } });
     await insertJob(serverId);
     await create('logo', PNG);

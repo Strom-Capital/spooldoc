@@ -43,9 +43,9 @@ export const dataUri = (contentType: string, content: Uint8Array): string => `da
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** True when a template prints the asset: `{asset('logo')}`, or `asset('logo')` in a Nunjucks template from before Carbone. */
+/** True when a template prints the asset: `{asset('logo')}`. */
 export function templateUsesAsset(template: string | null | undefined, name: string): boolean {
-  return !!template && new RegExp(`asset\\(\\s*(['"])${escapeRegExp(name)}\\1\\s*\\)`).test(template);
+  return !!template && new RegExp(`\\{asset\\(\\s*(['"])${escapeRegExp(name)}\\1\\s*\\)\\}`).test(template);
 }
 
 type AssetRow = typeof assets.$inferSelect;

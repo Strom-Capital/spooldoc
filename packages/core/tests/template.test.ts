@@ -92,11 +92,6 @@ describe("documentName", () => {
     expect(documentName(definition, documents[0] as Record<string, unknown>)).toBe("invoice-260101");
   });
 
-  it("converts a name pattern from before Carbone", () => {
-    const { definition } = loadFixture("invoice");
-    expect(documentName({ ...definition, output: { name: "invoice-{{ invoiceNo }}" } }, { invoiceNo: "260101" })).toBe("invoice-260101");
-  });
-
   it("makes names safe and falls back to type-n", () => {
     const { definition } = loadFixture("invoice");
     expect(documentName({ ...definition, output: { name: "{d.doc.a}/{d.doc.b}" } }, { a: "x y", b: "../z" })).toBe("x_y_.._z");
@@ -104,9 +99,9 @@ describe("documentName", () => {
     expect(documentName({ ...definition, output: undefined }, {}, 0)).toBe(`${definition.type}-1`);
   });
 
-  it("refuses formatters and Nunjucks it can't convert in output.name", () => {
+  it("refuses formatters and Nunjucks in output.name", () => {
     expect(namePatternProblems("inv-{d.doc.no}")).toEqual([]);
-    expect(namePatternProblems("inv-{{ no }}")).toEqual([]);
+    expect(namePatternProblems("inv-{{ no }}")[0]).toMatch(/write fields as \{d\.doc\.invoiceNo\}, not \{\{ no \}\}/);
     expect(namePatternProblems("inv-{d.doc.date:formatD(YYYY)}")[0]).toMatch(/without formatters/);
     expect(namePatternProblems("inv-{{ no | wordcount }}")[0]).toMatch(/write fields as \{d\.doc\.invoiceNo\}/);
     const { yaml } = loadFixture("invoice");

@@ -111,7 +111,8 @@ body, header or footer):
 - a tag whose field is not in the definition, such as `{d.doc.invoiceNumber}`,
   with the field it most likely means;
 - double quotes or curly quotes inside a tag;
-- Nunjucks left over, such as `{{ doc.x }}` or `{% for %}`;
+- Nunjucks, such as `{{ doc.x }}` or `{% for %}`, from Spooldoc 0.2 and older
+  or pasted from elsewhere;
 - a tag that is never closed;
 - an asset name that is not uploaded.
 
@@ -119,29 +120,6 @@ A template with problems is not rendered, in the preview or in a run.
 Carbone's own errors, such as a loop without an `[i+1]` row or a
 formatter it does not have, show with Spooldoc's message on top and
 Carbone's text under Details.
-
-## Templates from before Carbone
-
-Spooldoc 0.2 and older used [Nunjucks](https://mozilla.github.io/nunjucks/)
-tags. A Nunjucks template is converted to Carbone tags when Spooldoc reads
-it, for the common cases:
-
-| Nunjucks | Carbone |
-|----------|---------|
-| `{{ doc.invoiceNo }}` | `{d.doc.invoiceNo}` |
-| `{% for row in doc.lines %}<tr>...</tr>{% endfor %}` | an `[i]` row and an `[i+1]` row |
-| `{% if doc.address2 %}...{% else %}...{% endif %}` | `showBegin` and `showEnd` |
-| `money`, `money("EUR")` | `:formatN(2)`, followed by ` EUR` |
-| `date`, `date("yyyy-MM-dd")` | `:formatD('DD.MM.YYYY')`, `:formatD('YYYY-MM-DD')` |
-| `pad(8)`, `pad(8, "right", ".")` | `:padl(8)`, `:padr(8, '.')` |
-| `upper`, `lower` | `:upperCase`, `:lowerCase` |
-| `asset('logo')` | `{asset('logo')}` |
-| `{# note #}` | `<!-- note -->` |
-
-Anything the converter can't map stays as it was, and the check lists its
-lines: a loop over more than one element, `elif`, `and` and `or`, `set`,
-`loop.index`, and other filters. Fix those by hand. A job's draft keeps
-the converted template once you save it.
 
 ## Word templates
 

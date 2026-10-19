@@ -1,4 +1,3 @@
-import { convertNamePattern } from "./convert.js";
 import type { Definition, ValueType } from "./definition.js";
 import type { DocxTemplate } from "./docx.js";
 import { firstTag } from "./html.js";
@@ -101,10 +100,9 @@ function valueAt(data: unknown, path: string): unknown {
 /** Tags in a file name pattern: `{d.doc.invoiceNo}`, plain paths without formatters. */
 const NAME_TAG = /\{d\.([A-Za-z_][\w.[\]]*)\}/g;
 
-/** Problems with a file name pattern: Nunjucks the converter can't map, or tags with formatters. */
+/** Problems with a file name pattern: Nunjucks such as `{{ invoiceNo }}`, or tags with formatters. */
 export function namePatternProblems(pattern: string): string[] {
-  const converted = convertNamePattern(pattern);
-  const rest = converted.replace(NAME_TAG, "");
+  const rest = pattern.replace(NAME_TAG, "");
   const nunjucks = [rest.indexOf("{{"), rest.indexOf("{%")].filter((i) => i !== -1);
   if (nunjucks.length > 0) {
     const start = Math.min(...nunjucks);
@@ -118,15 +116,13 @@ export function namePatternProblems(pattern: string): string[] {
 
 /**
  * Renders the definition's `output.name` (or `type-n`) for one document, as a
- * filesystem-safe name. The pattern takes tags like `{d.doc.invoiceNo}`; a pattern from
- * before Carbone (`invoice-{{ invoiceNo }}`) is converted first.
+ * filesystem-safe name. The pattern takes tags like `{d.doc.invoiceNo}`.
  */
 export function documentName(def: Definition, doc: Record<string, unknown>, index = 0): string {
   const fallback = `${def.type}-${index + 1}`;
   let name = fallback;
   if (def.output?.name) {
-    const pattern = convertNamePattern(def.output.name);
-    name = pattern.replace(NAME_TAG, (_tag, path: string) => {
+    name = def.output.name.replace(NAME_TAG, (_tag, path: string) => {
       const value = valueAt({ doc }, path);
       return value === null || value === undefined || typeof value === "object" ? "" : String(value);
     });
@@ -179,8 +175,7 @@ export function starterLayout(def: Definition): { title: string; fields: Starter
       blocks.push({ name, columns: Object.entries(g.map).map(([column, value]) => ({ name: column, type: xmlType(value) })) });
     }
   }
-  // A title from before Carbone (`Invoice {{ invoiceNo }}`) is converted like `output.name`.
-  return { title: def.output?.title ? convertNamePattern(def.output.title) : fieldLabel(def.type), fields, blocks };
+  return { title: def.output?.title ?? fieldLabel(def.type), fields, blocks };
 }
 
 function tableHtml(block: StarterBlock): string {
