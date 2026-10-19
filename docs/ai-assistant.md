@@ -13,7 +13,7 @@ set, the job builder works as before and the assistant points to Settings.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/ai-assistant-dark.png">
-    <img src="assets/ai-assistant-light.png" alt="The AI assistant panel beside the workbench, with suggested prompts, the Values masked badge and the model name under the message box" width="900">
+    <img src="assets/ai-assistant-light.png" alt="The AI assistant panel beside the workbench, with suggested prompts, the Values masked badge, and under the message box the template it works on and the model name" width="900">
   </picture>
 </p>
 

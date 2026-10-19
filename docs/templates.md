@@ -19,7 +19,7 @@ Cloud. See [Carbone](carbone.md) to set one up.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/template-preview-dark.png">
-    <img src="assets/template-preview-light.png" alt="The render step of a job with two templates: the Document template picked, with its kind (HTML template), its PDF and HTML switches and Add template, its HTML in an editor on the left and the rendered invoice preview on the right" width="900">
+    <img src="assets/template-preview-light.png" alt="The render step of a job with two templates as tabs, Document and Lines, with Add template and JSON at the end of the row; below them the open template's kind (HTML template) and its PDF and HTML switches, its HTML in an editor on the left and the rendered invoice preview on the right" width="900">
   </picture>
 </p>
 
