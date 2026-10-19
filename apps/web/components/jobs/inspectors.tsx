@@ -175,13 +175,6 @@ export function DestinationInspector() {
           </Choice>
         ))}
       </div>
-      <p className="text-muted-foreground text-sm">
-        SFTP, S3, IFS, email and webhooks are coming later. See{' '}
-        <Link href="/destinations" className="text-primary hover:underline">
-          Destinations
-        </Link>
-        .
-      </p>
     </Panel>
   );
 }

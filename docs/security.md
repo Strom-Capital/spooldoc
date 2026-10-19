@@ -52,6 +52,8 @@ Everything is in Postgres:
 The app needs a sign-in (Better Auth, email and password). Anyone may
 create the first account on the login page; after that sign-up is closed,
 and one sign-up at a time is accepted so two first accounts cannot race.
+A later sign-up is refused with a message saying the instance has one
+account and to sign in with it.
 There is one role: every signed-in user can do everything. More users and
 roles are on the roadmap. Every write is origin-checked against `APP_URL`
 and the request's own host, and the session cookie is secure under https.
