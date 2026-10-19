@@ -101,8 +101,9 @@ The same thing looks, reads and behaves the same everywhere.
 In practice:
 
 - One component for each pattern: selects, empty states, loading states,
-  confirmations. Look in `components/ui` and `components/page.tsx` before
-  adding one.
+  confirmations. Look in `components/ui`, `components/page.tsx` and
+  `components/empty-state.tsx` before adding one. A list loads with
+  `Loading`; a table already on screen keeps its shape with `SkeletonRows`.
 - One word for each state and action. A paused job is "paused" in the
   list, the builder and the toast.
 - Errors read "Could not ..." and say what to do. Success toasts say

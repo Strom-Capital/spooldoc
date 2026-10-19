@@ -3,7 +3,7 @@ import { guard } from '@/lib/server/auth';
 import { getConfig } from '@/lib/server/config';
 import { getDb } from '@/lib/server/db';
 import { servers } from '@/lib/server/db/schema';
-import { errorResponse, json, readJson } from '@/lib/server/http';
+import { errorResponse, invalidResponse, json, readJson } from '@/lib/server/http';
 import { closeConnection, connectionErrorResponse, signOn } from '@/lib/server/ibmi';
 import { jobsUsingServer } from '@/lib/server/jobs-using';
 import { encryptSecret } from '@/lib/server/secrets';
@@ -58,7 +58,7 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
   const targetChanged = (change.host !== undefined && change.host !== row.host) || (change.user !== undefined && change.user !== row.user);
   // The saved password is only ever sent to the host and user it was entered for.
   if (targetChanged && change.password === undefined) {
-    return errorResponse(400, 'password: Enter the password again for the new host or user.');
+    return invalidResponse('Enter the password again for the new host or user.', ['password']);
   }
   const signOnChanged = targetChanged || change.password !== undefined;
   if (signOnChanged) {
@@ -70,7 +70,7 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
     }
     const creds = { host, user: change.user ?? row.user, password: change.password ?? old?.password ?? '' };
     if (!creds.password) {
-      return errorResponse(400, 'password: Enter the password again.');
+      return invalidResponse('Enter the password again.', ['password']);
     }
     try {
       const info = await signOn(creds);

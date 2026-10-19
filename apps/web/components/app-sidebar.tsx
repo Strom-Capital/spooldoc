@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { authClient } from '@/lib/client/auth';
+import { shortcut } from '@/lib/client/keys';
 import { useAppInfo } from './app-info';
 import { Logo } from './logo';
 import { ThemeMenu } from './theme-menu';
@@ -83,7 +84,9 @@ export function AppSidebar() {
                 <PanelLeftIcon />
               </Button>
             </TooltipTrigger>
-            <TooltipContent side="right">{collapsed ? 'Expand' : 'Collapse'} (Ctrl+B)</TooltipContent>
+            <TooltipContent side="right">
+              {collapsed ? 'Expand' : 'Collapse'} ({shortcut('B')})
+            </TooltipContent>
           </Tooltip>
         )}
       </SidebarHeader>

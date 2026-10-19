@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkFetchSite, checkOrigin, redact } from '@/lib/server/http';
+import { checkFetchSite, checkOrigin, invalidResponse, redact } from '@/lib/server/http';
 
 const request = (method: string, headers: Record<string, string>) =>
   new Request('http://localhost:3000/api/x', { method, headers: { host: 'localhost:3000', ...headers } });
@@ -42,5 +42,24 @@ describe('redact', () => {
     expect(redact(new Error('Sign-on failed for pw Secret99\nstack'), ['Secret99'])).toBe('Sign-on failed for pw ***');
     expect(redact(new Error('PASSWORD SECRET99 WRONG'), ['Secret99'])).toBe('PASSWORD *** WRONG');
     expect(redact('not an error')).toBe('Request failed');
+  });
+});
+
+describe('invalidResponse', () => {
+  it('shows a message written for people as a sentence, with the field apart', async () => {
+    const response = invalidResponse('Enter the password', ['password']);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'Enter the password.', field: 'password' });
+  });
+
+  it('keeps the field in front of zod\'s own messages', async () => {
+    expect(await invalidResponse('Invalid input: expected string, received number', ['source', 'queue']).json()).toEqual({
+      error: 'source.queue: Invalid input: expected string, received number.',
+      field: 'source.queue',
+    });
+  });
+
+  it('leaves out the field for the body as a whole', async () => {
+    expect(await invalidResponse('Invalid request.', []).json()).toEqual({ error: 'Invalid request.' });
   });
 });

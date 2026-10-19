@@ -79,17 +79,17 @@ describe('AI settings', () => {
   });
 
   it.each([
-    [{ provider: 'mistral' }, 'ai.provider: Choose a provider from the list'],
-    [{ provider: 'anthropic', effort: 'huge' }, 'ai.effort: Choose an effort from the list'],
-    [{ provider: 'anthropic', model: '  ' }, 'ai.model: Enter a model'],
-    [{ provider: 'local', model: 'qwen3', baseUrl: 'ftp://host' }, 'ai.baseUrl: Enter an http or https URL'],
-    [{ provider: 'local', model: 'qwen3' }, 'ai.baseUrl: Enter the base URL of the local model'],
-    [{ provider: 'local', baseUrl: 'http://localhost:11434/v1' }, 'ai.model: Enter a model'],
-    [{ provider: 'anthropic', apiKey: 'x'.repeat(501) }, 'ai.apiKey: The key is too long'],
+    [{ provider: 'mistral' }, { error: 'Choose a provider from the list.', field: 'ai.provider' }],
+    [{ provider: 'anthropic', effort: 'huge' }, { error: 'Choose an effort from the list.', field: 'ai.effort' }],
+    [{ provider: 'anthropic', model: '  ' }, { error: 'Enter a model.', field: 'ai.model' }],
+    [{ provider: 'local', model: 'qwen3', baseUrl: 'ftp://host' }, { error: 'Enter an http or https URL.', field: 'ai.baseUrl' }],
+    [{ provider: 'local', model: 'qwen3' }, { error: 'Enter the base URL of the local model.', field: 'ai.baseUrl' }],
+    [{ provider: 'local', baseUrl: 'http://localhost:11434/v1' }, { error: 'Enter a model.', field: 'ai.model' }],
+    [{ provider: 'anthropic', apiKey: 'x'.repeat(501) }, { error: 'The key is too long.', field: 'ai.apiKey' }],
   ])('refuses %j', async (body, message) => {
     const response = await put({ ai: body });
     expect(response.status).toBe(400);
-    expect(((await response.json()) as { error: string }).error).toBe(message);
+    expect(await response.json()).toEqual(message);
     expect((await ai()).provider).toBeNull();
   });
 

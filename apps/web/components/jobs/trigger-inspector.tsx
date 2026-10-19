@@ -141,7 +141,7 @@ export function TriggerInspector() {
 
       {watching && others.length > 0 && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          <UsersIcon className="mt-0.5 size-4 shrink-0 text-amber-600" />
+          <UsersIcon className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
           <div>
             <p>
               {library}/{queue} is also watched by{' '}
@@ -207,7 +207,7 @@ export function TriggerInspector() {
             {!library ? null : queues === null && !queuesError ? (
               <Skeleton className="h-5 w-24 rounded-full" />
             ) : realtime ? (
-              <Badge className="gap-1 bg-emerald-600 text-white hover:bg-emerald-600">
+              <Badge className="gap-1 bg-emerald-600 text-white hover:bg-emerald-600 dark:bg-emerald-500 dark:text-emerald-950">
                 <ZapIcon />
                 Real-time
               </Badge>
@@ -282,7 +282,7 @@ export function TriggerInspector() {
                         Use {info.dataQueue?.library}/{info.dataQueue?.name} for real-time
                       </Button>
                       <p className="flex items-start gap-1.5 text-muted-foreground text-xs">
-                        <AlertTriangleIcon className="mt-px size-3.5 shrink-0 text-amber-600" />
+                        <AlertTriangleIcon className="mt-px size-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
                         Only when nothing else reads it: Spooldoc takes the entries off the data queue as it reads them.
                       </p>
                     </div>
@@ -328,8 +328,8 @@ export function TriggerInspector() {
       <SettingRow id="job-paused" title="Paused" text="A paused job is not watched. Files that arrive meanwhile are left for Run now.">
         <Switch id="job-paused" checked={job.paused} onCheckedChange={(paused) =>
             void updateJob({ paused }).then(
-              () => toast.success(paused ? 'Job paused' : 'Job resumed'),
-              (err) => toast.error(paused ? 'Could not pause the job' : 'Could not resume the job', { description: errorText(err) }),
+              () => toast.success(paused ? `Paused ${job.name}` : `Resumed ${job.name}`),
+              (err) => toast.error(paused ? `Could not pause ${job.name}` : `Could not resume ${job.name}`, { description: errorText(err) }),
             )
           } />
       </SettingRow>

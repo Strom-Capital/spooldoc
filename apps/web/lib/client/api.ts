@@ -19,7 +19,7 @@ export class ApiError extends Error {
  * Call one of the app's API routes: same-origin credentials, no cache, JSON in and out.
  *
  * @param path - Path such as `/api/samples`
- * @param init - Method and a JSON-serializable body
+ * @param init - Method and a JSON-serializable body, or `FormData` for an upload
  * @returns The parsed JSON, or undefined for 204
  * @throws ApiError with the server's message when the status is not 2xx
  */
@@ -31,8 +31,9 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
       credentials: 'same-origin',
       cache: 'no-store',
       signal: init.signal,
-      headers: init.body === undefined ? undefined : { 'Content-Type': 'application/json' },
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      // FormData sets its own multipart content type.
+      headers: init.body === undefined || init.body instanceof FormData ? undefined : { 'Content-Type': 'application/json' },
+      body: init.body === undefined ? undefined : init.body instanceof FormData ? init.body : JSON.stringify(init.body),
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {

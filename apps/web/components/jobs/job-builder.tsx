@@ -103,14 +103,13 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
   const { job, viewing, setViewing, draftDiffers, updateJob } = useJob();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function onRename(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = String(new FormData(event.currentTarget).get('name') ?? '').trim();
     setEditing(false);
     if (name && name !== job.name) {
-      await updateJob({ name }).catch((err) => setError(errorText(err)));
+      await updateJob({ name }).catch((err) => toast.error('Could not rename the job', { description: errorText(err) }));
     }
   }
 
@@ -120,7 +119,7 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
       toast.success(`Deleted ${job.name}`);
       router.push('/jobs');
     } catch (err) {
-      setError(errorText(err));
+      toast.error(`Could not delete ${job.name}`, { description: errorText(err) });
     }
   }
 
@@ -146,11 +145,10 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
                 v{job.activeVersion} active
               </Badge>
             ) : (
-              <span>No version saved yet</span>
+              <span>Draft only</span>
             )}
             {viewing === 'draft' && job.activeVersion !== null && draftDiffers && <span>Draft has changes</span>}
             {job.paused && <Badge variant="outline" className="h-4 px-1.5 text-[10px]">Paused</Badge>}
-            {error && <span className="text-destructive">{error}</span>}
           </div>
         </div>
         <Select value={String(viewing)} onValueChange={(value) => void setViewing(value === 'draft' ? 'draft' : Number(value))}>
@@ -187,7 +185,7 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
             <DropdownMenuItem asChild>
               <Link href={`/runs?job=${job.id}`}>
                 <ScrollTextIcon />
-                Runs of this job
+                Job log for this job
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -225,7 +223,6 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
 function VersionBanner() {
   const { job, spec, activeSpec, viewing, setViewing, refresh } = useJob();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   // The notice to confirm before the version is made active, while the question is open.
   const [confirm, setConfirm] = useState<string | null>(null);
   if (viewing === 'draft') {
@@ -237,7 +234,6 @@ function VersionBanner() {
 
   async function act(path: 'restore' | 'activate', confirmDelete = false) {
     setBusy(true);
-    setError(null);
     try {
       await api(`/api/jobs/${job.id}/versions/${viewing}/${path}`, { method: 'POST', body: path === 'activate' ? { confirmDelete } : undefined });
       toast.success(path === 'activate' ? `Version ${viewing} is now active` : `Version ${viewing} copied to the draft`);
@@ -247,7 +243,7 @@ function VersionBanner() {
       if (path === 'activate' && err instanceof ApiError && err.status === 409) {
         setConfirm(err.message);
       } else {
-        setError(errorText(err));
+        toast.error(path === 'activate' ? `Could not make version ${viewing} active` : `Could not restore version ${viewing}`, { description: errorText(err) });
       }
     } finally {
       setBusy(false);
@@ -269,7 +265,6 @@ function VersionBanner() {
         {version ? `, saved ${dateTime(version.createdAt)}` : ''}
         {version?.note ? ` (${version.note})` : ''}. It is read-only.
       </span>
-      {error && <span className="text-destructive">{error}</span>}
       <div className="ml-auto flex gap-1.5">
         {job.activeVersion !== viewing && (
           <Button size="xs" variant="outline" disabled={busy} onClick={onActivate}>

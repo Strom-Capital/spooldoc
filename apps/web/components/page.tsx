@@ -67,7 +67,3 @@ export function ErrorNote({ children, detail, className }: { children: ReactNode
   );
 }
 
-/** A muted box for an empty list. */
-export function EmptyNote({ children }: { children: ReactNode }) {
-  return <div className="rounded-lg border border-dashed px-4 py-10 text-center text-muted-foreground text-sm">{children}</div>;
-}

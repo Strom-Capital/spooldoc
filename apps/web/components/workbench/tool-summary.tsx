@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 const ICONS = {
   running: <Spinner className="size-3.5" />,
   ok: <CheckIcon className="size-3.5 text-green-600" />,
-  warn: <AlertTriangleIcon className="size-3.5 text-amber-600" />,
+  warn: <AlertTriangleIcon className="size-3.5 text-amber-600 dark:text-amber-400" />,
   error: <XIcon className="size-3.5 text-destructive" />,
 };
 

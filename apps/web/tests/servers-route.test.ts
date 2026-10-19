@@ -85,7 +85,7 @@ describe('/api/servers', () => {
     for (const body of [{ host: 'elsewhere.example.com' }, { user: 'other' }]) {
       const response = await one.PATCH(appRequest(`/api/servers/${id}`, { method: 'PATCH', body, headers: auth }), params({ id }));
       expect(response.status).toBe(400);
-      expect((await response.json()).error).toMatch(/^password:/);
+      expect(await response.json()).toEqual({ error: 'Enter the password again for the new host or user.', field: 'password' });
     }
     expect((await db().select().from(servers))[0]).toMatchObject({ host: 'ibmi.example.com', user: 'DEMOUSER' });
   });

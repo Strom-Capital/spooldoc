@@ -109,8 +109,25 @@ export async function readJson<T>(
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
-    const where = issue && issue.path.length > 0 ? `${issue.path.map(String).join('.')}: ` : '';
-    return { response: errorResponse(400, `${where}${issue?.message ?? 'Invalid request.'}`) };
+    return { response: invalidResponse(issue?.message ?? 'Invalid request.', issue?.path ?? []) };
   }
   return { data: parsed.data };
+}
+
+// zod's own messages, which do not say which field they are about.
+const GENERIC = /^(Invalid|Too (big|small)|Unrecognized|Expected|Required)\b/;
+
+/**
+ * A 400 for a value that is not valid: `{ error, field }`. A message the schema wrote for
+ * people ("Enter the password") is shown as a sentence; one of zod's own keeps the field
+ * name in front, since it does not say which field it is about.
+ *
+ * @param message - The issue's message
+ * @param path - Where in the body the issue is
+ */
+export function invalidResponse(message: string, path: readonly PropertyKey[]): Response {
+  const field = path.length > 0 ? path.map(String).join('.') : undefined;
+  const sentence = /[.!?]$/.test(message) ? message : `${message}.`;
+  const error = GENERIC.test(message) && field ? `${field}: ${sentence}` : sentence;
+  return json(field ? { error, field } : { error }, { status: 400 });
 }

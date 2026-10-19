@@ -4,7 +4,8 @@ import { CheckIcon, CopyIcon, ImageIcon, MoreHorizontalIcon, PlusIcon, RefreshCw
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
-import { EmptyNote, ErrorNote, Page } from '@/components/page';
+import { EmptyState, Loading } from '@/components/empty-state';
+import { ErrorNote, Page } from '@/components/page';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +22,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { api, ApiError, errorText } from '@/lib/client/api';
+import { api, errorText } from '@/lib/client/api';
 import { ago, bytes } from '@/lib/client/format';
 import type { AssetView } from '@/lib/types';
 
@@ -42,21 +43,6 @@ function usage(asset: AssetView): string {
   return asset.kind === 'font'
     ? `@font-face { font-family: "${asset.name}"; src: url("{{ asset('${asset.name}') }}"); }`
     : `<img src="{{ asset('${asset.name}') }}" alt="">`;
-}
-
-/** Send a multipart upload to an asset route; errors like `api`. */
-async function upload(path: string, method: 'POST' | 'PUT', form: FormData): Promise<AssetView> {
-  let response: Response;
-  try {
-    response = await fetch(path, { method, body: form, credentials: 'same-origin', cache: 'no-store' });
-  } catch {
-    throw new ApiError(0, 'The server did not answer. Is it running?');
-  }
-  const data = (await response.json().catch(() => ({}))) as AssetView & { error?: string };
-  if (!response.ok) {
-    throw new ApiError(response.status, data.error ?? `Upload failed (HTTP ${response.status}).`);
-  }
-  return data;
 }
 
 /** Images and fonts that templates print with `asset('name')`. */
@@ -97,7 +83,7 @@ export function AssetsPage() {
     form.set('file', file);
     setReplacing(asset.id);
     try {
-      await upload(`/api/assets/${asset.id}`, 'PUT', form);
+      await api<AssetView>(`/api/assets/${asset.id}`, { method: 'PUT', body: form });
       toast.success(`Replaced the file of ${asset.name}`);
       await load();
     } catch (err) {
@@ -136,21 +122,15 @@ export function AssetsPage() {
     >
       {error && <ErrorNote className="mb-4">{error}</ErrorNote>}
       {assets === null && !error && (
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <Spinner /> Loading assets...
-        </div>
+        <Loading>Loading assets...</Loading>
       )}
       {assets?.length === 0 && (
-        <EmptyNote>
-          <ImageIcon className="mx-auto mb-2 size-6" aria-hidden />
-          No assets yet. Upload a company logo or a font to use it in templates.
-          <div className="mt-4">
-            <Button onClick={() => setAdding(true)}>
-              <PlusIcon />
-              Upload asset
-            </Button>
-          </div>
-        </EmptyNote>
+        <EmptyState icon={ImageIcon} title="No assets yet" description="Upload a company logo or a font to use it in templates.">
+          <Button onClick={() => setAdding(true)}>
+            <PlusIcon />
+            Upload asset
+          </Button>
+        </EmptyState>
       )}
       {assets && assets.length > 0 && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -340,7 +320,7 @@ function UploadDialog({ onClose, onSaved }: { onClose(): void; onSaved(asset: As
     setBusy(true);
     setError(null);
     try {
-      onSaved(await upload('/api/assets', 'POST', new FormData(event.currentTarget)));
+      onSaved(await api<AssetView>('/api/assets', { method: 'POST', body: new FormData(event.currentTarget) }));
     } catch (err) {
       setError(errorText(err));
       setBusy(false);

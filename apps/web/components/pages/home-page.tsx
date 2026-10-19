@@ -9,6 +9,7 @@ import { KpiTile } from '@/components/home/kpi-tile';
 import { RANGES, RunsChart } from '@/components/home/runs-chart';
 import { ErrorNote, Page } from '@/components/page';
 import { api, errorText } from '@/lib/client/api';
+import { pollWhileVisible } from '@/lib/client/poll';
 import type { AttentionItem, DashboardRange, DashboardView } from '@/lib/types';
 
 const RANGE_KEY = 'spooldoc.home.range';
@@ -56,10 +57,10 @@ export function HomePage() {
         (err) => !cancelled && setError(errorText(err)),
       );
     void fetchView();
-    const timer = setInterval(() => void fetchView(), 30_000);
+    const stop = pollWhileVisible(() => void fetchView(), 30_000);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      stop();
     };
   }, [saved, reloads]);
 
