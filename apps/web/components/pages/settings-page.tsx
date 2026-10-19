@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { Switch } from '@/components/ui/switch';
 import { AI_PROVIDERS, aiProvider, DEFAULT_LOCAL_BASE_URL, EFFORTS, type AiProviderId, type Effort } from '@/lib/ai-providers';
 import { api, errorText } from '@/lib/client/api';
 import type { AiSettingsView, CarboneCheck, RenderingView, SettingsView } from '@/lib/types';
@@ -72,15 +73,18 @@ interface AiDraft {
   baseUrl: string;
   apiKey: string;
   removeKey: boolean;
+  /** Mask values before they go to the model. */
+  mask: boolean;
 }
 
 /** A provider's saved settings as a draft, or an empty one for no provider. */
 function aiDraft(ai: AiSettingsView, provider: AiProviderId | null): AiDraft {
   if (!provider) {
-    return { provider, model: '', effort: 'provider-default', baseUrl: '', apiKey: '', removeKey: false };
+    return { provider, model: '', effort: 'provider-default', baseUrl: '', apiKey: '', removeKey: false, mask: ai.mask };
   }
   const saved = ai.providers[provider];
   return {
+    mask: ai.mask,
     provider,
     model: saved.model ?? aiProvider(provider).defaultModel,
     effort: saved.effort,
@@ -97,6 +101,7 @@ function aiChange(ai: AiDraft) {
   }
   return {
     provider: ai.provider,
+    mask: ai.mask,
     model: ai.model.trim() || undefined,
     effort: ai.effort,
     baseUrl: ai.provider === 'local' ? ai.baseUrl.trim() : undefined,
@@ -104,7 +109,7 @@ function aiChange(ai: AiDraft) {
   };
 }
 
-/** The provider, key, model and effort the workbench chat uses. */
+/** The provider, key, model and effort the workbench chat uses, and whether values are masked. */
 function AiSection({ saved, ai, onChange }: { saved: AiSettingsView; ai: AiDraft; onChange(ai: AiDraft): void }) {
   const meta = ai.provider ? aiProvider(ai.provider) : null;
   const hasKey = ai.provider ? saved.providers[ai.provider].hasKey : false;
@@ -117,7 +122,10 @@ function AiSection({ saved, ai, onChange }: { saved: AiSettingsView; ai: AiDraft
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="ai-provider">Provider</Label>
-          <Select value={ai.provider ?? 'none'} onValueChange={(next) => onChange(aiDraft(saved, (next === 'none' ? null : next) as AiProviderId | null))}>
+          <Select
+            value={ai.provider ?? 'none'}
+            onValueChange={(next) => onChange({ ...aiDraft(saved, (next === 'none' ? null : next) as AiProviderId | null), mask: ai.mask })}
+          >
             <SelectTrigger id="ai-provider" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -213,6 +221,21 @@ function AiSection({ saved, ai, onChange }: { saved: AiSettingsView; ai: AiDraft
                   ? `No key saved yet: the chat stays off until you add one. ${meta.keyHint}`
                   : `Stored encrypted on the server and never shown again. ${meta.keyHint}`}
             </p>
+          </div>
+        )}
+        {meta && (
+          <div className="flex items-start justify-between gap-3 rounded-lg border p-4 sm:col-span-2">
+            <div>
+              <Label htmlFor="ai-mask" className="font-medium">
+                Mask values
+              </Label>
+              <p className="text-muted-foreground text-xs">
+                {ai.mask
+                  ? 'Digits become 9 and letters X or x before page text and tool results go to the model. It sees the layout, not the customer, and reads and designs less well from values it cannot read.'
+                  : `The model sees values as printed, which helps it read the pages and design templates. ${ai.provider === 'local' ? 'A local model keeps them on your network.' : 'The provider processes them under its own terms; a local model keeps them on your network.'}`}
+              </p>
+            </div>
+            <Switch id="ai-mask" checked={ai.mask} onCheckedChange={(mask) => onChange({ ...ai, mask })} />
           </div>
         )}
       </div>

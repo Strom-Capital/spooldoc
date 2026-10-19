@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { assetNames } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
 import { buildInstructions, buildTools, hasContent, trimHistory, wordTemplates } from '@/lib/server/chat';
-import { getConfig } from '@/lib/server/config';
 import { previewRenderer } from '@/lib/server/documents';
 import { draftStore } from '@/lib/server/draft-store';
 import { errorResponse, json, readJson, redact } from '@/lib/server/http';
@@ -14,6 +13,7 @@ import { getJobRow } from '@/lib/server/jobs';
 import { log } from '@/lib/server/log';
 import { createModel } from '@/lib/server/models';
 import { getRendering } from '@/lib/server/rendering';
+import { maskingOn } from '@/lib/server/settings';
 import { getTemplateFile } from '@/lib/server/template-files';
 
 export const dynamic = 'force-dynamic';
@@ -49,8 +49,8 @@ export async function GET(request: Request, { params }: Context): Promise<Respon
 
 /**
  * Stream the model's answer for one job. The model gets the job's preview spooled file
- * (page text masked by default), its metadata and the draft's definition and template,
- * the recent part of the thread, and tools that read the sample, write the draft and
+ * (page text masked when masking is on, under Settings), its metadata and the draft's
+ * definition and template, the recent part of the thread, and tools that read the sample, write the draft and
  * read other jobs' definitions and templates. It never gets the login session or the
  * IBM i connection. When the answer ends, the whole thread is stored with the job.
  */
@@ -64,7 +64,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
     return body.response;
   }
   const { messages } = body.data;
-  const config = getConfig();
+  const masked = await maskingOn();
   const job = await getJobRow((await params).id);
   if (!job) {
     return errorResponse(404, 'Job not found.');
@@ -97,7 +97,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
         sample,
         definitionYaml: draft.extract.definition.trim() ? draft.extract.definition : null,
         outputs: draft.render.outputs,
-        masked: config.mask,
+        masked,
         assets,
         carbone: (await getRendering()).check,
         wordTemplates: words,
@@ -106,7 +106,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
       tools: buildTools({
         sample,
         store: draftStore(job.id),
-        masked: config.mask,
+        masked,
         assets,
         renderer: await previewRenderer(),
         jobs: jobFilesReader(job.id),

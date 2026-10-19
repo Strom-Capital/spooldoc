@@ -8,8 +8,12 @@ export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== 'nodejs') {
     return;
   }
-  const { getConfig } = await import('./lib/server/config');
+  const { getConfig, retiredSettings } = await import('./lib/server/config');
   const config = getConfig();
+  const { log } = await import('./lib/server/log');
+  for (const message of retiredSettings()) {
+    log.warn(message);
+  }
   if (process.env.SPOOLDOC_MIGRATE !== 'off') {
     const { runMigrations } = await import('./lib/server/db');
     await runMigrations();
