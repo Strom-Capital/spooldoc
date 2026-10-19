@@ -164,6 +164,20 @@ export async function renderingReady(): Promise<boolean> {
   }
 }
 
+/** How long a failed check stands before `renderingCheck` checks again. */
+export const FAILED_RECHECK_MS = 60_000;
+
+/**
+ * The connection as a run would find it: the last check, or a new one when there is none
+ * or the last one failed more than a minute ago, so a server that came back is not held
+ * to an old failure until the next scheduled check.
+ */
+export async function renderingCheck(): Promise<CarboneCheck> {
+  const last = (await readRow()).carboneCheck;
+  if (last && (last.ok || Date.now() - Date.parse(last.at) < FAILED_RECHECK_MS)) return last;
+  return checkCarbone();
+}
+
 /** A change to the rendering settings. */
 export interface RenderingChange {
   mode: 'onprem' | 'cloud';
