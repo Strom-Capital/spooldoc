@@ -112,7 +112,7 @@ const RETIRED: Record<string, string> = {
 };
 
 /** What to say about settings in the environment that Spooldoc no longer reads, one message each. */
-export function retiredSettings(env: NodeJS.ProcessEnv = process.env): string[] {
+export function retiredSettings(env: Record<string, string | undefined> = process.env): string[] {
   return Object.entries(RETIRED)
     .filter(([name]) => env[name] !== undefined)
     .map(([, message]) => message);

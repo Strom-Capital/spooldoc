@@ -7,7 +7,7 @@ export interface AppInfo {
   user: { id: string; email: string; name: string };
   /** The chat model, never its key. */
   model: { provider: string; id: string } | null;
-  /** Values are masked before page text goes to the model. */
+  /** Values are masked before page text goes to the model (Settings, AI model). */
   masking: boolean;
   /** The last check found a working Carbone server, so documents can be rendered. */
   rendering: boolean;

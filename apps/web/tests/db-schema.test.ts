@@ -1,8 +1,9 @@
+import { readFileSync } from 'node:fs';
 import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { destinations, jobChats, jobs, jobVersions, runs, settings, watchSeen } from '@/lib/server/db/schema';
 import { resetTables } from './helpers/db';
-import { builtinDestination, db, insertJob, insertServer } from './helpers/fixtures';
+import { builtinDestination, db, insertJob, insertServer, insertUser } from './helpers/fixtures';
 
 const splf = { name: 'SPDINVOICE', number: 1, jobName: 'QPADEV0001', jobUser: 'DEMOUSER', jobNumber: '123456' };
 
@@ -15,6 +16,16 @@ describe('database rules', () => {
     expect(
       await db().select({ poll: settings.pollSeconds, safety: settings.safetyCheckSeconds, retention: settings.retentionDays }).from(settings),
     ).toEqual([{ poll: 30, safety: 300, retention: 90 }]);
+  });
+
+  it('keeps masking on for an install with users when masking becomes a setting, and leaves a new one off', async () => {
+    const migration = readFileSync(new URL('../drizzle/0015_masking_setting.sql', import.meta.url), 'utf8');
+    const keepOn = migration.split('--> statement-breakpoint').at(-1)!;
+    await db().execute(sql.raw(keepOn));
+    expect((await db().select({ mask: settings.aiMask }).from(settings))[0]?.mask).toBe(false);
+    await insertUser();
+    await db().execute(sql.raw(keepOn));
+    expect((await db().select({ mask: settings.aiMask }).from(settings))[0]?.mask).toBe(true);
   });
 
   it('refuses settings outside the ranges and a second settings row', async () => {

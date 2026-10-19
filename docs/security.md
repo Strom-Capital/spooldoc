@@ -13,15 +13,16 @@ The assistant is the only part of Spooldoc that talks to anything but
 your IBM i and your database. What it sends to the model provider:
 
 - The page text of the job's preview sample: the first pages in the
-  instructions, any other page on request. Values are masked by default:
-  digits become 9 and letters X or x, while labels, positions and lengths
-  stay as printed. See [Masking](ai-assistant.md#masking).
+  instructions, any other page on request. Values go as printed unless
+  masking is on (Settings, AI model): then digits become 9 and letters X
+  or x, while labels, positions and lengths stay as printed. See
+  [Masking](ai-assistant.md#masking).
 - The sample's metadata: spooled file name, queue, user data, page size,
   code page.
 - The job's current definition and template, and the names of the
   uploaded assets.
 - Tool results: the extraction report and the rendered text, masked the
-  same way.
+  same way when masking is on.
 
 What it never receives: IBM i credentials, the login session, the IBM i
 connection, any other spooled file, or the job log. No tool reaches the
@@ -106,5 +107,7 @@ Spooldoc never reads or copies that log.
 - Reach the IBM i over a private network; do not open the host server
   ports to the internet. Set `SPOOLDOC_ALLOWED_HOSTS`.
 - Give the IBM i profile only the queues it needs.
-- Leave masking on unless the model runs on your own hardware.
+- Decide where the values may go: a local model keeps them on your
+  network; with a hosted provider, turn on masking unless its terms are
+  acceptable for your documents.
 - Set the retention to what the documents need, no longer.

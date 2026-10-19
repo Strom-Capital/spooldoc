@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { getConfig, resetConfig } from '@/lib/server/config';
+import { getConfig, resetConfig, retiredSettings } from '@/lib/server/config';
 
 const saved = { ...process.env };
 
@@ -40,13 +40,12 @@ describe('getConfig', () => {
   });
 
   it('has defaults', () => {
-    withEnv({ APP_URL: undefined, SPOOLDOC_MASK: undefined, SPOOLDOC_WATCHER: undefined, DATABASE_URL: undefined, SPOOLDOC_LOG_LEVEL: undefined });
+    withEnv({ APP_URL: undefined, SPOOLDOC_WATCHER: undefined, DATABASE_URL: undefined, SPOOLDOC_LOG_LEVEL: undefined });
     const config = getConfig();
     expect(config.databaseUrl).toBeUndefined();
     expect(config.secretKey).toHaveLength(32);
     expect(config.watcher).toBe(true);
     expect(config.appUrl).toBeUndefined();
-    expect(config.mask).toBe(true);
     expect(config.allowedHosts).toEqual([]);
     expect(config.defaultCcsid).toBeUndefined();
     expect(config.logLevel).toBe('info');
@@ -63,15 +62,21 @@ describe('getConfig', () => {
     withEnv({
       DATABASE_URL: 'postgres://localhost/spooldoc',
       SPOOLDOC_WATCHER: 'off',
-      SPOOLDOC_MASK: 'false',
       SPOOLDOC_DEFAULT_CCSID: '37',
       SPOOLDOC_ALLOWED_HOSTS: ' IBMI.example.com, other.example.com ,',
     });
     const config = getConfig();
     expect(config.databaseUrl).toBe('postgres://localhost/spooldoc');
     expect(config.watcher).toBe(false);
-    expect(config.mask).toBe(false);
     expect(config.defaultCcsid).toBe(37);
     expect(config.allowedHosts).toEqual(['ibmi.example.com', 'other.example.com']);
+  });
+
+  it('says where a setting it no longer reads went', () => {
+    expect(retiredSettings({})).toEqual([]);
+    expect(retiredSettings({ SPOOLDOC_MASK: 'false' })).toEqual(['SPOOLDOC_MASK is no longer read. Masking is set in the app, under Settings, AI model.']);
+    // A value it does not read is no longer an error either.
+    withEnv({ SPOOLDOC_MASK: 'maybe' });
+    expect(() => getConfig()).not.toThrow();
   });
 });

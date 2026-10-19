@@ -92,6 +92,6 @@ Rendering. See [Contributing](contributing.md) for the tools and the tests.
 
 ## Next steps
 
-- [Configuration](configuration.md): masking, the default code page, allowed hosts.
+- [Configuration](configuration.md): the default code page, allowed hosts, the server log.
 - [Security](security.md): what the model receives, what the database holds.
 - [FAQ](faq.md): the questions that come up first.

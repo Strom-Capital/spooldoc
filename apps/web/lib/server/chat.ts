@@ -71,7 +71,7 @@ export interface InstructionsInput {
   definitionYaml: string | null;
   /** The job's outputs, each with its formats and template (null for the starter template). */
   outputs: JobOutput[];
-  /** Mask values in the page text (SPOOLDOC_MASK). */
+  /** Mask values in the page text (Settings, AI model). */
   masked: boolean;
   /** Uploaded images and fonts the template can print with `{asset('name')}`. */
   assets?: ChatAsset[];
@@ -519,7 +519,7 @@ export interface JobFilesReader {
 export interface ToolsInput {
   sample: Sample;
   store: DraftStore;
-  /** Mask values in page text and tool results (SPOOLDOC_MASK). */
+  /** Mask values in page text and tool results (Settings, AI model). */
   masked: boolean;
   /** Names `{asset('name')}` accepts. Renders print a placeholder for them, never the file. */
   assets?: ChatAsset[];

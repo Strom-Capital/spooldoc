@@ -2,7 +2,7 @@ import type { UIMessage } from 'ai';
 import { convertArrayToReadableStream, MockLanguageModelV4 } from 'ai/test';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { jobChats, jobs, jobVersions, templateFiles } from '@/lib/server/db/schema';
+import { jobChats, jobs, jobVersions, settings, templateFiles } from '@/lib/server/db/schema';
 import { jobSpecSchema, versionSpec } from '@/lib/job-spec';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
@@ -132,12 +132,12 @@ describe('POST /api/jobs/[id]/chat', () => {
     expect(parts.some((p) => p.type === 'text-delta' && p.delta === 'Saved the invoice definition.')).toBe(true);
     expect(text).not.toContain(FAKE_KEY);
 
-    // The instructions carry the masked pages and the tools; the second step sees the tool result.
+    // The instructions carry the pages, values as printed with masking off, and the tools; the second step sees the tool result.
     expect(model.doStreamCalls).toHaveLength(2);
     expect(model.doStreamCalls[0]?.reasoning).toBe('high');
     const instructions = JSON.stringify(model.doStreamCalls[0]?.prompt);
     expect(instructions).toContain('Invoice no');
-    expect(instructions).not.toContain('260101');
+    expect(instructions).toContain('260101');
     expect(model.doStreamCalls[0]?.tools?.map((t) => t.name).sort()).toEqual([
       'add_output',
       'edit_word_template',
@@ -313,7 +313,8 @@ describe('the stored thread (GET and DELETE /api/jobs/[id]/chat)', () => {
     expect((await clear({ ...auth, origin: 'https://evil.example.com' })).status).toBe(403);
   });
 
-  it('keeps each finished turn with its tool calls, masked, and gives the thread back to the model', async () => {
+  it('keeps each finished turn with its tool calls, masked when masking is on, and gives the thread back to the model', async () => {
+    await db().update(settings).set({ aiMask: true });
     const first = scriptedModel(toolStep('write_definition', { yaml }), textStep('Saved the invoice definition.'));
     createModel.mockResolvedValue(withKey(first));
     await chunks(await chat());
