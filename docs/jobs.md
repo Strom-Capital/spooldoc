@@ -107,8 +107,17 @@ one of:
 |--------|--------------|
 | Hold (default) | `HLDSPLF`, so the file stays on the queue and is not printed. |
 | Move | The file is moved to another output queue, for example an archive queue. |
-| Delete | The file is deleted. |
+| Delete | The file is deleted from the IBM i. This cannot be undone. |
 | Leave as is | Nothing. With a watcher, Spooldoc still runs the file only once. |
+
+Delete is the one action that destroys something on the IBM i, so
+Spooldoc asks before it starts. Saving a version as the active one, or
+making a saved version active, when that version deletes and the active
+version does not, shows which queue's files will be deleted and needs a
+second click. The API answers `409` with `confirm: "delete"` until the
+request carries `confirmDelete: true`. Once a deleting version is active,
+later deleting versions need no confirmation. The Jobs list marks a job
+whose active version deletes its spooled files.
 
 A finish that fails leaves the run with the status warning: the documents
 are delivered and the spooled file is where it was. Previews only read.
