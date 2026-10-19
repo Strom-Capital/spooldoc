@@ -109,7 +109,7 @@ export function carboneError(status: number, code: string | undefined, error: st
   if (code === "w118" || status === 415) {
     return new CarboneError("file", "Carbone could not read the template. It is damaged or not an HTML document. Save it again.", info);
   }
-  if (status >= 500 && /Document converter|converter .*unavailable/i.test(text)) {
+  if (status >= 500 && (/Document converter/i.test(text) || (/\bconverter\b/i.test(text) && /\bunavailable\b/i.test(text)))) {
     return new CarboneError("server", "Carbone could not convert the document. Check that the Carbone service has its converters (the full image).", info);
   }
   if (code === "w101") {
@@ -142,7 +142,12 @@ function headers(server: CarboneServer, json: boolean): Record<string, string> {
   return out;
 }
 
-const base = (server: CarboneServer): string => server.url.replace(/\/+$/, "");
+/** The URL without trailing slashes. A loop, not `/\/+$/`, which is slow on a long run of slashes. */
+function base(server: CarboneServer): string {
+  let end = server.url.length;
+  while (end > 0 && server.url[end - 1] === "/") end--;
+  return server.url.slice(0, end);
+}
 
 async function request(server: CarboneServer, path: string, init: { method: "GET" | "POST"; body?: unknown }): Promise<Response> {
   const timeoutMs = server.timeoutMs ?? TIMEOUT_MS;

@@ -160,6 +160,12 @@ describe("keys and tokens", () => {
     expect(env).toBe("-----BEGIN PUBLIC KEY-----\\nABC\\nDEF\\n-----END PUBLIC KEY-----");
   });
 
+  it("trims trailing slashes from the URL, however many", async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { success: true, version: "5.15.5" }));
+    await carboneStatus({ url: `http://carbone.example.com${"/".repeat(100_000)}` });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://carbone.example.com/status");
+  });
+
   it("maps a status code alone", () => {
     expect(carboneError(429, undefined, "Too many requests", server).message).toMatch(/busy/);
     expect(carboneError(502, undefined, "Bad gateway", server).message).toBe("Carbone could not render the document (HTTP 502).");

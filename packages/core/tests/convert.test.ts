@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { convertNamePattern, convertNunjucks, isNunjucks } from "../src/convert.js";
+import { convertNamePattern, convertNunjucks, isNunjucks, nunjucksSpans } from "../src/convert.js";
 import { checkTemplate } from "../src/tags.js";
 import { fixtureText, loadFixture } from "./helpers/fixtures.js";
 
@@ -82,6 +82,25 @@ describe("convertNunjucks", () => {
       "{{ other.thing }}",
     ]);
     expect([...new Set(checkTemplate(converted, null).map((p) => p.line))]).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+});
+
+describe("nunjucksSpans", () => {
+  it("finds each span up to the first closer of its kind", () => {
+    expect(nunjucksSpans("a {{ x }}} b {%- if y -%} {# c #} {{ open").map((s) => [s.kind, s.inner])).toEqual([
+      ["{", " x "],
+      ["%", "- if y -"],
+      ["#", " c "],
+    ]);
+  });
+
+  it("stays fast on many openers without a closer", () => {
+    const started = performance.now();
+    for (const opener of ["{{", "{%", "{#", "{{{{a"]) {
+      expect(nunjucksSpans(opener.repeat(50_000))).toEqual([]);
+      expect(checkTemplate(convertNunjucks(`${opener.repeat(50_000)}{{ doc.a }}`), null).length).toBeGreaterThan(0);
+    }
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 });
 

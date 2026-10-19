@@ -5,9 +5,45 @@
  * map is left as it was, so the tag check flags its line.
  */
 
+/** Nunjucks syntax in a text: `{{ }}`, `{% %}` or `{# #}`, with what is between the delimiters. */
+export interface NunjucksSpan {
+  start: number;
+  end: number;
+  kind: "{" | "%" | "#";
+  inner: string;
+}
+
+const CLOSE = { "{": "}}", "%": "%}", "#": "#}" } as const;
+
+/**
+ * The Nunjucks spans of a text, in order: each opener ends at the first closer of its kind
+ * after it. One pass with `indexOf`, since a regular expression such as `\{\{[\s\S]*?\}\}`
+ * is slow on a text with many openers and no closer.
+ */
+export function nunjucksSpans(text: string): NunjucksSpan[] {
+  const spans: NunjucksSpan[] = [];
+  // A kind with no closer after some opener has none after any later opener either.
+  const unclosed = new Set<string>();
+  let i = text.indexOf("{");
+  while (i !== -1 && i < text.length - 1) {
+    const kind = text[i + 1];
+    if ((kind === "{" || kind === "%" || kind === "#") && !unclosed.has(kind)) {
+      const close = text.indexOf(CLOSE[kind], i + 2);
+      if (close !== -1) {
+        spans.push({ start: i, end: close + 2, kind, inner: text.slice(i + 2, close) });
+        i = text.indexOf("{", close + 2);
+        continue;
+      }
+      unclosed.add(kind);
+    }
+    i = text.indexOf("{", i + 1);
+  }
+  return spans;
+}
+
 /** True when a template has Nunjucks syntax: `{{ }}`, `{% %}` or `{# #}`. */
 export function isNunjucks(template: string): boolean {
-  return /\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}|\{#[\s\S]*?#\}/.test(template);
+  return nunjucksSpans(template).length > 0;
 }
 
 type Node =
@@ -22,14 +58,16 @@ type Token = { kind: "text"; text: string } | { kind: "output"; expr: string; ra
 
 function tokenize(template: string): Token[] {
   const tokens: Token[] = [];
-  const re = /\{\{-?([\s\S]*?)-?\}\}|\{%-?([\s\S]*?)-?%\}|\{#([\s\S]*?)#\}/g;
   let last = 0;
-  for (const m of template.matchAll(re)) {
-    if (m.index > last) tokens.push({ kind: "text", text: template.slice(last, m.index) });
-    if (m[1] !== undefined) tokens.push({ kind: "output", expr: m[1].trim(), raw: m[0] });
-    else if (m[2] !== undefined) tokens.push({ kind: "statement", body: m[2].trim(), raw: m[0] });
-    else tokens.push({ kind: "comment", text: (m[3] ?? "").trim(), raw: m[0] });
-    last = m.index + m[0].length;
+  for (const span of nunjucksSpans(template)) {
+    if (span.start > last) tokens.push({ kind: "text", text: template.slice(last, span.start) });
+    const raw = template.slice(span.start, span.end);
+    // `{%-` and `-%}` trim whitespace in Nunjucks; the dashes are not part of the body.
+    const body = span.kind === "#" ? span.inner : span.inner.replace(/^-/, "").replace(/-$/, "");
+    if (span.kind === "{") tokens.push({ kind: "output", expr: body.trim(), raw });
+    else if (span.kind === "%") tokens.push({ kind: "statement", body: body.trim(), raw });
+    else tokens.push({ kind: "comment", text: body.trim(), raw });
+    last = span.end;
   }
   if (last < template.length) tokens.push({ kind: "text", text: template.slice(last) });
   return tokens;

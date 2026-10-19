@@ -1,3 +1,4 @@
+import { nunjucksSpans } from "./convert.js";
 import type { Definition } from "./definition.js";
 
 /**
@@ -24,9 +25,6 @@ const TAG_START = /\{(?:[dco](?=[.[:}\s])|#|\$|t\()/g;
 
 /** `{asset('name')}`: an uploaded image or font, written into the template as a data URI before it is sent. */
 export const ASSET_TAG = /\{asset\(\s*(['"])([^'"{}]*)\1\s*\)\}/g;
-
-/** Nunjucks: `{{ }}`, `{% %}` and `{# #}`. */
-const NUNJUCKS = /\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}|\{#[\s\S]*?#\}/g;
 
 const MAX_TAG = 1000;
 
@@ -60,7 +58,7 @@ export interface TemplateTag {
 
 /** The Carbone tags in a template, in order. Nunjucks syntax is skipped. */
 export function templateTags(template: string): TemplateTag[] {
-  const text = blank(template, [...template.matchAll(NUNJUCKS)].map((m) => [m.index, m.index + m[0].length]));
+  const text = blank(template, nunjucksSpans(template).map((span) => [span.start, span.end]));
   const tags: TemplateTag[] = [];
   for (const m of text.matchAll(TAG_START)) {
     const start = m.index;
@@ -214,12 +212,14 @@ export function checkTemplate(template: string, def?: Definition | null, options
     problems.push({ line: lineAt(template, index), message });
   };
 
-  for (const m of template.matchAll(NUNJUCKS)) {
-    const help = NUNJUCKS_HELP.find(([re]) => re.test(m[0]))?.[1] ?? "";
-    add(m.index, `${short(m[0])} is Nunjucks, which templates no longer use. ${help}`.trim());
+  const spans = nunjucksSpans(template);
+  for (const span of spans) {
+    const raw = template.slice(span.start, span.end);
+    const help = NUNJUCKS_HELP.find(([re]) => re.test(raw))?.[1] ?? "";
+    add(span.start, `${short(raw)} is Nunjucks, which templates no longer use. ${help}`.trim());
   }
   // An opening {{ or {% with no end is Nunjucks too.
-  const matched = blank(template, [...template.matchAll(NUNJUCKS)].map((m) => [m.index, m.index + m[0].length]));
+  const matched = blank(template, spans.map((span) => [span.start, span.end]));
   for (const m of matched.matchAll(/\{\{|\{%/g)) {
     add(m.index, `${short(template.slice(m.index, m.index + 40))} is Nunjucks, which templates no longer use, and it is not closed.`);
   }
