@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { Sample } from '@spooldoc/core';
 import { z } from 'zod';
-import { findOutput, jobSpecSchema, type JobOutput, type JobSpec, type OutputTemplate } from '@/lib/job-spec';
+import { findTemplate, jobSpecSchema, type JobTemplate, type JobSpec, type TemplateContent } from '@/lib/job-spec';
 import { sampleTemplate } from './documents';
 import type { JobRow } from './jobs';
 import type { SampleTemplate } from './render';
@@ -18,36 +18,36 @@ export async function draftAndSample(job: JobRow, sampleId?: string): Promise<{ 
 
 const MAX_TEXT = 2_000_000;
 
-/** The template fields of a preview request: unsaved editor text, or a Word template, else the output's draft template. */
+/** The template fields of a preview request: unsaved editor text, or a Word template, else the draft template's content. */
 export const previewTemplateFields = {
   /** HTML; `null` means the starter template. */
   html: z.string().max(MAX_TEXT).nullable().optional(),
   /** A Word template; `fileId: null` means the Word starter template. */
   docx: z.object({ fileId: z.string().uuid().nullable() }).optional(),
-  /** The output whose draft template is used when neither is given; missing means the first. */
-  outputId: z.string().max(40).optional(),
+  /** The draft template that is rendered, with its content when neither is given; missing means the first. */
+  templateId: z.string().max(40).optional(),
 };
 
 /**
- * The template a preview renders: the one in the request, which wins so an output changed
- * a moment ago renders before its draft is saved, or else the output's draft template.
- * `output` is null when the request names no output the draft has.
+ * What a preview renders: the content in the request, which wins so a template changed
+ * a moment ago renders before its draft is saved, or else the draft template's content.
+ * `template` is null when the request names no template the draft has.
  */
 export async function previewTemplate(
   draft: JobSpec,
-  input: { html?: string | null; docx?: { fileId: string | null }; outputId?: string },
-): Promise<{ output: JobOutput | null; template: SampleTemplate } | { error: string; status: number }> {
-  const output = findOutput(draft.render.outputs, input.outputId);
-  let template: OutputTemplate;
+  input: { html?: string | null; docx?: { fileId: string | null }; templateId?: string },
+): Promise<{ template: JobTemplate | null; content: SampleTemplate } | { error: string; status: number }> {
+  const template = findTemplate(draft.render.templates, input.templateId);
+  let content: TemplateContent;
   if (input.docx) {
-    template = { kind: 'docx', fileId: input.docx.fileId };
+    content = { kind: 'docx', fileId: input.docx.fileId };
   } else if (input.html !== undefined) {
-    template = { kind: 'html', source: input.html };
-  } else if (output) {
-    template = output.template;
+    content = { kind: 'html', source: input.html };
+  } else if (template) {
+    content = template;
   } else {
-    return { error: `The job has no output ${input.outputId}.`, status: 404 };
+    return { error: `The job has no template ${input.templateId}.`, status: 404 };
   }
-  const resolved = await sampleTemplate(template);
-  return resolved ? { output, template: resolved } : { error: TEMPLATE_FILE_GONE, status: 404 };
+  const resolved = await sampleTemplate(content);
+  return resolved ? { template, content: resolved } : { error: TEMPLATE_FILE_GONE, status: 404 };
 }

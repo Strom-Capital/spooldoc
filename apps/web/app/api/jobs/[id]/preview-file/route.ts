@@ -1,6 +1,6 @@
 import { isCarboneError, readDocx, starterDocx, templateData } from '@spooldoc/core';
 import { z } from 'zod';
-import { FORMAT_FILES, KIND_FORMATS, formatList, outputFileName } from '@/lib/job-spec';
+import { FORMAT_FILES, KIND_FORMATS, formatList, templateFileName } from '@/lib/job-spec';
 import { assetNames, assetResolver } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
 import { fileNameFor, previewRenderer, tryDefinition } from '@/lib/server/documents';
@@ -16,14 +16,14 @@ const MAX_TEXT = 2_000_000;
 const fileSchema = z.object({
   yaml: z.string().max(MAX_TEXT).optional(),
   ...previewTemplateFields,
-  document: z.number().int().nonnegative().default(0),
+  pageGroup: z.number().int().nonnegative().default(0),
   /** A PDF, or the filled-in DOCX of a Word template. HTML is the render's own result. */
   format: z.enum(['pdf', 'docx']).default('pdf'),
 });
 
 /**
- * One document of the preview sample as a PDF, or as a DOCX from a Word template, from
- * the draft or unsaved editor text, rendered by Carbone. 400 when there is no such document
+ * The document of one page group of the preview sample as a PDF, or as a DOCX from a Word
+ * template, from the draft or unsaved editor text, rendered by Carbone. 400 when there is no such page group
  * or the template does not make the format, 422 with `templateErrors` when the definition
  * or template fails, 503 when Carbone is not connected or does not answer.
  */
@@ -52,11 +52,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if ('error' in picked) {
     return errorResponse(picked.status, picked.error);
   }
-  const { template } = picked;
-  const output = picked.output ?? draft.render.outputs[0]!;
-  const { document, format } = body.data;
-  if (!KIND_FORMATS[template.kind].includes(format)) {
-    return errorResponse(400, `${template.kind === 'docx' ? 'A Word' : 'An HTML'} template makes ${formatList(KIND_FORMATS[template.kind])} files.`);
+  const { content } = picked;
+  const template = picked.template ?? draft.render.templates[0]!;
+  const { pageGroup, format } = body.data;
+  if (!KIND_FORMATS[content.kind].includes(format)) {
+    return errorResponse(400, `${content.kind === 'docx' ? 'A Word' : 'An HTML'} template makes ${formatList(KIND_FORMATS[content.kind])} files.`);
   }
   const renderer = await previewRenderer();
   if (!renderer) {
@@ -65,7 +65,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const asset = await assetResolver();
   const assets = (await assetNames()).map((entry) => entry.name);
   // Checks the template and renders it first (HTML, or a PDF of a Word template), so a file is only made from a template that works.
-  const result = await renderSample(sample, { yaml, template, document, asset, assets, renderer });
+  const result = await renderSample(sample, { yaml, template: content, pageGroup, asset, assets, renderer });
   if (result.carbone) {
     return json({ error: result.carbone.error, ...(result.carbone.detail ? { detail: result.carbone.detail } : {}) }, { status: 503 });
   }
@@ -75,22 +75,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       { status: 422 },
     );
   }
-  const documents = result.extract.documents;
-  if (document >= documents.length) {
+  const pageGroups = result.extract.pageGroups;
+  if (pageGroup >= pageGroups.length) {
     return errorResponse(
       400,
-      documents.length === 0
-        ? 'The definition finds no documents in this spooled file.'
-        : `There is no document ${document + 1}: this spooled file has ${documents.length}.`,
+      pageGroups.length === 0
+        ? 'The definition finds no page groups in this spooled file.'
+        : `There is no page group ${pageGroup + 1}: this spooled file has ${pageGroups.length}.`,
     );
   }
   if ((!result.html && !result.pdf) || !result.template) {
     return json({ error: 'Nothing to render.', templateErrors: result.errors }, { status: 422 });
   }
-  const filename = outputFileName(
-    fileNameFor(tryDefinition(yaml), documents[document] ?? {}, document, sample.splf.name.toLowerCase()),
-    draft.render.outputs,
-    output,
+  const filename = templateFileName(
+    fileNameFor(tryDefinition(yaml), pageGroups[pageGroup] ?? {}, pageGroup, sample.splf.name.toLowerCase()),
+    draft.render.templates,
+    template,
   );
   const send = (content: Uint8Array) =>
     new Response(Buffer.from(content), {
@@ -100,21 +100,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         'Cache-Control': 'no-store',
       },
     });
-  const doc = documents[document] ?? {};
+  const group = pageGroups[pageGroup] ?? {};
   try {
     if (result.template.kind === 'html') {
       const html = result.template.html;
-      return send(await renderer({ template: html, data: templateData(html, doc, documents, sample), format: 'pdf', pageWidth: sample.attributes.pageWidth, asset }));
+      return send(await renderer({ template: html, data: templateData(html, group, pageGroups, sample), format: 'pdf', pageWidth: sample.attributes.pageWidth, asset }));
     }
     if (format === 'pdf' && result.pdf) {
       return send(Buffer.from(result.pdf, 'base64'));
     }
     const def = tryDefinition(yaml);
-    const bytes = template.kind === 'docx' && template.file ? template.file.content : def ? await starterDocx(def) : null;
+    const bytes = content.kind === 'docx' && content.file ? content.file.content : def ? await starterDocx(def) : null;
     if (!bytes) {
       return json({ error: 'Nothing to render.', templateErrors: result.errors }, { status: 422 });
     }
-    return send(await renderer({ kind: 'docx', template: bytes, data: templateData(readDocx(bytes), doc, documents, sample), format: 'docx' }));
+    return send(await renderer({ kind: 'docx', template: bytes, data: templateData(readDocx(bytes), group, pageGroups, sample), format: 'docx' }));
   } catch (error) {
     const message = error instanceof Error ? error.message : `Carbone could not render the ${FORMAT_FILES[format].label}.`;
     const detail = isCarboneError(error) ? error.detail : undefined;

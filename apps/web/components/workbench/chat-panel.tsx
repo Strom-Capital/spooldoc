@@ -30,7 +30,7 @@ import { useWorkbench } from './workbench-provider';
 
 const SUGGESTIONS = [
   'Generate a definition and a template from this spooled file',
-  'This is a multi-document run, split it per document',
+  'This spooled file prints many documents, split it into page groups',
   'The first page is a parameter page, skip it',
   'Make the template match the printed layout',
 ];

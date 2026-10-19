@@ -113,12 +113,12 @@ export function templateTags(template: string): TemplateTag[] {
   return tags;
 }
 
-/** True when a template reads `d.<root>`, such as `documents`. */
+/** True when a template reads `d.<root>`, such as `pageGroups`. */
 export function templateUses(template: string, root: string): boolean {
   return templateTags(template).some((tag) => new RegExp(`(^|[^.\\w])d\\.${root}\\b`).test(tag.text));
 }
 
-/** The path of a `d` tag, before its formatters: `{d.doc.lines[i].amount:formatN(2)}` gives `d.doc.lines[i].amount`. */
+/** The path of a `d` tag, before its formatters: `{d.pageGroup.lines[i].amount:formatN(2)}` gives `d.pageGroup.lines[i].amount`. */
 function tagPath(tag: string): string {
   const inner = tag.slice(1, tag.endsWith("}") ? -1 : undefined);
   let depth = 0;
@@ -136,7 +136,7 @@ function tagPath(tag: string): string {
 
 /**
  * A data path as the check compares it: without `d.`, every `[...]` as `[]`, and without a
- * trailing `[]` (the `[i+1]` row). `d.doc.lines[i].amount` gives `doc.lines[].amount`.
+ * trailing `[]` (the `[i+1]` row). `d.pageGroup.lines[i].amount` gives `pageGroup.lines[].amount`.
  * Undefined for paths the check does not follow, such as `..` to a parent.
  */
 function normalPath(path: string): string | undefined {
@@ -149,12 +149,12 @@ function normalPath(path: string): string | undefined {
     .replace(/\[\]$/, "");
 }
 
-/** The splf fields of a sample, as `sample.splf.*`. */
+/** The fields of the spooled file, as `splf.*`. */
 const SPLF_FIELDS = ["name", "number", "jobName", "jobUser", "jobNumber"];
 
 /**
- * Every data path a template can use with this definition: `doc` and its fields and
- * lists, the same under `documents[]`, and `sample` with its id and spooled file.
+ * Every data path a template can use with this definition: `pageGroup` and its fields
+ * and lists, the same under `pageGroups[]`, and `splf`, the spooled file.
  */
 export function templatePaths(def: Definition): Set<string> {
   const fields: string[] = [];
@@ -167,8 +167,8 @@ export function templatePaths(def: Definition): Set<string> {
     fields.push(...Object.keys(def.xml.fields ?? {}));
     for (const [name, g] of Object.entries(def.xml.groups ?? {})) lists.push({ name, columns: Object.keys(g.map) });
   }
-  const paths = new Set<string>(["doc", "documents", "sample", "sample.id", "sample.splf", ...SPLF_FIELDS.map((f) => `sample.splf.${f}`)]);
-  for (const root of ["doc", "documents[]"]) {
+  const paths = new Set<string>(["pageGroup", "pageGroups", "splf", ...SPLF_FIELDS.map((f) => `splf.${f}`)]);
+  for (const root of ["pageGroup", "pageGroups[]"]) {
     paths.add(root.replace(/\[\]$/, ""));
     for (const f of fields) paths.add(`${root}.${f}`);
     for (const l of lists) {
@@ -195,11 +195,11 @@ function distance(a: string, b: string): number {
 }
 
 /**
- * The known path an unknown one probably meant: the same path under `doc`, or a name
- * under the same parent that is a typo away or starts the same way.
+ * The known path an unknown one probably meant: the same path under `pageGroup`, or a
+ * name under the same parent that is a typo away or starts the same way.
  */
 function closest(path: string, known: Set<string>): string | undefined {
-  if (known.has(`doc.${path}`)) return `doc.${path}`;
+  if (known.has(`pageGroup.${path}`)) return `pageGroup.${path}`;
   const cut = path.lastIndexOf(".");
   const parent = path.slice(0, cut + 1);
   const name = path.slice(cut + 1).toLowerCase();
@@ -217,12 +217,12 @@ function closest(path: string, known: Set<string>): string | undefined {
   return best?.path;
 }
 
-/** `doc.lines[].amount` written back as a tag, `{d.doc.lines[i].amount}`. */
+/** `pageGroup.lines[].amount` written back as a tag, `{d.pageGroup.lines[i].amount}`. */
 const asTag = (path: string): string => `{d.${path.replace(/\[\]/g, "[i]")}}`;
 
 /** What to write instead of a Nunjucks span. */
 function nunjucksHelp(span: NunjucksSpan): string {
-  if (span.kind === "{") return "Write a Carbone tag such as {d.doc.invoiceNo} instead.";
+  if (span.kind === "{") return "Write a Carbone tag such as {d.pageGroup.invoiceNo} instead.";
   if (span.kind === "#") return "Write an HTML comment (<!-- -->) instead.";
   const word = /^[a-z]+/i.exec(span.inner.replace(/^-/, "").trimStart())?.[0] ?? "";
   if (word === "for" || word === "endfor") return "Write a loop as a row with [i] and a row with [i+1] instead.";
@@ -265,7 +265,7 @@ export function tagProblems(text: string, known: Set<string> | undefined, option
     const path = normalPath(tagPath(tag.text));
     if (path === undefined || known.has(path)) continue;
     if (path === "[]") {
-      add(tag.index, `${short(tag.text)} reads d as a list, but d is { doc, documents, sample }. Start the tag with d.doc.`);
+      add(tag.index, `${short(tag.text)} reads d as a list, but d is { pageGroup, pageGroups, splf }. Start the tag with d.pageGroup.`);
       continue;
     }
     // .att and .val after a list read an object's keys and values.
@@ -273,9 +273,9 @@ export function tagProblems(text: string, known: Set<string> | undefined, option
     const near = closest(path, known);
     const hint = near
       ? ` Did you mean ${asTag(near)}?`
-      : path.startsWith("doc.") || path.startsWith("documents")
+      : path.startsWith("pageGroup")
         ? " Check the name against the definition's fields."
-        : " The data has doc, documents and sample.";
+        : " The data has pageGroup, pageGroups and splf.";
     add(tag.index, `${short(tag.text)} is not in the data.${hint}`);
   }
   return problems;
@@ -284,7 +284,7 @@ export function tagProblems(text: string, known: Set<string> | undefined, option
 /**
  * Checks a Carbone HTML template before it is rendered:
  *
- * - tags whose field is not in the definition (`{d.doc.invoiceNumber}`, `{d.doc.lines[i].ammount}`);
+ * - tags whose field is not in the definition (`{d.pageGroup.invoiceNumber}`, `{d.pageGroup.lines[i].ammount}`);
  * - smart quotes and double quotes inside tags;
  * - Nunjucks left over (`{{ }}`, `{% %}`, `{# #}`);
  * - tags that are never closed;

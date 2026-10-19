@@ -71,7 +71,7 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
   return updated ? json(await jobDetail(updated)) : errorResponse(404, 'Job not found.');
 }
 
-/** Delete a job with its versions, runs and outputs. */
+/** Delete a job with its versions, runs and files. */
 export async function DELETE(request: Request, { params }: Context): Promise<Response> {
   const auth = await guard(request);
   if ('response' in auth) {

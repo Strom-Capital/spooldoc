@@ -32,8 +32,9 @@ keeping them apart makes both easier:
   report lists found, missing and empty fields. The assistant works from
   that report too.
 - **One spooled file, many documents.** Six invoices printed back to back
-  become six JSON objects and six files, split on the invoice number.
-- **Same JSON for every output.** PDF and HTML today, DOCX and XLSX
+  are six page groups, split on the invoice number: six JSON objects and
+  six documents.
+- **Same JSON for every template.** PDF and HTML today, DOCX and XLSX
   later, and destinations such as webhooks can carry the JSON itself.
 
 See [Definitions](definitions.md) for the YAML that does the reading and

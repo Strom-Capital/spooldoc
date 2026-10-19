@@ -6,7 +6,7 @@ import { loadFixture } from "./helpers/fixtures.js";
 const { sample, definition, expected } = loadFixture("invoice");
 const result = extract(definition, sample);
 type Doc = { invoiceNo: string; customerName: string; netAmount: number; totalAmount: number; lines: { amount: number }[] };
-const docs = result.documents as Doc[];
+const docs = result.pageGroups as Doc[];
 
 describe("invoice extraction", () => {
   it("decodes the code page 273 characters", () => {
@@ -17,7 +17,7 @@ describe("invoice extraction", () => {
 
   it("finds six invoices on eight pages, two of them on two pages", () => {
     expect(docs.map((d) => d.invoiceNo)).toEqual(["260101", "260102", "260103", "260104", "260105", "260106"]);
-    const pagesPerDoc = docs.map((_, i) => new Set(result.hits.filter((h) => h.document === i).map((h) => h.page)).size);
+    const pagesPerDoc = docs.map((_, i) => new Set(result.hits.filter((h) => h.pageGroup === i).map((h) => h.page)).size);
     expect(pagesPerDoc.filter((n) => n === 2)).toHaveLength(2);
     expect(result.warnings).toEqual([]);
   });
@@ -44,6 +44,6 @@ describe("invoice extraction", () => {
   });
 
   it("equals expected.json", () => {
-    expect(result.documents).toEqual(expected);
+    expect(result.pageGroups).toEqual(expected);
   });
 });

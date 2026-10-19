@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { hitKey } from '@/lib/client/render';
 import { CodeEditor } from './code-editor';
-import { DocumentSelect } from './document-select';
+import { PageGroupSelect } from './page-group-select';
 import { useWorkbench } from './workbench-provider';
 
 const STATUS_CLASS = {
@@ -15,14 +15,14 @@ const STATUS_CLASS = {
   missing: 'bg-destructive/15 text-destructive',
 } as const;
 
-/** The extracted documents as JSON, with warnings and the field hits of the current document. */
+/** The extracted page groups as JSON, with warnings and the field hits of the current page group. */
 export function JsonView() {
-  const { render, documentIndex, selectedHit, setSelectedHit } = useWorkbench();
+  const { render, pageGroupIndex, selectedHit, setSelectedHit } = useWorkbench();
   const listRef = useRef<HTMLUListElement>(null);
   const extract = render?.extract;
-  const doc = extract?.documents[documentIndex] ?? extract?.documents[0];
-  const code = useMemo(() => (doc ? JSON.stringify(doc, null, 2) : ''), [doc]);
-  const hits = useMemo(() => (extract?.hits ?? []).filter((hit) => hit.document === documentIndex), [extract, documentIndex]);
+  const group = extract?.pageGroups[pageGroupIndex] ?? extract?.pageGroups[0];
+  const code = useMemo(() => (group ? JSON.stringify(group, null, 2) : ''), [group]);
+  const hits = useMemo(() => (extract?.hits ?? []).filter((hit) => hit.pageGroup === pageGroupIndex), [extract, pageGroupIndex]);
   const selectedKey = selectedHit ? hitKey(selectedHit) : null;
 
   useEffect(() => {
@@ -44,9 +44,9 @@ export function JsonView() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b px-2 text-sm">
-        <DocumentSelect />
+        <PageGroupSelect />
         <span className="ml-auto text-muted-foreground text-xs">
-          {extract.documents.length} {extract.documents.length === 1 ? 'document' : 'documents'}
+          {extract.pageGroups.length} {extract.pageGroups.length === 1 ? 'page group' : 'page groups'}
         </span>
       </div>
       <div className="min-h-0 flex-1 overflow-auto p-2">
@@ -57,13 +57,13 @@ export function JsonView() {
             ))}
           </ul>
         )}
-        {doc ? (
+        {group ? (
           <div className="relative overflow-hidden rounded-md border">
-            <CodeEditor value={code} label="Document JSON" language="json" readOnly autoHeight />
+            <CodeEditor value={code} label="Page group JSON" language="json" readOnly autoHeight />
             <CopyButton text={code} />
           </div>
         ) : (
-          <p className="text-muted-foreground text-sm">No documents found.</p>
+          <p className="text-muted-foreground text-sm">No page groups found.</p>
         )}
         <h3 className="mt-4 mb-1 font-medium text-sm">Fields</h3>
         <ul ref={listRef} className="divide-y rounded-md border text-xs">

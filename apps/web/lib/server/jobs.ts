@@ -204,12 +204,12 @@ export function versionProblems(spec: JobSpec): string[] {
   return problems;
 }
 
-/** Word templates a spec points at that are gone, one line per output. */
+/** Word files a spec's templates point at that are gone, one line per template. */
 async function templateFileProblems(spec: JobSpec): Promise<string[]> {
   const problems: string[] = [];
-  for (const output of spec.render.outputs) {
-    if (output.template.kind === 'docx' && output.template.fileId !== null && !(await getTemplateFile(output.template.fileId))) {
-      problems.push(`Render: the Word template of ${output.label} is gone. Upload it again.`);
+  for (const template of spec.render.templates) {
+    if (template.kind === 'docx' && template.fileId !== null && !(await getTemplateFile(template.fileId))) {
+      problems.push(`Render: the Word file of the ${template.name} template is gone. Upload it again.`);
     }
   }
   return problems;

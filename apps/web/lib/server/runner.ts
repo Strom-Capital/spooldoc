@@ -23,12 +23,12 @@ import {
 } from '@spooldoc/core';
 import type { Connection } from '@spooldoc/ibmi';
 import { and, eq } from 'drizzle-orm';
-import { FORMAT_FILES, jobSpecSchema, outputFileName, splfKey, type JobOutput, type JobSpec, type OutputFormat } from '@/lib/job-spec';
+import { FORMAT_FILES, jobSpecSchema, templateFileName, splfKey, type JobTemplate, type JobSpec, type Format } from '@/lib/job-spec';
 import { assetNames, assetResolver } from './assets';
 import { getDb } from './db';
 import { jobVersions, runs, watchSeen, type RunStep } from './db/schema';
-import { destinationFor, type OutputFile } from './destinations';
-import { documentRenderer, fileNameFor, outputTemplate } from './documents';
+import { destinationFor, type RunFile } from './destinations';
+import { documentRenderer, fileNameFor, templateHtml } from './documents';
 import { redact } from './http';
 import { connectServer } from './ibmi';
 import { log } from './log';
@@ -84,8 +84,8 @@ export async function startRun(request: RunRequest): Promise<{ id: string; seq: 
 }
 
 /**
- * Process one spooled file with a job version: capture, extract, render every document
- * with each output's template to that output's formats (PDF, HTML or both) with Carbone,
+ * Process one spooled file with a job version: capture, extract, render the document of
+ * every page group with each template to that template's formats (PDF, HTML, DOCX) with Carbone,
  * deliver, then hold, move or delete the file as the version says. Every step is
  * recorded on the run; a failure stops the run and is stored, never thrown. A file the
  * definition's `match` rules do not accept ends the run as `skipped`, untouched. The
@@ -99,7 +99,7 @@ export async function executeRun(runId: string, request: RunRequest, connection?
   const db = getDb();
   const steps: RunStep[] = [];
   const secrets: string[] = connection ? [connection.password] : [];
-  let documents = 0;
+  let pageGroups = 0;
   let status: 'success' | 'warning' | 'failed' | 'skipped' = 'success';
   let error: string | null = null;
 
@@ -160,21 +160,21 @@ export async function executeRun(runId: string, request: RunRequest, connection?
         const def: Definition = parseDefinition(spec.extract.definition);
         // A file the definition is not for (its `match` rules) is skipped, not failed.
         const mismatch = matchProblems(def, sample);
-        if (mismatch.length > 0) return { def, docs: [], mismatch };
+        if (mismatch.length > 0) return { def, groups: [], mismatch };
         const result = extract(def, sample);
-        if (result.documents.length === 0) throw new Error('The definition finds no documents in this spooled file.');
-        return { def, docs: result.documents, mismatch };
+        if (result.pageGroups.length === 0) throw new Error('The definition finds no page groups in this spooled file.');
+        return { def, groups: result.pageGroups, mismatch };
       },
-      ({ docs, mismatch }) =>
-        mismatch.length > 0 ? 'Not for this definition' : `${docs.length} ${docs.length === 1 ? 'document' : 'documents'}`,
+      ({ groups, mismatch }) =>
+        mismatch.length > 0 ? 'Not for this definition' : `${groups.length} ${groups.length === 1 ? 'page group' : 'page groups'}`,
     );
     if (extracted.mismatch.length > 0) {
       throw new SkipRun(`Skipped: the definition is not for this file (${extracted.mismatch.join('; ')}).`);
     }
-    const { def, docs } = extracted;
-    documents = docs.length;
+    const { def, groups } = extracted;
+    pageGroups = groups.length;
 
-    const files: OutputFile[] = await step(
+    const files: RunFile[] = await step(
       'render',
       async () => {
         const render = await documentRenderer();
@@ -187,21 +187,21 @@ export async function executeRun(runId: string, request: RunRequest, connection?
           names.add(name);
           return name;
         };
-        const out: OutputFile[] = [];
-        for (const [outputIndex, output] of spec.render.outputs.entries()) {
-          // Checked once per output: Carbone prints some mistakes without an error.
-          const prepared = await prepareOutput(output, def, assets);
-          for (const [index, doc] of docs.entries()) {
-            const base = outputFileName(fileNameFor(def, doc, index, sample.splf.name.toLowerCase()), spec.render.outputs, output);
-            const file = { documentIndex: index, output: output.label, outputIndex };
-            for (const format of output.formats) {
+        const out: RunFile[] = [];
+        for (const [templateIndex, template] of spec.render.templates.entries()) {
+          // Checked once per template: Carbone prints some mistakes without an error.
+          const prepared = await prepareTemplate(template, def, assets);
+          for (const [index, group] of groups.entries()) {
+            const base = templateFileName(fileNameFor(def, group, index, sample.splf.name.toLowerCase()), spec.render.templates, template);
+            const file = { pageGroupIndex: index, template: template.name, templateIndex };
+            for (const format of template.formats) {
               let content: Uint8Array;
               try {
-                content = await render(prepared.input(templateData(prepared.data, doc, docs, sample), format, sample.attributes.pageWidth, asset));
+                content = await render(prepared.input(templateData(prepared.data, group, groups, sample), format, sample.attributes.pageWidth, asset));
               } catch (err) {
                 if (isCarboneError(err) && SERVER_KINDS.includes(err.kind)) throw err;
                 const text = err instanceof Error ? err.message : String(err);
-                throw new StepError('render', `The "${output.label}" output, document ${index + 1}: ${text}`, isCarboneError(err) ? err.detail : undefined);
+                throw new StepError('render', `The "${template.name}" template, page group ${index + 1}: ${text}`, isCarboneError(err) ? err.detail : undefined);
               }
               const { extension, contentType } = FORMAT_FILES[format];
               out.push({ ...file, name: unique(base, extension), contentType, content });
@@ -250,46 +250,46 @@ export async function executeRun(runId: string, request: RunRequest, connection?
   }
 
   mergeCapture(steps);
-  await db.update(runs).set({ status, error, steps, documents, finishedAt: new Date() }).where(eq(runs.id, runId));
+  await db.update(runs).set({ status, error, steps, pageGroups, finishedAt: new Date() }).where(eq(runs.id, runId));
 }
 
-/** An output's template, checked: what `templateData` reads, and the render of one document to one format. */
-interface PreparedOutput {
+/** A template, checked: what `templateData` reads, and the render of one document to one format. */
+interface PreparedTemplate {
   data: string | DocxTemplate;
-  input(data: TemplateData, format: OutputFormat, pageWidth: number, asset: AssetResolver): DocumentRender;
+  input(data: TemplateData, format: Format, pageWidth: number, asset: AssetResolver): DocumentRender;
 }
 
 /**
- * An output's template, checked and ready to render each document: an HTML template, or
- * a Word template's file (the starter template when none is uploaded).
+ * A template, checked and ready to render each page group: its HTML, or its Word file
+ * (the starter when none is uploaded).
  *
  * @throws StepError when the template has problems or its file is gone
  */
-async function prepareOutput(output: JobOutput, def: Definition, assets: string[]): Promise<PreparedOutput> {
+async function prepareTemplate(template: JobTemplate, def: Definition, assets: string[]): Promise<PreparedTemplate> {
   const problems = (count: number, text: string) =>
-    new StepError('render', `The "${output.label}" output's template has ${count === 1 ? '1 problem' : `${count} problems`}. ${text.replace(/\n/g, ' ')}`);
-  if (output.template.kind === 'html') {
-    const template = outputTemplate(output.template.source, def);
-    const found = checkTemplate(template, def, { assets });
+    new StepError('render', `The "${template.name}" template has ${count === 1 ? '1 problem' : `${count} problems`}. ${text.replace(/\n/g, ' ')}`);
+  if (template.kind === 'html') {
+    const html = templateHtml(template.source, def);
+    const found = checkTemplate(html, def, { assets });
     if (found.length > 0) throw problems(found.length, problemText(found.slice(0, 3)));
     return {
-      data: template,
-      input: (data, format, pageWidth, asset) => ({ template, data, format: format === 'html' ? 'html' : 'pdf', pageWidth, asset }),
+      data: html,
+      input: (data, format, pageWidth, asset) => ({ template: html, data, format: format === 'html' ? 'html' : 'pdf', pageWidth, asset }),
     };
   }
   let bytes: Uint8Array;
-  if (output.template.fileId === null) {
+  if (template.fileId === null) {
     bytes = await starterDocx(def);
   } else {
-    const file = await getTemplateFile(output.template.fileId);
-    if (!file) throw new StepError('render', `The "${output.label}" output: ${TEMPLATE_FILE_GONE}`);
+    const file = await getTemplateFile(template.fileId);
+    if (!file) throw new StepError('render', `The "${template.name}" template: ${TEMPLATE_FILE_GONE}`);
     bytes = file.content;
   }
   let read: DocxTemplate;
   try {
     read = readDocx(bytes);
   } catch (err) {
-    throw new StepError('render', `The "${output.label}" output's Word template: ${err instanceof Error ? err.message : String(err)}`);
+    throw new StepError('render', `The "${template.name}" template's Word file: ${err instanceof Error ? err.message : String(err)}`);
   }
   const found = checkDocx(read, def);
   if (found.length > 0) throw problems(found.length, docxProblemText(found.slice(0, 3)));
@@ -301,7 +301,7 @@ async function prepareOutput(output: JobOutput, def: Definition, assets: string[
 }
 
 /** "6 PDFs and 6 DOCX files". */
-function fileCount(files: OutputFile[]): string {
+function fileCount(files: RunFile[]): string {
   const counts = new Map<string, number>();
   for (const file of files) {
     const label = Object.values(FORMAT_FILES).find((f) => f.contentType === file.contentType)?.label ?? 'other';

@@ -15,7 +15,7 @@ const renderSchema = z.object({
   /** Unsaved editor text; missing means the draft's. */
   yaml: z.string().max(MAX_TEXT).optional(),
   ...previewTemplateFields,
-  document: z.number().int().nonnegative().optional(),
+  pageGroup: z.number().int().nonnegative().optional(),
   sampleId: z.string().uuid().optional(),
 });
 
@@ -44,6 +44,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   const assets = (await assetNames()).map((asset) => asset.name);
   return json(
-    await renderSample(sample, { yaml, template: picked.template, document: body.data.document, asset: await assetResolver(), assets, renderer: await previewRenderer() }),
+    await renderSample(sample, { yaml, template: picked.content, pageGroup: body.data.pageGroup, asset: await assetResolver(), assets, renderer: await previewRenderer() }),
   );
 }

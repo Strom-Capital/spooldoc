@@ -4,7 +4,7 @@ import { getRun } from '@/lib/server/runs';
 
 export const dynamic = 'force-dynamic';
 
-/** One run with its steps and outputs. */
+/** One run with its steps and files. */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const auth = await guard(request);
   if ('response' in auth) {

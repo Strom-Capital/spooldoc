@@ -7,27 +7,28 @@ import { ASSET_TAG, templateUses } from "./tags.js";
 /** Turns an asset name into its data URI, or undefined when there is no such asset. */
 export type AssetResolver = (name: string) => string | undefined;
 
-/** What a template's `d` holds: the document, every document of the spooled file, and the sample. */
+/** What a template's `d` holds: the page group, every page group of the spooled file, and the spooled file. */
 export interface TemplateData {
-  doc: Record<string, unknown>;
-  documents?: Record<string, unknown>[];
-  sample: { id: string; splf: unknown };
+  pageGroup: Record<string, unknown>;
+  pageGroups?: Record<string, unknown>[];
+  splf: unknown;
 }
 
 /**
- * The data for one document. `documents` is only sent when the template reads it, so a
- * spooled file with many documents does not send all of them with each one.
+ * The data for the document of one page group. `pageGroups` is only sent when the
+ * template reads it, so a spooled file with many page groups does not send all of them
+ * with each one.
  *
  * @param template - An HTML template, or a Word template as `readDocx` reads it
  */
 export function templateData(
   template: string | DocxTemplate,
-  doc: Record<string, unknown>,
-  documents: Record<string, unknown>[],
-  sample: { id: string; splf: unknown },
+  pageGroup: Record<string, unknown>,
+  pageGroups: Record<string, unknown>[],
+  sample: { splf: unknown },
 ): TemplateData {
   const text = typeof template === "string" ? template : template.text;
-  return { doc, ...(templateUses(text, "documents") ? { documents } : {}), sample: { id: sample.id, splf: sample.splf } };
+  return { pageGroup, ...(templateUses(text, "pageGroups") ? { pageGroups } : {}), splf: sample.splf };
 }
 
 /** CSS that hides Carbone's PDF header, footer and options in HTML output; Carbone leaves those elements in. */
@@ -87,7 +88,7 @@ export function pdfLandscape(template: string, pageWidth?: number | null): boole
   return !layout.fromTemplate && layout.landscape;
 }
 
-/** A value at a path such as `doc.lines[0].item`, or undefined. */
+/** A value at a path such as `pageGroup.lines[0].item`, or undefined. */
 function valueAt(data: unknown, path: string): unknown {
   let current: unknown = data;
   for (const part of path.split(/\.|\[(\d+)\]/).filter((p) => p !== undefined && p !== "")) {
@@ -97,7 +98,7 @@ function valueAt(data: unknown, path: string): unknown {
   return current;
 }
 
-/** Tags in a file name pattern: `{d.doc.invoiceNo}`, plain paths without formatters. */
+/** Tags in a file name pattern: `{d.pageGroup.invoiceNo}`, plain paths without formatters. */
 const NAME_TAG = /\{d\.([A-Za-z_][\w.[\]]*)\}/g;
 
 /** Problems with a file name pattern: Nunjucks such as `{{ invoiceNo }}`, or tags with formatters. */
@@ -108,22 +109,22 @@ export function namePatternProblems(pattern: string): string[] {
     const start = Math.min(...nunjucks);
     const close = rest.indexOf("}", start + 2);
     const snippet = rest.slice(start, close === -1 ? start + 40 : rest[close + 1] === "}" ? close + 2 : close + 1);
-    return [`write fields as {d.doc.invoiceNo}, not ${snippet}`];
+    return [`write fields as {d.pageGroup.invoiceNo}, not ${snippet}`];
   }
-  if (/\{d[.:[]/.test(rest)) return ["file names take plain tags such as {d.doc.invoiceNo}, without formatters"];
+  if (/\{d[.:[]/.test(rest)) return ["file names take plain tags such as {d.pageGroup.invoiceNo}, without formatters"];
   return [];
 }
 
 /**
- * Renders the definition's `output.name` (or `type-n`) for one document, as a
- * filesystem-safe name. The pattern takes tags like `{d.doc.invoiceNo}`.
+ * Renders the definition's `output.name` (or `type-n`) for the document of one page
+ * group, as a filesystem-safe name. The pattern takes tags like `{d.pageGroup.invoiceNo}`.
  */
-export function documentName(def: Definition, doc: Record<string, unknown>, index = 0): string {
+export function documentName(def: Definition, pageGroup: Record<string, unknown>, index = 0): string {
   const fallback = `${def.type}-${index + 1}`;
   let name = fallback;
   if (def.output?.name) {
     name = def.output.name.replace(NAME_TAG, (_tag, path: string) => {
-      const value = valueAt({ doc }, path);
+      const value = valueAt({ pageGroup }, path);
       return value === null || value === undefined || typeof value === "object" ? "" : String(value);
     });
   }
@@ -181,14 +182,14 @@ export function starterLayout(def: Definition): { title: string; fields: Starter
 function tableHtml(block: StarterBlock): string {
   const num = (c: StarterColumn): string => (c.type === "number" ? ' class="num"' : "");
   const head = block.columns.map((c) => `<th${num(c)}>${fieldLabel(c.name)}</th>`).join("");
-  const cells = block.columns.map((c) => `<td${num(c)}>${valueTag(`d.doc.${block.name}[i].${c.name}`, c.type)}</td>`).join("");
+  const cells = block.columns.map((c) => `<td${num(c)}>${valueTag(`d.pageGroup.${block.name}[i].${c.name}`, c.type)}</td>`).join("");
   return [
     `  <h2>${fieldLabel(block.name)}</h2>`,
     `  <table>`,
     `    <thead><tr>${head}</tr></thead>`,
     `    <tbody>`,
     `      <tr>${cells}</tr>`,
-    `      <tr><td>{d.doc.${block.name}[i+1]}</td></tr>`,
+    `      <tr><td>{d.pageGroup.${block.name}[i+1]}</td></tr>`,
     `    </tbody>`,
     `  </table>`,
   ].join("\n");
@@ -197,12 +198,12 @@ function tableHtml(block: StarterBlock): string {
 /**
  * A complete A4 HTML starter template for a definition, in Carbone tags: the fields in a
  * header block, each shown only when it has a value, and a table for each table, record or
- * group. Data is `d` = `{ doc, documents, sample }`.
+ * group. Data is `d` = `{ pageGroup, pageGroups, splf }`.
  */
 export function starterTemplate(def: Definition): string {
   const { title, fields, blocks } = starterLayout(def);
   const rows = fields
-    .map((f) => `    {d.doc.${f.name}:ifNEM:showBegin}<dt>${fieldLabel(f.name)}</dt><dd>${valueTag(`d.doc.${f.name}`, f.type)}</dd>{d.doc.${f.name}:showEnd}`)
+    .map((f) => `    {d.pageGroup.${f.name}:ifNEM:showBegin}<dt>${fieldLabel(f.name)}</dt><dd>${valueTag(`d.pageGroup.${f.name}`, f.type)}</dd>{d.pageGroup.${f.name}:showEnd}`)
     .join("\n");
   return `<!doctype html>
 <html lang="en">

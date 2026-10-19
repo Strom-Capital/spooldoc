@@ -11,17 +11,17 @@ describe("starterTemplate", () => {
     const html = starterTemplate(definition);
     expect(html).toContain("@page { size: A4; margin: 15mm; }");
     expect(html).toContain(HIDE_PDF_ELEMENTS);
-    expect(html).toMatch(/\{d\.doc\.\w+\[i\]\.\w+/);
-    expect(html).toMatch(/<tr><td>\{d\.doc\.\w+\[i\+1\]\}<\/td><\/tr>/);
+    expect(html).toMatch(/\{d\.pageGroup\.\w+\[i\]\.\w+/);
+    expect(html).toMatch(/<tr><td>\{d\.pageGroup\.\w+\[i\+1\]\}<\/td><\/tr>/);
     expect(html).not.toMatch(/\{\{|\{%/);
     expect(checkTemplate(html, definition)).toEqual([]);
   });
 
   it("formats dates and numbers, and shows a field only when it has a value", () => {
     const html = starterTemplate(loadFixture("invoice").definition);
-    expect(html).toContain("{d.doc.invoiceDate:ifNEM:showBegin}<dt>Invoice Date</dt><dd>{d.doc.invoiceDate:formatD('DD.MM.YYYY')}</dd>{d.doc.invoiceDate:showEnd}");
-    expect(html).toContain('<td class="num">{d.doc.lines[i].amount:formatN(2)}</td>');
-    expect(html).toContain("<td>{d.doc.lines[i].item}</td>");
+    expect(html).toContain("{d.pageGroup.invoiceDate:ifNEM:showBegin}<dt>Invoice Date</dt><dd>{d.pageGroup.invoiceDate:formatD('DD.MM.YYYY')}</dd>{d.pageGroup.invoiceDate:showEnd}");
+    expect(html).toContain('<td class="num">{d.pageGroup.lines[i].amount:formatN(2)}</td>');
+    expect(html).toContain("<td>{d.pageGroup.lines[i].item}</td>");
   });
 });
 
@@ -40,9 +40,9 @@ describe("prepareHtml", () => {
   });
 
   it("makes a fragment a full document, since Carbone reads a fragment as XML", () => {
-    const html = prepareHtml("<p>{d.doc.x}</p>");
+    const html = prepareHtml("<p>{d.pageGroup.x}</p>");
     expect(html).toMatch(/^<!doctype html>\n<html>/);
-    expect(html).toContain("<body>\n<p>{d.doc.x}</p>\n</body>");
+    expect(html).toContain("<body>\n<p>{d.pageGroup.x}</p>\n</body>");
   });
 
   it("hides Carbone's PDF elements in the HTML, in the head or else the body", () => {
@@ -78,33 +78,33 @@ describe("templateData", () => {
   const doc = { a: 1 };
   const sample = { id: "S", splf: { name: "QPRINT" }, extra: "not sent" };
 
-  it("sends documents only when the template reads them", () => {
-    expect(templateData("<p>{d.doc.a}</p>", doc, [doc, doc], sample)).toEqual({ doc, sample: { id: "S", splf: { name: "QPRINT" } } });
-    expect(templateData("<p>{d.documents[i].a}</p>", doc, [doc, doc], sample).documents).toHaveLength(2);
-    expect(templateData("<p>{d.documents[].a:aggSum}</p>", doc, [doc], sample).documents).toHaveLength(1);
+  it("sends every page group only when the template reads them", () => {
+    expect(templateData("<p>{d.pageGroup.a}</p>", doc, [doc, doc], sample)).toEqual({ pageGroup: doc, splf: { name: "QPRINT" } });
+    expect(templateData("<p>{d.pageGroups[i].a}</p>", doc, [doc, doc], sample).pageGroups).toHaveLength(2);
+    expect(templateData("<p>{d.pageGroups[].a:aggSum}</p>", doc, [doc], sample).pageGroups).toHaveLength(1);
   });
 });
 
 describe("documentName", () => {
   it("names documents from output.name tags", () => {
     const { sample, definition } = loadFixture("invoice");
-    const { documents } = extract(definition, sample);
-    expect(documentName(definition, documents[0] as Record<string, unknown>)).toBe("invoice-260101");
+    const { pageGroups } = extract(definition, sample);
+    expect(documentName(definition, pageGroups[0] as Record<string, unknown>)).toBe("invoice-260101");
   });
 
   it("makes names safe and falls back to type-n", () => {
     const { definition } = loadFixture("invoice");
-    expect(documentName({ ...definition, output: { name: "{d.doc.a}/{d.doc.b}" } }, { a: "x y", b: "../z" })).toBe("x_y_.._z");
-    expect(documentName({ ...definition, output: { name: "{d.doc.missing}" } }, {}, 2)).toBe(`${definition.type}-3`);
+    expect(documentName({ ...definition, output: { name: "{d.pageGroup.a}/{d.pageGroup.b}" } }, { a: "x y", b: "../z" })).toBe("x_y_.._z");
+    expect(documentName({ ...definition, output: { name: "{d.pageGroup.missing}" } }, {}, 2)).toBe(`${definition.type}-3`);
     expect(documentName({ ...definition, output: undefined }, {}, 0)).toBe(`${definition.type}-1`);
   });
 
   it("refuses formatters and Nunjucks in output.name", () => {
-    expect(namePatternProblems("inv-{d.doc.no}")).toEqual([]);
-    expect(namePatternProblems("inv-{{ no }}")[0]).toMatch(/write fields as \{d\.doc\.invoiceNo\}, not \{\{ no \}\}/);
-    expect(namePatternProblems("inv-{d.doc.date:formatD(YYYY)}")[0]).toMatch(/without formatters/);
-    expect(namePatternProblems("inv-{{ no | wordcount }}")[0]).toMatch(/write fields as \{d\.doc\.invoiceNo\}/);
+    expect(namePatternProblems("inv-{d.pageGroup.no}")).toEqual([]);
+    expect(namePatternProblems("inv-{{ no }}")[0]).toMatch(/write fields as \{d\.pageGroup\.invoiceNo\}, not \{\{ no \}\}/);
+    expect(namePatternProblems("inv-{d.pageGroup.date:formatD(YYYY)}")[0]).toMatch(/without formatters/);
+    expect(namePatternProblems("inv-{{ no | wordcount }}")[0]).toMatch(/write fields as \{d\.pageGroup\.invoiceNo\}/);
     const { yaml } = loadFixture("invoice");
-    expect(() => parseDefinition(yaml.replace("invoice-{d.doc.invoiceNo}", "invoice-{d.doc.invoiceNo:upperCase}"))).toThrow(DefinitionError);
+    expect(() => parseDefinition(yaml.replace("invoice-{d.pageGroup.invoiceNo}", "invoice-{d.pageGroup.invoiceNo:upperCase}"))).toThrow(DefinitionError);
   });
 });

@@ -10,7 +10,7 @@ import { useWorkbench } from './workbench-provider';
  * it: found (accent), empty (yellow) and missing (red outline where the anchor is known).
  */
 export function PageView() {
-  const { render, page, setPage, selectedHit, setSelectedHit, setTab, documentIndex, setDocumentIndex } = useWorkbench();
+  const { render, page, setPage, selectedHit, setSelectedHit, setTab, pageGroupIndex, setPageGroupIndex } = useWorkbench();
   const scroller = useRef<HTMLDivElement>(null);
   const pages = useMemo(() => render?.sample.pages ?? [], [render]);
   const current = pages.find((p) => p.no === page) ?? pages[0];
@@ -67,7 +67,7 @@ export function PageView() {
               onClick={() => {
                 setSelectedHit(hit);
                 setTab('json');
-                if (hit.document !== documentIndex) setDocumentIndex(hit.document);
+                if (hit.pageGroup !== pageGroupIndex) setPageGroupIndex(hit.pageGroup);
               }}
             />
           );

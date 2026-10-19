@@ -3,7 +3,7 @@
  * Nothing here holds a session, a key or an absolute path.
  */
 
-import type { OutputFormat, TemplateKind } from './job-spec';
+import type { Format, TemplateKind } from './job-spec';
 
 /** Names of the tools the model can call. */
 export const CHAT_TOOL_NAMES = [
@@ -14,8 +14,8 @@ export const CHAT_TOOL_NAMES = [
   'read_word_template',
   'edit_word_template',
   'render_preview',
-  'add_output',
-  'remove_output',
+  'add_template',
+  'remove_template',
   'list_jobs',
   'read_job_files',
   'read_carbone_reference',
@@ -29,8 +29,8 @@ export const SYNC_TOOLS: readonly ChatToolName[] = [
   'write_word_template',
   'edit_word_template',
   'render_preview',
-  'add_output',
-  'remove_output',
+  'add_template',
+  'remove_template',
 ];
 
 /** A tool call that could not do its work; the model reads `error` and tries again. */
@@ -42,11 +42,11 @@ export interface ToolFailure {
 /** `read_sample_page`. */
 export type ReadPageResult = { page: number; of: number; lines: string } | ToolFailure;
 
-/** One top-level field of the first document after extraction. */
+/** One top-level field of the first page group after extraction. */
 export interface FieldReport {
   name: string;
   status: 'found' | 'missing' | 'empty';
-  /** The value in the first document (masked when masking is on). Tables show the row count. */
+  /** The value in the first page group (masked when masking is on). Tables show the row count. */
   value: string;
 }
 
@@ -56,7 +56,7 @@ export type WriteDefinitionResult =
       ok: true;
       type: string;
       path: string;
-      documents: number;
+      pageGroups: number;
       fields: FieldReport[];
       missing: string[];
       warnings: string[];
@@ -64,20 +64,20 @@ export type WriteDefinitionResult =
     }
   | ToolFailure;
 
-/** One of the job's outputs as the tools report it. */
-export interface OutputListing {
+/** One of the job's templates as the tools report it. */
+export interface TemplateListing {
   id: string;
-  label: string;
-  formats: OutputFormat[];
+  name: string;
+  formats: Format[];
   /** An HTML template, or a Word template. */
   kind: TemplateKind;
-  /** `starter` when the output has no template of its own yet. */
-  template: 'saved' | 'starter';
+  /** `starter` when the template has no content of its own yet. */
+  content: 'saved' | 'starter';
 }
 
-/** `write_template`. `output` is the label of the output written. */
+/** `write_template`: `template` is the name of the template written, `templateId` its id. */
 export type WriteTemplateResult =
-  | { ok: boolean; path: string; output: string; errors: string[]; warnings: string[]; textPreview: string }
+  | { ok: boolean; path: string; template: string; templateId: string; errors: string[]; warnings: string[]; textPreview: string }
   | ToolFailure;
 
 /**
@@ -96,17 +96,18 @@ export interface WordFileListing {
 
 /**
  * `write_word_template` and `edit_word_template`: the file saved, the tag check's and
- * Carbone's errors, the text of document 1 and what the model was shown of it.
+ * Carbone's errors, the text of the first document and what the model was shown of it.
  */
 export type WordTemplateResult =
   | {
       ok: boolean;
-      output: string;
+      template: string;
+      templateId: string;
       file: WordFileListing;
       errors: string[];
       textPreview: string;
       view: WordView;
-      /** Pages of document 1, when it was rendered to PDF. */
+      /** Pages of the first document, when it was rendered to PDF. */
       pages: number | null;
       /** Why the model sees less than every page, when it does. */
       note?: string;
@@ -115,23 +116,24 @@ export type WordTemplateResult =
 
 /** `read_word_template`: the parts of the file, or one part's XML from `from`. */
 export type ReadWordTemplateResult =
-  | { ok: true; output: string; file: string | null; parts: { name: string; size: number }[] }
-  | { ok: true; output: string; file: string | null; part: string; size: number; from: number; xml: string; more: boolean }
+  | { ok: true; template: string; file: string | null; parts: { name: string; size: number }[] }
+  | { ok: true; template: string; file: string | null; part: string; size: number; from: number; xml: string; more: boolean }
   | ToolFailure;
 
-/** `add_output` and `remove_output`: the output added or removed, and the job's outputs after. */
-export type OutputChangeResult = { ok: true; output: OutputListing; outputs: OutputListing[] } | ToolFailure;
+/** `add_template` and `remove_template`: the template added or removed, and the job's templates after. */
+export type TemplateChangeResult = { ok: true; template: TemplateListing; templates: TemplateListing[] } | ToolFailure;
 
 /** `render_preview`. */
 export type RenderPreviewResult =
   | {
       ok: true;
-      /** The label of the output rendered. */
-      output: string;
-      document: number;
-      documents: number;
-      /** `starter` when there is no saved template yet and the starter template was used. */
-      template: 'saved' | 'starter';
+      /** The name of the template rendered. */
+      template: string;
+      templateId: string;
+      pageGroup: number;
+      pageGroups: number;
+      /** `starter` when the template has no content of its own yet and the starter was used. */
+      content: 'saved' | 'starter';
       hits: { found: number; missing: number; empty: number };
       missing: string[];
       templateErrors: string[];
@@ -149,30 +151,30 @@ export interface JobListing {
   name: string;
   /** The `type` of its definition, or null when it has none or it does not parse. */
   type: string | null;
-  /** The labels of its outputs. */
-  outputs: string[];
-  /** True when any of its outputs has its own template (not the starter template). */
-  hasTemplate: boolean;
+  /** The names of its templates. */
+  templates: string[];
+  /** True when any of its templates has content of its own (not the starter). */
+  hasOwnContent: boolean;
 }
 
 /** `list_jobs`. */
 export type ListJobsResult = { ok: true; jobs: JobListing[] } | ToolFailure;
 
 /**
- * One output of another job: its label, formats and template. `templateHtml` is an HTML
- * template's text, `fileId` a Word template's file; null for the starter template.
+ * One template of another job: its name, formats and content. `html` is an HTML template's
+ * text, `fileId` a Word template's file; null for the starter.
  */
-export interface JobOutputFiles {
+export interface JobTemplateFiles {
   id: string;
-  label: string;
-  formats: OutputFormat[];
+  name: string;
+  formats: Format[];
   kind: TemplateKind;
-  templateHtml: string | null;
+  html: string | null;
   fileId: string | null;
 }
 
 /** `read_job_files`. */
-export type ReadJobFilesResult = { ok: true; id: string; name: string; definitionYaml: string | null; outputs: JobOutputFiles[] } | ToolFailure;
+export type ReadJobFilesResult = { ok: true; id: string; name: string; definitionYaml: string | null; templates: JobTemplateFiles[] } | ToolFailure;
 
 /** `read_carbone_reference`: one reference file of the Carbone Skill. */
 export type ReadCarboneReferenceResult = { ok: true; name: string; text: string } | ToolFailure;

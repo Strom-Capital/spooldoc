@@ -36,5 +36,5 @@ text:
         - { name: quantity, column: 76, length: 10, type: number }
         - { name: unit, column: 88, length: 6 }
 output:
-  name: "picklist-{d.doc.picklistNo}"
+  name: "picklist-{d.pageGroup.picklistNo}"
   title: Pick list

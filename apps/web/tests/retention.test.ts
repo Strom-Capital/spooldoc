@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { splfKey } from '@/lib/job-spec';
-import { jobs, runOutputs, runs, samples, settings, watchSeen } from '@/lib/server/db/schema';
+import { jobs, runFiles, runs, samples, settings, watchSeen } from '@/lib/server/db/schema';
 import { resetTables } from './helpers/db';
 import { loadSample } from './helpers/fake-connection';
 import { db, insertJob, insertServer, testDb } from './helpers/fixtures';
@@ -60,8 +60,8 @@ async function insertRun(values: { startedAt: Date; finishedAt: Date | null; num
   const sampleId = await insertSample({ runId, capturedAt: values.startedAt, number: values.number });
   await db().update(runs).set({ sampleId }).where(eq(runs.id, runId));
   await db()
-    .insert(runOutputs)
-    .values({ runId, documentIndex: 0, name: 'invoice.pdf', contentType: 'application/pdf', size: 4, content: Buffer.from('%PDF') });
+    .insert(runFiles)
+    .values({ runId, pageGroupIndex: 0, template: 'Template 1', name: 'invoice.pdf', contentType: 'application/pdf', size: 4, content: Buffer.from('%PDF') });
   await db().insert(watchSeen).values({ jobId, splfKey: splfKey(splf), runId, seenAt: values.startedAt });
   return { runId, sampleId };
 }
@@ -84,7 +84,7 @@ describe('cleanUp', () => {
     expect(await cleanUp(30, NOW)).toEqual({ runs: 1, samples: 1, templateFiles: 0 });
 
     expect(await ids(db().select({ id: runs.id }).from(runs))).toEqual([recent.runId]);
-    expect((await db().select({ runId: runOutputs.runId }).from(runOutputs)).map((r) => r.runId)).toEqual([recent.runId]);
+    expect((await db().select({ runId: runFiles.runId }).from(runFiles)).map((r) => r.runId)).toEqual([recent.runId]);
     expect(await ids(db().select({ id: samples.id }).from(samples))).toEqual([recent.sampleId]);
   });
 

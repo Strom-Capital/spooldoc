@@ -127,8 +127,8 @@ describe('POST /api/jobs/[id]/chat', () => {
 
     expect(response.status).toBe(200);
     expect((await draft()).extract.definition).toBe(yaml);
-    const output = parts.find((p) => p.type === 'tool-output-available')?.output as { ok: boolean; documents: number; missing: string[] };
-    expect(output).toMatchObject({ ok: true, type: 'invoice', documents: 6, missing: [] });
+    const output = parts.find((p) => p.type === 'tool-output-available')?.output as { ok: boolean; pageGroups: number; missing: string[] };
+    expect(output).toMatchObject({ ok: true, type: 'invoice', pageGroups: 6, missing: [] });
     expect(parts.some((p) => p.type === 'text-delta' && p.delta === 'Saved the invoice definition.')).toBe(true);
     expect(text).not.toContain(FAKE_KEY);
 
@@ -139,14 +139,14 @@ describe('POST /api/jobs/[id]/chat', () => {
     expect(instructions).toContain('Invoice no');
     expect(instructions).toContain('260101');
     expect(model.doStreamCalls[0]?.tools?.map((t) => t.name).sort()).toEqual([
-      'add_output',
+      'add_template',
       'edit_word_template',
       'list_jobs',
       'read_carbone_reference',
       'read_job_files',
       'read_sample_page',
       'read_word_template',
-      'remove_output',
+      'remove_template',
       'render_preview',
       'write_definition',
       'write_template',
@@ -160,15 +160,15 @@ describe('POST /api/jobs/[id]/chat', () => {
 
     const { parts } = await chunks(await chat());
 
-    expect((await draft()).render.outputs[0]!.template).toEqual({ kind: 'html', source: html });
+    expect((await draft()).render.templates[0]).toMatchObject({ kind: 'html', source: html });
     const output = parts.find((p) => p.type === 'tool-output-available')?.output as { ok: boolean; path: string; errors: string[] };
-    expect(output).toMatchObject({ ok: true, path: 'template', output: 'Document', errors: [] });
+    expect(output).toMatchObject({ ok: true, path: 'template', template: 'Template 1', templateId: 'template-1', errors: [] });
   });
 
   it('designs and edits a Word template as new files, and shows the model the PDF once', async () => {
     await setDefinition(yaml);
     setDocumentRenderer(fakeRenderer);
-    const design = { sections: [{ children: [{ type: 'Paragraph', text: 'Invoice {d.doc.invoiceNo}' }] }] };
+    const design = { sections: [{ children: [{ type: 'Paragraph', text: 'Invoice {d.pageGroup.invoiceNo}' }] }] };
     const model = scriptedModel(
       toolStep('write_word_template', { design, name: 'invoice.docx' }),
       toolStep('edit_word_template', { edits: [{ part: 'word/document.xml', find: '>Invoice ', replace: '>Sales invoice ' }] }),
@@ -186,7 +186,7 @@ describe('POST /api/jobs/[id]/chat', () => {
     const [first, second] = files;
     expect(first).toMatchObject({ name: 'invoice.docx', madeBy: 'assistant', previousId: null, createdBy: expect.any(String) });
     expect(second).toMatchObject({ name: 'invoice.docx', madeBy: 'assistant', previousId: first!.id });
-    expect((await draft()).render.outputs[0]).toMatchObject({ template: { kind: 'docx', fileId: second!.id }, formats: ['pdf'] });
+    expect((await draft()).render.templates[0]).toMatchObject({ kind: 'docx', fileId: second!.id, formats: ['pdf'] });
 
     // The step after each call has the PDF; the stored thread has the results' text only.
     const toolResult = (call: number) =>
@@ -199,22 +199,22 @@ describe('POST /api/jobs/[id]/chat', () => {
     expect(thread).not.toContain(Buffer.from(PDF_BYTES).toString('base64'));
   });
 
-  it('adds an output and writes its template through the draft store', async () => {
+  it('adds a template and writes it through the draft store', async () => {
     await setDefinition(yaml);
     createModel.mockResolvedValue(
       withKey(
         scriptedModel(
-          toolStep('add_output', { label: 'Lines', formats: ['html'] }),
-          toolStep('write_template', { html: '<p>{d.doc.invoiceNo}</p>', output: 'Lines' }),
-          toolStep('remove_output', { output: 'Document' }),
+          toolStep('add_template', { name: 'Lines', formats: ['html'] }),
+          toolStep('write_template', { html: '<p>{d.pageGroup.invoiceNo}</p>', template: 'Lines' }),
+          toolStep('remove_template', { template: 'Template 1' }),
           textStep('Done.'),
         ),
       ),
     );
     await chunks(await chat());
 
-    expect((await draft()).render.outputs).toEqual([
-      { id: 'lines', label: 'Lines', template: { kind: 'html', source: '<p>{d.doc.invoiceNo}</p>' }, formats: ['html'] },
+    expect((await draft()).render.templates).toEqual([
+      { id: 'lines', name: 'Lines', kind: 'html', source: '<p>{d.pageGroup.invoiceNo}</p>', formats: ['html'] },
     ]);
   });
 
@@ -222,7 +222,7 @@ describe('POST /api/jobs/[id]/chat', () => {
     const serverId = (await draft()).source.serverId!;
     const otherId = await insertJob(serverId, {
       extract: { definition: yaml },
-      render: { outputs: [{ id: 'main', label: 'Document', template: { kind: 'html', source: html }, formats: ['pdf'] }] },
+      render: { templates: [{ id: 'main', name: 'Document', kind: 'html', source: html, formats: ['pdf'] }] },
     });
     const [other] = await db().select().from(jobs).where(eq(jobs.id, otherId));
     await db().insert(jobVersions).values({ jobId: otherId, number: 1, spec: versionSpec(jobSpecSchema.parse(other!.draft)) });
@@ -235,13 +235,13 @@ describe('POST /api/jobs/[id]/chat', () => {
     const { parts } = await chunks(await chat());
 
     const outputs = parts.filter((p) => p.type === 'tool-output-available').map((p) => p.output as Record<string, unknown>);
-    expect(outputs[0]).toEqual({ ok: true, jobs: [{ id: otherId, name: 'Invoices', type: 'invoice', outputs: ['Document'], hasTemplate: true }] });
+    expect(outputs[0]).toEqual({ ok: true, jobs: [{ id: otherId, name: 'Invoices', type: 'invoice', templates: ['Document'], hasOwnContent: true }] });
     expect(outputs[1]).toEqual({
       ok: true,
       id: otherId,
       name: 'Invoices',
       definitionYaml: yaml,
-      outputs: [{ id: 'main', label: 'Document', formats: ['pdf'], kind: 'html', templateHtml: html, fileId: null }],
+      templates: [{ id: 'main', name: 'Document', formats: ['pdf'], kind: 'html', html, fileId: null }],
     });
     expect((await draft()).extract.definition).toBe('');
   });
@@ -325,8 +325,8 @@ describe('the stored thread (GET and DELETE /api/jobs/[id]/chat)', () => {
     const answer = thread[1]!;
     expect(answer.role).toBe('assistant');
     expect(answer.id).toBeTruthy();
-    const toolPart = answer.parts.find((p) => p.type === 'tool-write_definition') as { state: string; output: { ok: boolean; documents: number } };
-    expect(toolPart).toMatchObject({ state: 'output-available', output: { ok: true, documents: 6 } });
+    const toolPart = answer.parts.find((p) => p.type === 'tool-write_definition') as { state: string; output: { ok: boolean; pageGroups: number } };
+    expect(toolPart).toMatchObject({ state: 'output-available', output: { ok: true, pageGroups: 6 } });
     expect(answer.parts).toContainEqual(expect.objectContaining({ type: 'text', text: 'Saved the invoice definition.' }));
     // The stored results are the masked ones the model saw.
     expect(JSON.stringify(thread)).not.toContain('260101');

@@ -62,10 +62,10 @@ export async function listAssets(): Promise<AssetView[]> {
     .from(jobs)
     .leftJoin(jobVersions, and(eq(jobVersions.jobId, jobs.id), eq(jobVersions.number, jobs.activeVersion)))
     .orderBy(asc(jobs.name));
-  // Stored specs may be from before outputs; parsing the render part migrates them.
+  // Parsed, so a spec the schema refuses counts as printing nothing.
   const templates = (spec: JobSpec | null): string[] => {
     const render = jobSpecSchema.shape.render.safeParse(spec?.render);
-    return render.success ? render.data.outputs.flatMap((output) => (output.template.kind === 'html' ? (output.template.source ?? []) : [])) : [];
+    return render.success ? render.data.templates.flatMap((template) => (template.kind === 'html' ? (template.source ?? []) : [])) : [];
   };
   return rows.map((row) => ({
     id: row.id,

@@ -20,15 +20,15 @@ import { useWorkbench } from './workbench-provider';
 type FileInfo = { id: string; file: TemplateFileDetails } | { id: string; error: string };
 
 /**
- * The Word template of the output shown: its `.docx`, uploaded or made by the AI
+ * The Word template shown: its `.docx`, uploaded or made by the AI
  * assistant, or the starter template generated from the definition until there is one.
  * The user changes the file in Word; here they upload it, download it or the starter
  * template, see what the tag check finds, by part, and put back the file the assistant
  * replaced.
  */
 export function WordTemplate() {
-  const { jobId, template, render, readOnly, yaml, outputId, onDraftWritten, setTemplate } = useWorkbench();
-  const fileId = template.kind === 'docx' ? template.fileId : null;
+  const { jobId, content, render, readOnly, yaml, templateId, onDraftWritten, setContent } = useWorkbench();
+  const fileId = content.kind === 'docx' ? content.fileId : null;
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<'upload' | 'starter' | null>(null);
   const [error, setError] = useState<ShownError | null>(null);
@@ -57,7 +57,7 @@ export function WordTemplate() {
     }
     const form = new FormData();
     form.set('file', file);
-    form.set('outputId', outputId);
+    form.set('templateId', templateId);
     setBusy('upload');
     setError(null);
     try {
@@ -75,7 +75,7 @@ export function WordTemplate() {
 
   /** Use the file the assistant replaced, or the starter template when it replaced none. */
   function restorePrevious(file: TemplateFileDetails) {
-    setTemplate({ kind: 'docx', fileId: file.previous?.id ?? null });
+    setContent({ kind: 'docx', fileId: file.previous?.id ?? null });
     toast.success(file.previous ? `Using ${file.previous.name} again` : 'Using the starter template again');
   }
 
@@ -109,7 +109,7 @@ export function WordTemplate() {
               variant="ghost"
               disabled={busy !== null}
               onClick={() => input.current?.click()}
-              title="Upload a .docx made in Word. This output uses it from then on; saved versions keep theirs."
+              title="Upload a .docx made in Word. This template uses it from then on; saved versions keep theirs."
             >
               {busy === 'upload' ? <Spinner /> : <UploadIcon />}
               Upload template
@@ -130,7 +130,7 @@ export function WordTemplate() {
           </Button>
         )}
         {!readOnly && (
-          <Button size="sm" variant="ghost" onClick={() => setStartFrom(true)} title="Use a template of another job in this output, and on request its definition in this draft">
+          <Button size="sm" variant="ghost" onClick={() => setStartFrom(true)} title="Copy a template of another job into this one, and on request its definition into this draft">
             <FolderInputIcon />
             Start from job
           </Button>
@@ -144,7 +144,7 @@ export function WordTemplate() {
       )}
       {!fileId && (
         <EditorMessage tone="note">
-          This output has no Word template yet. The preview uses a starter template generated from the definition. Download it, change it in
+          This template has no Word file yet. The preview uses a starter template generated from the definition. Download it, change it in
           Word and upload it, or ask the AI assistant to design one.
         </EditorMessage>
       )}
@@ -191,12 +191,12 @@ export function WordTemplate() {
             tag with curly quotes as text.
           </li>
           <li>
-            Fields are the same tags as in HTML, such as <code className="font-mono text-foreground">{'{d.doc.invoiceNo}'}</code>. The JSON tab
+            Fields are the same tags as in HTML, such as <code className="font-mono text-foreground">{'{d.pageGroup.invoiceNo}'}</code>. The JSON tab
             has the names.
           </li>
           <li>
             Repeat a table row with a row of <code className="font-mono text-foreground">[i]</code> tags and, below it, a row with{' '}
-            <code className="font-mono text-foreground">{'{d.doc.lines[i+1]}'}</code>. Keep a loop inside the body, a header or a footer.
+            <code className="font-mono text-foreground">{'{d.pageGroup.lines[i+1]}'}</code>. Keep a loop inside the body, a header or a footer.
           </li>
           <li>Insert a logo as a picture, set to In line with text. It is the same in every document.</li>
           <li>Page numbers are Word&apos;s own fields: Insert, Page Number.</li>

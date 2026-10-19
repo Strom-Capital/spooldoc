@@ -43,10 +43,10 @@ describe.skipIf(!url)("Carbone server", () => {
 
   it.each(FIXTURES)("renders the %s fixture and starter templates to HTML and PDF", async (name) => {
     const { sample, definition, template } = loadFixture(name);
-    const { documents } = extract(definition, sample);
+    const { pageGroups } = extract(definition, sample);
     for (const html of [template, starterTemplate(definition)]) {
       expect(checkTemplate(html, definition)).toEqual([]);
-      const data = templateData(html, documents[0]!, documents, sample);
+      const data = templateData(html, pageGroups[0]!, pageGroups, sample);
       const out = Buffer.from(await renderDocument(server, { template: html, data, format: "html" })).toString();
       expect(out).not.toMatch(/\{d\./);
       const pdf = await renderDocument(server, { template: html, data, format: "pdf", pageWidth: sample.attributes.pageWidth });
@@ -56,11 +56,11 @@ describe.skipIf(!url)("Carbone server", () => {
 
   it.each(FIXTURES)("renders the %s Word starter template to DOCX and PDF", async (name) => {
     const { sample, definition } = loadFixture(name);
-    const { documents } = extract(definition, sample);
+    const { pageGroups } = extract(definition, sample);
     const template = await starterDocx(definition);
     const read = readDocx(template);
     expect(checkDocx(read, definition)).toEqual([]);
-    const data = templateData(read, documents[0]!, documents, sample);
+    const data = templateData(read, pageGroups[0]!, pageGroups, sample);
     const docx = readDocx(await renderDocument(server, { kind: "docx", template, data, format: "docx" }));
     expect(docx.text).not.toMatch(/\{d\./);
     const pdf = await renderDocument(server, { kind: "docx", template, data, format: "pdf" });
@@ -69,11 +69,11 @@ describe.skipIf(!url)("Carbone server", () => {
 
   it("hides an empty field's line in the Word starter, keeps the loop rows and leaves page fields to Word", async () => {
     const { sample, definition } = loadFixture("invoice");
-    const { documents } = extract(definition, sample);
+    const { pageGroups } = extract(definition, sample);
     const template = await starterDocx(definition);
-    const doc = documents[2]!;
+    const doc = pageGroups[2]!;
     expect(doc.address2).toBe("");
-    const out = await renderDocument(server, { kind: "docx", template, data: templateData(readDocx(template), doc, documents, sample), format: "docx" });
+    const out = await renderDocument(server, { kind: "docx", template, data: templateData(readDocx(template), doc, pageGroups, sample), format: "docx" });
     const text = readDocx(out).text;
     expect(text).toContain("BAKER & SONS LTD");
     expect(text).not.toContain("Address2");
@@ -85,14 +85,14 @@ describe.skipIf(!url)("Carbone server", () => {
 
   it("renders a designed Word template on every page, and page 1 as a PNG", async () => {
     const { sample, definition } = loadFixture("invoice");
-    const { documents } = extract(definition, sample);
+    const { pageGroups } = extract(definition, sample);
     const template = await buildDocx(invoiceDesign, (name) => (name === "logo" ? { data: testPng(400, 100), type: "png", width: 400, height: 100 } : undefined));
     const read = readDocx(template);
     expect(checkDocx(read, definition)).toEqual([]);
     // Enough lines for a second page, which has the running header and the totals.
-    const first = documents[0]!;
+    const first = pageGroups[0]!;
     const long = { ...first, lines: Array.from({ length: 12 }, () => first.lines as unknown[]).flat() };
-    const data = templateData(read, long, documents, sample);
+    const data = templateData(read, long, pageGroups, sample);
     const docx = readDocx(await renderDocument(server, { kind: "docx", template, data, format: "docx" }));
     expect(docx.text).not.toMatch(/\{d\.|\[i/);
     expect(docx.text).toContain("NORTHERN SUPPLY CO");
@@ -107,15 +107,15 @@ describe.skipIf(!url)("Carbone server", () => {
 
   it("renders a Word template after an edit", async () => {
     const { sample, definition } = loadFixture("invoice");
-    const { documents } = extract(definition, sample);
-    const template = editDocx(await starterDocx(definition), [{ part: "word/document.xml", find: ">Invoice<", replace: ">Invoice {d.doc.invoiceNo}<" }]);
+    const { pageGroups } = extract(definition, sample);
+    const template = editDocx(await starterDocx(definition), [{ part: "word/document.xml", find: ">Invoice<", replace: ">Invoice {d.pageGroup.invoiceNo}<" }]);
     const read = readDocx(template);
-    const out = readDocx(await renderDocument(server, { kind: "docx", template, data: templateData(read, documents[0]!, documents, sample), format: "docx" }));
-    expect(out.paragraphs[0]!.text).toBe(`Invoice ${String(documents[0]!.invoiceNo)}`);
+    const out = readDocx(await renderDocument(server, { kind: "docx", template, data: templateData(read, pageGroups[0]!, pageGroups, sample), format: "docx" }));
+    expect(out.paragraphs[0]!.text).toBe(`Invoice ${String(pageGroups[0]!.invoiceNo)}`);
   });
 
   it("keeps the paper-size rule: the template's @page wins, else landscape above 160 columns", async () => {
-    const data = { doc: {}, sample: { id: "S", splf: {} } };
+    const data = { pageGroup: {}, splf: {} };
     const noSize = "<html><body><p>wide</p></body></html>";
     const portrait = "<html><head><style>@page { size: A4; }</style></head><body><p>A4</p></body></html>";
     const [wide] = pageSizes(await renderDocument(server, { template: noSize, data, format: "pdf", pageWidth: 198 }));
@@ -127,15 +127,15 @@ describe.skipIf(!url)("Carbone server", () => {
   });
 
   it("maps Carbone's template errors", async () => {
-    const render = (body: string) => carboneRender(server, { template: `<!doctype html><html><body>${body}</body></html>`, data: { doc: { lines: [{ a: 1 }] } }, convertTo: "html" });
-    expect((await failure(render("<p>{d.doc.lines[i].a}</p>"))).message).toMatch(/no end row/);
-    expect((await failure(render("{d.doc.a:formatDate('DD')}"))).message).toMatch(/Did you mean :formatD\?/);
-    expect((await failure(render("{d.doc.a:ifNEM:showBegin}x"))).message).toMatch(/no showEnd or hideEnd/);
+    const render = (body: string) => carboneRender(server, { template: `<!doctype html><html><body>${body}</body></html>`, data: { pageGroup: { lines: [{ a: 1 }] } }, convertTo: "html" });
+    expect((await failure(render("<p>{d.pageGroup.lines[i].a}</p>"))).message).toMatch(/no end row/);
+    expect((await failure(render("{d.pageGroup.a:formatDate('DD')}"))).message).toMatch(/Did you mean :formatD\?/);
+    expect((await failure(render("{d.pageGroup.a:ifNEM:showBegin}x"))).message).toMatch(/no showEnd or hideEnd/);
   });
 
   it("prints what the tag check catches, which is why Spooldoc checks first", async () => {
-    const html = "<!doctype html><html><body>[{d.doc.invoiceNumber}] [{d.doc.invoiceDate:formatD(\"DD.MM.YYYY\")}]</body></html>";
-    const out = Buffer.from(await carboneRender(server, { template: html, data: { doc: { invoiceDate: "2026-10-15" } }, convertTo: "html" })).toString();
+    const html = "<!doctype html><html><body>[{d.pageGroup.invoiceNumber}] [{d.pageGroup.invoiceDate:formatD(\"DD.MM.YYYY\")}]</body></html>";
+    const out = Buffer.from(await carboneRender(server, { template: html, data: { pageGroup: { invoiceDate: "2026-10-15" } }, convertTo: "html" })).toString();
     expect(out).toContain('[] ["15.10.2026"]');
     expect(checkTemplate(html, loadFixture("invoice").definition)).toHaveLength(2);
   });

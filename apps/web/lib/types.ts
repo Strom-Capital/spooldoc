@@ -73,7 +73,7 @@ export interface TemplateFileView {
   createdAt: string;
   /** `assistant` for a file the AI assistant wrote or edited. */
   madeBy: 'upload' | 'assistant';
-  /** The file the output used before the assistant made this one; null for an upload or the starter template. */
+  /** The file the template used before the assistant made this one; null for an upload or the starter template. */
   previousId: string | null;
 }
 
@@ -140,11 +140,12 @@ export interface RunView {
   trigger: 'manual' | 'watch';
   splf: SpooledFileId;
   status: RunStatus;
-  documents: number;
+  /** How many page groups the definition found. */
+  pageGroups: number;
   error: string | null;
   steps: RunStepView[];
-  /** The delivered files, with the label of the job output each was rendered for (null before outputs). */
-  files: { id: string; name: string; size: number; contentType: string; output: string | null }[];
+  /** The delivered files, with the name of the job template each was rendered with. */
+  files: { id: string; name: string; size: number; contentType: string; template: string }[];
   startedAt: string;
   finishedAt: string | null;
 }

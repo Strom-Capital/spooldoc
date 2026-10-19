@@ -1,19 +1,19 @@
 import 'server-only';
 
 import { documentName, parseDefinition, renderDocument, starterTemplate, type Definition, type DocumentRender } from '@spooldoc/core';
-import type { OutputTemplate } from '@/lib/job-spec';
+import type { TemplateContent } from '@/lib/job-spec';
 import { log } from './log';
 import type { SampleTemplate } from './render';
 import { carboneServer, noteRenderFailure, renderingReady } from './rendering';
 import { getTemplateFile } from './template-files';
 
 /**
- * The file name of a document: the definition's `output.name`, or `<fallback>-<n>`.
+ * The file name of the document of a page group: the definition's `output.name`, or `<fallback>-<n>`.
  */
-export function fileNameFor(def: Definition | null, doc: Record<string, unknown>, index: number, fallback: string): string {
+export function fileNameFor(def: Definition | null, pageGroup: Record<string, unknown>, index: number, fallback: string): string {
   if (def?.output?.name) {
     try {
-      return documentName(def, doc, index);
+      return documentName(def, pageGroup, index);
     } catch {
       // keep the fallback
     }
@@ -21,17 +21,17 @@ export function fileNameFor(def: Definition | null, doc: Record<string, unknown>
   return `${fallback}-${index + 1}`;
 }
 
-/** The Carbone template of an output: its own, or the starter template. */
-export function outputTemplate(source: string | null | undefined, def: Definition): string {
+/** The HTML of a template: its own, or the starter template. */
+export function templateHtml(source: string | null | undefined, def: Definition): string {
   return source === null || source === undefined ? starterTemplate(def) : source;
 }
 
 /**
- * An output's template as `renderSample` takes it: HTML as it is, a Word template with
+ * A template's content as `renderSample` takes it: HTML as it is, a Word template with
  * its file read. Null when the Word file is gone.
  */
-export async function sampleTemplate(template: OutputTemplate): Promise<SampleTemplate | null> {
-  if (template.kind === 'html') return template;
+export async function sampleTemplate(template: TemplateContent): Promise<SampleTemplate | null> {
+  if (template.kind === 'html') return { kind: 'html', source: template.source };
   if (template.fileId === null) return { kind: 'docx', file: null };
   const file = await getTemplateFile(template.fileId);
   return file ? { kind: 'docx', file } : null;

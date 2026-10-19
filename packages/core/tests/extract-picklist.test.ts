@@ -6,7 +6,7 @@ import { loadFixture } from "./helpers/fixtures.js";
 const { sample, definition, expected } = loadFixture("picklist");
 const result = extract(definition, sample);
 type Doc = { picklistNo: string; lineCount: number; lines: unknown[]; deliverAddress2: string };
-const docs = result.documents as Doc[];
+const docs = result.pageGroups as Doc[];
 
 describe("pick list extraction", () => {
   it("finds five pick lists with their lines", () => {
@@ -16,7 +16,7 @@ describe("pick list extraction", () => {
 
   it("reports a blank address line as empty, not missing", () => {
     expect(docs[1]?.deliverAddress2).toBe("");
-    const hit = result.hits.find((h) => h.document === 1 && h.name === "deliverAddress2");
+    const hit = result.hits.find((h) => h.pageGroup === 1 && h.name === "deliverAddress2");
     expect(hit?.status).toBe("empty");
   });
 
@@ -29,7 +29,7 @@ describe("pick list extraction", () => {
   });
 
   it("equals expected.json", () => {
-    expect(result.documents).toEqual(expected);
+    expect(result.pageGroups).toEqual(expected);
   });
 
   it("reports a missing field with a warning", () => {
@@ -38,6 +38,6 @@ describe("pick list extraction", () => {
     const r = extract(def, sample);
     expect(r.hits.filter((h) => h.name === "nothing").every((h) => h.status === "missing")).toBe(true);
     expect(r.warnings).toHaveLength(5);
-    expect((r.documents[0] as Record<string, unknown>).nothing).toBeNull();
+    expect((r.pageGroups[0] as Record<string, unknown>).nothing).toBeNull();
   });
 });

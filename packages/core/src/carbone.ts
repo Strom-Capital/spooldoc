@@ -86,7 +86,7 @@ export function carboneError(status: number, code: string | undefined, error: st
   if (/no corresponding \[i\+1\]/i.test(text)) {
     return new CarboneError(
       "template",
-      "A loop in the template has no end row. After the row with [i], add a row with [i+1], such as <tr><td>{d.doc.lines[i+1]}</td></tr>.",
+      "A loop in the template has no end row. After the row with [i], add a row with [i+1], such as <tr><td>{d.pageGroup.lines[i+1]}</td></tr>.",
       info,
     );
   }

@@ -1,7 +1,7 @@
 import { CarboneError, type HtmlRender } from '@spooldoc/core';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { assets, jobs, jobVersions, queueHealth, runOutputs, runs, watchSeen } from '@/lib/server/db/schema';
+import { assets, jobs, jobVersions, queueHealth, runFiles, runs, watchSeen } from '@/lib/server/db/schema';
 import type { JobDetail, JobSummary, RunView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { fakeCarbone, fakeRenderer, PDF_BYTES } from './helpers/carbone';
@@ -54,22 +54,23 @@ async function job(id: string): Promise<JobDetail> {
 /** A job with the invoice definition, the template and the invoice sample as preview. */
 async function readyJob(): Promise<string> {
   const id = await newJob();
-  await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { extract: { definition: yaml }, render: { outputs: [output()] } } }), params({ id }));
+  await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { extract: { definition: yaml }, render: { templates: [tpl()] } } }), params({ id }));
   const captured = await previewSample.POST(post(`/api/jobs/${id}/preview-sample`, { splf: sample.splf }), params({ id }));
   expect(captured.status).toBe(201);
   return id;
 }
 
-/** An output of the job, the first unless given an id and label. */
-const output = ({ id = 'main', label = 'Document', source = template as string | null, formats = ['pdf'] as ('pdf' | 'html')[] } = {}) => ({
+/** A template of the job, the first unless given an id and name. */
+const tpl = ({ id = 'main', name = 'Document', source = template as string | null, formats = ['pdf'] as ('pdf' | 'html')[] } = {}) => ({
   id,
-  label,
-  template: { kind: 'html' as const, source },
+  name,
+  kind: 'html' as const,
+  source,
   formats,
 });
 
-/** A second output: the invoice lines as HTML. */
-const LINES = output({ id: 'lines', label: 'Lines', source: '<ul><li>{d.doc.lines[i].line}</li><li>{d.doc.lines[i+1]}</li></ul>', formats: ['html'] });
+/** A second template: the invoice lines as HTML. */
+const LINES = tpl({ id: 'lines', name: 'Lines', source: '<ul><li>{d.pageGroup.lines[i].line}</li><li>{d.pageGroup.lines[i+1]}</li></ul>', formats: ['html'] });
 
 /** What the fake Carbone was sent for its n-th render. */
 const sent = (n = 0) => fakeCarbone.mock.calls[n]![0];
@@ -139,11 +140,11 @@ describe('jobs', () => {
     expect(fake().actions()).toEqual([]);
     expect((await job(id)).draft.preview.sampleId).toBeTruthy();
 
-    const result = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { document: 1 }), params({ id }))).json();
-    expect(result.extract.documents).toHaveLength(6);
+    const result = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { pageGroup: 1 }), params({ id }))).json();
+    expect(result.extract.pageGroups).toHaveLength(6);
     expect(result.html).toContain('260102');
 
-    const unsaved = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { html: '<p>{d.doc.invoiceNo}</p>' }), params({ id }))).json();
+    const unsaved = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { html: '<p>{d.pageGroup.invoiceNo}</p>' }), params({ id }))).json();
     expect(unsaved.html).toContain('<p>260101</p>');
     // Nunjucks is not converted: the check lists it and nothing is sent.
     const old = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { html: '<p>{{ doc.invoiceNo }}</p>' }), params({ id }))).json();
@@ -153,41 +154,41 @@ describe('jobs', () => {
     expect(starter.template.generated).toBe(true);
   });
 
-  it("renders the draft template of the output asked for, the first by default", async () => {
+  it('renders the draft template asked for, the first by default', async () => {
     const id = await readyJob();
-    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output(), LINES] } } }), params({ id }));
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { templates: [tpl(), LINES] } } }), params({ id }));
     const first = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, {}), params({ id }))).json();
     expect(first.html).toContain('<title>Invoice 260101</title>');
-    const lines = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { outputId: 'lines' }), params({ id }))).json();
+    const lines = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { templateId: 'lines' }), params({ id }))).json();
     expect(lines.html).toContain('<ul><li>');
-    const unknown = await renderRoute.POST(post(`/api/jobs/${id}/render`, { outputId: 'nope' }), params({ id }));
+    const unknown = await renderRoute.POST(post(`/api/jobs/${id}/render`, { templateId: 'nope' }), params({ id }));
     expect(unknown.status).toBe(404);
-    expect((await unknown.json()).error).toBe('The job has no output nope.');
-    // An output added a moment ago renders with the editor's text before its draft is saved.
-    const unsaved = await renderRoute.POST(post(`/api/jobs/${id}/render`, { outputId: 'new', html: null }), params({ id }));
+    expect((await unknown.json()).error).toBe('The job has no template nope.');
+    // A template added a moment ago renders with the editor's text before its draft is saved.
+    const unsaved = await renderRoute.POST(post(`/api/jobs/${id}/render`, { templateId: 'new', html: null }), params({ id }));
     expect(unsaved.status).toBe(200);
 
-    const pdf = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { outputId: 'lines' }), params({ id }));
+    const pdf = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { templateId: 'lines' }), params({ id }));
     expect(pdf.headers.get('content-disposition')).toBe('attachment; filename="invoice-260101-lines.pdf"');
     const pdfCall = fakeCarbone.mock.calls.map((call) => call[0]).find((input) => input.format === 'pdf')!;
     expect(pdfCall.template).toMatch(/^<ul><li>/);
-    expect((await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { outputId: 'nope' }), params({ id }))).status).toBe(404);
+    expect((await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { templateId: 'nope' }), params({ id }))).status).toBe(404);
   });
 
-  it('downloads a preview PDF named after the output name, and reports problems', async () => {
+  it('downloads a preview PDF named after the template name, and reports problems', async () => {
     const id = await readyJob();
-    const response = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { document: 1 }), params({ id }));
+    const response = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { pageGroup: 1 }), params({ id }));
     expect(response.status).toBe(200);
     expect(response.headers.get('content-disposition')).toBe('attachment; filename="invoice-260102.pdf"');
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(PDF_BYTES);
     // The HTML is rendered and checked first, then the PDF, with the page width for the paper rule.
     expect(sent(1)).toMatchObject({ format: 'pdf', pageWidth: sample.attributes.pageWidth });
-    expect(sent(1).data.doc.invoiceNo).toBe('260102');
+    expect(sent(1).data.pageGroup.invoiceNo).toBe('260102');
 
-    expect((await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { document: 50 }), params({ id }))).status).toBe(400);
-    const broken = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { html: '<p>{d.doc.invoiceNumber}</p>' }), params({ id }));
+    expect((await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { pageGroup: 50 }), params({ id }))).status).toBe(400);
+    const broken = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { html: '<p>{d.pageGroup.invoiceNumber}</p>' }), params({ id }));
     expect(broken.status).toBe(422);
-    expect((await broken.json()).templateErrors).toEqual(['Template line 1: {d.doc.invoiceNumber} is not in the data. Did you mean {d.doc.invoiceNo}?']);
+    expect((await broken.json()).templateErrors).toEqual(['Template line 1: {d.pageGroup.invoiceNumber} is not in the data. Did you mean {d.pageGroup.invoiceNo}?']);
   });
 
   it('takes stock again when a watching job gets a version with the backlog on', async () => {
@@ -248,20 +249,20 @@ describe('jobs', () => {
 });
 
 describe('files', () => {
-  it("serves a job's definition and outputs from its active version, else its draft, and nothing else", async () => {
+  it("serves a job's definition and templates from its active version, else its draft, and nothing else", async () => {
     const id = await readyJob();
     const fromDraft = await (await filesRoute.GET(get(`/api/jobs/${id}/files`), params({ id }))).json();
     expect(fromDraft).toEqual({
       id,
       name: `${library}/${queue}`,
       definitionYaml: yaml,
-      outputs: [{ id: 'main', label: 'Document', formats: ['pdf'], kind: 'html', templateHtml: template, fileId: null }],
+      templates: [{ id: 'main', name: 'Document', formats: ['pdf'], kind: 'html', html: template, fileId: null }],
     });
 
     expect((await versions.POST(post(`/api/jobs/${id}/versions`, { note: 'v1' }), params({ id }))).status).toBe(201);
-    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output({ source: '<p>draft</p>' }), LINES] } } }), params({ id }));
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { templates: [tpl({ source: '<p>draft</p>' }), LINES] } } }), params({ id }));
     const fromVersion = await (await filesRoute.GET(get(`/api/jobs/${id}/files`), params({ id }))).json();
-    expect(fromVersion.outputs.map((o: { templateHtml: string }) => o.templateHtml)).toEqual([template]);
+    expect(fromVersion.templates.map((t: { html: string }) => t.html)).toEqual([template]);
 
     expect((await filesRoute.GET(get('/api/jobs/not-a-job/files'), params({ id: 'not-a-job' }))).status).toBe(404);
     expect((await filesRoute.GET(appRequest(`/api/jobs/${id}/files`), params({ id }))).status).toBe(401);
@@ -285,7 +286,7 @@ describe('runs', () => {
     expect(other).toEqual({ runs: [], next: null });
   });
 
-  it('runs a file: captures it, delivers one PDF per document, holds it and logs every step', async () => {
+  it('runs a file: captures it, delivers one PDF per page group, holds it and logs every step', async () => {
     const spies = spyConsole();
     const id = await readyJob();
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
@@ -293,7 +294,7 @@ describe('runs', () => {
     expect(response.status).toBe(201);
     const [run] = (await response.json()).runs as RunView[];
 
-    expect(run).toMatchObject({ status: 'success', version: 1, trigger: 'manual', documents: 6, error: null });
+    expect(run).toMatchObject({ status: 'success', version: 1, trigger: 'manual', pageGroups: 6, error: null });
     expect(run!.steps.map((s) => [s.step, s.ok])).toEqual([
       ['capture', true],
       ['extract', true],
@@ -314,7 +315,7 @@ describe('runs', () => {
 
   it('makes HTML files next to the PDFs, and serves them sandboxed', async () => {
     const id = await readyJob();
-    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output({ formats: ['html', 'pdf'] })] } } }), params({ id }));
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { templates: [tpl({ formats: ['html', 'pdf'] })] } } }), params({ id }));
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
 
@@ -335,7 +336,7 @@ describe('runs', () => {
     const uri = `data:image/png;base64,${png.toString('base64')}`;
     const withLogo = template.replace('<body>', `<body><img src="{asset('logo')}" alt="">`);
     const id = await readyJob();
-    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output({ source: withLogo, formats: ['html', 'pdf'] })] } } }), params({ id }));
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { templates: [tpl({ source: withLogo, formats: ['html', 'pdf'] })] } } }), params({ id }));
 
     const preview = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, {}), params({ id }))).json();
     expect(preview.html).toContain(`<img src="${uri}" alt="">`);
@@ -357,24 +358,24 @@ describe('runs', () => {
     expect(await file.text()).toContain(uri);
   });
 
-  it("makes every output's files, names the others after their label and groups them by output", async () => {
+  it("makes every template's files, names the others after their name and groups them by template", async () => {
     const id = await readyJob();
-    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output(), LINES] } } }), params({ id }));
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { templates: [tpl(), LINES] } } }), params({ id }));
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
 
     expect(run!.status).toBe('success');
     expect(run!.files).toHaveLength(12);
-    expect(run!.files.map((f) => f.output)).toEqual([...Array(6).fill('Document'), ...Array(6).fill('Lines')]);
+    expect(run!.files.map((f) => f.template)).toEqual([...Array(6).fill('Document'), ...Array(6).fill('Lines')]);
     expect(run!.files[0]).toMatchObject({ name: 'invoice-260101.pdf', contentType: 'application/pdf' });
     expect(run!.files[6]).toMatchObject({ name: 'invoice-260101-lines.html', contentType: 'text/html; charset=utf-8' });
     expect(run!.steps.find((s) => s.step === 'render')?.note).toBe('6 PDFs and 6 HTML files');
   });
 
-  it("fails the run with the output's name when its template has an error", async () => {
+  it("fails the run with the template's name when it has an error", async () => {
     const id = await readyJob();
     await jobRoute.PATCH(
-      patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output(), output({ id: 'lines', label: 'Lines', source: "<p>{asset('stamp')}</p>" })] } } }),
+      patch(`/api/jobs/${id}`, { draft: { render: { templates: [tpl(), tpl({ id: 'lines', name: 'Lines', source: "<p>{asset('stamp')}</p>" })] } } }),
       params({ id }),
     );
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
@@ -382,7 +383,7 @@ describe('runs', () => {
 
     expect(run!.status).toBe('failed');
     expect(run!.error).toBe(
-      'The "Lines" output\'s template has 1 problem. Line 1: There is no asset named "stamp". Upload it on the Assets page, or fix the name in {asset(\'stamp\')}.',
+      'The "Lines" template has 1 problem. Line 1: There is no asset named "stamp". Upload it on the Assets page, or fix the name in {asset(\'stamp\')}.',
     );
     expect(run!.files).toEqual([]);
     expect(fake().actions()).toEqual([]);
@@ -398,7 +399,7 @@ describe('runs', () => {
       const preview = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, {}), params({ id }))).json();
       expect(preview.carbone).toEqual({ error: CARBONE_NOT_CONNECTED });
       expect(preview.html).toBeUndefined();
-      expect(preview.extract.documents).toHaveLength(6);
+      expect(preview.extract.pageGroups).toHaveLength(6);
       expect((await previewFile.POST(post(`/api/jobs/${id}/preview-file`, {}), params({ id }))).status).toBe(503);
 
       const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
@@ -418,27 +419,27 @@ describe('runs', () => {
 
   it('fails a run with the line of each problem the tag check finds, before anything is sent to Carbone', async () => {
     const id = await readyJob();
-    const typo = template.replace('{d.doc.customerName}', '{d.doc.customerNam}');
-    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output({ source: typo })] } } }), params({ id }));
+    const typo = template.replace('{d.pageGroup.customerName}', '{d.pageGroup.customerNam}');
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { templates: [tpl({ source: typo })] } } }), params({ id }));
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
     expect(run!.status).toBe('failed');
-    expect(run!.error).toMatch(/^The "Document" output's template has 1 problem\. Line \d+: \{d\.doc\.customerNam\} is not in the data\. Did you mean \{d\.doc\.customerName\}\?$/);
+    expect(run!.error).toMatch(/^The "Document" template has 1 problem\. Line \d+: \{d\.pageGroup\.customerNam\} is not in the data\. Did you mean \{d\.pageGroup\.customerName\}\?$/);
     expect(fakeCarbone).not.toHaveBeenCalled();
   });
 
   it('keeps Carbone\'s own text with a template error Carbone finds', async () => {
     const id = await readyJob();
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
-    fakeCarbone.mockRejectedValueOnce(new CarboneError('template', 'A loop in the template has no end row.', { detail: 'The marker {d.doc.lines[i].item} has no corresponding [i+1]' }));
+    fakeCarbone.mockRejectedValueOnce(new CarboneError('template', 'A loop in the template has no end row.', { detail: 'The marker {d.pageGroup.lines[i].item} has no corresponding [i+1]' }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
-    expect(run!.error).toBe('The "Document" output, document 1: A loop in the template has no end row.');
-    expect(run!.steps.find((step) => step.step === 'render')?.detail).toBe('The marker {d.doc.lines[i].item} has no corresponding [i+1]');
+    expect(run!.error).toBe('The "Document" template, page group 1: A loop in the template has no end row.');
+    expect(run!.steps.find((step) => step.step === 'render')?.detail).toBe('The marker {d.pageGroup.lines[i].item} has no corresponding [i+1]');
   });
 
   it('makes only HTML when PDF is off', async () => {
     const id = await readyJob();
-    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { outputs: [output({ formats: ['html'] })] } } }), params({ id }));
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { templates: [tpl({ formats: ['html'] })] } } }), params({ id }));
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
     expect(run!.files.map((f) => f.contentType)).toEqual(Array(6).fill('text/html; charset=utf-8'));
@@ -565,7 +566,7 @@ describe('runs', () => {
     expect(older.runs[0].id).toBe(all.runs[1].id);
     const none = await (await runLog.GET(get('/api/runs?from=2999-01-01T00:00:00Z'))).json();
     expect(none.runs).toEqual([]);
-    expect(await db().select({ id: runOutputs.id }).from(runOutputs)).toHaveLength(6);
+    expect(await db().select({ id: runFiles.id }).from(runFiles)).toHaveLength(6);
     expect(await db().select({ id: runs.id }).from(runs)).toHaveLength(2);
   });
 });

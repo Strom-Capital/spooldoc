@@ -10,14 +10,14 @@ import { StartFromJobDialog } from './start-from-job-dialog';
 import { WordTemplate } from './word-template';
 import { useWorkbench } from './workbench-provider';
 
-/** The template of the output shown: the HTML editor, or the Word template's file and problems. */
+/** The template shown: the HTML editor, or the Word template's file and problems. */
 export function TemplateEditor() {
-  const { template } = useWorkbench();
-  return template.kind === 'docx' ? <WordTemplate /> : <HtmlTemplateEditor />;
+  const { content } = useWorkbench();
+  return content.kind === 'docx' ? <WordTemplate /> : <HtmlTemplateEditor />;
 }
 
 /**
- * The HTML template (Carbone tags) of the output shown. Without one the preview uses a
+ * The HTML (Carbone tags) of the template shown. Without one the preview uses a
  * starter template generated from the definition, which can be copied in to edit, as can
  * another job's template. Problems the tag check finds are listed by line.
  */
@@ -45,7 +45,7 @@ function HtmlTemplateEditor() {
           </Button>
         )}
         {!readOnly && (
-          <Button size="sm" variant="ghost" onClick={() => setStartFrom(true)} title="Copy a template of another job into this output, and on request its definition into this draft">
+          <Button size="sm" variant="ghost" onClick={() => setStartFrom(true)} title="Copy a template of another job into this one, and on request its definition into this draft">
             <FolderInputIcon />
             Start from job
           </Button>
@@ -54,7 +54,7 @@ function HtmlTemplateEditor() {
       {startFrom && <StartFromJobDialog onClose={() => setStartFrom(false)} />}
       {html === null && (
         <EditorMessage tone="note">
-          This output has no template yet. The preview uses a starter template generated from the definition.
+          This template has no HTML yet. The preview uses a starter template generated from the definition.
         </EditorMessage>
       )}
       {error && (
@@ -75,7 +75,7 @@ function HtmlTemplateEditor() {
         readOnly={readOnly}
         label="Template HTML"
         language="html"
-        placeholder="<!doctype html> ... {d.doc.invoiceNo} ..."
+        placeholder="<!doctype html> ... {d.pageGroup.invoiceNo} ..."
       />
     </div>
   );

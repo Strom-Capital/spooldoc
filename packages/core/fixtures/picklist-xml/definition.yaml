@@ -1,4 +1,4 @@
-# One XML document per pick list, printed into a 300 column spooled file.
+# One XML page group per pick list, printed into a 300 column spooled file.
 type: picklist-xml
 version: 1
 match:
@@ -6,7 +6,7 @@ match:
   userData: PICKXML
 source: xml
 xml:
-  document: FORM
+  pageGroup: FORM
   fields:
     title: DOCUMENT/TITLE
     picklistNo: DOCUMENT/PICKLIST_NO
@@ -27,5 +27,5 @@ xml:
         quantity: { path: QTY, type: number }
         unit: UNIT
 output:
-  name: "{d.doc.outputName}"
+  name: "{d.pageGroup.outputName}"
   title: Pick list

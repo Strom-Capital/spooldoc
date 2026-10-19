@@ -11,23 +11,23 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import type { JobOutputFiles } from '@/lib/chat-types';
+import type { JobTemplateFiles } from '@/lib/chat-types';
 import { api, errorText, isAbort } from '@/lib/client/api';
 import type { JobSummary } from '@/lib/types';
 import { useWorkbench } from './workbench-provider';
 
-/** What `/api/jobs/[id]/files` answers: a job's definition and outputs, nothing else. */
+/** What `/api/jobs/[id]/files` answers: a job's definition and templates, nothing else. */
 interface JobFilesView {
   id: string;
   name: string;
   definitionYaml: string;
-  outputs: JobOutputFiles[];
+  templates: JobTemplateFiles[];
 }
 
-/** What an output of the other job has as its template. */
-function templateName(output: JobOutputFiles): string {
-  if (output.kind === 'docx') return output.fileId === null ? 'Starter Word template' : 'Word template';
-  return output.templateHtml === null ? 'Starter template' : 'Custom template';
+/** What a template of the other job has as its content. */
+function contentName(template: JobTemplateFiles): string {
+  if (template.kind === 'docx') return template.fileId === null ? 'Starter Word template' : 'Word template';
+  return template.html === null ? 'Starter template' : 'Custom template';
 }
 
 /** The `type:` of a definition YAML, read without parsing it. */
@@ -36,17 +36,17 @@ function typeOf(yaml: string): string | null {
 }
 
 /**
- * Copy the template of one of another job's outputs into the output shown, and on
- * request the other job's definition into this job's draft. The files come from the
+ * Copy one of another job's templates into the template shown, and on request the
+ * other job's definition into this job's draft. The files come from the
  * other job's active version, or its draft when it has no version. Mount it when it
  * opens, so it starts empty each time.
  */
 export function StartFromJobDialog({ onClose }: { onClose(): void }) {
-  const { jobId, setYaml, setTemplate } = useWorkbench();
+  const { jobId, setYaml, setContent } = useWorkbench();
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
   const [chosen, setChosen] = useState('');
   const [loaded, setLoaded] = useState<JobFilesView | null>(null);
-  const [outputId, setOutputId] = useState('');
+  const [sourceId, setSourceId] = useState('');
   const [withDefinition, setWithDefinition] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -75,8 +75,8 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
   const files = loaded?.id === chosen ? loaded : null;
   const type = files ? typeOf(files.definitionYaml) : null;
   const hasDefinition = !!files?.definitionYaml.trim();
-  const source = files ? (files.outputs.find((o) => o.id === outputId) ?? files.outputs[0]) : undefined;
-  const hasTemplate = !!source && (source.kind === 'docx' ? source.fileId !== null : source.templateHtml !== null);
+  const source = files ? (files.templates.find((t) => t.id === sourceId) ?? files.templates[0]) : undefined;
+  const hasTemplate = !!source && (source.kind === 'docx' ? source.fileId !== null : source.html !== null);
   const copies = files ? [hasTemplate && 'template', withDefinition && hasDefinition && 'definition'].filter(Boolean) : [];
 
   function copy() {
@@ -84,7 +84,7 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
       return;
     }
     if (hasTemplate) {
-      setTemplate(source.kind === 'docx' ? { kind: 'docx', fileId: source.fileId } : { kind: 'html', source: source.templateHtml });
+      setContent(source.kind === 'docx' ? { kind: 'docx', fileId: source.fileId } : { kind: 'html', source: source.html });
     }
     if (withDefinition && hasDefinition) {
       setYaml(files.definitionYaml);
@@ -99,7 +99,7 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
         <DialogHeader>
           <DialogTitle>Start from another job</DialogTitle>
           <DialogDescription>
-            Copies a template of the chosen job into this output, replacing the current one. Its definition can come along too.
+            Copies a template of the chosen job into this one, replacing what it has. Its definition can come along too.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
@@ -114,7 +114,7 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
                 value={chosen}
                 onValueChange={(id) => {
                   setChosen(id);
-                  setOutputId('');
+                  setSourceId('');
                 }}
               >
                 <SelectTrigger id="start-from-job" className="w-full" aria-label="Job">
@@ -140,18 +140,18 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
               <Spinner /> Reading the job&apos;s files...
             </div>
           )}
-          {files && files.outputs.length > 1 && (
+          {files && files.templates.length > 1 && (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="start-from-output">Output to copy</Label>
-              <Select value={source?.id ?? ''} onValueChange={setOutputId}>
-                <SelectTrigger id="start-from-output" className="w-full" aria-label="Output to copy">
+              <Label htmlFor="start-from-template">Template to copy</Label>
+              <Select value={source?.id ?? ''} onValueChange={setSourceId}>
+                <SelectTrigger id="start-from-template" className="w-full" aria-label="Template to copy">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {files.outputs.map((output) => (
-                    <SelectItem key={output.id} value={output.id}>
-                      {output.label}
-                      <span className="text-muted-foreground">{templateName(output)}</span>
+                  {files.templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                      <span className="text-muted-foreground">{contentName(template)}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>

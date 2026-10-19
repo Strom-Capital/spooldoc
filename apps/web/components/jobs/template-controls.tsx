@@ -22,14 +22,14 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   FORMAT_FILES,
-  hasOwnTemplate,
+  hasOwnContent,
   KIND_FORMATS,
-  labelTaken,
-  newOutput,
-  OUTPUT_FORMATS,
-  withTemplate,
-  type JobOutput,
-  type OutputFormat,
+  nameTaken,
+  newTemplate,
+  FORMATS,
+  withContent,
+  type JobTemplate,
+  type Format,
   type TemplateKind,
 } from '@/lib/job-spec';
 import { useJob } from './job-provider';
@@ -37,72 +37,72 @@ import { useJob } from './job-provider';
 const KIND_LABEL: Record<TemplateKind, string> = { html: 'HTML template', docx: 'Word template' };
 
 /**
- * The render step's output controls: which output the template and preview show, its
- * kind of template (HTML or Word), the formats it makes (at least one), Add output, and a
- * menu to rename or remove it.
+ * The render step's template controls: which template the editor and preview show, its
+ * kind (HTML or Word), the formats it makes (at least one), Add template, and a menu to
+ * rename or remove it.
  */
-export function OutputControls({ output, onPick }: { output: JobOutput; onPick(id: string): void }) {
+export function TemplateControls({ template, onPick }: { template: JobTemplate; onPick(id: string): void }) {
   const { spec, readOnly, updateDraft } = useJob();
-  const outputs = spec.render.outputs;
+  const templates = spec.render.templates;
   const [renaming, setRenaming] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [switching, setSwitching] = useState<TemplateKind | null>(null);
-  const kind = output.template.kind;
+  const kind = template.kind;
 
-  const save = (next: JobOutput[]) => updateDraft({ render: { outputs: next } }, { debounce: false });
+  const save = (next: JobTemplate[]) => updateDraft({ render: { templates: next } }, { debounce: false });
 
-  const toggle = (format: OutputFormat, on: boolean) => {
-    const formats = on ? [...output.formats, format] : output.formats.filter((f) => f !== format);
+  const toggle = (format: Format, on: boolean) => {
+    const formats = on ? [...template.formats, format] : template.formats.filter((f) => f !== format);
     if (formats.length > 0) {
-      save(outputs.map((o) => (o.id === output.id ? { ...o, formats: OUTPUT_FORMATS.filter((f) => formats.includes(f)) } : o)));
+      save(templates.map((t) => (t.id === template.id ? { ...t, formats: FORMATS.filter((f) => formats.includes(f)) } : t)));
     }
   };
 
-  /** Use the other kind of template, starting from its starter template. */
+  /** Use the other kind of template, starting from its starter. */
   const switchKind = (next: TemplateKind) => {
-    const template = next === 'docx' ? ({ kind: 'docx', fileId: null } as const) : ({ kind: 'html', source: null } as const);
-    save(outputs.map((o) => (o.id === output.id ? withTemplate(o, template) : o)));
+    const content = next === 'docx' ? ({ kind: 'docx', fileId: null } as const) : ({ kind: 'html', source: null } as const);
+    save(templates.map((t) => (t.id === template.id ? withContent(t, content) : t)));
     setSwitching(null);
-    toast.success(`${output.label} uses ${next === 'docx' ? 'a Word' : 'an HTML'} template`);
+    toast.success(`${template.name} is ${next === 'docx' ? 'a Word' : 'an HTML'} template`);
   };
 
   const pickKind = (next: string) => {
     if (next === kind) return;
-    if (hasOwnTemplate(output.template)) setSwitching(next as TemplateKind);
+    if (hasOwnContent(template)) setSwitching(next as TemplateKind);
     else switchKind(next as TemplateKind);
   };
 
   const add = () => {
-    const added = newOutput(outputs);
-    save([...outputs, added]);
+    const added = newTemplate(templates);
+    save([...templates, added]);
     onPick(added.id);
-    toast.success(`Added ${added.label}`);
+    toast.success(`Added ${added.name}`);
   };
 
   const remove = () => {
-    const index = outputs.findIndex((o) => o.id === output.id);
-    const rest = outputs.filter((o) => o.id !== output.id);
+    const index = templates.findIndex((t) => t.id === template.id);
+    const rest = templates.filter((t) => t.id !== template.id);
     save(rest);
     onPick(rest[Math.max(0, index - 1)]!.id);
-    toast.success(`Removed ${output.label}`);
+    toast.success(`Removed ${template.name}`);
   };
 
   return (
     <div className="flex flex-wrap items-center gap-3 text-sm">
-      <Select value={output.id} onValueChange={onPick}>
-        <SelectTrigger size="sm" className="max-w-48" aria-label="Output">
+      <Select value={template.id} onValueChange={onPick}>
+        <SelectTrigger size="sm" className="max-w-48" aria-label="Template">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {outputs.map((o) => (
-            <SelectItem key={o.id} value={o.id}>
-              {o.label}
+          {templates.map((t) => (
+            <SelectItem key={t.id} value={t.id}>
+              {t.name}
             </SelectItem>
           ))}
         </SelectContent>
       </Select>
       <Select value={kind} onValueChange={pickKind} disabled={readOnly}>
-        <SelectTrigger size="sm" aria-label={`Kind of template of ${output.label}`}>
+        <SelectTrigger size="sm" aria-label={`Kind of ${template.name}`}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -113,16 +113,16 @@ export function OutputControls({ output, onPick }: { output: JobOutput; onPick(i
           ))}
         </SelectContent>
       </Select>
-      <div role="group" aria-label={`Formats of ${output.label}`} className="flex items-center gap-3">
+      <div role="group" aria-label={`Formats of ${template.name}`} className="flex items-center gap-3">
         {KIND_FORMATS[kind].map((format) => {
-          const checked = output.formats.includes(format);
+          const checked = template.formats.includes(format);
           return (
             <label key={format} className="flex items-center gap-1.5">
               <Checkbox
                 checked={checked}
-                disabled={readOnly || (checked && output.formats.length === 1)}
+                disabled={readOnly || (checked && template.formats.length === 1)}
                 onCheckedChange={(on) => toggle(format, on === true)}
-                aria-label={`Make ${FORMAT_FILES[format].label} files for ${output.label}`}
+                aria-label={`Make ${FORMAT_FILES[format].label} files with ${template.name}`}
               />
               {FORMAT_FILES[format].label}
             </label>
@@ -133,11 +133,11 @@ export function OutputControls({ output, onPick }: { output: JobOutput; onPick(i
         <>
           <Button size="sm" variant="ghost" onClick={add}>
             <PlusIcon />
-            Add output
+            Add template
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={`More actions for ${output.label}`}>
+              <Button variant="ghost" size="icon-sm" aria-label={`More actions for ${template.name}`}>
                 <MoreHorizontalIcon />
               </Button>
             </DropdownMenuTrigger>
@@ -146,7 +146,7 @@ export function OutputControls({ output, onPick }: { output: JobOutput; onPick(i
                 <PencilIcon />
                 Rename
               </DropdownMenuItem>
-              {outputs.length > 1 && (
+              {templates.length > 1 && (
                 <DropdownMenuItem variant="destructive" onSelect={() => setRemoving(true)}>
                   <Trash2Icon />
                   Remove
@@ -157,20 +157,20 @@ export function OutputControls({ output, onPick }: { output: JobOutput; onPick(i
         </>
       )}
       {renaming && (
-        <RenameOutputDialog
-          output={output}
-          outputs={outputs}
+        <RenameTemplateDialog
+          template={template}
+          templates={templates}
           onClose={() => setRenaming(false)}
-          onRename={(label) => save(outputs.map((o) => (o.id === output.id ? { ...o, label } : o)))}
+          onRename={(name) => save(templates.map((t) => (t.id === template.id ? { ...t, name } : t)))}
         />
       )}
       <AlertDialog open={switching !== null} onOpenChange={(open) => !open && setSwitching(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Use {switching === 'docx' ? 'a Word' : 'an HTML'} template for {output.label}?</AlertDialogTitle>
+            <AlertDialogTitle>Make {template.name} {switching === 'docx' ? 'a Word' : 'an HTML'} template?</AlertDialogTitle>
             <AlertDialogDescription>
-              {kind === 'html' ? 'The HTML template' : 'The uploaded Word template'} is removed from the draft, and the output starts from the{' '}
-              {switching === 'docx' ? 'Word' : 'HTML'} starter template. Saved versions keep it.
+              {kind === 'html' ? 'Its HTML' : 'Its uploaded Word file'} is removed from the draft, and the template starts from the{' '}
+              {switching === 'docx' ? 'Word' : 'HTML'} starter. Saved versions keep it.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -182,10 +182,8 @@ export function OutputControls({ output, onPick }: { output: JobOutput; onPick(i
       <AlertDialog open={removing} onOpenChange={setRemoving}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove {output.label}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The draft stops making its files, and its template is removed from the draft. Saved versions keep it.
-            </AlertDialogDescription>
+            <AlertDialogTitle>Remove {template.name}?</AlertDialogTitle>
+            <AlertDialogDescription>The draft stops making its documents, and the template is removed from the draft. Saved versions keep it.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -199,28 +197,28 @@ export function OutputControls({ output, onPick }: { output: JobOutput; onPick(i
   );
 }
 
-/** Rename an output. The name is added to its file names, so it must differ from the other outputs' names. */
-function RenameOutputDialog({
-  output,
-  outputs,
+/** Rename a template. The name is added to its file names, so it must differ from the other templates' names. */
+function RenameTemplateDialog({
+  template,
+  templates,
   onClose,
   onRename,
 }: {
-  output: JobOutput;
-  outputs: JobOutput[];
+  template: JobTemplate;
+  templates: JobTemplate[];
   onClose(): void;
-  onRename(label: string): void;
+  onRename(name: string): void;
 }) {
-  const [label, setLabel] = useState(output.label);
-  const name = label.trim();
-  const problem = !name ? 'Name the output.' : labelTaken(outputs, name, output.id) ? `Another output is named ${name}. Pick another name.` : null;
+  const [value, setValue] = useState(template.name);
+  const name = value.trim();
+  const problem = !name ? 'Name the template.' : nameTaken(templates, name, template.id) ? `Another template is named ${name}. Pick another name.` : null;
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
     if (problem) return;
-    if (name !== output.label) {
+    if (name !== template.name) {
       onRename(name);
-      toast.success(`Renamed ${output.label} to ${name}`);
+      toast.success(`Renamed ${template.name} to ${name}`);
     }
     onClose();
   }
@@ -230,22 +228,22 @@ function RenameOutputDialog({
       <DialogContent className="sm:max-w-md">
         <form onSubmit={submit} className="flex flex-col gap-4">
           <DialogHeader>
-            <DialogTitle>Rename {output.label}</DialogTitle>
-            <DialogDescription>Files of every output but the first add this name, as in invoice-260101-lines.pdf.</DialogDescription>
+            <DialogTitle>Rename {template.name}</DialogTitle>
+            <DialogDescription>Files of every template but the first add this name, as in invoice-260101-lines.pdf.</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="output-label">Name</Label>
+            <Label htmlFor="template-name">Name</Label>
             <Input
-              id="output-label"
-              value={label}
-              onChange={(event) => setLabel(event.target.value)}
+              id="template-name"
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
               maxLength={40}
               autoFocus
               aria-invalid={!!problem}
-              aria-describedby={problem ? 'output-label-problem' : undefined}
+              aria-describedby={problem ? 'template-name-problem' : undefined}
             />
             {problem && (
-              <p id="output-label-problem" className="text-destructive text-xs">
+              <p id="template-name-problem" className="text-destructive text-xs">
                 {problem}
               </p>
             )}

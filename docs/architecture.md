@@ -45,10 +45,10 @@ where a run stopped.
    one the job is for; a file that does not match ends the run as skipped
    and is left alone. Then the fields, tables and records are read from
    the pages, or from the XML when the spooled file holds XML, and the
-   pages are split into documents. See [Definitions](definitions.md).
-3. **Render.** Spooldoc checks each output's template against the
-   definition, then sends it to Carbone once per document and format, with
-   the document's JSON as the data and uploaded assets written in as data
+   pages are split into page groups. See [Definitions](definitions.md).
+3. **Render.** Spooldoc checks each template against the definition,
+   then sends it to Carbone once per page group and format, with the
+   page group's JSON as the data and uploaded assets written in as data
    URIs. Carbone answers with the HTML file or the PDF. See
    [Templates](templates.md).
 4. **Deliver.** Every file goes to the job's destination in the run's
@@ -61,13 +61,13 @@ where a run stopped.
 
 The extract and render steps are separate on purpose. The definition
 knows the page: labels, lines, columns, where tables start and stop. The
-template knows the document: `doc.invoiceNo`, `doc.lines`, formatted with
-filters. The JSON between them is the contract. A new look is a new
+template knows the document: `d.pageGroup.invoiceNo`, `d.pageGroup.lines`,
+formatted with formatters. The JSON between them is the contract. A new look is a new
 template with the same definition; a moved column is one fix in the
 definition with every template untouched. Values are typed once, the
 reading can be checked on its own in the workbench and in the extraction
-report, one spooled file splits into many documents, and the same JSON
-feeds every output format and, later, destinations that want the data
+report, one spooled file splits into many page groups, and the same JSON
+feeds every template and format and, later, destinations that want the data
 itself. See [the FAQ](faq.md#why-turn-the-pages-into-json-first-instead-of-rendering-straight-from-the-spooled-file).
 
 ## The queue watcher

@@ -24,13 +24,13 @@ const STEP_LABEL: Record<string, string> = { capture: 'Capture', extract: 'Extra
 
 const RETRIED: Record<RunStatus, string> = { running: 'started', success: 'succeeded', warning: 'done with warnings', failed: 'failed', skipped: 'skipped' };
 
-/** A run's files by the job output they were rendered for, in the run's order. Labels only when there are several outputs. */
-function fileGroups(files: RunView['files']): { output: string | null; label: string | null; files: RunView['files'] }[] {
-  const groups: { output: string | null; label: string | null; files: RunView['files'] }[] = [];
+/** A run's files by the job template they were rendered with, in the run's order. Labels only when there are several templates. */
+function fileGroups(files: RunView['files']): { template: string; label: string | null; files: RunView['files'] }[] {
+  const groups: { template: string; label: string | null; files: RunView['files'] }[] = [];
   for (const file of files) {
-    const group = groups.find((g) => g.output === file.output);
+    const group = groups.find((g) => g.template === file.template);
     if (group) group.files.push(file);
-    else groups.push({ output: file.output, label: file.output, files: [file] });
+    else groups.push({ template: file.template, label: file.template, files: [file] });
   }
   return groups.length > 1 ? groups : groups.map((group) => ({ ...group, label: null }));
 }
@@ -217,7 +217,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                 <th className="px-3 py-2 font-medium">Job</th>
                 <th className="px-3 py-2 font-medium">Spooled file</th>
                 <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 text-right font-medium">Documents</th>
+                <th className="px-3 py-2 text-right font-medium">Page groups</th>
                 <th className="px-3 py-2 font-medium">Files</th>
               </tr>
             </thead>
@@ -262,7 +262,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                       </div>
                     )}
                   </td>
-                  <td className="tabular px-3 py-2 text-right">{run.documents}</td>
+                  <td className="tabular px-3 py-2 text-right">{run.pageGroups}</td>
                   <td className="px-3 py-2">
                     <div className="flex max-w-xs flex-wrap gap-x-2 gap-y-0.5">
                       {run.files.slice(0, 3).map((file) => (
@@ -355,7 +355,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                   ) : (
                     <div className="flex flex-col gap-3">
                       {fileGroups(open.files).map((group) => (
-                        <section key={group.output ?? ''} aria-label={group.label ? `${group.label} files` : 'Files'}>
+                        <section key={group.template} aria-label={group.label ? `${group.label} files` : 'Files'}>
                           {group.label && <h4 className="mb-1 text-muted-foreground text-xs">{group.label}</h4>}
                           <ul className="flex flex-col gap-1">
                             {group.files.map((file) => (

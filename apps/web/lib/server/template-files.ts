@@ -91,7 +91,7 @@ export interface NewTemplateFile {
   userId: string | null;
   /** Default `upload`. */
   madeBy?: TemplateFileRow['madeBy'];
-  /** The file the output used before; for a file the assistant made. */
+  /** The file the template used before; for a file the assistant made. */
   previousId?: string | null;
 }
 

@@ -32,7 +32,7 @@ function ToolCallInput({ input }: { input: unknown }) {
 }
 
 /**
- * One line for a tool call in the chat ("Wrote definition invoice: 6 documents, 2 missing").
+ * One line for a tool call in the chat ("Wrote definition invoice: 6 page groups, 2 missing").
  * Clicking it opens the AI Elements Tool card with the input and the output.
  */
 export function ToolSummary({ part }: { part: ToolUIPart | DynamicToolUIPart }) {

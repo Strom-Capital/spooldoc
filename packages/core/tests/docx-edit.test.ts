@@ -1,7 +1,7 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { readDocx, starterDocx } from "../src/docx.js";
-import { docxParts, DocxEditError, editDocx, mergeRuns, readDocxPart, xmlProblem } from "../src/docx-edit.js";
+import { docxParts, DocxEditError, editDocx, mergeRuns, readDocxPart, rewriteDocx, xmlProblem } from "../src/docx-edit.js";
 import { pdfPageCount } from "../src/render.js";
 import { loadFixture } from "./helpers/fixtures.js";
 import { testPng } from "./helpers/png.js";
@@ -14,7 +14,7 @@ function wordFile(body: string): Uint8Array {
   return zipSync({
     "[Content_Types].xml": strToU8('<?xml version="1.0"?><Types/>'),
     "word/document.xml": strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<w:document ${W}><w:body>${body}</w:body></w:document>`),
-    "word/header1.xml": strToU8(`<w:hdr ${W}><w:p><w:r><w:t>Invoice {d.doc.invoiceNo}</w:t></w:r></w:p></w:hdr>`),
+    "word/header1.xml": strToU8(`<w:hdr ${W}><w:p><w:r><w:t>Invoice {d.pageGroup.invoiceNo}</w:t></w:r></w:p></w:hdr>`),
     "word/footer1.xml": strToU8(`<w:ftr ${W}><w:p><w:r><w:t>Page</w:t></w:r></w:p></w:ftr>`),
     "word/styles.xml": strToU8(`<w:styles ${W}><w:style w:styleId="Normal"/></w:styles>`),
     "word/media/image1.png": testPng(20, 10),
@@ -23,8 +23,8 @@ function wordFile(body: string): Uint8Array {
 
 /** Body text as Word writes it: a tag split over runs by spell-checking and later typing. */
 const SPLIT_BODY =
-  `<w:p><w:r w:rsidR="00A1"><w:t xml:space="preserve">Customer </w:t></w:r><w:proofErr w:type="spellStart"/><w:r w:rsidR="00B2"><w:t>{d.doc.cust</w:t></w:r>` +
-  `<w:r w:rsidR="00C3"><w:t>omerName}</w:t></w:r><w:proofErr w:type="spellEnd"/><w:r>${BOLD}<w:t xml:space="preserve"> due </w:t></w:r><w:r>${BOLD}<w:lastRenderedPageBreak/><w:t>{d.doc.dueDate}</w:t></w:r>` +
+  `<w:p><w:r w:rsidR="00A1"><w:t xml:space="preserve">Customer </w:t></w:r><w:proofErr w:type="spellStart"/><w:r w:rsidR="00B2"><w:t>{d.pageGroup.cust</w:t></w:r>` +
+  `<w:r w:rsidR="00C3"><w:t>omerName}</w:t></w:r><w:proofErr w:type="spellEnd"/><w:r>${BOLD}<w:t xml:space="preserve"> due </w:t></w:r><w:r>${BOLD}<w:lastRenderedPageBreak/><w:t>{d.pageGroup.dueDate}</w:t></w:r>` +
   `<w:r><w:tab/></w:r><w:r><w:t>end</w:t></w:r></w:p>`;
 
 const files = (bytes: Uint8Array) => unzipSync(bytes);
@@ -32,7 +32,7 @@ const files = (bytes: Uint8Array) => unzipSync(bytes);
 describe("mergeRuns", () => {
   it("merges adjacent runs with the same formatting and drops spell-check marks", () => {
     expect(mergeRuns(SPLIT_BODY)).toBe(
-      `<w:p><w:r w:rsidR="00A1"><w:t xml:space="preserve">Customer {d.doc.customerName}</w:t></w:r><w:r>${BOLD}<w:t xml:space="preserve"> due {d.doc.dueDate}</w:t></w:r>` +
+      `<w:p><w:r w:rsidR="00A1"><w:t xml:space="preserve">Customer {d.pageGroup.customerName}</w:t></w:r><w:r>${BOLD}<w:t xml:space="preserve"> due {d.pageGroup.dueDate}</w:t></w:r>` +
         `<w:r><w:tab/></w:r><w:r><w:t>end</w:t></w:r></w:p>`,
     );
   });
@@ -75,7 +75,7 @@ describe("docxParts and readDocxPart", () => {
   it("lists the body, headers and footers, and reads a part with its runs merged", () => {
     const bytes = wordFile(SPLIT_BODY);
     expect(docxParts(bytes).map((p) => p.name)).toEqual(["word/document.xml", "word/header1.xml", "word/footer1.xml"]);
-    expect(readDocxPart(bytes, "word/document.xml")).toContain("Customer {d.doc.customerName}");
+    expect(readDocxPart(bytes, "word/document.xml")).toContain("Customer {d.pageGroup.customerName}");
     expect(() => readDocxPart(bytes, "word/styles.xml")).toThrow('There is no part "word/styles.xml". The parts are word/document.xml, word/header1.xml, word/footer1.xml.');
   });
 
@@ -88,7 +88,7 @@ describe("editDocx", () => {
   it("finds a tag Word split over runs, keeps the formatting and leaves every other file as it was", () => {
     const before = wordFile(SPLIT_BODY);
     const after = editDocx(before, [
-      { part: "word/document.xml", find: "{d.doc.dueDate}", replace: "{d.doc.dueDate:formatD('DD.MM.YYYY')}" },
+      { part: "word/document.xml", find: "{d.pageGroup.dueDate}", replace: "{d.pageGroup.dueDate:formatD('DD.MM.YYYY')}" },
       { part: "word/header1.xml", find: "Invoice ", replace: "Invoice no " },
     ]);
     const old = files(before);
@@ -98,21 +98,21 @@ describe("editDocx", () => {
       expect(Buffer.from(out[name]!).equals(Buffer.from(old[name]!))).toBe(true);
     }
     const body = strFromU8(out["word/document.xml"]!);
-    expect(body).toContain(`<w:r>${BOLD}<w:t xml:space="preserve"> due {d.doc.dueDate:formatD('DD.MM.YYYY')}</w:t></w:r>`);
+    expect(body).toContain(`<w:r>${BOLD}<w:t xml:space="preserve"> due {d.pageGroup.dueDate:formatD('DD.MM.YYYY')}</w:t></w:r>`);
     expect(body.startsWith('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n')).toBe(true);
     expect(readDocx(after).paragraphs.map((p) => p.text)).toEqual([
-      "Customer {d.doc.customerName} due {d.doc.dueDate:formatD('DD.MM.YYYY')}\tend",
-      "Invoice no {d.doc.invoiceNo}",
+      "Customer {d.pageGroup.customerName} due {d.pageGroup.dueDate:formatD('DD.MM.YYYY')}\tend",
+      "Invoice no {d.pageGroup.invoiceNo}",
       "Page",
     ]);
   });
 
   it("applies edits in order, so a later edit sees an earlier one", () => {
     const after = editDocx(wordFile(SPLIT_BODY), [
-      { part: "word/document.xml", find: "end", replace: "{d.doc.orderNo}" },
-      { part: "word/document.xml", find: "{d.doc.orderNo}", replace: "{d.doc.reference}" },
+      { part: "word/document.xml", find: "end", replace: "{d.pageGroup.orderNo}" },
+      { part: "word/document.xml", find: "{d.pageGroup.orderNo}", replace: "{d.pageGroup.reference}" },
     ]);
-    expect(readDocx(after).paragraphs[0]!.text).toMatch(/\t\{d\.doc\.reference\}$/);
+    expect(readDocx(after).paragraphs[0]!.text).toMatch(/\t\{d\.pageGroup\.reference\}$/);
   });
 
   it("edits a starter template, which the docx library wrote", async () => {
@@ -132,7 +132,7 @@ describe("editDocx", () => {
       }
       throw new Error("expected an error");
     };
-    expect(error([{ part: "word/document.xml", find: "{d.doc.missing}", replace: "x" }])).toMatch(/^The text to find is not in word\/document.xml\./);
+    expect(error([{ part: "word/document.xml", find: "{d.pageGroup.missing}", replace: "x" }])).toMatch(/^The text to find is not in word\/document.xml\./);
     expect(error([{ part: "word/document.xml", find: "<w:r>", replace: "<w:r>" }])).toMatch(/occurs more than once/);
     expect(error([{ part: "word/styles.xml", find: "Normal", replace: "x" }])).toMatch(/^There is no part "word\/styles.xml"/);
     expect(error([{ part: "word/document.xml", find: "", replace: "x" }])).toMatch(/find is empty/);
@@ -173,5 +173,27 @@ describe("pdfPageCount", () => {
     const started = performance.now();
     expect(pdfPageCount(hostile)).toBeNull();
     expect(performance.now() - started).toBeLessThan(1000);
+  });
+});
+
+describe("rewriteDocx", () => {
+  it("changes the text of every part, with runs merged, and keeps every other file", () => {
+    const before = wordFile(SPLIT_BODY);
+    const after = rewriteDocx(before, (xml) => xml.replaceAll("{d.pageGroup.", "{d.part."));
+    expect(readDocxPart(after, "word/header1.xml")).toContain("Invoice {d.part.invoiceNo}");
+    expect(readDocxPart(after, "word/document.xml")).toContain("{d.part.customerName}");
+    expect(readDocxPart(after, "word/document.xml")).not.toContain("{d.pageGroup.");
+    const files = unzipSync(after);
+    expect(files["word/media/image1.png"]).toEqual(unzipSync(before)["word/media/image1.png"]);
+    expect(strFromU8(files["word/styles.xml"]!)).toBe(strFromU8(unzipSync(before)["word/styles.xml"]!));
+  });
+
+  it("returns the same file when nothing changes", () => {
+    const before = wordFile(SPLIT_BODY);
+    expect(rewriteDocx(before, (xml) => xml)).toBe(before);
+  });
+
+  it("refuses a change that breaks the XML", () => {
+    expect(() => rewriteDocx(wordFile(SPLIT_BODY), (xml, part) => (part === "word/footer1.xml" ? xml.replace("</w:ftr>", "") : xml))).toThrow(DocxEditError);
   });
 });

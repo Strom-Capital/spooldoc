@@ -43,15 +43,16 @@ was cut off". Retry it to run the file again.
 | Step | What it does |
 |------|--------------|
 | Capture | Reads the spooled file and stores it as a sample. |
-| Extract | Matches the file against the definition and reads the documents. |
-| Render | Checks the template of each output, then renders each document with it, to the output's formats: HTML, PDF or both, with [Carbone](carbone.md). A failed render shows Carbone's own text under Details. |
+| Extract | Matches the file against the definition and reads its page groups. |
+| Render | Checks each template, then makes the document of each page group with it, in the template's formats, with [Carbone](carbone.md). A failed render shows Carbone's own text under Details. |
 | Deliver | Hands every file to the destination. |
 | Finish | Holds, moves, deletes or leaves the spooled file. |
 
 Each step is recorded with its outcome, so a run shows where it stopped.
 The captured sample and the delivered files stay with the run while it is
-kept. When the job has more than one output, the run's files are grouped
-by output.
+kept. When the job has more than one template, the run's files are
+grouped by template. The log's Page groups column counts what the
+definition found.
 
 ## Retry
 

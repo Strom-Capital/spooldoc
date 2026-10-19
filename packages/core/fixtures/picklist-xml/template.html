@@ -21,20 +21,20 @@
 <body>
   <h1>Pick list</h1>
   <dl>
-    <dt>Title</dt><dd>{d.doc.title}</dd>
-    <dt>Picklist No</dt><dd>{d.doc.picklistNo}</dd>
-    <dt>Order No</dt><dd>{d.doc.orderNo}</dd>
-    <dt>Customer No</dt><dd>{d.doc.customerNo}</dd>
-    <dt>Ship To</dt><dd>{d.doc.shipTo}</dd>
-    <dt>Ship Date</dt><dd>{d.doc.shipDate}</dd>
-    <dt>Output Name</dt><dd>{d.doc.outputName}</dd>
+    <dt>Title</dt><dd>{d.pageGroup.title}</dd>
+    <dt>Picklist No</dt><dd>{d.pageGroup.picklistNo}</dd>
+    <dt>Order No</dt><dd>{d.pageGroup.orderNo}</dd>
+    <dt>Customer No</dt><dd>{d.pageGroup.customerNo}</dd>
+    <dt>Ship To</dt><dd>{d.pageGroup.shipTo}</dd>
+    <dt>Ship Date</dt><dd>{d.pageGroup.shipDate}</dd>
+    <dt>Output Name</dt><dd>{d.pageGroup.outputName}</dd>
   </dl>
   <h2>Lines</h2>
   <table>
     <thead><tr><th>Line</th><th>Item</th><th>Description</th><th>Warehouse</th><th>Bin</th><th>Quantity</th><th>Unit</th></tr></thead>
     <tbody>
-      <tr><td>{d.doc.lines[i].line}</td><td>{d.doc.lines[i].item}</td><td>{d.doc.lines[i].description}</td><td>{d.doc.lines[i].warehouse}</td><td>{d.doc.lines[i].bin}</td><td>{d.doc.lines[i].quantity}</td><td>{d.doc.lines[i].unit}</td></tr>
-      <tr><td>{d.doc.lines[i+1]}</td></tr>
+      <tr><td>{d.pageGroup.lines[i].line}</td><td>{d.pageGroup.lines[i].item}</td><td>{d.pageGroup.lines[i].description}</td><td>{d.pageGroup.lines[i].warehouse}</td><td>{d.pageGroup.lines[i].bin}</td><td>{d.pageGroup.lines[i].quantity}</td><td>{d.pageGroup.lines[i].unit}</td></tr>
+      <tr><td>{d.pageGroup.lines[i+1]}</td></tr>
     </tbody>
   </table>
 </body>

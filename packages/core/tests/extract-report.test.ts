@@ -5,7 +5,7 @@ import { loadFixture } from "./helpers/fixtures.js";
 const { sample, definition, expected } = loadFixture("order-report");
 const result = extract(definition, sample);
 type Line = { customerNo: string; typeCode: string; message: string; amount: number };
-const doc = result.documents[0] as { runDate: string; lines: Line[] };
+const doc = result.pageGroups[0] as { runDate: string; lines: Line[] };
 
 describe("order report extraction", () => {
   it("has a parameter page first and skips it", () => {
@@ -15,7 +15,7 @@ describe("order report extraction", () => {
   });
 
   it("reads forty three-line records", () => {
-    expect(result.documents).toHaveLength(1);
+    expect(result.pageGroups).toHaveLength(1);
     expect(doc.lines).toHaveLength(40);
     for (const l of doc.lines) {
       expect(l.customerNo).toMatch(/^\d{5}$/);
@@ -31,7 +31,7 @@ describe("order report extraction", () => {
   });
 
   it("equals expected.json", () => {
-    expect(result.documents).toEqual(expected);
+    expect(result.pageGroups).toEqual(expected);
     expect(result.warnings).toEqual([]);
   });
 });

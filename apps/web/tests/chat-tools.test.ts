@@ -1,9 +1,9 @@
 import { extract, parseDefinition, readDocx, starterDocx, type HtmlRender } from '@spooldoc/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type {
-  JobOutputFiles,
+  JobTemplateFiles,
   ListJobsResult,
-  OutputChangeResult,
+  TemplateChangeResult,
   ReadJobFilesResult,
   ReadPageResult,
   ReadWordTemplateResult,
@@ -12,7 +12,7 @@ import type {
   WriteDefinitionResult,
   WriteTemplateResult,
 } from '@/lib/chat-types';
-import { jobSpecSchema, withTemplate, type JobOutput } from '@/lib/job-spec';
+import { jobSpecSchema, withContent, type JobTemplate } from '@/lib/job-spec';
 import { buildTools, visibleText, type DraftStore, type JobFiles, type JobFilesReader } from '@/lib/server/chat';
 import type { DocumentRenderer } from '@/lib/server/documents';
 import type { TemplateFileView } from '@/lib/types';
@@ -26,42 +26,42 @@ const options = { toolCallId: 'call-1', messages: [] };
 /** A 40 x 10 PNG header, enough for the docx library to place. */
 const PNG_LOGO = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAACgAAAAKCAIAAABaL8vzAAAAEklEQVR4nGM4ceIEAAS0AlkWLoFAAAAAAElFTkSuQmCC', 'base64'));
 
-/** A job draft in memory: a definition and outputs, checked by the spec schema as the draft store does. */
-/** An output's HTML template text; undefined for a Word template. */
-const htmlOf = (output: JobOutput): string | null | undefined => (output.template.kind === 'html' ? output.template.source : undefined);
+/** A job draft in memory: a definition and templates, checked by the spec schema as the draft store does. */
+/** A template's HTML; undefined for a Word template. */
+const htmlOf = (template: JobTemplate): string | null | undefined => (template.kind === 'html' ? template.source : undefined);
 
 class MemoryDraft implements DraftStore {
   yaml = '';
-  outputs: JobOutput[] = jobSpecSchema.parse({}).render.outputs;
-  /** The first output's template. */
+  templates: JobTemplate[] = jobSpecSchema.parse({}).render.templates;
+  /** The first template's HTML. */
   get html(): string | null | undefined {
-    return htmlOf(this.outputs[0]!);
+    return htmlOf(this.templates[0]!);
   }
   async readDefinition() {
     return this.yaml;
   }
-  async readOutputs() {
-    return this.outputs;
+  async readTemplates() {
+    return this.templates;
   }
   async writeDefinition(yaml: string) {
     this.yaml = yaml;
   }
-  async writeTemplate(outputId: string, html: string) {
-    await this.changeOutputs((outputs) => outputs.map((o) => (o.id === outputId ? { ...o, template: { kind: 'html', source: html } } : o)));
+  async writeHtml(templateId: string, html: string) {
+    await this.changeTemplates((templates) => templates.map((t) => (t.id === templateId ? withContent(t, { kind: 'html', source: html }) : t)));
   }
-  async changeOutputs(change: (outputs: JobOutput[]) => JobOutput[]) {
-    this.outputs = jobSpecSchema.shape.render.parse({ outputs: change(this.outputs) }).outputs;
-    return this.outputs;
+  async changeTemplates(change: (templates: JobTemplate[]) => JobTemplate[]) {
+    this.templates = jobSpecSchema.shape.render.parse({ templates: change(this.templates) }).templates;
+    return this.templates;
   }
   /** The Word files the assistant saved, by id, as the database would keep them. */
   files = new Map<string, { name: string; content: Uint8Array; previousId: string | null }>();
-  async writeWordTemplate(outputId: string, file: { name: string; content: Uint8Array; previousId: string | null }): Promise<TemplateFileView> {
-    const output = this.outputs.find((o) => o.id === outputId);
-    if (!output) throw new Error('The output is gone.');
-    if (output.template.kind === 'html' && output.template.source !== null) throw new Error(`The ${output.label} output has an HTML template of its own.`);
+  async writeWordTemplate(templateId: string, file: { name: string; content: Uint8Array; previousId: string | null }): Promise<TemplateFileView> {
+    const template = this.templates.find((t) => t.id === templateId);
+    if (!template) throw new Error('The template is gone.');
+    if (template.kind === 'html' && template.source !== null) throw new Error(`The ${template.name} template has HTML of its own.`);
     const id = `00000000-0000-4000-8000-${String(this.files.size + 1).padStart(12, '0')}`;
     this.files.set(id, file);
-    await this.changeOutputs((outputs) => outputs.map((o) => (o.id === outputId ? withTemplate(o, { kind: 'docx', fileId: id }) : o)));
+    await this.changeTemplates((templates) => templates.map((t) => (t.id === templateId ? withContent(t, { kind: 'docx', fileId: id }) : t)));
     return { id, name: file.name, size: file.content.length, createdAt: new Date(0).toISOString(), madeBy: 'assistant', previousId: file.previousId };
   }
   /** Reads a file the assistant saved, as the chat route's `templateFile` does. */
@@ -74,25 +74,25 @@ beforeEach(() => {
   store = new MemoryDraft();
 });
 
-/** An output of another job with its template. */
-const files = (templateHtml: string | null, fields: Partial<JobOutputFiles> = {}): JobOutputFiles => ({
+/** A template of another job. */
+const files = (html: string | null, fields: Partial<JobTemplateFiles> = {}): JobTemplateFiles => ({
   id: 'main',
-  label: 'Document',
+  name: 'Document',
   formats: ['pdf'],
   kind: 'html',
-  templateHtml,
+  html,
   fileId: null,
   ...fields,
 });
 
-/** Two other jobs: one with a definition and two outputs, one with only a draft definition. */
+/** Two other jobs: one with a definition and two templates, one with only a draft definition. */
 const OTHER_JOBS: JobFiles[] = [
-  { id: 'job-a', name: 'Invoices', definitionYaml: yaml, outputs: [files(template), files(null, { id: 'lines', label: 'Lines', formats: ['html'] })] },
+  { id: 'job-a', name: 'Invoices', definitionYaml: yaml, templates: [files(template), files(null, { id: 'lines', name: 'Lines', formats: ['html'] })] },
   {
     id: 'job-b',
     name: 'Reminders',
     definitionYaml: 'type: reminder\nversion: 1\nsource: text\ntext:\n  page: { width: 132, length: 66 }\n  fields: []\n',
-    outputs: [files(null)],
+    templates: [files(null)],
   },
 ];
 
@@ -122,7 +122,7 @@ describe('write_definition', () => {
 
     expect(result.type).toBe('invoice');
     expect(result.path).toBe('definition');
-    expect(result.documents).toBe(6);
+    expect(result.pageGroups).toBe(6);
     expect(result.missing).toEqual([]);
     expect(result.fields.find((f) => f.name === 'invoiceNo')).toEqual({ name: 'invoiceNo', status: 'found', value: '260101' });
     expect(result.fields.find((f) => f.name === 'lines')?.value).toMatch(/^\d+ rows$/);
@@ -146,7 +146,7 @@ describe('write_definition', () => {
     if (!result.ok) throw new Error(result.error);
     expect(result.fields.find((f) => f.name === 'invoiceNo')?.value).toBe('999999');
     expect(result.preview).not.toContain('260101');
-    expect(result.documents).toBe(6);
+    expect(result.pageGroups).toBe(6);
   });
 });
 
@@ -165,7 +165,8 @@ describe('write_template', () => {
 
     expect(result.ok).toBe(true);
     expect(result.path).toBe('template');
-    expect(result.output).toBe('Document');
+    expect(result.template).toBe('Template 1');
+    expect(result.templateId).toBe('template-1');
     expect(result.errors).toEqual([]);
     expect(result.warnings).toEqual([]);
     expect(result.textPreview).toContain('260101');
@@ -174,24 +175,24 @@ describe('write_template', () => {
     expect(store.html).toBe(template);
   });
 
-  it('saves the template of the output named by id or name, and fails for an unknown output', async () => {
+  it('saves the template named by id or name, and fails for an unknown template', async () => {
     await call(tools().write_definition, { yaml });
-    await call(tools().add_output, { label: 'Lines' });
-    const byName = await call<WriteTemplateResult>(tools().write_template, { html: '<p>{d.doc.invoiceNo}</p>', output: 'lines' });
+    await call(tools().add_template, { name: 'Lines' });
+    const byName = await call<WriteTemplateResult>(tools().write_template, { html: '<p>{d.pageGroup.invoiceNo}</p>', template: 'lines' });
     if (!('path' in byName)) throw new Error(byName.error);
-    expect(byName.output).toBe('Lines');
-    expect(store.outputs.map(htmlOf)).toEqual([null, '<p>{d.doc.invoiceNo}</p>']);
+    expect(byName.template).toBe('Lines');
+    expect(store.templates.map(htmlOf)).toEqual([null, '<p>{d.pageGroup.invoiceNo}</p>']);
 
-    const unknown = await call<WriteTemplateResult>(tools().write_template, { html: '<p/>', output: 'Totals' });
-    expect(unknown).toEqual({ ok: false, error: 'There is no output "Totals". The job\'s outputs are Document (id main), Lines (id lines).' });
-    expect(htmlOf(store.outputs[1]!)).toBe('<p>{d.doc.invoiceNo}</p>');
+    const unknown = await call<WriteTemplateResult>(tools().write_template, { html: '<p/>', template: 'Totals' });
+    expect(unknown).toEqual({ ok: false, error: 'There is no template "Totals". The job\'s templates are Template 1 (id template-1), Lines (id lines).' });
+    expect(htmlOf(store.templates[1]!)).toBe('<p>{d.pageGroup.invoiceNo}</p>');
   });
 
   it('checks the template by line before it renders', async () => {
     await call(tools().write_definition, { yaml });
-    const result = await call<WriteTemplateResult>(tools().write_template, { html: '<p>\n{d.doc.invoiceNumber}</p>' });
+    const result = await call<WriteTemplateResult>(tools().write_template, { html: '<p>\n{d.pageGroup.invoiceNumber}</p>' });
     if (!('path' in result)) throw new Error(result.error);
-    expect(result.errors).toEqual(['Line 2: {d.doc.invoiceNumber} is not in the data. Did you mean {d.doc.invoiceNo}?']);
+    expect(result.errors).toEqual(['Line 2: {d.pageGroup.invoiceNumber} is not in the data. Did you mean {d.pageGroup.invoiceNo}?']);
     expect(fakeCarbone).not.toHaveBeenCalled();
   });
 
@@ -206,7 +207,7 @@ describe('write_template', () => {
   it('renders with placeholders for assets, never the file', async () => {
     await call(tools().write_definition, { yaml });
     const withLogo = buildTools({ sample, store, masked: false, renderer: fakeRenderer, assets: [{ name: 'logo', kind: 'image' }] });
-    await call(withLogo.write_template, { html: `<img src="{asset('logo')}">{d.doc.invoiceNo}` });
+    await call(withLogo.write_template, { html: `<img src="{asset('logo')}">{d.pageGroup.invoiceNo}` });
     expect((fakeCarbone.mock.calls[0]![0] as HtmlRender).asset?.('logo')).toBe('data:,');
   });
 
@@ -255,82 +256,82 @@ describe('render_preview', () => {
   it('counts the same hits as extract', async () => {
     await call(tools().write_definition, { yaml });
     await call(tools().write_template, { html: template });
-    const result = await call<RenderPreviewResult>(tools().render_preview, { document: 1 });
+    const result = await call<RenderPreviewResult>(tools().render_preview, { pageGroup: 1 });
     if (!result.ok) throw new Error(result.error);
 
     const expected = extract(parseDefinition(yaml), sample);
     const count = (status: string) => expected.hits.filter((hit) => hit.status === status).length;
-    expect(result.documents).toBe(expected.documents.length);
+    expect(result.pageGroups).toBe(expected.pageGroups.length);
     expect(result.hits).toEqual({ found: count('found'), missing: count('missing'), empty: count('empty') });
-    expect(result.document).toBe(1);
-    expect(result.output).toBe('Document');
-    expect(result.template).toBe('saved');
+    expect(result.pageGroup).toBe(1);
+    expect(result.template).toBe('Template 1');
+    expect(result.content).toBe('saved');
     expect(result.templateErrors).toEqual([]);
     expect(result.textPreview).toContain('MÄKELÄ RAKENNUS OY');
   });
 
-  it('uses the starter template when none is saved, and clamps the document index', async () => {
+  it('uses the starter template when none is saved, and clamps the page group index', async () => {
     await call(tools().write_definition, { yaml });
-    const result = await call<RenderPreviewResult>(tools().render_preview, { document: 50 });
+    const result = await call<RenderPreviewResult>(tools().render_preview, { pageGroup: 50 });
     if (!result.ok) throw new Error(result.error);
-    expect(result.template).toBe('starter');
-    expect(result.document).toBe(5);
+    expect(result.content).toBe('starter');
+    expect(result.pageGroup).toBe(5);
   });
 
-  it("renders the output named, with that output's template", async () => {
+  it('renders the template named', async () => {
     await call(tools().write_definition, { yaml });
     await call(tools().write_template, { html: template });
-    await call(tools().add_output, { label: 'Lines' });
-    await call(tools().write_template, { html: '<p>Lines of {d.doc.invoiceNo}</p>', output: 'Lines' });
+    await call(tools().add_template, { name: 'Lines' });
+    await call(tools().write_template, { html: '<p>Lines of {d.pageGroup.invoiceNo}</p>', template: 'Lines' });
 
-    const lines = await call<RenderPreviewResult>(tools().render_preview, { output: 'lines' });
+    const lines = await call<RenderPreviewResult>(tools().render_preview, { template: 'lines' });
     if (!lines.ok) throw new Error(lines.error);
-    expect(lines).toMatchObject({ output: 'Lines', template: 'saved', textPreview: 'Lines of 260101' });
+    expect(lines).toMatchObject({ template: 'Lines', content: 'saved', textPreview: 'Lines of 260101' });
     const first = await call<RenderPreviewResult>(tools().render_preview, {});
     if (!first.ok) throw new Error(first.error);
-    expect(first.output).toBe('Document');
+    expect(first.template).toBe('Template 1');
     expect(first.textPreview).not.toContain('Lines of');
-    expect((await call<RenderPreviewResult>(tools().render_preview, { output: 'nope' })).ok).toBe(false);
+    expect((await call<RenderPreviewResult>(tools().render_preview, { template: 'nope' })).ok).toBe(false);
   });
 });
 
-describe('add_output and remove_output', () => {
-  it('adds an output with the starter template and the formats asked for', async () => {
-    const result = await call<OutputChangeResult>(tools().add_output, { label: 'Order lines', formats: ['html', 'pdf'] });
+describe('add_template and remove_template', () => {
+  it('adds a template with the starter and the formats asked for', async () => {
+    const result = await call<TemplateChangeResult>(tools().add_template, { name: 'Order lines', formats: ['html', 'pdf'] });
     expect(result).toEqual({
       ok: true,
-      output: { id: 'order-lines', label: 'Order lines', formats: ['pdf', 'html'], kind: 'html', template: 'starter' },
-      outputs: [
-        { id: 'main', label: 'Document', formats: ['pdf'], kind: 'html', template: 'starter' },
-        { id: 'order-lines', label: 'Order lines', formats: ['pdf', 'html'], kind: 'html', template: 'starter' },
+      template: { id: 'order-lines', name: 'Order lines', formats: ['pdf', 'html'], kind: 'html', content: 'starter' },
+      templates: [
+        { id: 'template-1', name: 'Template 1', formats: ['pdf'], kind: 'html', content: 'starter' },
+        { id: 'order-lines', name: 'Order lines', formats: ['pdf', 'html'], kind: 'html', content: 'starter' },
       ],
     });
-    expect(store.outputs).toHaveLength(2);
-    expect((await call<OutputChangeResult>(tools().add_output, { label: 'Totals' })).ok && store.outputs[2]!.formats).toEqual(['pdf']);
+    expect(store.templates).toHaveLength(2);
+    expect((await call<TemplateChangeResult>(tools().add_template, { name: 'Totals' })).ok && store.templates[2]!.formats).toEqual(['pdf']);
   });
 
-  it('refuses a name another output has', async () => {
-    const result = await call<OutputChangeResult>(tools().add_output, { label: 'document' });
-    expect(result).toEqual({ ok: false, error: 'There is already an output named "document". Pick another name.' });
-    expect(store.outputs).toHaveLength(1);
+  it('refuses a name another template has', async () => {
+    const result = await call<TemplateChangeResult>(tools().add_template, { name: 'template 1' });
+    expect(result).toEqual({ ok: false, error: 'There is already a template named "template 1". Pick another name.' });
+    expect(store.templates).toHaveLength(1);
   });
 
-  it('removes an output by id or name, but never the last one', async () => {
-    await call(tools().add_output, { label: 'Lines' });
-    const removed = await call<OutputChangeResult>(tools().remove_output, { output: 'Document' });
+  it('removes a template by id or name, but never the last one', async () => {
+    await call(tools().add_template, { name: 'Lines' });
+    const removed = await call<TemplateChangeResult>(tools().remove_template, { template: 'Template 1' });
     if (!removed.ok) throw new Error(removed.error);
-    expect(removed.output.label).toBe('Document');
-    expect(store.outputs.map((o) => o.id)).toEqual(['lines']);
+    expect(removed.template.name).toBe('Template 1');
+    expect(store.templates.map((o) => o.id)).toEqual(['lines']);
 
-    expect(await call<OutputChangeResult>(tools().remove_output, { output: 'lines' })).toEqual({
+    expect(await call<TemplateChangeResult>(tools().remove_template, { template: 'lines' })).toEqual({
       ok: false,
-      error: 'A job needs at least one output, so the last one cannot be removed.',
+      error: 'A job needs at least one template, so the last one cannot be removed.',
     });
-    expect(await call<OutputChangeResult>(tools().remove_output, { output: 'nope' })).toEqual({
+    expect(await call<TemplateChangeResult>(tools().remove_template, { template: 'nope' })).toEqual({
       ok: false,
-      error: 'There is no output "nope". The job\'s outputs are Lines (id lines).',
+      error: 'There is no template "nope". The job\'s templates are Lines (id lines).',
     });
-    expect(store.outputs.map((o) => o.id)).toEqual(['lines']);
+    expect(store.templates.map((o) => o.id)).toEqual(['lines']);
   });
 });
 
@@ -344,23 +345,23 @@ describe('visibleText', () => {
 });
 
 describe('list_jobs', () => {
-  it('lists every other job with its definition type, outputs and whether it has a template', async () => {
+  it('lists every other job with its definition type, templates and whether they have content of their own', async () => {
     const result = await call<ListJobsResult>(tools(false, new MemoryJobs()).list_jobs, {});
     expect(result).toEqual({
       ok: true,
       jobs: [
-        { id: 'job-a', name: 'Invoices', type: 'invoice', outputs: ['Document', 'Lines'], hasTemplate: true },
-        { id: 'job-b', name: 'Reminders', type: 'reminder', outputs: ['Document'], hasTemplate: false },
+        { id: 'job-a', name: 'Invoices', type: 'invoice', templates: ['Document', 'Lines'], hasOwnContent: true },
+        { id: 'job-b', name: 'Reminders', type: 'reminder', templates: ['Document'], hasOwnContent: false },
       ],
     });
   });
 
   it('reports no type for a job whose definition is empty or does not parse, and nothing else of a job', async () => {
-    const reader = new MemoryJobs([{ id: 'job-c', name: 'Blank', definitionYaml: '', outputs: [files(null)] }]);
+    const reader = new MemoryJobs([{ id: 'job-c', name: 'Blank', definitionYaml: '', templates: [files(null)] }]);
     const result = await call<ListJobsResult>(tools(false, reader).list_jobs, {});
     if (!result.ok) throw new Error(result.error);
-    expect(result.jobs).toEqual([{ id: 'job-c', name: 'Blank', type: null, outputs: ['Document'], hasTemplate: false }]);
-    expect(Object.keys(result.jobs[0]!).sort()).toEqual(['hasTemplate', 'id', 'name', 'outputs', 'type']);
+    expect(result.jobs).toEqual([{ id: 'job-c', name: 'Blank', type: null, templates: ['Document'], hasOwnContent: false }]);
+    expect(Object.keys(result.jobs[0]!).sort()).toEqual(['hasOwnContent', 'id', 'name', 'templates', 'type']);
   });
 
   it('lists no jobs without a reader, and reports a reader that fails', async () => {
@@ -377,7 +378,7 @@ describe('list_jobs', () => {
 });
 
 describe('read_job_files', () => {
-  it("returns a job's definition and every output with its template, and only those", async () => {
+  it("returns a job's definition and every template, and only those", async () => {
     const reader = new MemoryJobs();
     const result = await call<ReadJobFilesResult>(tools(false, reader).read_job_files, { id: 'job-a' });
     expect(result).toEqual({
@@ -385,7 +386,7 @@ describe('read_job_files', () => {
       id: 'job-a',
       name: 'Invoices',
       definitionYaml: yaml,
-      outputs: [files(template), files(null, { id: 'lines', label: 'Lines', formats: ['html'] })],
+      templates: [files(template), files(null, { id: 'lines', name: 'Lines', formats: ['html'] })],
     });
     expect(reader.reads).toEqual(['job-a']);
   });
@@ -393,12 +394,12 @@ describe('read_job_files', () => {
   it('answers null for a missing template or definition', async () => {
     const result = await call<ReadJobFilesResult>(tools(false, new MemoryJobs()).read_job_files, { id: 'job-b' });
     if (!result.ok) throw new Error(result.error);
-    expect(result.outputs[0]!.templateHtml).toBeNull();
+    expect(result.templates[0]!.html).toBeNull();
     expect(result.definitionYaml).toContain('type: reminder');
 
-    const blank = new MemoryJobs([{ id: 'job-c', name: 'Blank', definitionYaml: '  \n', outputs: [files(null)] }]);
+    const blank = new MemoryJobs([{ id: 'job-c', name: 'Blank', definitionYaml: '  \n', templates: [files(null)] }]);
     const empty = await call<ReadJobFilesResult>(tools(false, blank).read_job_files, { id: 'job-c' });
-    expect(empty).toEqual({ ok: true, id: 'job-c', name: 'Blank', definitionYaml: null, outputs: [files(null)] });
+    expect(empty).toEqual({ ok: true, id: 'job-c', name: 'Blank', definitionYaml: null, templates: [files(null)] });
   });
 
   it('fails for an unknown job and without a reader, and writes nothing', async () => {
@@ -412,47 +413,47 @@ describe('read_job_files', () => {
 });
 
 describe('Word templates', () => {
-  const wordOutput = (fileId: string | null): JobOutput[] => [{ id: 'main', label: 'Document', template: { kind: 'docx', fileId }, formats: ['pdf', 'docx'] }];
+  const wordTemplate = (fileId: string | null): JobTemplate[] => [{ id: 'main', name: 'Document', kind: 'docx', fileId, formats: ['pdf', 'docx'] }];
   const withFile = (bytes: Uint8Array | null) =>
     buildTools({ sample, store, masked: false, renderer: fakeRenderer, templateFile: async (id) => (id === 'file-1' && bytes ? { name: 'invoice.docx', content: bytes } : null) });
 
   it('never writes over a Word template', async () => {
     await call(tools().write_definition, { yaml });
-    store.outputs = wordOutput(null);
-    const result = await call<WriteTemplateResult>(tools().write_template, { html: '<p>{d.doc.invoiceNo}</p>' });
+    store.templates = wordTemplate(null);
+    const result = await call<WriteTemplateResult>(tools().write_template, { html: '<p>{d.pageGroup.invoiceNo}</p>' });
     expect(result).toEqual({
       ok: false,
-      error: 'The Document output uses a Word template. Change it with edit_word_template, or design a new one with write_word_template.',
+      error: 'The Document template is a Word template. Change it with edit_word_template, or design a new one with write_word_template.',
     });
-    expect(store.outputs[0]!.template).toEqual({ kind: 'docx', fileId: null });
+    expect(store.templates[0]).toMatchObject({ kind: 'docx', fileId: null });
   });
 
   it('checks and renders the uploaded file, or the starter template, to DOCX and returns its text', async () => {
     await call(tools().write_definition, { yaml });
-    store.outputs = wordOutput('00000000-0000-4000-8000-000000000001');
+    store.templates = wordTemplate('00000000-0000-4000-8000-000000000001');
     const bytes = await starterDocx(parseDefinition(yaml));
     const reader = buildTools({ sample, store, masked: false, renderer: fakeRenderer, templateFile: async () => ({ name: 'invoice.docx', content: bytes }) });
     const result = await call<RenderPreviewResult>(reader.render_preview, {});
     if (!result.ok) throw new Error(result.error);
-    expect(result).toMatchObject({ template: 'saved', templateErrors: [] });
+    expect(result).toMatchObject({ content: 'saved', templateErrors: [] });
     // The fake Carbone sends the file back as it was: its paragraphs are the text.
-    expect(result.textPreview).toContain('Invoice No\t{d.doc.invoiceNo}');
+    expect(result.textPreview).toContain('Invoice No\t{d.pageGroup.invoiceNo}');
     expect(fakeCarbone.mock.calls.at(-1)![0]).toMatchObject({ kind: 'docx', format: 'docx' });
 
-    store.outputs = wordOutput(null);
+    store.templates = wordTemplate(null);
     const starter = await call<RenderPreviewResult>(withFile(null).render_preview, {});
-    expect(starter).toMatchObject({ ok: true, template: 'starter', templateErrors: [] });
+    expect(starter).toMatchObject({ ok: true, content: 'starter', templateErrors: [] });
   });
 
   it('reports the tag check by part, and a file that is gone', async () => {
     await call(tools().write_definition, { yaml });
-    store.outputs = wordOutput('file-1');
+    store.templates = wordTemplate('file-1');
     const bad = await starterDocx(parseDefinition(yaml.replace('name: invoiceNo,', 'name: invoiceNumber,').replace('field: invoiceNo }', 'field: invoiceNumber }')));
     const result = await call<RenderPreviewResult>(withFile(bad).render_preview, {});
-    expect(result).toMatchObject({ ok: true, templateErrors: ['body: {d.doc.invoiceNumber} is not in the data. Did you mean {d.doc.invoiceNo}?'] });
+    expect(result).toMatchObject({ ok: true, templateErrors: ['body: {d.pageGroup.invoiceNumber} is not in the data. Did you mean {d.pageGroup.invoiceNo}?'] });
     expect(await call(withFile(null).render_preview, {})).toEqual({
       ok: false,
-      error: 'The Word template of the Document output is gone. Write a new one with write_word_template, or the user uploads one.',
+      error: 'The Word file of the Document template is gone. Write a new one with write_word_template, or the user uploads one.',
     });
   });
 });
@@ -465,19 +466,19 @@ describe('Word templates by the assistant', () => {
       {
         footers: { default: { children: [{ type: 'Paragraph', children: [{ type: 'TextRun', text: 'Page ' }, { type: 'PageNumber', field: 'PAGE' }] }] } },
         children: [
-          { type: 'Paragraph', children: [{ type: 'TextRun', text: 'Invoice {d.doc.invoiceNo}', bold: true, size: '18pt' }] },
+          { type: 'Paragraph', children: [{ type: 'TextRun', text: 'Invoice {d.pageGroup.invoiceNo}', bold: true, size: '18pt' }] },
           {
             type: 'Table',
             rows: [
-              { type: 'TableRow', children: [{ type: 'TableCell', children: [{ type: 'Paragraph', text: '{d.doc.lines[i].item}' }] }] },
-              { type: 'TableRow', children: [{ type: 'TableCell', children: [{ type: 'Paragraph', text: '{d.doc.lines[i+1]}' }] }] },
+              { type: 'TableRow', children: [{ type: 'TableCell', children: [{ type: 'Paragraph', text: '{d.pageGroup.lines[i].item}' }] }] },
+              { type: 'TableRow', children: [{ type: 'TableCell', children: [{ type: 'Paragraph', text: '{d.pageGroup.lines[i+1]}' }] }] },
             ],
           },
         ],
       },
     ],
   };
-  const wordOutput = (fileId: string | null): JobOutput[] => [{ id: 'main', label: 'Document', template: { kind: 'docx', fileId }, formats: ['pdf', 'docx'] }];
+  const wordTemplate = (fileId: string | null): JobTemplate[] => [{ id: 'main', name: 'Document', kind: 'docx', fileId, formats: ['pdf', 'docx'] }];
   const word = (input: Partial<Parameters<typeof buildTools>[0]> = {}) =>
     buildTools({ sample, store, masked: false, renderer: fakeRenderer, templateFile: store.readFile, ...input });
   const modelOutput = (t: { toModelOutput?: unknown }, output: unknown, toolCallId = options.toolCallId) =>
@@ -487,13 +488,13 @@ describe('Word templates by the assistant', () => {
     await call(tools().write_definition, { yaml });
   });
 
-  it('designs a template, saves it as a new file the output uses and reports its text', async () => {
+  it('designs a template, saves it as a new file the template uses and reports its text', async () => {
     const result = await call<WordTemplateResult>(word().write_word_template, { design });
     if (!('file' in result)) throw new Error(result.error);
-    expect(result).toMatchObject({ ok: true, output: 'Document', errors: [], view: null, pages: null, file: { name: 'invoice.docx' } });
-    expect(result.textPreview).toContain('Invoice {d.doc.invoiceNo}');
-    // The HTML starter output became a Word one.
-    expect(store.outputs[0]).toMatchObject({ template: { kind: 'docx', fileId: result.file.id }, formats: ['pdf'] });
+    expect(result).toMatchObject({ ok: true, template: 'Template 1', templateId: 'template-1', errors: [], view: null, pages: null, file: { name: 'invoice.docx' } });
+    expect(result.textPreview).toContain('Invoice {d.pageGroup.invoiceNo}');
+    // The HTML starter template became a Word one.
+    expect(store.templates[0]).toMatchObject({ kind: 'docx', fileId: result.file.id, formats: ['pdf'] });
     const saved = store.files.get(result.file.id)!;
     expect(saved.previousId).toBeNull();
     expect(readDocx(saved.content).fields).toEqual(['PAGE']);
@@ -522,7 +523,7 @@ describe('Word templates by the assistant', () => {
       ok: true,
       view: 'png',
       pages: 9,
-      note: 'Document 1 has 9 pages, so you see page 1 only. To check the later pages, render a document with fewer pages (render_preview with document).',
+      note: 'The document of page group 1 has 9 pages, so you see page 1 only. To check the later pages, render a page group with fewer pages (render_preview with pageGroup).',
     });
     const shown = modelOutput(tools.write_word_template, result) as { value: unknown[] };
     expect(shown.value[1]).toMatchObject({ type: 'file', mediaType: 'image/png', data: { type: 'data', data: PNG_BYTES } });
@@ -531,7 +532,7 @@ describe('Word templates by the assistant', () => {
   it('renders the preview with masked values when masking is on', async () => {
     await call(word({ visual: true, masked: true }).write_word_template, { design });
     const pdf = fakeCarbone.mock.calls.findLast(([input]) => input.format === 'pdf')![0];
-    expect((pdf.data.doc as { invoiceNo: string }).invoiceNo).toMatch(/^9+$/);
+    expect((pdf.data.pageGroup as { invoiceNo: string }).invoiceNo).toMatch(/^9+$/);
   });
 
   it('places uploaded images and refuses a design with problems, saving nothing', async () => {
@@ -552,83 +553,83 @@ describe('Word templates by the assistant', () => {
   });
 
   it("keeps the file it replaces as the new file's previous one, and its name", async () => {
-    store.outputs = wordOutput(null);
+    store.templates = wordTemplate(null);
     const first = await call<WordTemplateResult>(word().write_word_template, { design, name: 'sales.docx' });
     const second = await call<WordTemplateResult>(word().write_word_template, { design });
     if (!('file' in first) || !('file' in second)) throw new Error('not saved');
     expect(second.file.name).toBe('sales.docx');
     expect(store.files.get(second.file.id)!.previousId).toBe(first.file.id);
-    expect(store.outputs[0]!.template).toEqual({ kind: 'docx', fileId: second.file.id });
+    expect(store.templates[0]).toMatchObject({ kind: 'docx', fileId: second.file.id });
   });
 
-  it('does not replace an HTML template of the HTML output', async () => {
+  it('does not replace the HTML of an HTML template', async () => {
     await call(tools().write_template, { html: template });
     const result = await call<WordTemplateResult>(word().write_word_template, { design });
-    expect(result).toEqual({ ok: false, error: 'Could not save the Word template: The Document output has an HTML template of its own.' });
+    expect(result).toEqual({ ok: false, error: 'Could not save the Word template: The Template 1 template has HTML of its own.' });
     expect(store.html).toBe(template);
   });
 
   it('reads the parts of the file and one part, in pieces', async () => {
-    store.outputs = wordOutput(null);
+    store.templates = wordTemplate(null);
     const parts = await call<ReadWordTemplateResult>(word().read_word_template, {});
-    expect(parts).toMatchObject({ ok: true, output: 'Document', file: null, parts: [{ name: 'word/document.xml' }, { name: 'word/footer1.xml' }] });
+    expect(parts).toMatchObject({ ok: true, template: 'Document', file: null, parts: [{ name: 'word/document.xml' }, { name: 'word/footer1.xml' }] });
     const body = await call<ReadWordTemplateResult>(word().read_word_template, { part: 'word/document.xml' });
     if (!body.ok || !('xml' in body)) throw new Error('no part');
     expect(body).toMatchObject({ from: 0, more: false });
-    expect(body.xml).toContain('{d.doc.invoiceNo}');
+    expect(body.xml).toContain('{d.pageGroup.invoiceNo}');
     const rest = await call<ReadWordTemplateResult>(word().read_word_template, { part: 'word/document.xml', from: body.size - 10 });
     expect(rest).toMatchObject({ from: body.size - 10, xml: body.xml.slice(-10), more: false });
     expect(await call(word().read_word_template, { part: 'word/styles.xml' })).toMatchObject({ ok: false, error: expect.stringMatching(/^There is no part "word\/styles.xml"/) });
-    store.outputs = jobSpecSchema.parse({}).render.outputs;
-    expect(await call(word().read_word_template, {})).toMatchObject({ ok: false, error: expect.stringMatching(/uses an HTML template/) });
+    store.templates = jobSpecSchema.parse({}).render.templates;
+    expect(await call(word().read_word_template, {})).toMatchObject({ ok: false, error: expect.stringMatching(/is an HTML template/) });
   });
 
-  it("edits the starter template or the output's file and saves the result as a new file", async () => {
-    store.outputs = wordOutput(null);
+  it("edits the starter template or the template's file and saves the result as a new file", async () => {
+    store.templates = wordTemplate(null);
     const fromStarter = await call<WordTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Invoice<', replace: '>Sales invoice<' }] });
     if (!('file' in fromStarter)) throw new Error(fromStarter.error);
     expect(fromStarter.textPreview.split('\n')[0]).toBe('Sales invoice');
     expect(store.files.get(fromStarter.file.id)!.previousId).toBeNull();
-    const again = await call<WordTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Sales invoice<', replace: '>Invoice {d.doc.invoiceNo}<' }] });
+    const again = await call<WordTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Sales invoice<', replace: '>Invoice {d.pageGroup.invoiceNo}<' }] });
     if (!('file' in again)) throw new Error(again.error);
     expect(store.files.get(again.file.id)).toMatchObject({ previousId: fromStarter.file.id, name: 'invoice.docx' });
-    expect(again.textPreview.split('\n')[0]).toBe('Invoice {d.doc.invoiceNo}');
+    expect(again.textPreview.split('\n')[0]).toBe('Invoice {d.pageGroup.invoiceNo}');
   });
 
   it('refuses an edit it cannot make, and saves nothing', async () => {
-    store.outputs = wordOutput(null);
+    store.templates = wordTemplate(null);
     const missing = await call<WordTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: 'nowhere', replace: 'x' }] });
     expect(missing).toMatchObject({ ok: false, error: expect.stringMatching(/^The text to find is not in word\/document.xml/) });
     const broken = await call<WordTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Invoice<', replace: '>A & B<' }] });
     expect(broken).toMatchObject({ ok: false, error: expect.stringMatching(/is not well-formed XML: A bare & in text/) });
     expect(store.files.size).toBe(0);
-    expect(store.outputs[0]!.template).toEqual({ kind: 'docx', fileId: null });
+    expect(store.templates[0]).toMatchObject({ kind: 'docx', fileId: null });
   });
 
   it('runs a render the model calls next to an edit after the edit', async () => {
-    store.outputs = wordOutput(null);
+    store.templates = wordTemplate(null);
     const tools = word();
     const edit = call<WordTemplateResult>(tools.edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Invoice<', replace: '>Sales invoice<' }] });
     const render = call<RenderPreviewResult>(tools.render_preview, {});
     const [edited, rendered] = await Promise.all([edit, render]);
     expect(edited).toMatchObject({ ok: true });
-    expect(rendered).toMatchObject({ ok: true, template: 'saved' });
+    expect(rendered).toMatchObject({ ok: true, content: 'saved' });
     if (!rendered.ok) throw new Error(rendered.error);
     expect(rendered.textPreview.split('\n')[0]).toBe('Sales invoice');
   });
 
   it('shows the model the Word document in render_preview too', async () => {
-    store.outputs = wordOutput(null);
+    store.templates = wordTemplate(null);
     const tools = word({ visual: true });
     const result = await call<RenderPreviewResult>(tools.render_preview, {});
-    expect(result).toMatchObject({ ok: true, template: 'starter', view: 'pdf', pages: 1 });
+    expect(result).toMatchObject({ ok: true, content: 'starter', view: 'pdf', pages: 1 });
     expect((modelOutput(tools.render_preview, result) as { type: string }).type).toBe('content');
   });
 
-  it('adds a Word output, and refuses a format its kind does not make', async () => {
-    const added = await call<OutputChangeResult>(tools().add_output, { label: 'Letter', kind: 'docx', formats: ['docx'] });
-    expect(added).toMatchObject({ ok: true, output: { label: 'Letter', kind: 'docx', formats: ['docx'], template: 'starter' } });
-    const wrong = await call<OutputChangeResult>(tools().add_output, { label: 'Web', kind: 'docx', formats: ['html'] });
+  it('adds a Word template, and refuses a format its kind does not make', async () => {
+    const added = await call<TemplateChangeResult>(tools().add_template, { name: 'Letter', kind: 'docx', formats: ['docx'] });
+    expect(added).toMatchObject({ ok: true, template: { name: 'Letter', kind: 'docx', formats: ['docx'], content: 'starter' } });
+    const wrong = await call<TemplateChangeResult>(tools().add_template, { name: 'Web', kind: 'docx', formats: ['html'] });
     expect(wrong).toEqual({ ok: false, error: 'A Word template makes PDF and DOCX files, not HTML.' });
   });
 });
