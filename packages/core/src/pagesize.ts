@@ -18,11 +18,27 @@ function toMm(value: string): number | undefined {
 }
 
 /**
+ * CSS text without its `/* ... *\/` comments. A loop, not a lazy regular expression,
+ * which is slow on a template with many unclosed comments.
+ */
+function withoutComments(css: string): string {
+  let out = "";
+  let from = 0;
+  for (let start = css.indexOf("/*"); start !== -1; start = css.indexOf("/*", from)) {
+    const end = css.indexOf("*/", start + 2);
+    if (end === -1) break;
+    out += css.slice(from, start);
+    from = end + 2;
+  }
+  return out + css.slice(from);
+}
+
+/**
  * The `size` value of the template's `@page` rule, or undefined when there is none.
  * Only page rules without a page selector count (`@page :first` and named pages are skipped).
  */
 export function cssPageSize(html: string): string | undefined {
-  const text = html.replace(/\/\*[\s\S]*?\*\//g, "");
+  const text = withoutComments(html);
   const rule = /@page\s*\{([^}]*)\}/gi;
   let size: string | undefined;
   for (let m = rule.exec(text); m; m = rule.exec(text)) {

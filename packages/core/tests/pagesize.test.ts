@@ -26,4 +26,12 @@ describe("pageLayout", () => {
     expect(cssPageSize(page("/* @page { size: landscape } */"))).toBeUndefined();
     expect(cssPageSize(page("@page :first { size: landscape }"))).toBeUndefined();
   });
+
+  it("skips commented-out rules, and stays fast on many unclosed comments", () => {
+    expect(cssPageSize("<style>/* @page { size: A4 landscape } */ @page { size: A4 } /* x */</style>")).toBe("A4");
+    expect(cssPageSize("<style>@page { size: A4 } /* not closed @page { size: A3 }</style>")).toBe("A3");
+    const started = performance.now();
+    expect(cssPageSize("/*".repeat(100_000))).toBeUndefined();
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
 });
