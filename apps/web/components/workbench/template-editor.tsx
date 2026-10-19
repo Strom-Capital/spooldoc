@@ -7,20 +7,28 @@ import { CodeEditor } from './code-editor';
 import { EditorBar, EditorMessage } from './editor-bar';
 import { SaveStatus } from './save-status';
 import { StartFromJobDialog } from './start-from-job-dialog';
+import { WordTemplate } from './word-template';
 import { useWorkbench } from './workbench-provider';
+
+/** The template of the output shown: the HTML editor, or the Word template's file and problems. */
+export function TemplateEditor() {
+  const { template } = useWorkbench();
+  return template.kind === 'docx' ? <WordTemplate /> : <HtmlTemplateEditor />;
+}
 
 /**
  * The HTML template (Carbone tags) of the output shown. Without one the preview uses a
  * starter template generated from the definition, which can be copied in to edit, as can
  * another job's template. Problems the tag check finds are listed by line.
  */
-export function TemplateEditor() {
+function HtmlTemplateEditor() {
   const { html, setHtml, render, readOnly } = useWorkbench();
   const [startFrom, setStartFrom] = useState(false);
-  const starter = html === null ? (render?.template?.generated ? render.template.html : null) : null;
-  const error = render?.template?.error;
-  const detail = render?.template?.detail;
-  const problems = render?.template?.problems ?? [];
+  const shown = render?.template?.kind === 'html' ? render.template : undefined;
+  const starter = html === null ? (shown?.generated ? shown.html : null) : null;
+  const error = shown?.error;
+  const detail = shown?.detail;
+  const problems = shown?.problems ?? [];
   return (
     <div className="flex h-full min-h-0 flex-col">
       <EditorBar status={<SaveStatus />}>

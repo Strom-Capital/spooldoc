@@ -1,20 +1,29 @@
 import 'server-only';
 
 import {
+  checkDocx,
   checkTemplate,
+  docxConverter,
+  docxProblemText,
   extract,
   isCarboneError,
   matchProblems,
   parseDefinition,
   problemText,
+  readDocx,
+  starterDocx,
   templateData,
+  type AssetResolver,
   type Definition,
+  type DocumentRender,
+  type DocxTemplate,
+  type TemplateData,
   type Sample,
   type SpooledFileId,
 } from '@spooldoc/core';
 import type { Connection } from '@spooldoc/ibmi';
 import { and, eq } from 'drizzle-orm';
-import { jobSpecSchema, outputFileName, splfKey, type JobSpec } from '@/lib/job-spec';
+import { FORMAT_FILES, jobSpecSchema, outputFileName, splfKey, type JobOutput, type JobSpec, type OutputFormat } from '@/lib/job-spec';
 import { assetNames, assetResolver } from './assets';
 import { getDb } from './db';
 import { jobVersions, runs, watchSeen, type RunStep } from './db/schema';
@@ -25,6 +34,7 @@ import { connectServer } from './ibmi';
 import { log } from './log';
 import { HEARTBEAT_MS } from './retention';
 import { capture, storeSample } from './samples';
+import { getTemplateFile, TEMPLATE_FILE_GONE } from './template-files';
 
 /** What starts a run. */
 export interface RunRequest {
@@ -180,30 +190,21 @@ export async function executeRun(runId: string, request: RunRequest, connection?
         const out: OutputFile[] = [];
         for (const [outputIndex, output] of spec.render.outputs.entries()) {
           // Checked once per output: Carbone prints some mistakes without an error.
-          const template = outputTemplate(output.template.source, def);
-          const problems = checkTemplate(template, def, { assets });
-          if (problems.length > 0) {
-            const count = problems.length === 1 ? '1 problem' : `${problems.length} problems`;
-            throw new StepError('render', `The "${output.label}" output's template has ${count}. ${problemText(problems.slice(0, 3)).replace(/\n/g, ' ')}`);
-          }
+          const prepared = await prepareOutput(output, def, assets);
           for (const [index, doc] of docs.entries()) {
             const base = outputFileName(fileNameFor(def, doc, index, sample.splf.name.toLowerCase()), spec.render.outputs, output);
             const file = { documentIndex: index, output: output.label, outputIndex };
-            const data = templateData(template, doc, docs, sample);
             for (const format of output.formats) {
               let content: Uint8Array;
               try {
-                content = await render({ template, data, format, pageWidth: sample.attributes.pageWidth, asset });
+                content = await render(prepared.input(templateData(prepared.data, doc, docs, sample), format, sample.attributes.pageWidth, asset));
               } catch (err) {
                 if (isCarboneError(err) && SERVER_KINDS.includes(err.kind)) throw err;
                 const text = err instanceof Error ? err.message : String(err);
                 throw new StepError('render', `The "${output.label}" output, document ${index + 1}: ${text}`, isCarboneError(err) ? err.detail : undefined);
               }
-              out.push(
-                format === 'pdf'
-                  ? { ...file, name: unique(base, 'pdf'), contentType: 'application/pdf', content }
-                  : { ...file, name: unique(base, 'html'), contentType: 'text/html; charset=utf-8', content },
-              );
+              const { extension, contentType } = FORMAT_FILES[format];
+              out.push({ ...file, name: unique(base, extension), contentType, content });
             }
           }
         }
@@ -252,11 +253,61 @@ export async function executeRun(runId: string, request: RunRequest, connection?
   await db.update(runs).set({ status, error, steps, documents, finishedAt: new Date() }).where(eq(runs.id, runId));
 }
 
-/** "6 PDFs and 6 HTML files". */
+/** An output's template, checked: what `templateData` reads, and the render of one document to one format. */
+interface PreparedOutput {
+  data: string | DocxTemplate;
+  input(data: TemplateData, format: OutputFormat, pageWidth: number, asset: AssetResolver): DocumentRender;
+}
+
+/**
+ * An output's template, checked and ready to render each document: an HTML template, or
+ * a Word template's file (the starter template when none is uploaded).
+ *
+ * @throws StepError when the template has problems or its file is gone
+ */
+async function prepareOutput(output: JobOutput, def: Definition, assets: string[]): Promise<PreparedOutput> {
+  const problems = (count: number, text: string) =>
+    new StepError('render', `The "${output.label}" output's template has ${count === 1 ? '1 problem' : `${count} problems`}. ${text.replace(/\n/g, ' ')}`);
+  if (output.template.kind === 'html') {
+    const template = outputTemplate(output.template.source, def);
+    const found = checkTemplate(template, def, { assets });
+    if (found.length > 0) throw problems(found.length, problemText(found.slice(0, 3)));
+    return {
+      data: template,
+      input: (data, format, pageWidth, asset) => ({ template, data, format: format === 'html' ? 'html' : 'pdf', pageWidth, asset }),
+    };
+  }
+  let bytes: Uint8Array;
+  if (output.template.fileId === null) {
+    bytes = await starterDocx(def);
+  } else {
+    const file = await getTemplateFile(output.template.fileId);
+    if (!file) throw new StepError('render', `The "${output.label}" output: ${TEMPLATE_FILE_GONE}`);
+    bytes = file.content;
+  }
+  let read: DocxTemplate;
+  try {
+    read = readDocx(bytes);
+  } catch (err) {
+    throw new StepError('render', `The "${output.label}" output's Word template: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  const found = checkDocx(read, def);
+  if (found.length > 0) throw problems(found.length, docxProblemText(found.slice(0, 3)));
+  const converter = docxConverter(read);
+  return {
+    data: read,
+    input: (data, format) => ({ kind: 'docx', template: bytes, data, format: format === 'docx' ? 'docx' : 'pdf', converter }),
+  };
+}
+
+/** "6 PDFs and 6 DOCX files". */
 function fileCount(files: OutputFile[]): string {
-  const pdf = files.filter((f) => f.contentType === 'application/pdf').length;
-  const html = files.length - pdf;
-  const parts = [pdf ? `${pdf} PDF${pdf === 1 ? '' : 's'}` : '', html ? `${html} HTML file${html === 1 ? '' : 's'}` : ''].filter(Boolean);
+  const counts = new Map<string, number>();
+  for (const file of files) {
+    const label = Object.values(FORMAT_FILES).find((f) => f.contentType === file.contentType)?.label ?? 'other';
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  const parts = [...counts].map(([label, n]) => (label === 'PDF' ? `${n} PDF${n === 1 ? '' : 's'}` : `${n} ${label} file${n === 1 ? '' : 's'}`));
   return parts.join(' and ') || 'No files';
 }
 

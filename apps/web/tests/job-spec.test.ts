@@ -3,6 +3,8 @@ import {
   draftPatchSchema,
   filterParams,
   findOutput,
+  formatList,
+  hasOwnTemplate,
   ibmiFilter,
   jobSpecSchema,
   labelTaken,
@@ -10,6 +12,7 @@ import {
   newOutput,
   outputFileName,
   outputSlug,
+  withTemplate,
   type JobOutput,
 } from '@/lib/job-spec';
 
@@ -33,8 +36,9 @@ describe('job spec', () => {
   it('converts a Nunjucks template from before Carbone when it is read', () => {
     const old = '<p>{{ doc.invoiceNo }}</p><ul>{% for l in doc.lines %}<li>{{ l.item }}</li>{% endfor %}</ul>';
     const spec = jobSpecSchema.parse({ render: { template: old, formats: ['pdf'] } });
-    expect(spec.render.outputs[0]!.template.source).toBe('<p>{d.doc.invoiceNo}</p><ul><li>{d.doc.lines[i].item}</li>\n<li>{d.doc.lines[i+1]}</li></ul>');
-    expect(jobSpecSchema.parse(spec).render.outputs[0]!.template.source).toBe(spec.render.outputs[0]!.template.source);
+    const converted = { kind: 'html', source: '<p>{d.doc.invoiceNo}</p><ul><li>{d.doc.lines[i].item}</li>\n<li>{d.doc.lines[i+1]}</li></ul>' };
+    expect(spec.render.outputs[0]!.template).toEqual(converted);
+    expect(jobSpecSchema.parse(spec).render.outputs[0]!.template).toEqual(converted);
   });
 
   it('starts with one PDF output and keeps outputs as they are', () => {
@@ -100,5 +104,28 @@ describe('job filters', () => {
     const filter = { splf: 'INV ', userData: '', jobName: 'INVPRT', jobUser: '', formType: '*STD' };
     expect(filterParams(filter).toString()).toBe('name=INV&jobName=INVPRT&formType=*STD');
     expect(ibmiFilter(filter)).toEqual({ name: 'INV', userData: undefined, jobName: 'INVPRT', jobUser: undefined, formType: '*STD' });
+  });
+});
+
+describe('Word templates', () => {
+  const html: JobOutput = { id: 'main', label: 'Document', template: { kind: 'html', source: '<p/>' }, formats: ['pdf', 'html'] };
+
+  it('reads a Word output and refuses formats a Word template does not make', () => {
+    const word = { ...html, template: { kind: 'docx', fileId: null }, formats: ['docx', 'pdf'] };
+    expect(jobSpecSchema.parse({ render: { outputs: [word] } }).render.outputs[0]).toEqual({ ...word, formats: ['pdf', 'docx'] });
+    const wrong = jobSpecSchema.safeParse({ render: { outputs: [{ ...word, formats: ['html'] }] } });
+    expect(wrong.success).toBe(false);
+    expect(wrong.error?.issues[0]?.message).toBe('A Word template makes PDF and DOCX files, not HTML.');
+    expect(jobSpecSchema.safeParse({ render: { outputs: [{ ...html, formats: ['docx'] }] } }).error?.issues[0]?.message).toBe(
+      'An HTML template makes PDF and HTML files, not DOCX.',
+    );
+  });
+
+  it('switches a template, keeping the formats the new kind makes, else PDF', () => {
+    expect(withTemplate(html, { kind: 'docx', fileId: null })).toEqual({ ...html, template: { kind: 'docx', fileId: null }, formats: ['pdf'] });
+    expect(withTemplate({ ...html, formats: ['html'] }, { kind: 'docx', fileId: null }).formats).toEqual(['pdf']);
+    expect(hasOwnTemplate({ kind: 'docx', fileId: null })).toBe(false);
+    expect(hasOwnTemplate(html.template)).toBe(true);
+    expect(formatList(['pdf', 'docx'])).toBe('PDF and DOCX');
   });
 });

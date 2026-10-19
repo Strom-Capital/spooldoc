@@ -1,4 +1,5 @@
-import type { CodePageSource, ExtractResult, FieldHit, Sample, SamplePage, TemplateProblem } from '@spooldoc/core';
+import type { CodePageSource, DocxProblem, ExtractResult, FieldHit, Sample, SamplePage, TemplateProblem } from '@spooldoc/core';
+import type { TemplateFileView } from '@/lib/types';
 
 export type { FieldHit, SamplePage };
 
@@ -9,14 +10,22 @@ export type SampleView = Omit<Sample, 'rawBase64'> & { codePageSource: CodePageS
 export interface RenderResult {
   sample: SampleView;
   definition?: { type: string; yaml: string; error?: string };
-  /** `problems` from Spooldoc's tag check, by line, or `error` from Carbone with its own text in `detail`. */
-  template?: { html: string; error?: string; detail?: string; problems?: TemplateProblem[]; generated?: boolean };
+  /**
+   * The template and what is wrong with it: `problems` from Spooldoc's tag check (by line
+   * for HTML, by part for Word), or `error` from Carbone with its own text in `detail`.
+   */
+  template?:
+    | { kind: 'html'; html: string; error?: string; detail?: string; problems?: TemplateProblem[]; generated?: boolean }
+    | { kind: 'docx'; file: TemplateFileView | null; error?: string; detail?: string; problems?: DocxProblem[]; generated?: boolean };
   /** Carbone is not connected or did not answer, so nothing was rendered. */
   carbone?: { error: string; detail?: string };
   extract?: ExtractResult;
   /** One name per extracted document, from the definition output name. */
   names?: string[];
+  /** The rendered HTML, from an HTML template. */
   html?: string;
+  /** The rendered PDF in base64, from a Word template. */
+  pdf?: string;
   document: number;
   /** Why the definition's `match` rules do not accept this file (runs skip such files). */
   mismatch?: string[];

@@ -1,14 +1,17 @@
 ---
 title: "Templates"
-description: "The HTML templates that render each document with Carbone tags, the check Spooldoc runs before each render, assets, and how PDFs are laid out."
+description: "The HTML and Word templates that render each document with Carbone tags, the check Spooldoc runs before each render, assets, and how PDFs are laid out."
 ---
 
 A template is an ordinary HTML page with [Carbone](https://carbone.io)
-tags, such as `{d.doc.invoiceNo}`. Each output of a job has its own
-template. Each document the definition extracts is rendered through it
-once, to an HTML file, a PDF, or both, as the output's formats say. Until
-you write one, the starter template renders the fields in a header block
-and a table for each table, record or group. See [Outputs](jobs.md#outputs).
+tags, such as `{d.doc.invoiceNo}`, or a Word document with the same tags
+in its text (see [Word templates](#word-templates)). Each output of a job
+has its own template. Each document the definition extracts is rendered
+through it once, to the output's formats: an HTML template makes HTML
+files, PDFs or both, and a Word template makes DOCX files, PDFs or both.
+Until you write or upload one, the starter template renders the fields in
+a header block and a table for each table, record or group. See
+[Outputs](jobs.md#outputs).
 
 Spooldoc renders every document with a Carbone server, your own or Carbone
 Cloud. See [Carbone](carbone.md) to set one up.
@@ -16,13 +19,13 @@ Cloud. See [Carbone](carbone.md) to set one up.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/template-preview-dark.png">
-    <img src="assets/template-preview-light.png" alt="The render step of a job with two outputs: the Document output picked, with its PDF and HTML switches and Add output, its HTML template in an editor on the left and the rendered invoice preview on the right" width="900">
+    <img src="assets/template-preview-light.png" alt="The render step of a job with two outputs: the Document output picked, with its template kind (HTML template), its PDF and HTML switches and Add output, its HTML template in an editor on the left and the rendered invoice preview on the right" width="900">
   </picture>
 </p>
 
 "Start from job" in the template editor's bar copies another job's
-template into the output shown, and on request its definition into the
-draft. When the other job has more than one output, pick the one to copy.
+template, HTML or Word, into the output shown, and on request its
+definition into the draft. When the other job has more than one output, pick the one to copy.
 The [AI assistant](ai-assistant.md) does the same when asked.
 
 ## The data
@@ -102,7 +105,8 @@ Carbone Enterprise. See [Community and Enterprise](carbone.md#community-and-ente
 Carbone renders some mistakes without an error: it prints nothing for a
 field that is not in the data, and prints quotes it does not accept. So
 Spooldoc checks each template before it renders, and the Template tab
-lists each problem with its line:
+lists each problem with its line (for a Word template, with its part:
+body, header or footer):
 
 - a tag whose field is not in the definition, such as `{d.doc.invoiceNumber}`,
   with the field it most likely means;
@@ -139,7 +143,71 @@ lines: a loop over more than one element, `elif`, `and` and `or`, `set`,
 `loop.index`, and other filters. Fix those by hand. A job's draft keeps
 the converted template once you save it.
 
+## Word templates
+
+An output can use a Word document as its template instead: you lay it out
+in Word, with Word's own styles, headers and footers, and type the tags
+into its text. It makes DOCX files, PDFs or both. Pick Word template in
+the render step's header.
+
+Until you upload one, the preview uses a Word starter template made from
+the definition, with the same layout as the HTML one and "Page 1 of 2" in
+the footer. To make your own:
+
+1. Choose Download starter template in the Template tab.
+2. Open it in Word. Turn off smart quotes first (see below), then change
+   the layout, add a logo and move the tags where you want them.
+3. Choose Upload template and pick the `.docx`.
+
+Each upload is kept as its own file, and the draft points at the newest
+one. A saved version keeps the file it was saved with, so uploading again
+changes only the draft. Download template gives the uploaded file back.
+Spooldoc takes `.docx` files up to 10 MB; it refuses a Word 97-2003
+`.doc` and says to save it as a Word Document.
+
+The [AI assistant](ai-assistant.md) checks a Word template's tags and
+suggests tags to type in, but it never changes the file.
+
+### Tags in Word
+
+- **Turn off smart quotes before you type tags.** Word turns `'` into a
+  curly quote by default, and Carbone prints a tag with curly quotes as
+  text. In Word: File, Options, Proofing, AutoCorrect Options, AutoFormat
+  As You Type, then clear "Straight quotes" with "smart quotes". On a Mac:
+  Word, Preferences, AutoCorrect, AutoFormat As You Type. The check finds
+  a tag with curly quotes.
+- **The tags are the ones HTML templates use**, such as
+  `{d.doc.invoiceDate:formatD('DD.MM.YYYY')}`. Word splits a tag into
+  several pieces when part of it is styled or typed later; Spooldoc and
+  Carbone read each paragraph as one text, so that is fine. A tag cannot
+  go across two paragraphs.
+- **Repeat a table row** with a row of `[i]` tags and, below it, a row
+  with `{d.doc.lines[i+1]}` in its first cell, as in HTML. Keep a loop
+  inside one part: the body, a header or a footer.
+- **An optional line** is hidden with its line break when its field is
+  empty: `{d.doc.address1}{d.doc.address2:ifEM:hideBegin}`, then a line
+  break (Shift+Enter), then `{d.doc.address2}{d.doc.address2:hideEnd}`.
+  The starter template writes its fields this way.
+- **Pictures**, such as a logo, are inserted in Word and are the same in
+  every document. Set each to In line with text (Picture Format, Wrap
+  Text), so it stays in place. `{asset('name')}` is for HTML templates
+  only; the check reports it in a Word template.
+
+### Page numbers and fields
+
+Insert page numbers with Insert, Page Number, or the PAGE and NUMPAGES
+fields. In a DOCX file, Word fills them in when it opens the file. In the
+PDF, Carbone's own converter prints them at the document's default font
+size, not the size of the text around them in the footer.
+
+The PDF of a template with cross-references (PAGEREF or REF fields) is
+made with LibreOffice instead, which works them out itself. Tables of
+contents have not been tested: check the PDF before you rely on one.
+
 ## Logos, images and fonts
+
+This section is about HTML templates. In a Word template, insert the
+picture in Word (see [Word templates](#word-templates)).
 
 Templates cannot fetch anything, so an `<img src="https://...">` may stay
 empty. Upload the file on the Assets page instead and print it with
@@ -164,6 +232,9 @@ its image; the `full-...-fonts` image in the Compose file has a wide set.
 
 ## PDF layout
 
+A Word template's PDF has the page size, margins, headers and footers set
+in Word. The rest of this section is about HTML templates.
+
 PDFs are printed on A4 by Carbone's Chromium converter: portrait, or
 landscape when the spooled file is wider than 160 columns. A template's
 own `@page { size: ...; margin: ... }` wins. Backgrounds and borders
@@ -185,11 +256,14 @@ the PDF only: Spooldoc hides them in HTML output.
 ## Files
 
 Each document becomes a file named after the definition's `output.name`,
-such as `invoice-260102.pdf` and `invoice-260102.html`, or after the
+such as `invoice-260102.pdf`, `invoice-260102.html` or
+`invoice-260102.docx`, or after the
 spooled file and a number when there is no name. The files of every
 output but the first add the output's name: `invoice-260102-lines.pdf`
 for an output named Lines. See [Destinations](destinations.md).
 
 A template with problems fails the run, and the error names the output
-and the lines: `The "Lines" output's template has 1 problem. Line 12: ...`.
+and the lines: `The "Lines" output's template has 1 problem. Line 12: ...`,
+or for a Word template the parts: `... has 1 problem. Body: ...`. A Word
+template whose file is gone fails the run and says to upload it again.
 An error from Carbone names the output and the document.

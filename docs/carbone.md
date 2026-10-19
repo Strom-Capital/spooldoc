@@ -4,7 +4,8 @@ description: "The Carbone server that renders every document: running it with Co
 ---
 
 Spooldoc renders every document with [Carbone](https://carbone.io): HTML
-and PDF from the same [template](templates.md). Carbone runs as your own
+and PDF from an HTML [template](templates.md), DOCX and PDF from a Word
+template. Carbone runs as your own
 service, or you use Carbone Cloud. Spooldoc only calls it over HTTP; it
 never bundles or hosts Carbone. Without a working Carbone server there is
 nothing to render, so the job builder and the setup checklist on Home say
@@ -63,7 +64,7 @@ to be rendered, and each document counts toward your Carbone plan. See
 Carbone's Community Edition is free to run on-prem and renders everything
 the [starter template](templates.md) and the template docs use: tags,
 loops, conditions, `formatN`, `formatD` and the other formatters, `:set`,
-and PDF headers and footers. Carbone's team said running it as a service
+PDF headers and footers, and Word templates. Carbone's team said running it as a service
 that Spooldoc calls appears consistent with the Carbone Community License.
 
 A licence for Carbone Enterprise adds, among others:
@@ -76,6 +77,7 @@ A licence for Carbone Enterprise adds, among others:
 | Barcodes and QR codes | `<img src="{d.doc.invoiceNo:barcode(qrcode)}">` |
 | Colors from the data | `{d.doc.status:color(row, background)}` |
 | Charts | `<img src="{d.doc.chart:chart}">` |
+| Pictures from the data in a Word template | A logo per customer. On Community, Carbone keeps the template's picture without an error. |
 
 Carbone Cloud has the Enterprise features.
 
@@ -94,6 +96,22 @@ only its startup log says why. So when Settings shows Community Edition
 and you have a licence, check Carbone's log with
 `docker compose logs carbone`. Don't paste that log into an issue: with a
 licence, it prints the licensee's name and email.
+
+## Converters
+
+Carbone makes a PDF with one of its converters. Spooldoc picks it:
+
+| Template | Converter |
+|----------|-----------|
+| HTML | Chromium |
+| Word | Carbone's own converter (ICE), the fastest |
+| Word with cross-references (PAGEREF or REF fields) | LibreOffice, which works them out |
+
+The `full` images have all three. A DOCX file is the Word template as
+Carbone filled it in, with no converter. Spooldoc asks for it with
+`hardRefresh` off: otherwise Carbone Enterprise passes a file with page
+fields through LibreOffice, which rewrites its layout. Word fills in the
+page fields when it opens the file.
 
 ## When Carbone stops working
 

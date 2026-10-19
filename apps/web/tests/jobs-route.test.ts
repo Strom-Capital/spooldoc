@@ -1,4 +1,4 @@
-import { CarboneError } from '@spooldoc/core';
+import { CarboneError, type HtmlRender } from '@spooldoc/core';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { assets, jobs, jobVersions, queueHealth, runOutputs, runs, watchSeen } from '@/lib/server/db/schema';
@@ -16,7 +16,7 @@ const jobsRoute = await import('@/app/api/jobs/route');
 const jobRoute = await import('@/app/api/jobs/[id]/route');
 const previewSample = await import('@/app/api/jobs/[id]/preview-sample/route');
 const renderRoute = await import('@/app/api/jobs/[id]/render/route');
-const previewPdf = await import('@/app/api/jobs/[id]/preview-pdf/route');
+const previewFile = await import('@/app/api/jobs/[id]/preview-file/route');
 const versions = await import('@/app/api/jobs/[id]/versions/route');
 const restore = await import('@/app/api/jobs/[id]/versions/[n]/restore/route');
 const activate = await import('@/app/api/jobs/[id]/versions/[n]/activate/route');
@@ -166,16 +166,16 @@ describe('jobs', () => {
     const unsaved = await renderRoute.POST(post(`/api/jobs/${id}/render`, { outputId: 'new', html: null }), params({ id }));
     expect(unsaved.status).toBe(200);
 
-    const pdf = await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, { outputId: 'lines' }), params({ id }));
+    const pdf = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { outputId: 'lines' }), params({ id }));
     expect(pdf.headers.get('content-disposition')).toBe('attachment; filename="invoice-260101-lines.pdf"');
     const pdfCall = fakeCarbone.mock.calls.map((call) => call[0]).find((input) => input.format === 'pdf')!;
     expect(pdfCall.template).toMatch(/^<ul><li>/);
-    expect((await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, { outputId: 'nope' }), params({ id }))).status).toBe(404);
+    expect((await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { outputId: 'nope' }), params({ id }))).status).toBe(404);
   });
 
   it('downloads a preview PDF named after the output name, and reports problems', async () => {
     const id = await readyJob();
-    const response = await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, { document: 1 }), params({ id }));
+    const response = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { document: 1 }), params({ id }));
     expect(response.status).toBe(200);
     expect(response.headers.get('content-disposition')).toBe('attachment; filename="invoice-260102.pdf"');
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(PDF_BYTES);
@@ -183,8 +183,8 @@ describe('jobs', () => {
     expect(sent(1)).toMatchObject({ format: 'pdf', pageWidth: sample.attributes.pageWidth });
     expect(sent(1).data.doc.invoiceNo).toBe('260102');
 
-    expect((await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, { document: 50 }), params({ id }))).status).toBe(400);
-    const broken = await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, { html: '<p>{d.doc.invoiceNumber}</p>' }), params({ id }));
+    expect((await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { document: 50 }), params({ id }))).status).toBe(400);
+    const broken = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { html: '<p>{d.doc.invoiceNumber}</p>' }), params({ id }));
     expect(broken.status).toBe(422);
     expect((await broken.json()).templateErrors).toEqual(['Template line 1: {d.doc.invoiceNumber} is not in the data. Did you mean {d.doc.invoiceNo}?']);
   });
@@ -254,7 +254,7 @@ describe('files', () => {
       id,
       name: `${library}/${queue}`,
       definitionYaml: yaml,
-      outputs: [{ id: 'main', label: 'Document', formats: ['pdf'], templateHtml: template }],
+      outputs: [{ id: 'main', label: 'Document', formats: ['pdf'], kind: 'html', templateHtml: template, fileId: null }],
     });
 
     expect((await versions.POST(post(`/api/jobs/${id}/versions`, { note: 'v1' }), params({ id }))).status).toBe(201);
@@ -343,10 +343,10 @@ describe('runs', () => {
     expect(missing.template.problems).toEqual([{ line: 1, message: expect.stringContaining('There is no asset named "stamp"') }]);
 
     fakeCarbone.mockClear();
-    expect((await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, {}), params({ id }))).status).toBe(200);
+    expect((await previewFile.POST(post(`/api/jobs/${id}/preview-file`, {}), params({ id }))).status).toBe(200);
     expect(sent(1).format).toBe('pdf');
     expect(sent(1).template).toContain(`<img src="{asset('logo')}" alt="">`);
-    expect(sent(1).asset?.('logo')).toBe(uri);
+    expect((sent(1) as HtmlRender).asset?.('logo')).toBe(uri);
 
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
@@ -398,7 +398,7 @@ describe('runs', () => {
       expect(preview.carbone).toEqual({ error: CARBONE_NOT_CONNECTED });
       expect(preview.html).toBeUndefined();
       expect(preview.extract.documents).toHaveLength(6);
-      expect((await previewPdf.POST(post(`/api/jobs/${id}/preview-pdf`, {}), params({ id }))).status).toBe(503);
+      expect((await previewFile.POST(post(`/api/jobs/${id}/preview-file`, {}), params({ id }))).status).toBe(503);
 
       const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
       expect(run!.status).toBe('failed');

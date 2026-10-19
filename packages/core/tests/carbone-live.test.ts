@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { carboneRender, carboneStatus, isCarboneError, probeEdition, type CarboneError } from "../src/carbone.js";
 import { convertNunjucks } from "../src/convert.js";
 import { extract } from "../src/extract.js";
+import { checkDocx, readDocx, starterDocx } from "../src/docx.js";
 import { renderDocument } from "../src/render.js";
 import { checkTemplate } from "../src/tags.js";
 import { starterTemplate, templateData } from "../src/template.js";
@@ -48,6 +49,35 @@ describe.skipIf(!url)("Carbone server", () => {
       const pdf = await renderDocument(server, { template: html, data, format: "pdf", pageWidth: sample.attributes.pageWidth });
       expect(Buffer.from(pdf.subarray(0, 5)).toString()).toBe("%PDF-");
     }
+  });
+
+  it.each(FIXTURES)("renders the %s Word starter template to DOCX and PDF", async (name) => {
+    const { sample, definition } = loadFixture(name);
+    const { documents } = extract(definition, sample);
+    const template = await starterDocx(definition);
+    const read = readDocx(template);
+    expect(checkDocx(read, definition)).toEqual([]);
+    const data = templateData(read, documents[0]!, documents, sample);
+    const docx = readDocx(await renderDocument(server, { kind: "docx", template, data, format: "docx" }));
+    expect(docx.text).not.toMatch(/\{d\./);
+    const pdf = await renderDocument(server, { kind: "docx", template, data, format: "pdf" });
+    expect(Buffer.from(pdf.subarray(0, 5)).toString()).toBe("%PDF-");
+  });
+
+  it("hides an empty field's line in the Word starter, keeps the loop rows and leaves page fields to Word", async () => {
+    const { sample, definition } = loadFixture("invoice");
+    const { documents } = extract(definition, sample);
+    const template = await starterDocx(definition);
+    const doc = documents[2]!;
+    expect(doc.address2).toBe("");
+    const out = await renderDocument(server, { kind: "docx", template, data: templateData(readDocx(template), doc, documents, sample), format: "docx" });
+    const text = readDocx(out).text;
+    expect(text).toContain("BAKER & SONS LTD");
+    expect(text).not.toContain("Address2");
+    expect(text).toContain("Address3");
+    expect(text.match(/\{d\.|\[i/g)).toBeNull();
+    // hardRefresh: false, so Carbone Enterprise does not pass the file through LibreOffice.
+    expect(readDocx(out).fields).toEqual(["PAGE", "NUMPAGES"]);
   });
 
   it("renders the converted Nunjucks invoice like the original", async () => {

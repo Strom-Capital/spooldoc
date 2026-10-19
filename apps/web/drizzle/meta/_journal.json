@@ -92,6 +92,13 @@
       "when": 1792406676106,
       "tag": "0012_carbone_rendering",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792411200320,
+      "tag": "0013_word_templates",
+      "breakpoints": true
     }
   ]
 }

@@ -2,7 +2,7 @@
 
 import { useWorkbench } from './workbench-provider';
 
-/** Picks the document shown in the JSON view and the HTML preview (shared). */
+/** Picks the document shown in the JSON view and the preview (shared). */
 export function DocumentSelect() {
   const { render, documentIndex, setDocumentIndex } = useWorkbench();
   const documents = render?.extract?.documents ?? [];

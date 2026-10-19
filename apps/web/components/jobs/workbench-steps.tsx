@@ -10,7 +10,7 @@ import { PaneTabs, SplitPanes } from '@/components/workbench/split-panes';
 import { TemplateEditor } from '@/components/workbench/template-editor';
 import { useWorkbench, WorkbenchProvider } from '@/components/workbench/workbench-provider';
 import { Spinner } from '@/components/ui/spinner';
-import { outputFileName } from '@/lib/job-spec';
+import { outputFileName, withTemplate, type OutputTemplate } from '@/lib/job-spec';
 import { useJob } from './job-provider';
 import { OutputControls } from './output-controls';
 import { PreviewPicker } from './preview-picker';
@@ -23,25 +23,26 @@ export function JobWorkbench({ children }: { children: React.ReactNode }) {
   // A picked output that is gone (removed, or not in the version shown) falls back to the first.
   const output = outputs.find((o) => o.id === picked) ?? outputs[0]!;
   const setYaml = useCallback((yaml: string) => updateDraft({ extract: { definition: yaml } }), [updateDraft]);
-  const setHtml = useCallback(
-    (html: string | null) =>
+  // Typing in the HTML editor saves after a pause; anything else (a kind, a file, the starter) at once.
+  const setTemplate = useCallback(
+    (template: OutputTemplate) =>
       updateDraft(
-        { render: { outputs: outputs.map((o) => (o.id === output.id ? { ...o, template: { kind: 'html', source: html } } : o)) } },
-        { debounce: html !== null },
+        { render: { outputs: outputs.map((o) => (o.id === output.id ? withTemplate(o, template) : o)) } },
+        { debounce: template.kind === 'html' && template.source !== null && output.template.kind === 'html' },
       ),
-    [updateDraft, outputs, output.id],
+    [updateDraft, outputs, output.id, output.template.kind],
   );
   return (
     <WorkbenchProvider
       jobId={job.id}
       sampleId={spec.preview.sampleId}
       yaml={spec.extract.definition}
-      html={output.template.source}
+      template={output.template}
       outputId={output.id}
       setOutputId={setPicked}
       readOnly={readOnly}
       setYaml={setYaml}
-      setHtml={setHtml}
+      setTemplate={setTemplate}
       onDraftWritten={refresh}
     >
       {children}
@@ -117,7 +118,7 @@ export function ExtractStep() {
   );
 }
 
-/** Render: the picked output's template (and the JSON for field names) next to its HTML preview, with PDF and HTML downloads. */
+/** Render: the picked output's template (and the JSON for field names) next to its preview, with downloads of each format. */
 export function RenderStep() {
   const { tab, setTab, outputId, setOutputId } = useWorkbench();
   const { spec } = useJob();

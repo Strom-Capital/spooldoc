@@ -17,9 +17,9 @@ import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useAppInfo } from '@/components/app-info';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
+import { formatList, type OutputTemplate } from '@/lib/job-spec';
 import { cn } from '@/lib/utils';
 import { useJob, type Step } from './job-provider';
-import { formatList } from './output-controls';
 
 /** How a step looks in the strip. */
 export type StepStatus = 'unset' | 'ok' | 'warn' | 'error';
@@ -197,7 +197,7 @@ function useSteps(): StepInfo[] {
       step: 'render',
       title: 'Render',
       icon: FileTextIcon,
-      detail: outputs.length > 1 ? `${outputs.length} outputs` : outputs[0]!.template.source === null ? 'Starter template' : 'Custom template',
+      detail: outputs.length > 1 ? `${outputs.length} outputs` : templateName(outputs[0]!.template),
       sub: !rendering
         ? 'Connect Carbone in Settings'
         : render?.template?.error
@@ -209,7 +209,7 @@ function useSteps(): StepInfo[] {
             : outputs.length > 1
               ? outputs.map((o) => `${o.label}: ${formatList(o.formats)}`).join(', ')
               : formatList(outputs[0]!.formats),
-      status: !rendering || render?.carbone ? 'warn' : render?.template?.error ? 'error' : render?.html ? 'ok' : 'unset',
+      status: !rendering || render?.carbone ? 'warn' : render?.template?.error ? 'error' : render?.html || render?.pdf ? 'ok' : 'unset',
     },
     {
       step: 'destination',
@@ -235,6 +235,12 @@ function useSteps(): StepInfo[] {
       status: finish.action === 'move' && !finish.queue ? 'unset' : finish.action === 'delete' ? 'warn' : 'ok',
     },
   ];
+}
+
+/** What an output's template is, for the Render step's summary. */
+function templateName(template: OutputTemplate): string {
+  if (template.kind === 'docx') return template.fileId === null ? 'Starter Word template' : 'Word template';
+  return template.source === null ? 'Starter template' : 'Custom template';
 }
 
 /**

@@ -8,6 +8,7 @@ import type { JobDetail, JobSummary, RunStatus } from '@/lib/types';
 import { getDb, type Db, type Tx } from './db';
 import { destinations, jobs, jobVersions, queueHealth, runs, servers } from './db/schema';
 import { UUID } from './servers';
+import { getTemplateFile } from './template-files';
 
 export type JobRow = typeof jobs.$inferSelect;
 
@@ -203,6 +204,17 @@ export function versionProblems(spec: JobSpec): string[] {
   return problems;
 }
 
+/** Word templates a spec points at that are gone, one line per output. */
+async function templateFileProblems(spec: JobSpec): Promise<string[]> {
+  const problems: string[] = [];
+  for (const output of spec.render.outputs) {
+    if (output.template.kind === 'docx' && output.template.fileId !== null && !(await getTemplateFile(output.template.fileId))) {
+      problems.push(`Render: the Word template of ${output.label} is gone. Upload it again.`);
+    }
+  }
+  return problems;
+}
+
 /**
  * Save a job's draft as the next version.
  *
@@ -215,7 +227,7 @@ export async function saveVersion(
   input: { note: string; activate: boolean; userId: string; confirmDelete?: boolean },
 ): Promise<number> {
   const spec = versionSpec(jobSpecSchema.parse(job.draft));
-  const problems = versionProblems(spec);
+  const problems = [...versionProblems(spec), ...(await templateFileProblems(spec))];
   if (problems.length > 0) {
     throw new IncompleteJobError(problems);
   }

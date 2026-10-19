@@ -3,7 +3,7 @@
  * Nothing here holds a session, a key or an absolute path.
  */
 
-import type { OutputFormat } from './job-spec';
+import type { OutputFormat, TemplateKind } from './job-spec';
 
 /** Names of the tools the model can call. */
 export const CHAT_TOOL_NAMES = [
@@ -58,6 +58,8 @@ export interface OutputListing {
   id: string;
   label: string;
   formats: OutputFormat[];
+  /** An HTML template, or a Word template the user uploads. */
+  kind: TemplateKind;
   /** `starter` when the output has no template of its own yet. */
   template: 'saved' | 'starter';
 }
@@ -102,12 +104,17 @@ export interface JobListing {
 /** `list_jobs`. */
 export type ListJobsResult = { ok: true; jobs: JobListing[] } | ToolFailure;
 
-/** One output of another job: its label, formats and template (null for the starter template). */
+/**
+ * One output of another job: its label, formats and template. `templateHtml` is an HTML
+ * template's text, `fileId` a Word template's file; null for the starter template.
+ */
 export interface JobOutputFiles {
   id: string;
   label: string;
   formats: OutputFormat[];
+  kind: TemplateKind;
   templateHtml: string | null;
+  fileId: string | null;
 }
 
 /** `read_job_files`. */

@@ -385,6 +385,23 @@ export const assets = pgTable(
   (t) => [check('assets_name_check', sql`${t.name} ~ '^[a-z0-9][a-z0-9_-]{0,63}$'`)],
 );
 
+/**
+ * An uploaded Word template. A row never changes (a trigger refuses updates): uploading
+ * again adds a row, so a job version keeps the exact file it ran with. Outputs point at
+ * it with `{ kind: 'docx', fileId }`; a file no draft or version points at is deleted
+ * after the retention.
+ */
+export const templateFiles = pgTable('template_files', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  /** The file's name as uploaded, such as `invoice.docx`. */
+  name: text('name').notNull(),
+  contentType: text('content_type').notNull(),
+  size: integer('size').notNull(),
+  content: bytea('content').notNull(),
+  createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /** Spooled files a job has processed, so none is processed twice. */
 export const watchSeen = pgTable(
   'watch_seen',

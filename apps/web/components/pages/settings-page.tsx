@@ -401,7 +401,8 @@ function cleanupText(cleanup: NonNullable<SettingsView['cleanup']>): string {
   if (cleanup.error) return `The last cleanup, at ${at}, failed: ${cleanup.error}`;
   const runs = `${cleanup.runs} ${cleanup.runs === 1 ? 'run' : 'runs'}`;
   const samples = `${cleanup.samples} ${cleanup.samples === 1 ? 'spooled file' : 'spooled files'}`;
-  return `The last cleanup, at ${at}, deleted ${runs} and ${samples}.`;
+  const files = cleanup.templateFiles > 0 ? ` and ${cleanup.templateFiles} unused Word ${cleanup.templateFiles === 1 ? 'template' : 'templates'}` : '';
+  return `The last cleanup, at ${at}, deleted ${runs}${files ? ', ' : ' and '}${samples}${files}.`;
 }
 
 /** App-wide settings: the Carbone connection, the chat model, the watcher intervals and how long runs are kept. */

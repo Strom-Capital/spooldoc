@@ -43,9 +43,9 @@ Carbone syntax reference:
 |------|--------------|
 | `read_sample_page` | Reads one page of the sample as numbered lines. The first three pages are in its instructions already. |
 | `write_definition` | Saves the definition YAML to the draft, runs the extraction on the sample and returns the report: documents found, each field with its status, missing fields, warnings and the first document as JSON. |
-| `write_template` | Saves the HTML template of one [output](jobs.md#outputs), the first unless it names another, checks it, renders the first document with Carbone and returns any errors, by line, and its visible text. Without a working Carbone server it only checks. |
-| `render_preview` | Renders a document with one output's template again after a change to the definition. |
-| `add_output` | Adds an output with a name and formats. It uses the starter template until the assistant writes one. |
+| `write_template` | Saves the HTML template of one [output](jobs.md#outputs), the first unless it names another, checks it, renders the first document with Carbone and returns any errors, by line, and its visible text. Without a working Carbone server it only checks. It refuses an output with a Word template. |
+| `render_preview` | Renders a document with one output's template, HTML or Word, again after a change to the definition, and returns what the check finds and the visible text. |
+| `add_output` | Adds an output with an HTML template, a name and formats. It uses the starter template until the assistant writes one. |
 | `remove_output` | Removes an output and its template. The last output cannot be removed. |
 | `list_jobs` | Lists the other jobs with their definition type, outputs and whether they have a template. |
 | `read_job_files` | Reads another job's definition YAML and the template HTML of each of its outputs, from its active version or else its draft, so a new job can start from them. |
@@ -59,6 +59,11 @@ without a model is "Start from job" in the template editor's bar.
 No tool reaches the IBM i, the job log or any other spooled file, and
 nothing it writes is a version: save one yourself when the result is
 right.
+
+The assistant does not change a [Word template](templates.md#word-templates):
+only you do, in Word. It reads the template's text, checks its tags
+against the definition, explains render errors and suggests tags to type
+or paste in.
 
 The assistant writes [Carbone tags](templates.md). Its instructions hold
 the [Carbone Skill](https://github.com/carboneio/carbone-skill) by Carbone
@@ -75,7 +80,8 @@ What the model receives:
 - The sample's metadata: spooled file name, queue, user data, page size
   and code page.
 - The job's current definition, its outputs with their formats and
-  templates, the names of the uploaded assets, and the Carbone edition.
+  templates (the text of a Word template, paragraph by paragraph), the
+  names of the uploaded assets, and the Carbone edition.
 - Tool results: the extraction report and the rendered text.
 - On request, other jobs' definitions and templates: layout, not
   customer data. Nothing else of a job (its server, destination, finish

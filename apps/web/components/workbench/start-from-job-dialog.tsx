@@ -24,6 +24,12 @@ interface JobFilesView {
   outputs: JobOutputFiles[];
 }
 
+/** What an output of the other job has as its template. */
+function templateName(output: JobOutputFiles): string {
+  if (output.kind === 'docx') return output.fileId === null ? 'Starter Word template' : 'Word template';
+  return output.templateHtml === null ? 'Starter template' : 'Custom template';
+}
+
 /** The `type:` of a definition YAML, read without parsing it. */
 function typeOf(yaml: string): string | null {
   return /^type:\s*["']?([a-z0-9-]+)/m.exec(yaml)?.[1] ?? null;
@@ -36,7 +42,7 @@ function typeOf(yaml: string): string | null {
  * opens, so it starts empty each time.
  */
 export function StartFromJobDialog({ onClose }: { onClose(): void }) {
-  const { jobId, setYaml, setHtml } = useWorkbench();
+  const { jobId, setYaml, setTemplate } = useWorkbench();
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
   const [chosen, setChosen] = useState('');
   const [loaded, setLoaded] = useState<JobFilesView | null>(null);
@@ -70,7 +76,7 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
   const type = files ? typeOf(files.definitionYaml) : null;
   const hasDefinition = !!files?.definitionYaml.trim();
   const source = files ? (files.outputs.find((o) => o.id === outputId) ?? files.outputs[0]) : undefined;
-  const hasTemplate = source?.templateHtml !== null && source?.templateHtml !== undefined;
+  const hasTemplate = !!source && (source.kind === 'docx' ? source.fileId !== null : source.templateHtml !== null);
   const copies = files ? [hasTemplate && 'template', withDefinition && hasDefinition && 'definition'].filter(Boolean) : [];
 
   function copy() {
@@ -78,7 +84,7 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
       return;
     }
     if (hasTemplate) {
-      setHtml(source.templateHtml);
+      setTemplate(source.kind === 'docx' ? { kind: 'docx', fileId: source.fileId } : { kind: 'html', source: source.templateHtml });
     }
     if (withDefinition && hasDefinition) {
       setYaml(files.definitionYaml);
@@ -145,7 +151,7 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
                   {files.outputs.map((output) => (
                     <SelectItem key={output.id} value={output.id}>
                       {output.label}
-                      <span className="text-muted-foreground">{output.templateHtml === null ? 'Starter template' : 'Custom template'}</span>
+                      <span className="text-muted-foreground">{templateName(output)}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -155,7 +161,7 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
           {files && (
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm" aria-label="Files of the chosen job">
               <dt className="text-muted-foreground">Template</dt>
-              <dd>{hasTemplate ? 'Yes' : 'None, it uses the starter template'}</dd>
+              <dd>{hasTemplate ? (source.kind === 'docx' ? 'A Word template' : 'An HTML template') : 'None, it uses the starter template'}</dd>
               <dt className="text-muted-foreground">Definition</dt>
               <dd>{hasDefinition ? (type ?? 'Yes') : 'None yet'}</dd>
             </dl>

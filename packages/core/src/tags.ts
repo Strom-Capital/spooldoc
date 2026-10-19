@@ -36,7 +36,7 @@ function lineAt(text: string, index: number): number {
 }
 
 /** A short version of a snippet for a message. */
-const short = (text: string): string => {
+export const short = (text: string): string => {
   const one = text.replace(/\s+/g, " ").trim();
   return one.length > 60 ? `${one.slice(0, 57)}...` : one;
 };
@@ -195,6 +195,57 @@ function nunjucksHelp(span: NunjucksSpan): string {
   return "Carbone has no statements like this. See the template docs for what to use.";
 }
 
+/** How `tagProblems` words a message for the kind of template. */
+export interface TagCheckOptions {
+  /** A Word template: say how to turn off the curly quotes Word types by default. */
+  word?: boolean;
+}
+
+/**
+ * The problems of the tags in some template text: tags never closed, curly or double
+ * quotes, and fields not in `known` (when given). Each has the index its tag starts at.
+ */
+export function tagProblems(text: string, known: Set<string> | undefined, options: TagCheckOptions = {}): { index: number; message: string }[] {
+  const problems: { index: number; message: string }[] = [];
+  const add = (index: number, message: string): void => {
+    problems.push({ index, message });
+  };
+  for (const tag of templateTags(text)) {
+    if (!tag.closed) {
+      add(tag.index, `This tag has no closing }: ${short(tag.text)}`);
+      continue;
+    }
+    const inner = tag.text.slice(1, -1);
+    if (/[‘’“”]/.test(inner)) {
+      add(
+        tag.index,
+        options.word
+          ? `${short(tag.text)} has curly quotes, which Word types by default and Carbone prints as text. Turn off smart quotes in Word and type straight single quotes (') again.`
+          : `${short(tag.text)} has curly quotes, which Carbone prints as text. Use straight single quotes (').`,
+      );
+    } else if (inner.includes('"')) {
+      add(tag.index, `${short(tag.text)} has double quotes, which Carbone prints as text. Use single quotes (').`);
+    }
+    if (!known || !tag.text.startsWith("{d")) continue;
+    const path = normalPath(tagPath(tag.text));
+    if (path === undefined || known.has(path)) continue;
+    if (path === "[]") {
+      add(tag.index, `${short(tag.text)} reads d as a list, but d is { doc, documents, sample }. Start the tag with d.doc.`);
+      continue;
+    }
+    // .att and .val after a list read an object's keys and values.
+    if (/\[\]\.(att|val)$/.test(path) && known.has(path.replace(/\[\]\.(att|val)$/, ""))) continue;
+    const near = closest(path, known);
+    const hint = near
+      ? ` Did you mean ${asTag(near)}?`
+      : path.startsWith("doc.") || path.startsWith("documents")
+        ? " Check the name against the definition's fields."
+        : " The data has doc, documents and sample.";
+    add(tag.index, `${short(tag.text)} is not in the data.${hint}`);
+  }
+  return problems;
+}
+
 /**
  * Checks a Carbone HTML template before it is rendered:
  *
@@ -237,34 +288,7 @@ export function checkTemplate(template: string, def?: Definition | null, options
   }
 
   const known = def ? templatePaths(def) : undefined;
-  for (const tag of templateTags(template)) {
-    if (!tag.closed) {
-      add(tag.index, `This tag has no closing }: ${short(tag.text)}`);
-      continue;
-    }
-    const inner = tag.text.slice(1, -1);
-    if (/[‘’“”]/.test(inner)) {
-      add(tag.index, `${short(tag.text)} has curly quotes, which Carbone prints as text. Use straight single quotes (').`);
-    } else if (inner.includes('"')) {
-      add(tag.index, `${short(tag.text)} has double quotes, which Carbone prints as text. Use single quotes (').`);
-    }
-    if (!known || !tag.text.startsWith("{d")) continue;
-    const path = normalPath(tagPath(tag.text));
-    if (path === undefined || known.has(path)) continue;
-    if (path === "[]") {
-      add(tag.index, `${short(tag.text)} reads d as a list, but d is { doc, documents, sample }. Start the tag with d.doc.`);
-      continue;
-    }
-    // .att and .val after a list read an object's keys and values.
-    if (/\[\]\.(att|val)$/.test(path) && known.has(path.replace(/\[\]\.(att|val)$/, ""))) continue;
-    const near = closest(path, known);
-    const hint = near
-      ? ` Did you mean ${asTag(near)}?`
-      : path.startsWith("doc.") || path.startsWith("documents")
-        ? " Check the name against the definition's fields."
-        : " The data has doc, documents and sample.";
-    add(tag.index, `${short(tag.text)} is not in the data.${hint}`);
-  }
+  for (const problem of tagProblems(template, known)) add(problem.index, problem.message);
 
   const seen = new Set<string>();
   return problems

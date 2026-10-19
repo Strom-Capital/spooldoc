@@ -20,25 +20,34 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { labelTaken, newOutput, OUTPUT_FORMATS, type JobOutput, type OutputFormat } from '@/lib/job-spec';
+import {
+  FORMAT_FILES,
+  hasOwnTemplate,
+  KIND_FORMATS,
+  labelTaken,
+  newOutput,
+  OUTPUT_FORMATS,
+  withTemplate,
+  type JobOutput,
+  type OutputFormat,
+  type TemplateKind,
+} from '@/lib/job-spec';
 import { useJob } from './job-provider';
 
-const FORMAT_LABEL: Record<OutputFormat, string> = { pdf: 'PDF', html: 'HTML' };
-
-/** "PDF and HTML". */
-export function formatList(formats: readonly OutputFormat[]): string {
-  return formats.map((format) => FORMAT_LABEL[format]).join(' and ');
-}
+const KIND_LABEL: Record<TemplateKind, string> = { html: 'HTML template', docx: 'Word template' };
 
 /**
- * The render step's output controls: which output the template and preview show, the
- * formats it makes (at least one), Add output, and a menu to rename or remove it.
+ * The render step's output controls: which output the template and preview show, its
+ * kind of template (HTML or Word), the formats it makes (at least one), Add output, and a
+ * menu to rename or remove it.
  */
 export function OutputControls({ output, onPick }: { output: JobOutput; onPick(id: string): void }) {
   const { spec, readOnly, updateDraft } = useJob();
   const outputs = spec.render.outputs;
   const [renaming, setRenaming] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [switching, setSwitching] = useState<TemplateKind | null>(null);
+  const kind = output.template.kind;
 
   const save = (next: JobOutput[]) => updateDraft({ render: { outputs: next } }, { debounce: false });
 
@@ -47,6 +56,20 @@ export function OutputControls({ output, onPick }: { output: JobOutput; onPick(i
     if (formats.length > 0) {
       save(outputs.map((o) => (o.id === output.id ? { ...o, formats: OUTPUT_FORMATS.filter((f) => formats.includes(f)) } : o)));
     }
+  };
+
+  /** Use the other kind of template, starting from its starter template. */
+  const switchKind = (next: TemplateKind) => {
+    const template = next === 'docx' ? ({ kind: 'docx', fileId: null } as const) : ({ kind: 'html', source: null } as const);
+    save(outputs.map((o) => (o.id === output.id ? withTemplate(o, template) : o)));
+    setSwitching(null);
+    toast.success(`${output.label} uses ${next === 'docx' ? 'a Word' : 'an HTML'} template`);
+  };
+
+  const pickKind = (next: string) => {
+    if (next === kind) return;
+    if (hasOwnTemplate(output.template)) setSwitching(next as TemplateKind);
+    else switchKind(next as TemplateKind);
   };
 
   const add = () => {
@@ -78,8 +101,20 @@ export function OutputControls({ output, onPick }: { output: JobOutput; onPick(i
           ))}
         </SelectContent>
       </Select>
+      <Select value={kind} onValueChange={pickKind} disabled={readOnly}>
+        <SelectTrigger size="sm" aria-label={`Kind of template of ${output.label}`}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {(Object.keys(KIND_LABEL) as TemplateKind[]).map((k) => (
+            <SelectItem key={k} value={k}>
+              {KIND_LABEL[k]}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       <div role="group" aria-label={`Formats of ${output.label}`} className="flex items-center gap-3">
-        {OUTPUT_FORMATS.map((format) => {
+        {KIND_FORMATS[kind].map((format) => {
           const checked = output.formats.includes(format);
           return (
             <label key={format} className="flex items-center gap-1.5">
@@ -87,9 +122,9 @@ export function OutputControls({ output, onPick }: { output: JobOutput; onPick(i
                 checked={checked}
                 disabled={readOnly || (checked && output.formats.length === 1)}
                 onCheckedChange={(on) => toggle(format, on === true)}
-                aria-label={`Make ${FORMAT_LABEL[format]} files for ${output.label}`}
+                aria-label={`Make ${FORMAT_FILES[format].label} files for ${output.label}`}
               />
-              {FORMAT_LABEL[format]}
+              {FORMAT_FILES[format].label}
             </label>
           );
         })}
@@ -129,6 +164,21 @@ export function OutputControls({ output, onPick }: { output: JobOutput; onPick(i
           onRename={(label) => save(outputs.map((o) => (o.id === output.id ? { ...o, label } : o)))}
         />
       )}
+      <AlertDialog open={switching !== null} onOpenChange={(open) => !open && setSwitching(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Use {switching === 'docx' ? 'a Word' : 'an HTML'} template for {output.label}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {kind === 'html' ? 'The HTML template' : 'The uploaded Word template'} is removed from the draft, and the output starts from the{' '}
+              {switching === 'docx' ? 'Word' : 'HTML'} starter template. Saved versions keep it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => switching && switchKind(switching)}>Switch</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={removing} onOpenChange={setRemoving}>
         <AlertDialogContent>
           <AlertDialogHeader>

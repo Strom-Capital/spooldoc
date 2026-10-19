@@ -15,8 +15,30 @@ export const queueRefSchema = z.object({ library: ibmiName, name: ibmiName });
 export type QueueRefSpec = z.infer<typeof queueRefSchema>;
 
 /** The files a job makes from each document. */
-export const OUTPUT_FORMATS = ['pdf', 'html'] as const;
+export const OUTPUT_FORMATS = ['pdf', 'html', 'docx'] as const;
 export type OutputFormat = (typeof OUTPUT_FORMATS)[number];
+
+/** The kinds of template: HTML, written in the app, or a Word file made in Word and uploaded. */
+export const TEMPLATE_KINDS = ['html', 'docx'] as const;
+export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
+
+/** The formats an HTML template renders to. */
+export const HTML_FORMATS = ['pdf', 'html'] as const;
+
+/** The formats each kind of template renders to. */
+export const KIND_FORMATS: Record<TemplateKind, readonly OutputFormat[]> = { html: HTML_FORMATS, docx: ['pdf', 'docx'] };
+
+/** How each format is named in the app and stored as a file. */
+export const FORMAT_FILES: Record<OutputFormat, { label: string; extension: string; contentType: string }> = {
+  pdf: { label: 'PDF', extension: 'pdf', contentType: 'application/pdf' },
+  html: { label: 'HTML', extension: 'html', contentType: 'text/html; charset=utf-8' },
+  docx: { label: 'DOCX', extension: 'docx', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+};
+
+/** "PDF and HTML". */
+export function formatList(formats: readonly OutputFormat[]): string {
+  return formats.map((format) => FORMAT_FILES[format].label).join(' and ');
+}
 
 /** Which spooled files of the queue a job takes. Each is a "contains" match; empty means any. */
 const sourceFilterSchema = z.object({
@@ -54,15 +76,14 @@ export function ibmiFilter(filter: SourceFilter): { name?: string; userData?: st
 /** An output's id: lowercase letters, digits and dashes. */
 export const OUTPUT_ID = /^[a-z0-9-]{1,40}$/;
 
-/** One set of files a job makes from each document: a template and the formats it renders to. */
-const outputSchema = z.object({
-  id: z.string().regex(OUTPUT_ID, 'Use lowercase letters, digits and dashes for an output id'),
-  label: z.string().trim().min(1, 'Name the output').max(40, 'Use at most 40 characters for an output name'),
-  /**
-   * `source: null` is the starter template generated from the definition. A Nunjucks
-   * template from before Carbone is converted to Carbone tags when it is read.
-   */
-  template: z.object({
+/**
+ * An output's template. HTML: `source: null` is the starter template generated from the
+ * definition, and a Nunjucks template from before Carbone is converted to Carbone tags
+ * when it is read. Word: `fileId` is an uploaded template file, which never changes, or
+ * null for the Word starter template generated from the definition.
+ */
+const templateSchema = z.discriminatedUnion('kind', [
+  z.object({
     kind: z.literal('html'),
     source: z
       .string()
@@ -71,12 +92,48 @@ const outputSchema = z.object({
       .default(null)
       .transform((source) => (source === null ? null : convertNunjucks(source))),
   }),
-  formats: z
-    .array(z.enum(OUTPUT_FORMATS))
-    .min(1, 'Pick at least one format')
-    .transform((formats) => OUTPUT_FORMATS.filter((f) => formats.includes(f))),
-});
+  z.object({ kind: z.literal('docx'), fileId: z.string().uuid().nullable().default(null) }),
+]);
+export type OutputTemplate = z.infer<typeof templateSchema>;
+
+/** One set of files a job makes from each document: a template and the formats it renders to. */
+const outputSchema = z
+  .object({
+    id: z.string().regex(OUTPUT_ID, 'Use lowercase letters, digits and dashes for an output id'),
+    label: z.string().trim().min(1, 'Name the output').max(40, 'Use at most 40 characters for an output name'),
+    template: templateSchema,
+    formats: z
+      .array(z.enum(OUTPUT_FORMATS))
+      .min(1, 'Pick at least one format')
+      .transform((formats) => OUTPUT_FORMATS.filter((f) => formats.includes(f))),
+  })
+  .superRefine((output, ctx) => {
+    const allowed = KIND_FORMATS[output.template.kind];
+    const other = output.formats.find((format) => !allowed.includes(format));
+    if (other) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['formats'],
+        message: `${output.template.kind === 'docx' ? 'A Word' : 'An HTML'} template makes ${formatList(allowed)} files, not ${FORMAT_FILES[other].label}.`,
+      });
+    }
+  });
 export type JobOutput = z.infer<typeof outputSchema>;
+
+/**
+ * The output with another template, and the formats that kind makes: the ones it kept,
+ * or PDF when none is left.
+ */
+export function withTemplate(output: JobOutput, template: OutputTemplate): JobOutput {
+  const allowed = KIND_FORMATS[template.kind];
+  const formats = output.formats.filter((format) => allowed.includes(format));
+  return { ...output, template, formats: formats.length > 0 ? formats : ['pdf'] };
+}
+
+/** True when the output has a template of its own: HTML that was written, or an uploaded Word file. */
+export function hasOwnTemplate(template: OutputTemplate): boolean {
+  return template.kind === 'html' ? template.source !== null : template.fileId !== null;
+}
 
 /** The output of a new job, and of a job saved before a job had several. */
 function firstOutput(): JobOutput {

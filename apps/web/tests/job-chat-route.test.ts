@@ -155,7 +155,7 @@ describe('POST /api/jobs/[id]/chat', () => {
 
     const { parts } = await chunks(await chat());
 
-    expect((await draft()).render.outputs[0]!.template.source).toBe(html);
+    expect((await draft()).render.outputs[0]!.template).toEqual({ kind: 'html', source: html });
     const output = parts.find((p) => p.type === 'tool-output-available')?.output as { ok: boolean; path: string; errors: string[] };
     expect(output).toMatchObject({ ok: true, path: 'template', output: 'Document', errors: [] });
   });
@@ -202,7 +202,7 @@ describe('POST /api/jobs/[id]/chat', () => {
       id: otherId,
       name: 'Invoices',
       definitionYaml: yaml,
-      outputs: [{ id: 'main', label: 'Document', formats: ['pdf'], templateHtml: html }],
+      outputs: [{ id: 'main', label: 'Document', formats: ['pdf'], kind: 'html', templateHtml: html, fileId: null }],
     });
     expect((await draft()).extract.definition).toBe('');
   });

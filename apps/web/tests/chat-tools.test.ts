@@ -1,4 +1,4 @@
-import { extract, parseDefinition } from '@spooldoc/core';
+import { extract, parseDefinition, starterDocx, type HtmlRender } from '@spooldoc/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type {
   JobOutputFiles,
@@ -22,12 +22,15 @@ const template = fixtureText('invoice', 'template.html');
 const options = { toolCallId: 'call-1', messages: [] };
 
 /** A job draft in memory: a definition and outputs, checked by the spec schema as the draft store does. */
+/** An output's HTML template text; undefined for a Word template. */
+const htmlOf = (output: JobOutput): string | null | undefined => (output.template.kind === 'html' ? output.template.source : undefined);
+
 class MemoryDraft implements DraftStore {
   yaml = '';
   outputs: JobOutput[] = jobSpecSchema.parse({}).render.outputs;
   /** The first output's template. */
-  get html(): string | null {
-    return this.outputs[0]!.template.source;
+  get html(): string | null | undefined {
+    return htmlOf(this.outputs[0]!);
   }
   async readDefinition() {
     return this.yaml;
@@ -58,7 +61,9 @@ const files = (templateHtml: string | null, fields: Partial<JobOutputFiles> = {}
   id: 'main',
   label: 'Document',
   formats: ['pdf'],
+  kind: 'html',
   templateHtml,
+  fileId: null,
   ...fields,
 });
 
@@ -157,11 +162,11 @@ describe('write_template', () => {
     const byName = await call<WriteTemplateResult>(tools().write_template, { html: '<p>{d.doc.invoiceNo}</p>', output: 'lines' });
     if (!('path' in byName)) throw new Error(byName.error);
     expect(byName.output).toBe('Lines');
-    expect(store.outputs.map((o) => o.template.source)).toEqual([null, '<p>{d.doc.invoiceNo}</p>']);
+    expect(store.outputs.map(htmlOf)).toEqual([null, '<p>{d.doc.invoiceNo}</p>']);
 
     const unknown = await call<WriteTemplateResult>(tools().write_template, { html: '<p/>', output: 'Totals' });
     expect(unknown).toEqual({ ok: false, error: 'There is no output "Totals". The job\'s outputs are Document (id main), Lines (id lines).' });
-    expect(store.outputs[1]!.template.source).toBe('<p>{d.doc.invoiceNo}</p>');
+    expect(htmlOf(store.outputs[1]!)).toBe('<p>{d.doc.invoiceNo}</p>');
   });
 
   it('checks the template by line before it renders', async () => {
@@ -184,7 +189,7 @@ describe('write_template', () => {
     await call(tools().write_definition, { yaml });
     const withLogo = buildTools({ sample, store, masked: false, renderer: fakeRenderer, assets: [{ name: 'logo', kind: 'image' }] });
     await call(withLogo.write_template, { html: `<img src="{asset('logo')}">{d.doc.invoiceNo}` });
-    expect(fakeCarbone.mock.calls[0]![0].asset?.('logo')).toBe('data:,');
+    expect((fakeCarbone.mock.calls[0]![0] as HtmlRender).asset?.('logo')).toBe('data:,');
   });
 
   it('reports template errors and warns about scripts and external resources', async () => {
@@ -276,10 +281,10 @@ describe('add_output and remove_output', () => {
     const result = await call<OutputChangeResult>(tools().add_output, { label: 'Order lines', formats: ['html', 'pdf'] });
     expect(result).toEqual({
       ok: true,
-      output: { id: 'order-lines', label: 'Order lines', formats: ['pdf', 'html'], template: 'starter' },
+      output: { id: 'order-lines', label: 'Order lines', formats: ['pdf', 'html'], kind: 'html', template: 'starter' },
       outputs: [
-        { id: 'main', label: 'Document', formats: ['pdf'], template: 'starter' },
-        { id: 'order-lines', label: 'Order lines', formats: ['pdf', 'html'], template: 'starter' },
+        { id: 'main', label: 'Document', formats: ['pdf'], kind: 'html', template: 'starter' },
+        { id: 'order-lines', label: 'Order lines', formats: ['pdf', 'html'], kind: 'html', template: 'starter' },
       ],
     });
     expect(store.outputs).toHaveLength(2);
@@ -385,5 +390,48 @@ describe('read_job_files', () => {
     expect(none).toEqual({ ok: false, error: 'There are no other jobs to read.' });
     expect(store.yaml).toBe('');
     expect(store.html).toBeNull();
+  });
+});
+
+describe('Word templates', () => {
+  const wordOutput = (fileId: string | null): JobOutput[] => [{ id: 'main', label: 'Document', template: { kind: 'docx', fileId }, formats: ['pdf', 'docx'] }];
+  const withFile = (bytes: Uint8Array | null) =>
+    buildTools({ sample, store, masked: false, renderer: fakeRenderer, templateFile: async (id) => (id === 'file-1' ? bytes : null) });
+
+  it('never writes over a Word template', async () => {
+    await call(tools().write_definition, { yaml });
+    store.outputs = wordOutput(null);
+    const result = await call<WriteTemplateResult>(tools().write_template, { html: '<p>{d.doc.invoiceNo}</p>' });
+    expect(result).toEqual({
+      ok: false,
+      error: 'The Document output uses a Word template, which only the user changes, in Word. Suggest the tags to type or paste in instead, or check it with render_preview.',
+    });
+    expect(store.outputs[0]!.template).toEqual({ kind: 'docx', fileId: null });
+  });
+
+  it('checks and renders the uploaded file, or the starter template, to DOCX and returns its text', async () => {
+    await call(tools().write_definition, { yaml });
+    store.outputs = wordOutput('00000000-0000-4000-8000-000000000001');
+    const bytes = await starterDocx(parseDefinition(yaml));
+    const reader = buildTools({ sample, store, masked: false, renderer: fakeRenderer, templateFile: async () => bytes });
+    const result = await call<RenderPreviewResult>(reader.render_preview, {});
+    if (!result.ok) throw new Error(result.error);
+    expect(result).toMatchObject({ template: 'saved', templateErrors: [] });
+    // The fake Carbone sends the file back as it was: its paragraphs are the text.
+    expect(result.textPreview).toContain('Invoice No\t{d.doc.invoiceNo}');
+    expect(fakeCarbone.mock.calls.at(-1)![0]).toMatchObject({ kind: 'docx', format: 'docx' });
+
+    store.outputs = wordOutput(null);
+    const starter = await call<RenderPreviewResult>(withFile(null).render_preview, {});
+    expect(starter).toMatchObject({ ok: true, template: 'starter', templateErrors: [] });
+  });
+
+  it('reports the tag check by part, and a file that is gone', async () => {
+    await call(tools().write_definition, { yaml });
+    store.outputs = wordOutput('file-1');
+    const bad = await starterDocx(parseDefinition(yaml.replace('name: invoiceNo,', 'name: invoiceNumber,').replace('field: invoiceNo }', 'field: invoiceNumber }')));
+    const result = await call<RenderPreviewResult>(withFile(bad).render_preview, {});
+    expect(result).toMatchObject({ ok: true, templateErrors: ['body: {d.doc.invoiceNumber} is not in the data. Did you mean {d.doc.invoiceNo}?'] });
+    expect(await call(withFile(null).render_preview, {})).toEqual({ ok: false, error: 'The Word template of the Document output is gone. The user uploads it again.' });
   });
 });
