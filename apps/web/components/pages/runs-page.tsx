@@ -207,7 +207,18 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
               {runs.map((run) => (
                 <tr key={run.id} className="cursor-pointer border-t align-top hover:bg-muted/40" onClick={() => setOpen(run)}>
                   <td className="whitespace-nowrap px-3 py-2">
-                    <div className="font-medium">#{run.seq}</div>
+                    {/* The row opens on a click; the button makes it reachable from the keyboard. */}
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setOpen(run);
+                      }}
+                      aria-label={`Open run #${run.seq}`}
+                      className="rounded-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      #{run.seq}
+                    </button>
                     <div className="text-muted-foreground text-xs">{dateTime(run.startedAt)}</div>
                   </td>
                   <td className="px-3 py-2">
@@ -302,7 +313,12 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                   <ol className="flex flex-col gap-1.5">
                     {open.steps.map((step, index) => (
                       <li key={index} className="flex items-start gap-2 text-sm">
-                        {step.ok ? <CheckIcon className="mt-0.5 size-4 shrink-0 text-emerald-600" /> : <XIcon className="mt-0.5 size-4 shrink-0 text-destructive" />}
+                        {step.ok ? (
+                          <CheckIcon className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                        ) : (
+                          <XIcon className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
+                        )}
+                        <span className="sr-only">{step.ok ? 'Passed:' : 'Failed:'}</span>
                         <div className="min-w-0 flex-1">
                           <span className="font-medium">{STEP_LABEL[step.step] ?? step.step}</span>
                           {step.note && <span className="text-muted-foreground">: {step.note}</span>}

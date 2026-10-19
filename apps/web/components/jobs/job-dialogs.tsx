@@ -130,6 +130,9 @@ export function SaveVersionDialog({ open, onClose, onSaved }: { open: boolean; o
   );
 }
 
+/** What a run's status icon means, for screen readers. */
+const STATUS_WORD: Record<RunView['status'], string> = { success: 'Succeeded', skipped: 'Skipped', running: 'Running', warning: 'Warning', failed: 'Failed' };
+
 const idOf = (f: SpooledFileView) => ({ name: f.name, number: f.number, jobName: f.jobName, jobUser: f.jobUser, jobNumber: f.jobNumber });
 
 /**
@@ -223,16 +226,17 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
               {results.map((run) => (
                 <li key={run.id} className="flex items-start gap-2 rounded-md border px-3 py-2 text-sm">
                   {run.status === 'success' ? (
-                    <CheckCircle2Icon className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                    <CheckCircle2Icon className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
                   ) : run.status === 'skipped' ? (
-                    <CircleSlashIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                    <CircleSlashIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
                   ) : run.status === 'running' ? (
-                    <Spinner className="mt-0.5" />
+                    <Spinner className="mt-0.5" aria-hidden />
                   ) : run.status === 'warning' ? (
-                    <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                    <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
                   ) : (
-                    <XCircleIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
+                    <XCircleIcon className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
                   )}
+                  <span className="sr-only">{STATUS_WORD[run.status]}:</span>
                   <div className="min-w-0 flex-1">
                     <div className="font-mono text-xs">
                       Run #{run.seq}: {run.splf.name} #{run.splf.number}
@@ -262,7 +266,7 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
           <>
             {draftDiffers && (
               <p className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-                <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
                 <span>
                   The draft has changes that are not in version {job.activeVersion}. Run uses version {job.activeVersion} as it is.{' '}
                   <button
