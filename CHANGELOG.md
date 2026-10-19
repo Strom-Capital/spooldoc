@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.0](https://github.com/Strom-Capital/spooldoc/compare/v0.1.0...v0.2.0) (2026-10-19)
+
+
+### Features
+
+* IBM i errors say what to do, with the system's text under Details ([#39](https://github.com/Strom-Capital/spooldoc/issues/39)) ([e9bb795](https://github.com/Strom-Capital/spooldoc/commit/e9bb795e6003266e4f6ff82f4cdd1db46e17ae06))
+* **web:** confirm before a job starts deleting spooled files ([#38](https://github.com/Strom-Capital/spooldoc/issues/38)) ([067501f](https://github.com/Strom-Capital/spooldoc/commit/067501f27054a3f6253d4a47e3162b9ee6688e8e))
+* **web:** consistency and accessibility pass ([#41](https://github.com/Strom-Capital/spooldoc/issues/41)) ([cdbc13b](https://github.com/Strom-Capital/spooldoc/commit/cdbc13b7aedcec637ae44b4291295fae830b49fc))
+* **web:** show only what works: no "Coming later", a true sign-up message ([#40](https://github.com/Strom-Capital/spooldoc/issues/40)) ([38dd3c3](https://github.com/Strom-Capital/spooldoc/commit/38dd3c3589f8dc0c38ace2bfa309729f1887304f))
+
+
+### Bug Fixes
+
+* **web:** refuse to adopt a data queue while queues still send to the current one ([#25](https://github.com/Strom-Capital/spooldoc/issues/25)) ([fb97dec](https://github.com/Strom-Capital/spooldoc/commit/fb97dec879c8ef3c64fcb3fe2dac75113b53e71d))
+* **web:** show watcher and run failures, and say when a list is cut off ([#36](https://github.com/Strom-Capital/spooldoc/issues/36)) ([d0078d3](https://github.com/Strom-Capital/spooldoc/commit/d0078d35b957c7ed41ba8d48f7910c58966e0be1))
+
 ## 0.1.0 (2026-10-18)
 
 
