@@ -38,12 +38,12 @@ export function sniffAssetType(bytes: Uint8Array): string | null {
 /** `image` or `font`, from the content type. */
 export const assetKind = (contentType: string): AssetView['kind'] => (contentType.startsWith('font/') ? 'font' : 'image');
 
-/** A file as a data URI, which is what `asset('name')` prints. */
+/** A file as a data URI, which is what `{asset('name')}` prints. */
 export const dataUri = (contentType: string, content: Uint8Array): string => `data:${contentType};base64,${Buffer.from(content).toString('base64')}`;
 
 const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** True when a template prints the asset with a literal name: `asset('logo')` or `asset("logo")`. */
+/** True when a template prints the asset: `{asset('logo')}`, or `asset('logo')` in a Nunjucks template from before Carbone. */
 export function templateUsesAsset(template: string | null | undefined, name: string): boolean {
   return !!template && new RegExp(`asset\\(\\s*(['"])${escapeRegExp(name)}\\1\\s*\\)`).test(template);
 }
@@ -95,7 +95,7 @@ export async function assetNames(): Promise<{ name: string; kind: AssetView['kin
 let cache: { key: string; uris: Map<string, string> } | null = null;
 
 /**
- * Resolves `asset('name')` for a render. The data URIs are kept in memory and read
+ * Resolves `{asset('name')}` for a render. The data URIs are kept in memory and read
  * again only when the assets change (count or last change differ), also when another
  * process changed them.
  */

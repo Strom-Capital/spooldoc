@@ -3,22 +3,19 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptySpec, splfKey } from '@/lib/job-spec';
 import { jobs, jobVersions, queueHealth, runs, servers, settings, watchSeen } from '@/lib/server/db/schema';
+import { fakeRenderer } from './helpers/carbone';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, loadSample } from './helpers/fake-connection';
 import { builtinDestination, db, insertServer, testDb } from './helpers/fixtures';
 import { connections } from './helpers/mocks';
 
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
-vi.mock('@/lib/server/pdf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/pdf')>()),
-  loadPdf: async () => ({ renderPdf: async () => new TextEncoder().encode('%PDF') }),
-}));
 
 const { Watcher } = await import('@/lib/server/watcher');
 const { connectServer } = await import('@/lib/server/ibmi');
 const { setLogSink } = await import('@/lib/server/log');
 const { HEARTBEAT_MS } = await import('@/lib/server/retention');
-const { setPdfRenderer } = await import('@/lib/server/runner');
+const { setDocumentRenderer } = await import('@/lib/server/documents');
 
 const sample = loadSample('invoice');
 const { library, name: queue } = sample.attributes.queue;
@@ -334,9 +331,9 @@ describe('watcher', () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     let finish!: () => void;
     const gate = new Promise<void>((resolve) => (finish = resolve));
-    setPdfRenderer(async () => {
+    setDocumentRenderer(async (input) => {
       await gate;
-      return new TextEncoder().encode('%PDF');
+      return fakeRenderer(input);
     });
     try {
       await watchingJob({ backlog: true });
@@ -354,7 +351,7 @@ describe('watcher', () => {
       expect((await runRows())[0]!.status).toBe('success');
     } finally {
       finish();
-      setPdfRenderer(null);
+      setDocumentRenderer(fakeRenderer);
       vi.useRealTimers();
     }
   });

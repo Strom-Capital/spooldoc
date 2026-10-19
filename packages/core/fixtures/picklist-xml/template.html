@@ -21,21 +21,20 @@
 <body>
   <h1>Pick list</h1>
   <dl>
-    <dt>Title</dt><dd>{{ doc.title }}</dd>
-    <dt>Picklist No</dt><dd>{{ doc.picklistNo }}</dd>
-    <dt>Order No</dt><dd>{{ doc.orderNo }}</dd>
-    <dt>Customer No</dt><dd>{{ doc.customerNo }}</dd>
-    <dt>Ship To</dt><dd>{{ doc.shipTo }}</dd>
-    <dt>Ship Date</dt><dd>{{ doc.shipDate }}</dd>
-    <dt>Output Name</dt><dd>{{ doc.outputName }}</dd>
+    <dt>Title</dt><dd>{d.doc.title}</dd>
+    <dt>Picklist No</dt><dd>{d.doc.picklistNo}</dd>
+    <dt>Order No</dt><dd>{d.doc.orderNo}</dd>
+    <dt>Customer No</dt><dd>{d.doc.customerNo}</dd>
+    <dt>Ship To</dt><dd>{d.doc.shipTo}</dd>
+    <dt>Ship Date</dt><dd>{d.doc.shipDate}</dd>
+    <dt>Output Name</dt><dd>{d.doc.outputName}</dd>
   </dl>
   <h2>Lines</h2>
   <table>
     <thead><tr><th>Line</th><th>Item</th><th>Description</th><th>Warehouse</th><th>Bin</th><th>Quantity</th><th>Unit</th></tr></thead>
     <tbody>
-      {% for row in doc.lines %}
-      <tr><td>{{ row.line }}</td><td>{{ row.item }}</td><td>{{ row.description }}</td><td>{{ row.warehouse }}</td><td>{{ row.bin }}</td><td>{{ row.quantity }}</td><td>{{ row.unit }}</td></tr>
-      {% endfor %}
+      <tr><td>{d.doc.lines[i].line}</td><td>{d.doc.lines[i].item}</td><td>{d.doc.lines[i].description}</td><td>{d.doc.lines[i].warehouse}</td><td>{d.doc.lines[i].bin}</td><td>{d.doc.lines[i].quantity}</td><td>{d.doc.lines[i].unit}</td></tr>
+      <tr><td>{d.doc.lines[i+1]}</td></tr>
     </tbody>
   </table>
 </body>

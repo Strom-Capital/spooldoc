@@ -14,7 +14,10 @@ at the repository root; this page has the setup and the layout.
   picks up.
 - A JDK 17: `node-jt400` builds its native `java` addon at install time.
 - Docker for the development database, or a Postgres of your own.
-- Optional: Chrome or Chromium for PDFs (`SPOOLDOC_CHROMIUM_PATH`).
+- Optional: Docker for a local Carbone server, to render documents in the
+  app: `docker run -d -p 4000:4000 carbone/carbone-ee:full-5.15.5-fonts`,
+  then set `http://localhost:4000` under Settings, Rendering. Without
+  `CARBONE_AUTHENTICATION` it takes requests without a token.
 - Optional: an IBM i to try things on. A free [PUB400](https://pub400.com)
   account is enough; [demo-spool](../demo-spool/README.md) prints the demo
   documents there.
@@ -58,8 +61,10 @@ fake connection over those fixtures and an in-process Postgres (PGlite)
 per test file. To run them against a real Postgres, start one
 (`docker compose up -d db`) and set
 `TEST_DATABASE_URL=postgres://spooldoc:spooldoc@localhost:5433/spooldoc`;
-each test file gets a throwaway database. The Chromium PDF test runs only
-when `SPOOLDOC_CHROMIUM_PATH` is set.
+each test file gets a throwaway database. Unit tests use a
+stand-in for Carbone's HTTP API. The tests against a real Carbone server
+run only when `SPOOLDOC_CARBONE_URL` is set, such as
+`SPOOLDOC_CARBONE_URL=http://localhost:4000 pnpm --filter @spooldoc/core test`.
 
 Add a fixture by printing the document with demo-spool, capturing it with
 the capture command (which scrubs the job user and number) and writing
@@ -71,7 +76,7 @@ its definition, template and expected JSON next to the sample.
 |------|---------------|
 | `packages/core` | Pure TypeScript, no UI and no IBM i dependency: samples, the *SCS parser, definitions, extraction, templates, PDF, masking, workspace. |
 | `packages/ibmi` | The IBM i connection through jt400: queues, spooled files, hold, move, delete, data queues, CL commands. The root export does not load Java; `@spooldoc/ibmi/jt400` does. |
-| `apps/web` | The Next.js app. `lib/server` holds config, the database (`db/`, with the Drizzle schema and migrations in `drizzle/`), sign-in, the IBM i connection (`ibmi.ts` is the only module that loads jt400), rendering, the job runner, destinations and the queue watcher, started from `instrumentation.ts`. Route handlers are under `app/api`, pages under `components/pages`, the job builder under `components/jobs` and `components/workbench`. |
+| `apps/web` | The Next.js app. `lib/server` holds config, the database (`db/`, with the Drizzle schema and migrations in `drizzle/`), sign-in, the IBM i connection (`ibmi.ts` is the only module that loads jt400), the Carbone connection (`rendering.ts`) and rendering, the job runner, destinations and the queue watcher, started from `instrumentation.ts`. Route handlers are under `app/api`, pages under `components/pages`, the job builder under `components/jobs` and `components/workbench`. |
 | `demo-spool` | CL and RPG sources that create output queues and print invented documents on any IBM i. |
 | `Dockerfile`, `compose.yaml` | The container image and an example service for it. |
 | `workspace/` | Where the capture command writes samples. Ignored by git except its README. |

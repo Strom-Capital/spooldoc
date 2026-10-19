@@ -21,20 +21,19 @@
 <body>
   <h1>Open order lines by customer</h1>
   <dl>
-    <dt>Company</dt><dd>{{ doc.company }}</dd>
-    <dt>Title</dt><dd>{{ doc.title }}</dd>
-    <dt>Run Date</dt><dd>{{ doc.runDate }}</dd>
-    <dt>Run Time</dt><dd>{{ doc.runTime }}</dd>
-    <dt>Program</dt><dd>{{ doc.program }}</dd>
-    <dt>Warehouse</dt><dd>{{ doc.warehouse }}</dd>
+    <dt>Company</dt><dd>{d.doc.company}</dd>
+    <dt>Title</dt><dd>{d.doc.title}</dd>
+    <dt>Run Date</dt><dd>{d.doc.runDate}</dd>
+    <dt>Run Time</dt><dd>{d.doc.runTime}</dd>
+    <dt>Program</dt><dd>{d.doc.program}</dd>
+    <dt>Warehouse</dt><dd>{d.doc.warehouse}</dd>
   </dl>
   <h2>Lines</h2>
   <table>
     <thead><tr><th>Customer No</th><th>Customer Name</th><th>Order No</th><th>Line No</th><th>Item</th><th>Description</th><th>Unit</th><th>Quantity</th><th>Unit Price</th><th>Amount</th><th>Ship Date</th><th>Type Code</th><th>Type Text</th><th>Message</th></tr></thead>
     <tbody>
-      {% for row in doc.lines %}
-      <tr><td>{{ row.customerNo }}</td><td>{{ row.customerName }}</td><td>{{ row.orderNo }}</td><td>{{ row.lineNo }}</td><td>{{ row.item }}</td><td>{{ row.description }}</td><td>{{ row.unit }}</td><td>{{ row.quantity }}</td><td>{{ row.unitPrice }}</td><td>{{ row.amount }}</td><td>{{ row.shipDate }}</td><td>{{ row.typeCode }}</td><td>{{ row.typeText }}</td><td>{{ row.message }}</td></tr>
-      {% endfor %}
+      <tr><td>{d.doc.lines[i].customerNo}</td><td>{d.doc.lines[i].customerName}</td><td>{d.doc.lines[i].orderNo}</td><td>{d.doc.lines[i].lineNo}</td><td>{d.doc.lines[i].item}</td><td>{d.doc.lines[i].description}</td><td>{d.doc.lines[i].unit}</td><td>{d.doc.lines[i].quantity}</td><td>{d.doc.lines[i].unitPrice}</td><td>{d.doc.lines[i].amount}</td><td>{d.doc.lines[i].shipDate}</td><td>{d.doc.lines[i].typeCode}</td><td>{d.doc.lines[i].typeText}</td><td>{d.doc.lines[i].message}</td></tr>
+      <tr><td>{d.doc.lines[i+1]}</td></tr>
     </tbody>
   </table>
 </body>

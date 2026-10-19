@@ -324,7 +324,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                   (open.status === 'skipped' ? (
                     <p className="rounded-md border bg-muted/40 px-3 py-2 text-muted-foreground text-sm">{open.error}</p>
                   ) : (
-                    <ErrorNote>{open.error}</ErrorNote>
+                    <ErrorNote detail={open.steps.find((step) => !step.ok)?.detail}>{open.error}</ErrorNote>
                   ))}
                 <div>
                   <h3 className="mb-2 font-medium text-sm">Steps</h3>

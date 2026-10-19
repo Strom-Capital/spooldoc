@@ -75,15 +75,28 @@ not read.
 
 Set `SPOOLDOC_ALLOWED_HOSTS` to limit which systems users can add.
 
-## Rendering
+## Carbone
 
-Templates run on the server. Nunjucks has no sandbox, so Spooldoc blocks
-the member names that lead from a template value to code (`constructor`,
-`prototype` and the like) and returns template errors instead of throwing.
-PDFs render in headless Chromium, where the page may not make any network
-request, so a template cannot fetch or send anything; logos, images and
-fonts come from uploaded assets as data URIs, and the bytes decide an
-asset's type, not its file name.
+Templates are not run in the Spooldoc process: Carbone renders them, and
+Carbone's tags only read the data Spooldoc sends with each document.
+Logos, images and fonts come from uploaded assets, written into the
+template as data URIs, and the bytes decide an asset's type, not its file
+name.
+
+Spooldoc signs each request to an on-prem Carbone server with a token that
+lasts five minutes (ES512, audience `carbone-ee`). The private key is
+encrypted with `SPOOLDOC_SECRET_KEY`; only the public key leaves the
+server, into Carbone's settings. In the Compose file Carbone's port is not
+published, so only the Spooldoc container reaches it.
+
+With Carbone Cloud, the template and the data of each document go to
+Carbone's servers over https to be rendered. Masking does not apply to
+rendering: Carbone gets the values as extracted, since they go into the
+documents. Choose Cloud only when that is acceptable for your documents.
+The Cloud API key is stored encrypted and never sent to the browser.
+
+Carbone's startup log names the licensee of an Enterprise licence.
+Spooldoc never reads or copies that log.
 
 ## Checklist
 

@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { findOutput } from '@/lib/job-spec';
-import { assetResolver } from '@/lib/server/assets';
+import { assetNames, assetResolver } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
+import { previewRenderer } from '@/lib/server/documents';
 import { errorResponse, json, readJson } from '@/lib/server/http';
 import { draftAndSample } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
@@ -21,7 +22,7 @@ const renderSchema = z.object({
   outputId: z.string().max(40).optional(),
 });
 
-/** Render the preview sample with the draft (or unsaved editor text). */
+/** Render the preview sample with the draft (or unsaved editor text), to HTML with Carbone. */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const auth = await guard(request);
   if ('response' in auth) {
@@ -49,5 +50,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     html = output.template.source;
   }
-  return json(renderSample(sample, { yaml, html, document: body.data.document, asset: await assetResolver() }));
+  const assets = (await assetNames()).map((asset) => asset.name);
+  return json(await renderSample(sample, { yaml, html, document: body.data.document, asset: await assetResolver(), assets, renderer: await previewRenderer() }));
 }

@@ -1,4 +1,4 @@
-import type { CodePageSource, ExtractResult, FieldHit, Sample, SamplePage } from '@spooldoc/core';
+import type { CodePageSource, ExtractResult, FieldHit, Sample, SamplePage, TemplateProblem } from '@spooldoc/core';
 
 export type { FieldHit, SamplePage };
 
@@ -9,7 +9,10 @@ export type SampleView = Omit<Sample, 'rawBase64'> & { codePageSource: CodePageS
 export interface RenderResult {
   sample: SampleView;
   definition?: { type: string; yaml: string; error?: string };
-  template?: { html: string; error?: string; generated?: boolean };
+  /** `problems` from Spooldoc's tag check, by line, or `error` from Carbone with its own text in `detail`. */
+  template?: { html: string; error?: string; detail?: string; problems?: TemplateProblem[]; generated?: boolean };
+  /** Carbone is not connected or did not answer, so nothing was rendered. */
+  carbone?: { error: string; detail?: string };
   extract?: ExtractResult;
   /** One name per extracted document, from the definition output name. */
   names?: string[];

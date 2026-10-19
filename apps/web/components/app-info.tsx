@@ -9,8 +9,8 @@ export interface AppInfo {
   model: { provider: string; id: string } | null;
   /** Values are masked before page text goes to the model. */
   masking: boolean;
-  /** Chromium is available for PDFs. */
-  pdf: boolean;
+  /** The last check found a working Carbone server, so documents can be rendered. */
+  rendering: boolean;
 }
 
 const AppInfoContext = createContext<AppInfo | null>(null);
@@ -20,7 +20,7 @@ export function AppInfoProvider({ value, children }: { value: AppInfo; children:
   return <AppInfoContext.Provider value={value}>{children}</AppInfoContext.Provider>;
 }
 
-/** The signed-in user, the model and PDF support. */
+/** The signed-in user, the model and whether Carbone works. */
 export function useAppInfo(): AppInfo {
   const value = useContext(AppInfoContext);
   if (!value) {

@@ -60,7 +60,7 @@ export interface AssetView {
   contentType: string;
   size: number;
   updatedAt: string;
-  /** Jobs whose draft or active version prints it with `asset('name')`. */
+  /** Jobs whose draft or active version prints it with `{asset('name')}`. */
   jobs: { id: string; name: string }[];
 }
 
@@ -107,6 +107,8 @@ export interface RunStepView {
   ok: boolean;
   ms: number;
   error?: string;
+  /** The system's own text behind `error`, such as Carbone's message. */
+  detail?: string;
   note?: string;
 }
 
@@ -143,6 +145,32 @@ export interface AiSettingsView {
   providers: Record<AiProviderId, AiProviderView>;
 }
 
+/** The last check of the Carbone connection. */
+export interface CarboneCheck {
+  ok: boolean;
+  /** ISO time of the check. */
+  at: string;
+  version?: string;
+  /** From the probe on-prem; `cloud` for Carbone Cloud, which is not probed. */
+  edition?: 'enterprise' | 'community' | 'cloud';
+  /** What went wrong and what to do. */
+  error?: string;
+  /** Carbone's own text, for support. */
+  detail?: string;
+}
+
+/** Where documents are rendered. Never carries the Cloud key or the private key. */
+export interface RenderingView {
+  mode: 'onprem' | 'cloud';
+  /** The on-prem server's URL (the default when none is saved). */
+  url: string;
+  /** A Carbone Cloud key is saved. */
+  hasApiKey: boolean;
+  /** Spooldoc's public key, as CARBONE_AUTHENTICATION_PUBLIC_KEY needs it: one line, newlines written as \n. */
+  publicKey: string;
+  check: CarboneCheck | null;
+}
+
 /** App-wide watcher settings. */
 export interface SettingsView {
   pollSeconds: number;
@@ -152,6 +180,7 @@ export interface SettingsView {
   /** The last cleanup of old runs by this server process, if it did one. */
   cleanup: { at: string; runs: number; samples: number; error?: string } | null;
   ai: AiSettingsView;
+  rendering: RenderingView;
 }
 
 /** An item of Needs attention on Home, to dismiss or bring back. */

@@ -21,25 +21,24 @@
 <body>
   <h1>Pick list</h1>
   <dl>
-    <dt>Picklist No</dt><dd>{{ doc.picklistNo }}</dd>
-    <dt>Order No</dt><dd>{{ doc.orderNo }}</dd>
-    <dt>Customer No</dt><dd>{{ doc.customerNo }}</dd>
-    <dt>Route</dt><dd>{{ doc.route }}</dd>
-    <dt>Ship Date</dt><dd>{{ doc.shipDate }}</dd>
-    <dt>Warehouse</dt><dd>{{ doc.warehouse }}</dd>
-    <dt>Deliver Name</dt><dd>{{ doc.deliverName }}</dd>
-    <dt>Deliver Address1</dt><dd>{{ doc.deliverAddress1 }}</dd>
-    <dt>Deliver Address2</dt><dd>{{ doc.deliverAddress2 }}</dd>
-    <dt>Deliver Address3</dt><dd>{{ doc.deliverAddress3 }}</dd>
-    <dt>Line Count</dt><dd>{{ doc.lineCount }}</dd>
+    <dt>Picklist No</dt><dd>{d.doc.picklistNo}</dd>
+    <dt>Order No</dt><dd>{d.doc.orderNo}</dd>
+    <dt>Customer No</dt><dd>{d.doc.customerNo}</dd>
+    <dt>Route</dt><dd>{d.doc.route}</dd>
+    <dt>Ship Date</dt><dd>{d.doc.shipDate}</dd>
+    <dt>Warehouse</dt><dd>{d.doc.warehouse}</dd>
+    <dt>Deliver Name</dt><dd>{d.doc.deliverName}</dd>
+    <dt>Deliver Address1</dt><dd>{d.doc.deliverAddress1}</dd>
+    <dt>Deliver Address2</dt><dd>{d.doc.deliverAddress2}</dd>
+    <dt>Deliver Address3</dt><dd>{d.doc.deliverAddress3}</dd>
+    <dt>Line Count</dt><dd>{d.doc.lineCount}</dd>
   </dl>
   <h2>Lines</h2>
   <table>
     <thead><tr><th>Line</th><th>Item</th><th>Description</th><th>Bin</th><th>Lot</th><th>Quantity</th><th>Unit</th></tr></thead>
     <tbody>
-      {% for row in doc.lines %}
-      <tr><td>{{ row.line }}</td><td>{{ row.item }}</td><td>{{ row.description }}</td><td>{{ row.bin }}</td><td>{{ row.lot }}</td><td>{{ row.quantity }}</td><td>{{ row.unit }}</td></tr>
-      {% endfor %}
+      <tr><td>{d.doc.lines[i].line}</td><td>{d.doc.lines[i].item}</td><td>{d.doc.lines[i].description}</td><td>{d.doc.lines[i].bin}</td><td>{d.doc.lines[i].lot}</td><td>{d.doc.lines[i].quantity}</td><td>{d.doc.lines[i].unit}</td></tr>
+      <tr><td>{d.doc.lines[i+1]}</td></tr>
     </tbody>
   </table>
 </body>

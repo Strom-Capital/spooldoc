@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Invoice {{ doc.invoiceNo }}</title>
+<style>
+  @page { size: A4; margin: 15mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 9.5pt; color: #1a1a1a; margin: 0; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10mm; }
+  .seller { line-height: 1.4; }
+  .seller strong { font-size: 14pt; }
+  h1 { font-size: 22pt; letter-spacing: 0.08em; margin: 0; }
+  .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; margin-bottom: 8mm; }
+  .bill-to { line-height: 1.45; }
+  .label { color: #666; font-size: 8pt; text-transform: uppercase; letter-spacing: 0.06em; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 1mm 5mm; margin: 0; }
+  dt { color: #666; }
+  dd { margin: 0; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 1.6mm 2mm; border-bottom: 0.2mm solid #ddd; text-align: left; vertical-align: top; }
+  th { border-bottom: 0.4mm solid #222; font-weight: 600; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr { page-break-inside: avoid; }
+  .totals { margin-left: auto; width: 75mm; margin-top: 5mm; }
+  .totals td { border: 0; padding: 1mm 2mm; }
+  .totals .grand td { border-top: 0.4mm solid #222; font-weight: 700; font-size: 11pt; }
+  footer { margin-top: 12mm; color: #666; font-size: 8pt; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="seller">
+      <strong>MYCO LTD</strong><br>
+      Industrial Road 12<br>
+      FI-00100 HELSINKI
+    </div>
+    <h1>INVOICE</h1>
+  </header>
+
+  <section class="parties">
+    <div class="bill-to">
+      <div class="label">Bill to</div>
+      <strong>{{ doc.customerName }}</strong><br>
+      {% if doc.address1 %}{{ doc.address1 }}<br>{% endif %}
+      {% if doc.address2 %}{{ doc.address2 }}<br>{% endif %}
+      {% if doc.address3 %}{{ doc.address3 }}<br>{% endif %}
+      Customer no {{ doc.customerNo }}
+    </div>
+    <dl>
+      <dt>Invoice no</dt><dd>{{ doc.invoiceNo }}</dd>
+      <dt>Invoice date</dt><dd>{{ doc.invoiceDate | date }}</dd>
+      <dt>Due date</dt><dd>{{ doc.dueDate | date }}</dd>
+      <dt>Payment terms</dt><dd>{{ doc.paymentTerms }}</dd>
+      <dt>Your reference</dt><dd>{{ doc.reference }}</dd>
+      <dt>Our order no</dt><dd>{{ doc.orderNo }}</dd>
+    </dl>
+  </section>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Line</th><th>Item</th><th>Description</th>
+        <th class="num">Quantity</th><th>Unit</th><th class="num">Unit price</th><th class="num">Amount</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in doc.lines %}
+      <tr>
+        <td>{{ row.line }}</td><td>{{ row.item }}</td><td>{{ row.description }}</td>
+        <td class="num">{{ row.quantity }}</td><td>{{ row.unit }}</td>
+        <td class="num">{{ row.unitPrice | money }}</td><td class="num">{{ row.amount | money }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <table class="totals">
+    <tr><td>Net amount</td><td class="num">{{ doc.netAmount | money }}</td></tr>
+    <tr><td>VAT {{ doc.vatRate }} %</td><td class="num">{{ doc.vatAmount | money }}</td></tr>
+    <tr class="grand"><td>Total</td><td class="num">{{ doc.totalAmount | money(doc.currency) }}</td></tr>
+  </table>
+
+  <footer>MYCO LTD, Industrial Road 12, FI-00100 HELSINKI, Business ID 1234567-8</footer>
+</body>
+</html>

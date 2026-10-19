@@ -139,6 +139,7 @@ describe('POST /api/jobs/[id]/chat', () => {
     expect(model.doStreamCalls[0]?.tools?.map((t) => t.name).sort()).toEqual([
       'add_output',
       'list_jobs',
+      'read_carbone_reference',
       'read_job_files',
       'read_sample_page',
       'remove_output',
@@ -165,7 +166,7 @@ describe('POST /api/jobs/[id]/chat', () => {
       withKey(
         scriptedModel(
           toolStep('add_output', { label: 'Lines', formats: ['html'] }),
-          toolStep('write_template', { html: '<p>{{ doc.invoiceNo }}</p>', output: 'Lines' }),
+          toolStep('write_template', { html: '<p>{d.doc.invoiceNo}</p>', output: 'Lines' }),
           toolStep('remove_output', { output: 'Document' }),
           textStep('Done.'),
         ),
@@ -174,7 +175,7 @@ describe('POST /api/jobs/[id]/chat', () => {
     await chunks(await chat());
 
     expect((await draft()).render.outputs).toEqual([
-      { id: 'lines', label: 'Lines', template: { kind: 'html', source: '<p>{{ doc.invoiceNo }}</p>' }, formats: ['html'] },
+      { id: 'lines', label: 'Lines', template: { kind: 'html', source: '<p>{d.doc.invoiceNo}</p>' }, formats: ['html'] },
     ]);
   });
 

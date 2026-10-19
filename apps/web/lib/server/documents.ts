@@ -1,14 +1,8 @@
 import 'server-only';
 
-import { documentName, pageLayout, parseDefinition, renderTemplate, type AssetResolver, type Definition, type Sample } from '@spooldoc/core';
-import { loadPdf } from './pdf';
-
-/** One rendered document: its file name (without extension) and HTML. */
-export interface RenderedDocument {
-  index: number;
-  name: string;
-  html: string;
-}
+import { convertNunjucks, documentName, parseDefinition, renderDocument, starterTemplate, type Definition, type DocumentRender } from '@spooldoc/core';
+import { log } from './log';
+import { carboneServer, noteRenderFailure, renderingReady } from './rendering';
 
 /**
  * The file name of a document: the definition's `output.name`, or `<fallback>-<n>`.
@@ -24,49 +18,54 @@ export function fileNameFor(def: Definition | null, doc: Record<string, unknown>
   return `${fallback}-${index + 1}`;
 }
 
-/**
- * A Nunjucks error on one line, as run errors are: "(unknown path)\n  Error: There is no asset ..."
- * becomes "There is no asset ...".
- */
-function oneLine(error: string): string {
-  return error
-    .split('\n')
-    .map((line) => line.trim().replace(/^Error: /, ''))
-    .filter((line) => line && line !== '(unknown path)')
-    .join(' ');
+/** The Carbone template of an output: its own, converted from Nunjucks if it is from before Carbone, or the starter template. */
+export function outputTemplate(source: string | null | undefined, def: Definition): string {
+  return source === null || source === undefined ? starterTemplate(def) : convertNunjucks(source);
+}
+
+/** Renders one document to a file. */
+export type DocumentRenderer = (input: DocumentRender) => Promise<Uint8Array>;
+
+let override: DocumentRenderer | null = null;
+
+/** Render with something else than Carbone, for tests. Null goes back to Carbone. */
+export function setDocumentRenderer(next: DocumentRenderer | null): void {
+  override = next;
 }
 
 /**
- * Render every document of a sample to HTML, with `asset('name')` resolved by `asset`.
+ * A renderer for the Carbone server set in Settings, for one run or preview. A render
+ * that can't reach Carbone, or that Carbone refuses, is noted, so Settings and the setup
+ * checklist show it.
  *
- * @throws Error with the template errors when a document does not render
+ * @throws CarboneError when no Carbone server can be used, such as Carbone Cloud without a key
  */
-export function renderDocuments(
-  def: Definition,
-  html: string,
-  documents: Record<string, unknown>[],
-  sample: Sample,
-  asset?: AssetResolver,
-): RenderedDocument[] {
-  return documents.map((doc, index) => {
-    const rendered = renderTemplate(html, { doc, documents, sample: { id: sample.id, splf: sample.splf } }, { asset });
-    if (rendered.errors.length > 0) {
-      throw new Error(`Document ${index + 1}: ${rendered.errors.map(oneLine).join('; ')}`);
+export async function documentRenderer(): Promise<DocumentRenderer> {
+  if (override) return override;
+  const server = await carboneServer();
+  return async (input) => {
+    try {
+      return await renderDocument(server, input);
+    } catch (error) {
+      await noteRenderFailure(error);
+      throw error;
     }
-    return { index, name: fileNameFor(def, doc, index, sample.splf.name.toLowerCase()), html: rendered.html };
-  });
+  };
 }
 
 /**
- * A rendered document as PDF bytes. A4, landscape for pages wider than 160 columns,
- * unless the template sets `@page { size }`.
- *
- * @throws PdfUnavailableError without Chromium, PdfTimeoutError, or a render error
+ * The renderer for a workbench preview, or null when the last check found Carbone not
+ * working: with no working Carbone server there is no render to try.
  */
-export async function htmlToPdf(html: string, pageWidth: number): Promise<Uint8Array> {
-  const layout = pageLayout(html, pageWidth);
-  const { renderPdf } = await loadPdf();
-  return renderPdf(html, { format: layout.format, landscape: layout.landscape });
+export async function previewRenderer(): Promise<DocumentRenderer | null> {
+  if (override) return override;
+  if (!(await renderingReady())) return null;
+  try {
+    return await documentRenderer();
+  } catch (error) {
+    log.warn('Could not use Carbone for a preview', { error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
 }
 
 /** Parse a definition, or null when it does not parse. */

@@ -12,6 +12,8 @@ import type {
 } from '@/lib/chat-types';
 import { jobSpecSchema, type JobOutput } from '@/lib/job-spec';
 import { buildTools, visibleText, type DraftStore, type JobFiles, type JobFilesReader } from '@/lib/server/chat';
+import type { DocumentRenderer } from '@/lib/server/documents';
+import { fakeCarbone, fakeRenderer } from './helpers/carbone';
 import { fixtureText, loadSample } from './helpers/fake-connection';
 
 const sample = loadSample('invoice');
@@ -84,7 +86,7 @@ class MemoryJobs implements JobFilesReader {
   }
 }
 
-const tools = (masked = false, jobs?: JobFilesReader) => buildTools({ sample, store, masked, jobs });
+const tools = (masked = false, jobs?: JobFilesReader, renderer: DocumentRenderer | null = fakeRenderer) => buildTools({ sample, store, masked, jobs, renderer });
 
 async function call<T>(t: { execute?: (input: never, opts: never) => unknown }, input: unknown): Promise<T> {
   return (await t.execute?.(input as never, options as never)) as T;
@@ -152,14 +154,37 @@ describe('write_template', () => {
   it('saves the template of the output named by id or name, and fails for an unknown output', async () => {
     await call(tools().write_definition, { yaml });
     await call(tools().add_output, { label: 'Lines' });
-    const byName = await call<WriteTemplateResult>(tools().write_template, { html: '<p>{{ doc.invoiceNo }}</p>', output: 'lines' });
+    const byName = await call<WriteTemplateResult>(tools().write_template, { html: '<p>{d.doc.invoiceNo}</p>', output: 'lines' });
     if (!('path' in byName)) throw new Error(byName.error);
     expect(byName.output).toBe('Lines');
-    expect(store.outputs.map((o) => o.template.source)).toEqual([null, '<p>{{ doc.invoiceNo }}</p>']);
+    expect(store.outputs.map((o) => o.template.source)).toEqual([null, '<p>{d.doc.invoiceNo}</p>']);
 
     const unknown = await call<WriteTemplateResult>(tools().write_template, { html: '<p/>', output: 'Totals' });
     expect(unknown).toEqual({ ok: false, error: 'There is no output "Totals". The job\'s outputs are Document (id main), Lines (id lines).' });
-    expect(store.outputs[1]!.template.source).toBe('<p>{{ doc.invoiceNo }}</p>');
+    expect(store.outputs[1]!.template.source).toBe('<p>{d.doc.invoiceNo}</p>');
+  });
+
+  it('checks the template by line before it renders', async () => {
+    await call(tools().write_definition, { yaml });
+    const result = await call<WriteTemplateResult>(tools().write_template, { html: '<p>\n{d.doc.invoiceNumber}</p>' });
+    if (!('path' in result)) throw new Error(result.error);
+    expect(result.errors).toEqual(['Line 2: {d.doc.invoiceNumber} is not in the data. Did you mean {d.doc.invoiceNo}?']);
+    expect(fakeCarbone).not.toHaveBeenCalled();
+  });
+
+  it('only checks the template when Carbone is not connected', async () => {
+    await call(tools().write_definition, { yaml });
+    const result = await call<WriteTemplateResult>(tools(false, undefined, null).write_template, { html: template });
+    if (!('path' in result)) throw new Error(result.error);
+    expect(result.errors).toEqual(['Carbone is not connected, so the template was checked but not rendered. The user sets it up in Settings, under Rendering.']);
+    expect(store.html).toBe(template);
+  });
+
+  it('renders with placeholders for assets, never the file', async () => {
+    await call(tools().write_definition, { yaml });
+    const withLogo = buildTools({ sample, store, masked: false, renderer: fakeRenderer, assets: [{ name: 'logo', kind: 'image' }] });
+    await call(withLogo.write_template, { html: `<img src="{asset('logo')}">{d.doc.invoiceNo}` });
+    expect(fakeCarbone.mock.calls[0]![0].asset?.('logo')).toBe('data:,');
   });
 
   it('reports template errors and warns about scripts and external resources', async () => {
@@ -233,7 +258,7 @@ describe('render_preview', () => {
     await call(tools().write_definition, { yaml });
     await call(tools().write_template, { html: template });
     await call(tools().add_output, { label: 'Lines' });
-    await call(tools().write_template, { html: '<p>Lines of {{ doc.invoiceNo }}</p>', output: 'Lines' });
+    await call(tools().write_template, { html: '<p>Lines of {d.doc.invoiceNo}</p>', output: 'Lines' });
 
     const lines = await call<RenderPreviewResult>(tools().render_preview, { output: 'lines' });
     if (!lines.ok) throw new Error(lines.error);

@@ -63,22 +63,22 @@ const theme = EditorView.theme({
   '.cm-placeholder': { color: 'var(--muted-foreground)' },
   '.cm-panels': { backgroundColor: 'var(--muted)', color: 'var(--foreground)' },
   '.cm-panels-bottom': { borderTop: '1px solid var(--border)' },
-  '.cm-nunjucks': { backgroundColor: 'var(--syntax-template)', color: 'var(--primary)', borderRadius: '2px' },
+  '.cm-template-tag': { backgroundColor: 'var(--syntax-template)', color: 'var(--primary)', borderRadius: '2px' },
 });
 
-/** Nunjucks `{{ }}`, `{% %}` and `{# #}` marked on top of the HTML highlighting. */
-const nunjucksMatcher = new MatchDecorator({
-  regexp: /\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}|\{#[\s\S]*?#\}/g,
-  decoration: Decoration.mark({ class: 'cm-nunjucks' }),
+/** Carbone tags (`{d.doc.x}`, `{#alias = ...}`, `{t(text)}`, ...) and `{asset('name')}` marked on top of the HTML highlighting. */
+const tagMatcher = new MatchDecorator({
+  regexp: /\{(?:[dco](?=[.[:}])|#|\$|t\(|asset\()[^{}\n]*\}/g,
+  decoration: Decoration.mark({ class: 'cm-template-tag' }),
 });
-const nunjucks = ViewPlugin.fromClass(
+const templateTags = ViewPlugin.fromClass(
   class {
     decorations: DecorationSet;
     constructor(view: EditorView) {
-      this.decorations = nunjucksMatcher.createDeco(view);
+      this.decorations = tagMatcher.createDeco(view);
     }
     update(update: ViewUpdate) {
-      this.decorations = nunjucksMatcher.updateDeco(update, this.decorations);
+      this.decorations = tagMatcher.updateDeco(update, this.decorations);
     }
   },
   { decorations: (plugin) => plugin.decorations },
@@ -89,7 +89,7 @@ const external = Annotation.define<boolean>();
 
 const LANGUAGES: Record<CodeLanguage, () => Extension> = {
   yaml: () => yaml(),
-  html: () => [html(), nunjucks],
+  html: () => [html(), templateTags],
   json: () => json(),
 };
 

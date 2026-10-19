@@ -106,8 +106,8 @@ runs and their files. One `pg_dump` is the whole backup. See
 
 ## Can I use it without Docker?
 
-Yes: Node 22, a JDK 17 for the jt400 bridge, Postgres, and Chrome or
-Chromium for PDFs. See [Contributing](contributing.md).
+Yes: Node 22, a JDK 17 for the jt400 bridge, Postgres, and a Carbone
+server to render documents. See [Contributing](contributing.md).
 
 ## What is coming?
 

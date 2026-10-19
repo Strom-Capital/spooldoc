@@ -44,7 +44,7 @@ was cut off". Retry it to run the file again.
 |------|--------------|
 | Capture | Reads the spooled file and stores it as a sample. |
 | Extract | Matches the file against the definition and reads the documents. |
-| Render | Renders each document with the template of each output, to the output's formats: HTML, PDF or both. |
+| Render | Checks the template of each output, then renders each document with it, to the output's formats: HTML, PDF or both, with [Carbone](carbone.md). A failed render shows Carbone's own text under Details. |
 | Deliver | Hands every file to the destination. |
 | Finish | Holds, moves, deletes or leaves the spooled file. |
 

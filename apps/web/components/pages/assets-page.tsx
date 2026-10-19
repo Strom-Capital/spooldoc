@@ -41,11 +41,11 @@ function nameFromFile(file: string): string {
 /** What to put in a template to use the asset. */
 function usage(asset: AssetView): string {
   return asset.kind === 'font'
-    ? `@font-face { font-family: "${asset.name}"; src: url("{{ asset('${asset.name}') }}"); }`
-    : `<img src="{{ asset('${asset.name}') }}" alt="">`;
+    ? `@font-face { font-family: "${asset.name}"; src: url("{asset('${asset.name}')}"); }`
+    : `<img src="{asset('${asset.name}')}" alt="">`;
 }
 
-/** Images and fonts that templates print with `asset('name')`. */
+/** Images and fonts that templates print with `{asset('name')}`. */
 export function AssetsPage() {
   const [assets, setAssets] = useState<AssetView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -109,7 +109,7 @@ export function AssetsPage() {
       title="Assets"
       description={
         <>
-          Logos, images and fonts for templates. A template prints one with <code className="font-mono text-xs">{"{{ asset('name') }}"}</code>, and
+          Logos, images and fonts for templates. A template prints one with <code className="font-mono text-xs">{"{asset('name')}"}</code>, and
           it is embedded in every document.
         </>
       }
@@ -369,7 +369,7 @@ function UploadDialog({ onClose, onSaved }: { onClose(): void; onSaved(asset: As
             />
             <p className="text-muted-foreground text-xs">
               Lowercase letters, digits, dashes and underscores. Templates print it with{' '}
-              <code className="font-mono">{`{{ asset('${name || 'name'}') }}`}</code>.
+              <code className="font-mono">{`{asset('${name || 'name'}')}`}</code>.
             </p>
           </div>
           {error && <ErrorNote>{error}</ErrorNote>}

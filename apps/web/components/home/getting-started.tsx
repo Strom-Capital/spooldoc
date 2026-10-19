@@ -5,17 +5,15 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import type { DashboardView } from '@/lib/types';
 
-type Setup = DashboardView['setup'] & { pdf: boolean };
-
-const CONFIGURATION = 'https://github.com/Strom-Capital/spooldoc/blob/main/docs/configuration.md#environment-variables';
+type Setup = DashboardView['setup'] & { rendering: boolean };
 
 const STEPS: { key: keyof Setup; title: string; text: string; href: string; action: string }[] = [
   {
-    key: 'pdf',
-    title: 'Make PDFs work',
-    text: 'Spooldoc needs Chrome or Chromium for PDF output. The container image has it; elsewhere set SPOOLDOC_CHROMIUM_PATH. HTML output works without it.',
-    href: CONFIGURATION,
-    action: 'Configuration',
+    key: 'rendering',
+    title: 'Connect Carbone',
+    text: 'Spooldoc renders every document with Carbone. Start the Carbone service with Spooldoc\'s public key, or use Carbone Cloud.',
+    href: '/settings#rendering',
+    action: 'Settings',
   },
   { key: 'server', title: 'Add a server', text: 'Connect to an IBM i and test the connection.', href: '/servers', action: 'Servers' },
   { key: 'ai', title: 'Choose an AI provider', text: 'The chat proposes definitions and templates from a sample spooled file.', href: '/settings', action: 'Settings' },
@@ -25,11 +23,11 @@ const STEPS: { key: keyof Setup; title: string; text: string; href: string; acti
 
 /**
  * The setup steps in order, with the next open one highlighted. Hidden once every step is
- * done; it comes back when PDF output stops working, since nothing else says so before a
- * run fails.
+ * done; it comes back when Carbone stops working, since nothing else says so before a run
+ * fails.
  */
 export function GettingStarted({ setup: dashboard }: { setup: DashboardView['setup'] }) {
-  const setup: Setup = { ...dashboard, pdf: useAppInfo().pdf };
+  const setup: Setup = { ...dashboard, rendering: useAppInfo().rendering };
   const next = STEPS.find((step) => !setup[step.key]);
   if (!next) return null;
   const done = STEPS.filter((step) => setup[step.key]).length;

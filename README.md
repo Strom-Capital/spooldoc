@@ -51,15 +51,16 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 - **Definitions in YAML**: fields by label, pattern or position, tables,
   multi-line records, split keys for documents printed back to back, and
   XML-in-spool.
-- **HTML templates**: Nunjucks templates with your logos, images and fonts,
-  rendered to PDF in headless Chromium, or delivered as HTML.
+- **HTML templates**: [Carbone](https://carbone.io) tags with your logos,
+  images and fonts, rendered to PDF or HTML by a Carbone server of your own
+  or Carbone Cloud. Spooldoc checks every tag against the definition first.
 - **AI assistant**: Anthropic, Google, OpenAI, OpenRouter, Vercel AI
   Gateway or a local model writes the first definition and template, reads
   the extraction report and fixes what is missing. Values are masked before
   page text leaves the server.
 - **Job log**: every run with its steps, errors and files; retention you set.
-- **One image**: web app, Java runtime and Chromium in one container, amd64
-  and arm64.
+- **One Compose file**: the web app with its Java runtime, Postgres and
+  Carbone, amd64 and arm64.
 
 <p align="center">
   <picture>
@@ -109,6 +110,7 @@ To run from source instead, see [Contributing](docs/contributing.md).
 | [Jobs](docs/jobs.md) | The job builder, versions, triggers, finish actions |
 | [Definitions](docs/definitions.md) | The YAML that turns pages into JSON |
 | [Templates](docs/templates.md) | HTML templates, filters, assets, PDF layout |
+| [Carbone](docs/carbone.md) | The Carbone server, Settings, Community and Enterprise |
 | [AI assistant](docs/ai-assistant.md) | Models, tools, masking |
 | [Destinations](docs/destinations.md) | Where documents go |
 | [Job log](docs/job-log.md) | Runs, statuses, retry, retention |
@@ -143,4 +145,7 @@ with invented ones before you paste a spooled file, a log or a screenshot.
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE). Carbone runs as its own service under its own licence;
+Spooldoc only calls it. The AI assistant's Carbone syntax reference is the
+[Carbone Skill](https://github.com/carboneio/carbone-skill) by Carbone,
+under the Apache License 2.0 (`apps/web/lib/server/carbone-skill.LICENSE`).

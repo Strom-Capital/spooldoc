@@ -30,6 +30,13 @@ describe('job spec', () => {
     expect(jobSpecSchema.parse({ render: {} }).render).toEqual({ outputs: [output()] });
   });
 
+  it('converts a Nunjucks template from before Carbone when it is read', () => {
+    const old = '<p>{{ doc.invoiceNo }}</p><ul>{% for l in doc.lines %}<li>{{ l.item }}</li>{% endfor %}</ul>';
+    const spec = jobSpecSchema.parse({ render: { template: old, formats: ['pdf'] } });
+    expect(spec.render.outputs[0]!.template.source).toBe('<p>{d.doc.invoiceNo}</p><ul><li>{d.doc.lines[i].item}</li>\n<li>{d.doc.lines[i+1]}</li></ul>');
+    expect(jobSpecSchema.parse(spec).render.outputs[0]!.template.source).toBe(spec.render.outputs[0]!.template.source);
+  });
+
   it('starts with one PDF output and keeps outputs as they are', () => {
     expect(jobSpecSchema.parse({}).render).toEqual({ outputs: [output()] });
     const two = { outputs: [output(), output({ id: 'lines', label: 'Lines', formats: ['html'] })] };

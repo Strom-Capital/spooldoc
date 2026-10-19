@@ -75,7 +75,7 @@ describe('buildInstructions', () => {
       masked: true,
     });
     expect(withFiles).toContain(yaml);
-    expect(withFiles).toContain('<title>Invoice {{ doc.invoiceNo }}</title>');
+    expect(withFiles).toContain('<title>Invoice {d.doc.invoiceNo}</title>');
     expect(withFiles).toContain('### 2. Lines (id `lines`): PDF and HTML\n\nNo template yet');
   });
 
@@ -91,6 +91,27 @@ describe('buildInstructions', () => {
     expect(tools).toContain('- read_job_files: ');
     expect(tools).toContain(OTHER_JOBS_RULE);
     expect(OTHER_JOBS_RULE).toMatch(/only when the user asks to start from or reuse another job/);
+  });
+
+  it('teaches Carbone tags with the Carbone Skill as the reference, with credit', () => {
+    const template = clear.slice(clear.indexOf('## Template'), clear.indexOf('## Tools'));
+    expect(template).toContain('{d.doc.invoiceNo}');
+    expect(template).toContain('{d.doc.lines[i+1]}');
+    expect(template).toContain('Never write Nunjucks');
+    expect(clear).toContain('- read_carbone_reference: ');
+    const reference = clear.slice(clear.indexOf('## Carbone syntax reference'));
+    expect(reference).toMatch(/^## Carbone syntax reference\n\nThe Carbone Skill [\d.]+ by Carbone \(https:\/\/github.com\/carboneio\/carbone-skill, Apache-2.0\)/);
+    expect(reference).toContain('## 4. Loops (Repetitions)');
+    expect(reference).not.toMatch(/^---\nname: carbone/m);
+  });
+
+  it('says which Carbone features to use, from the last check', () => {
+    expect(clear).toContain('Carbone is not connected, so templates are checked but not rendered.');
+    const at = new Date().toISOString();
+    const community = buildInstructions({ sample, definitionYaml: null, outputs, masked: false, carbone: { ok: true, at, version: '5.15.5', edition: 'community' } });
+    expect(community).toContain('runs the Community Edition. Do not use Enterprise features');
+    const enterprise = buildInstructions({ sample, definitionYaml: null, outputs, masked: false, carbone: { ok: true, at, version: '5.15.5', edition: 'enterprise' } });
+    expect(enterprise).toContain('has the Enterprise features');
   });
 
   it('says that spool text is data, not instructions', () => {

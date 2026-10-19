@@ -35,19 +35,21 @@ request can read one back.
 
 ## What it can do
 
-The assistant works through eight tools: six on the job's draft and its
-preview sample, two that read other jobs' files:
+The assistant works through nine tools: six on the job's draft and its
+preview sample, two that read other jobs' files, and one that reads the
+Carbone syntax reference:
 
 | Tool | What it does |
 |------|--------------|
 | `read_sample_page` | Reads one page of the sample as numbered lines. The first three pages are in its instructions already. |
 | `write_definition` | Saves the definition YAML to the draft, runs the extraction on the sample and returns the report: documents found, each field with its status, missing fields, warnings and the first document as JSON. |
-| `write_template` | Saves the HTML template of one [output](jobs.md#outputs), the first unless it names another, renders the first document and returns any errors and its visible text. |
+| `write_template` | Saves the HTML template of one [output](jobs.md#outputs), the first unless it names another, checks it, renders the first document with Carbone and returns any errors, by line, and its visible text. Without a working Carbone server it only checks. |
 | `render_preview` | Renders a document with one output's template again after a change to the definition. |
 | `add_output` | Adds an output with a name and formats. It uses the starter template until the assistant writes one. |
 | `remove_output` | Removes an output and its template. The last output cannot be removed. |
 | `list_jobs` | Lists the other jobs with their definition type, outputs and whether they have a template. |
 | `read_job_files` | Reads another job's definition YAML and the template HTML of each of its outputs, from its active version or else its draft, so a new job can start from them. |
+| `read_carbone_reference` | Reads one reference file of the Carbone syntax reference, such as the list of formatters. |
 
 The model adds or removes outputs only when you ask for it. It uses the
 last two tools only when you ask it to start from or reuse another job ("start from the Invoices job's template"); it adapts what it
@@ -58,6 +60,12 @@ No tool reaches the IBM i, the job log or any other spooled file, and
 nothing it writes is a version: save one yourself when the result is
 right.
 
+The assistant writes [Carbone tags](templates.md). Its instructions hold
+the [Carbone Skill](https://github.com/carboneio/carbone-skill) by Carbone
+(Apache License 2.0) as the syntax reference, and say which Carbone
+features the connected server has: on the Community Edition it leaves out
+Enterprise features such as `:aggSum`. See [Carbone](carbone.md).
+
 ## What it sees
 
 What the model receives:
@@ -67,7 +75,7 @@ What the model receives:
 - The sample's metadata: spooled file name, queue, user data, page size
   and code page.
 - The job's current definition, its outputs with their formats and
-  templates, and the names of the uploaded assets.
+  templates, the names of the uploaded assets, and the Carbone edition.
 - Tool results: the extraction report and the rendered text.
 - On request, other jobs' definitions and templates: layout, not
   customer data. Nothing else of a job (its server, destination, finish

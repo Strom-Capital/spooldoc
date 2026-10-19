@@ -47,5 +47,5 @@ text:
         - { name: unitPrice, column: 71, length: 12, type: number }
         - { name: amount, column: 91, length: 20, type: number }
 output:
-  name: "invoice-{{ invoiceNo }}"
+  name: "invoice-{d.doc.invoiceNo}"
   title: Invoice
