@@ -30,8 +30,9 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { api, errorText } from '@/lib/client/api';
+import { api, ApiError, errorText } from '@/lib/client/api';
 import { dateTime } from '@/lib/client/format';
+import { deleteNotice, startsDeleting } from '@/lib/job-spec';
 import type { JobDetail } from '@/lib/types';
 import { AiButton, AiSidebar, useAiSidebar } from './ai-sidebar';
 import { DestinationInspector, FinishInspector, SourceInspector } from './inspectors';
@@ -217,28 +218,47 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
   );
 }
 
-/** Shown while a saved version is open: it is read-only, with restore and activate. */
+/**
+ * Shown while a saved version is open: it is read-only, with restore and activate.
+ * Activating a version that starts deleting spooled files asks first.
+ */
 function VersionBanner() {
-  const { job, viewing, setViewing, refresh } = useJob();
+  const { job, spec, activeSpec, viewing, setViewing, refresh } = useJob();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The notice to confirm before the version is made active, while the question is open.
+  const [confirm, setConfirm] = useState<string | null>(null);
   if (viewing === 'draft') {
     return null;
   }
   const version = job.versions.find((v) => v.number === viewing);
+  // While the active version is loading, whether it deletes is not known; the server asks then.
+  const known = job.activeVersion === null || activeSpec !== null;
 
-  async function act(path: 'restore' | 'activate') {
+  async function act(path: 'restore' | 'activate', confirmDelete = false) {
     setBusy(true);
     setError(null);
     try {
-      await api(`/api/jobs/${job.id}/versions/${viewing}/${path}`, { method: 'POST' });
+      await api(`/api/jobs/${job.id}/versions/${viewing}/${path}`, { method: 'POST', body: path === 'activate' ? { confirmDelete } : undefined });
       toast.success(path === 'activate' ? `Version ${viewing} is now active` : `Version ${viewing} copied to the draft`);
       await refresh();
       if (path === 'restore') await setViewing('draft');
     } catch (err) {
-      setError(errorText(err));
+      if (path === 'activate' && err instanceof ApiError && err.status === 409) {
+        setConfirm(err.message);
+      } else {
+        setError(errorText(err));
+      }
     } finally {
       setBusy(false);
+    }
+  }
+
+  function onActivate() {
+    if (known && startsDeleting(spec, activeSpec)) {
+      setConfirm(deleteNotice(spec));
+    } else {
+      void act('activate');
     }
   }
 
@@ -252,7 +272,7 @@ function VersionBanner() {
       {error && <span className="text-destructive">{error}</span>}
       <div className="ml-auto flex gap-1.5">
         {job.activeVersion !== viewing && (
-          <Button size="xs" variant="outline" disabled={busy} onClick={() => act('activate')}>
+          <Button size="xs" variant="outline" disabled={busy} onClick={onActivate}>
             <StarIcon />
             Make active
           </Button>
@@ -265,6 +285,29 @@ function VersionBanner() {
           Back to draft
         </Button>
       </div>
+      <AlertDialog open={confirm !== null} onOpenChange={(open) => !open && setConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Make version {viewing} active and start deleting?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirm} This cannot be undone. Keep it only when the delivered files are the record.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                setConfirm(null);
+                void act('activate', true);
+              }}
+            >
+              <Trash2Icon />
+              Make active
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2Icon, CircleAlertIcon, CircleSlashIcon, PlayIcon, SaveIcon, XCircleIcon } from 'lucide-react';
+import { CheckCircle2Icon, CircleAlertIcon, CircleSlashIcon, PlayIcon, SaveIcon, Trash2Icon, XCircleIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -13,19 +13,27 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { api, errorText } from '@/lib/client/api';
-import { filterParams, splfKey } from '@/lib/job-spec';
+import { deleteNotice, filterParams, splfKey, startsDeleting } from '@/lib/job-spec';
 import type { RunView, SpooledFileView } from '@/lib/types';
 import { useJob } from './job-provider';
 
-/** Save the draft as the next version, by default the active one. */
+/**
+ * Save the draft as the next version, by default the active one. When that makes the job
+ * start deleting spooled files, the dialog says so and the save button confirms it.
+ */
 export function SaveVersionDialog({ open, onClose, onSaved }: { open: boolean; onClose(): void; onSaved?(number: number): void }) {
-  const { job, refresh, flush } = useJob();
+  const { job, refresh, flush, activeSpec } = useJob();
   const [note, setNote] = useState('');
   const [activate, setActivate] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
+  // The server's notice, when it asked for a confirmation the dialog could not tell was needed.
+  const [asked, setAsked] = useState<string | null>(null);
   const next = (job.versions[0]?.number ?? 0) + 1;
+  // While the active version is loading, whether it deletes is not known; the server asks then.
+  const known = job.activeVersion === null || activeSpec !== null;
+  const confirming = activate && (asked !== null || (known && startsDeleting(job.draft, activeSpec)));
 
   async function onSave() {
     setBusy(true);
@@ -36,9 +44,13 @@ export function SaveVersionDialog({ open, onClose, onSaved }: { open: boolean; o
       const response = await fetch(`/api/jobs/${job.id}/versions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note, activate }),
+        body: JSON.stringify({ note, activate, confirmDelete: confirming }),
       });
-      const data = (await response.json().catch(() => ({}))) as { number?: number; error?: string; problems?: string[] };
+      const data = (await response.json().catch(() => ({}))) as { number?: number; error?: string; problems?: string[]; confirm?: string };
+      if (response.status === 409 && data.confirm === 'delete') {
+        setAsked(data.error ?? deleteNotice(job.draft));
+        return;
+      }
       if (!response.ok) {
         setError(data.error ?? `Saving failed (HTTP ${response.status}).`);
         setProblems(data.problems ?? []);
@@ -46,6 +58,7 @@ export function SaveVersionDialog({ open, onClose, onSaved }: { open: boolean; o
       }
       await refresh();
       setNote('');
+      setAsked(null);
       toast.success(activate ? `Saved version ${data.number ?? next} and made it active` : `Saved version ${data.number ?? next}`);
       onSaved?.(data.number ?? next);
       onClose();
@@ -69,11 +82,26 @@ export function SaveVersionDialog({ open, onClose, onSaved }: { open: boolean; o
             <Input id="version-note" value={note} onChange={(event) => setNote(event.target.value)} placeholder="What changed" maxLength={500} />
           </div>
           <div className="flex items-center gap-2">
-            <Switch id="version-activate" checked={activate} onCheckedChange={setActivate} />
+            <Switch
+              id="version-activate"
+              checked={activate}
+              onCheckedChange={(value) => {
+                setActivate(value);
+                setAsked(null);
+              }}
+            />
             <Label htmlFor="version-activate" className="font-normal">
               Make it the active version
             </Label>
           </div>
+          {confirming && (
+            <p className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-destructive text-sm">
+              <Trash2Icon className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <span>
+                {asked ?? deleteNotice(job.draft)} This cannot be undone. Keep it only when the delivered files are the record.
+              </span>
+            </p>
+          )}
           {error && (
             <ErrorNote>
               {error}
@@ -91,9 +119,9 @@ export function SaveVersionDialog({ open, onClose, onSaved }: { open: boolean; o
           <Button variant="outline" onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button onClick={onSave} disabled={busy}>
-            {busy ? <Spinner /> : <SaveIcon />}
-            Save version {next}
+          <Button variant={confirming ? 'destructive' : 'default'} onClick={onSave} disabled={busy}>
+            {busy ? <Spinner /> : confirming ? <Trash2Icon /> : <SaveIcon />}
+            {confirming ? 'Save and start deleting' : `Save version ${next}`}
           </Button>
         </DialogFooter>
       </DialogContent>
