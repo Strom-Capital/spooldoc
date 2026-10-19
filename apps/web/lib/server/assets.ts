@@ -1,7 +1,7 @@
 import 'server-only';
 
-import type { AssetResolver } from '@spooldoc/core';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { imageInfo, type AssetResolver, type DesignImage } from '@spooldoc/core';
+import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { jobSpecSchema, type JobSpec } from '@/lib/job-spec';
 import type { AssetView } from '@/lib/types';
 import { getDb } from './db';
@@ -90,6 +90,20 @@ export async function getAsset(id: string): Promise<AssetRow | undefined> {
 export async function assetNames(): Promise<{ name: string; kind: AssetView['kind'] }[]> {
   const rows = await getDb().select({ name: assets.name, contentType: assets.contentType }).from(assets).orderBy(asc(assets.name));
   return rows.map((row) => ({ name: row.name, kind: assetKind(row.contentType) }));
+}
+
+/** The PNG and JPEG assets with their size in pixels, by name: the pictures a Word template the assistant designs can place. */
+export async function imageAssets(): Promise<Map<string, DesignImage>> {
+  const rows = await getDb()
+    .select({ name: assets.name, content: assets.content })
+    .from(assets)
+    .where(inArray(assets.contentType, ['image/png', 'image/jpeg']));
+  const out = new Map<string, DesignImage>();
+  for (const row of rows) {
+    const info = imageInfo(row.content);
+    if (info) out.set(row.name, { data: row.content, ...info });
+  }
+  return out;
 }
 
 let cache: { key: string; uris: Map<string, string> } | null = null;

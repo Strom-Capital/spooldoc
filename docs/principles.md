@@ -70,13 +70,19 @@ In practice:
 ## The page is the truth, and a person decides
 
 The user checks every extracted value next to the page it came from. The
-AI assistant proposes; it does not decide. What it writes is plain YAML
-and HTML that a person can read, edit and keep without it.
+AI assistant proposes; it does not decide. What it writes is plain YAML,
+HTML, and Word files that a person can read, edit and keep without it.
 
 In practice:
 
 - Spooldoc works without a model. The assistant saves time, it is not a
   requirement.
+- A Word template the assistant makes is an ordinary `.docx` the user
+  opens and changes in Word, made of Word's own paragraphs, tables and
+  styles. The assistant designs it as data that Spooldoc builds; no code
+  the model writes runs on the server.
+- The assistant never overwrites what the user made. A Word file it
+  writes or edits is a new file, and the earlier one stays to go back to.
 - Values are masked before page text leaves the server, and the
   assistant panel says whether they are.
 - Nothing the assistant proposes runs on the IBM i or goes live until the

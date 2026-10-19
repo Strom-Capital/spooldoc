@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { aiProviders, settings } from '@/lib/server/db/schema';
-import { createModel, describeModel } from '@/lib/server/models';
+import { createModel, describeModel, takesFiles } from '@/lib/server/models';
 import { updateAiSettings, type AiChange } from '@/lib/server/settings';
 import { resetTables } from './helpers/db';
 import { db } from './helpers/fixtures';
@@ -56,5 +56,17 @@ describe('createModel', () => {
     await db().insert(aiProviders).values({ provider: 'anthropic', apiKeyEnc: 'v1.bad.bad.bad' });
     await db().update(settings).set({ aiProvider: 'anthropic' });
     await expect(createModel()).rejects.toThrow('The stored API key cannot be decrypted');
+  });
+});
+
+describe('takesFiles', () => {
+  it('trusts the vendors whose models read files in tool results, directly or by their model id', () => {
+    expect(takesFiles({ provider: 'anthropic', id: 'claude-sonnet-5-5' })).toBe(true);
+    expect(takesFiles({ provider: 'openai', id: 'gpt-6.1-sol' })).toBe(true);
+    expect(takesFiles({ provider: 'google', id: 'gemini-pro-latest' })).toBe(true);
+    expect(takesFiles({ provider: 'openrouter', id: 'anthropic/claude-sonnet-5.5' })).toBe(true);
+    expect(takesFiles({ provider: 'gateway', id: 'google/gemini-pro' })).toBe(true);
+    expect(takesFiles({ provider: 'openrouter', id: 'example/text-only-model' })).toBe(false);
+    expect(takesFiles({ provider: 'local', id: 'anthropic/claude' })).toBe(false);
   });
 });

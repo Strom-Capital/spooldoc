@@ -386,21 +386,30 @@ export const assets = pgTable(
 );
 
 /**
- * An uploaded Word template. A row never changes (a trigger refuses updates): uploading
- * again adds a row, so a job version keeps the exact file it ran with. Outputs point at
- * it with `{ kind: 'docx', fileId }`; a file no draft or version points at is deleted
- * after the retention.
+ * A Word template file, uploaded or made by the AI assistant. A row never changes (a
+ * trigger refuses updates): uploading again, or a change by the assistant, adds a row,
+ * so a job version keeps the exact file it ran with. Outputs point at it with
+ * `{ kind: 'docx', fileId }`; a file no draft or version points at is deleted after the
+ * retention, unless a file a draft uses names it as its previous one.
  */
-export const templateFiles = pgTable('template_files', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  /** The file's name as uploaded, such as `invoice.docx`. */
-  name: text('name').notNull(),
-  contentType: text('content_type').notNull(),
-  size: integer('size').notNull(),
-  content: bytea('content').notNull(),
-  createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const templateFiles = pgTable(
+  'template_files',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** The file's name, such as `invoice.docx`. */
+    name: text('name').notNull(),
+    contentType: text('content_type').notNull(),
+    size: integer('size').notNull(),
+    content: bytea('content').notNull(),
+    /** `upload`, or `assistant` for a file the AI assistant wrote or edited. */
+    madeBy: text('made_by', { enum: ['upload', 'assistant'] }).notNull().default('upload'),
+    /** The file the output used before the assistant made this one; null for an upload or the starter template. Not a foreign key: the cleanup may delete it. */
+    previousId: uuid('previous_id'),
+    createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check('template_files_made_by_check', sql`${t.madeBy} in ('upload', 'assistant')`)],
+);
 
 /** Spooled files a job has processed, so none is processed twice. */
 export const watchSeen = pgTable(

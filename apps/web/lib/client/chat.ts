@@ -4,7 +4,9 @@ import type {
   OutputChangeResult,
   ReadJobFilesResult,
   ReadPageResult,
+  ReadWordTemplateResult,
   RenderPreviewResult,
+  WordTemplateResult,
   WriteDefinitionResult,
   WriteTemplateResult,
 } from '@/lib/chat-types';
@@ -67,6 +69,24 @@ export function toolSummary(part: ToolPartLike): ToolSummary {
         ? { text: `Wrote template of ${out.output}: no errors`, tone: 'ok' }
         : { text: `Wrote template of ${out.output}: ${plural(out.errors.length, 'error')}`, tone: 'warn' };
     }
+    case 'write_word_template':
+    case 'edit_word_template': {
+      const verb = part.toolName === 'write_word_template' ? 'Designed' : 'Edited';
+      if (!done(part.state)) return { text: part.toolName === 'write_word_template' ? 'Designing a Word template' : 'Editing the Word template', tone: 'running' };
+      const out = part.output as WordTemplateResult;
+      if (!('file' in out)) return { text: `Word template not saved: ${firstLine(out.error)}`, tone: 'warn' };
+      const seen = out.view === 'pdf' ? `, looked at ${plural(out.pages ?? 1, 'page')}` : out.view === 'png' ? ', looked at page 1' : '';
+      return out.errors.length === 0
+        ? { text: `${verb} ${out.file.name} for ${out.output}${seen}`, tone: 'ok' }
+        : { text: `${verb} ${out.file.name} for ${out.output}: ${plural(out.errors.length, 'error')}`, tone: 'warn' };
+    }
+    case 'read_word_template': {
+      if (!done(part.state)) return { text: 'Reading the Word template', tone: 'running' };
+      const out = part.output as ReadWordTemplateResult;
+      if (!out.ok) return { text: firstLine(out.error), tone: 'warn' };
+      const name = out.file ?? 'the starter template';
+      return 'part' in out ? { text: `Read ${out.part} of ${name}`, tone: 'ok' } : { text: `Read the parts of ${name}`, tone: 'ok' };
+    }
     case 'render_preview': {
       if (!done(part.state)) return { text: 'Rendering', tone: 'running' };
       const out = part.output as RenderPreviewResult;
@@ -121,6 +141,7 @@ export function savedFile(part: ToolPartLike): 'yaml' | 'html' | 'outputs' | nul
   const out = (part.output ?? {}) as { ok?: boolean; path?: string };
   if (part.toolName === 'write_definition' && out.ok === true) return 'yaml';
   if (part.toolName === 'write_template' && typeof out.path === 'string') return 'html';
+  if ((part.toolName === 'write_word_template' || part.toolName === 'edit_word_template') && typeof (part.output as { file?: unknown }).file === 'object') return 'outputs';
   if ((part.toolName === 'add_output' || part.toolName === 'remove_output') && out.ok === true) return 'outputs';
   return null;
 }

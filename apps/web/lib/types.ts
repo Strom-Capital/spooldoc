@@ -64,13 +64,22 @@ export interface AssetView {
   jobs: { id: string; name: string }[];
 }
 
-/** An uploaded Word template, without its bytes. */
+/** A Word template file, uploaded or made by the AI assistant, without its bytes. */
 export interface TemplateFileView {
   id: string;
-  /** The file's name as uploaded. */
+  /** The file's name. */
   name: string;
   size: number;
   createdAt: string;
+  /** `assistant` for a file the AI assistant wrote or edited. */
+  madeBy: 'upload' | 'assistant';
+  /** The file the output used before the assistant made this one; null for an upload or the starter template. */
+  previousId: string | null;
+}
+
+/** A Word template file with the file it replaced, when that is still kept. */
+export interface TemplateFileDetails extends TemplateFileView {
+  previous: TemplateFileView | null;
 }
 
 export type RunStatus ='running' | 'success' | 'warning' | 'failed' | 'skipped';

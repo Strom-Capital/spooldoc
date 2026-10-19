@@ -1,6 +1,6 @@
 'use client';
 
-import { DownloadIcon, FileTextIcon, FolderInputIcon, UploadIcon } from 'lucide-react';
+import { DownloadIcon, FileTextIcon, FolderInputIcon, SparklesIcon, Undo2Icon, UploadIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ErrorNote } from '@/components/page';
@@ -10,23 +10,24 @@ import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/clie
 import { postForFile } from '@/lib/client/download';
 import { bytes, dateTime } from '@/lib/client/format';
 import { FORMAT_FILES } from '@/lib/job-spec';
-import type { TemplateFileView } from '@/lib/types';
+import type { TemplateFileDetails, TemplateFileView } from '@/lib/types';
 import { EditorBar, EditorMessage } from './editor-bar';
 import { SaveStatus } from './save-status';
 import { StartFromJobDialog } from './start-from-job-dialog';
 import { useWorkbench } from './workbench-provider';
 
-/** The uploaded file's details, for the file id they were read for. */
-type FileInfo = { id: string; file: TemplateFileView } | { id: string; error: string };
+/** The file's details, for the file id they were read for. */
+type FileInfo = { id: string; file: TemplateFileDetails } | { id: string; error: string };
 
 /**
- * The Word template of the output shown: the uploaded `.docx`, or the starter template
- * generated from the definition until one is uploaded. The user changes the file in Word;
- * here they upload it, download it or the starter template, and see what the tag check
- * finds, by part.
+ * The Word template of the output shown: its `.docx`, uploaded or made by the AI
+ * assistant, or the starter template generated from the definition until there is one.
+ * The user changes the file in Word; here they upload it, download it or the starter
+ * template, see what the tag check finds, by part, and put back the file the assistant
+ * replaced.
  */
 export function WordTemplate() {
-  const { jobId, template, render, readOnly, yaml, outputId, onDraftWritten } = useWorkbench();
+  const { jobId, template, render, readOnly, yaml, outputId, onDraftWritten, setTemplate } = useWorkbench();
   const fileId = template.kind === 'docx' ? template.fileId : null;
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<'upload' | 'starter' | null>(null);
@@ -39,7 +40,7 @@ export function WordTemplate() {
       return;
     }
     const controller = new AbortController();
-    api<TemplateFileView>(`/api/template-files/${fileId}`, { signal: controller.signal }).then(
+    api<TemplateFileDetails>(`/api/template-files/${fileId}`, { signal: controller.signal }).then(
       (file) => setInfo({ id: fileId, file }),
       (err: unknown) => !isAbort(err) && setInfo({ id: fileId, error: errorText(err) }),
     );
@@ -61,7 +62,7 @@ export function WordTemplate() {
     setError(null);
     try {
       const saved = await api<TemplateFileView>(`/api/jobs/${jobId}/template-files`, { method: 'POST', body: form });
-      setInfo({ id: saved.id, file: saved });
+      setInfo({ id: saved.id, file: { ...saved, previous: null } });
       await onDraftWritten();
       toast.success(`Uploaded ${saved.name}`);
     } catch (err) {
@@ -70,6 +71,12 @@ export function WordTemplate() {
       setBusy(null);
       if (input.current) input.current.value = '';
     }
+  }
+
+  /** Use the file the assistant replaced, or the starter template when it replaced none. */
+  function restorePrevious(file: TemplateFileDetails) {
+    setTemplate({ kind: 'docx', fileId: file.previous?.id ?? null });
+    toast.success(file.previous ? `Using ${file.previous.name} again` : 'Using the starter template again');
   }
 
   async function downloadStarter() {
@@ -138,7 +145,7 @@ export function WordTemplate() {
       {!fileId && (
         <EditorMessage tone="note">
           This output has no Word template yet. The preview uses a starter template generated from the definition. Download it, change it in
-          Word and upload it.
+          Word and upload it, or ask the AI assistant to design one.
         </EditorMessage>
       )}
       {current && 'error' in current && <EditorMessage tone="error">{current.error}</EditorMessage>}
@@ -162,7 +169,7 @@ export function WordTemplate() {
               <div className="min-w-0">
                 <p className="truncate font-medium">{current.file.name}</p>
                 <p className="text-muted-foreground text-xs">
-                  {bytes(current.file.size)}, uploaded {dateTime(current.file.createdAt)}
+                  {bytes(current.file.size)}, {current.file.madeBy === 'assistant' ? 'made by the AI assistant' : 'uploaded'} {dateTime(current.file.createdAt)}
                 </p>
               </div>
             ) : current ? (
@@ -173,6 +180,9 @@ export function WordTemplate() {
               </span>
             )}
           </div>
+        )}
+        {current && 'file' in current && current.file.madeBy === 'assistant' && (
+          <PreviousFile file={current.file} readOnly={readOnly} onUse={() => restorePrevious(current.file)} />
         )}
         <h3 className="mb-2 font-medium">Tags in Word</h3>
         <ul className="list-disc space-y-1.5 pl-5 text-muted-foreground">
@@ -192,6 +202,32 @@ export function WordTemplate() {
           <li>Page numbers are Word&apos;s own fields: Insert, Page Number.</li>
         </ul>
       </div>
+    </div>
+  );
+}
+
+/**
+ * What the AI assistant replaced with the current file, and a button to use it again:
+ * the earlier file while it is kept, or the starter template when there was no file.
+ */
+function PreviousFile({ file, readOnly, onUse }: { file: TemplateFileDetails; readOnly: boolean; onUse: () => void }) {
+  const gone = file.previousId !== null && file.previous === null;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-dashed p-3 text-xs">
+      <SparklesIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <p className="min-w-0 flex-1 text-muted-foreground">
+        {file.previous
+          ? `The AI assistant made this file from ${file.previous.name}, which is kept.`
+          : gone
+            ? 'The AI assistant made this file. The file before it is no longer kept.'
+            : 'The AI assistant made this file in place of the starter template.'}
+      </p>
+      {!readOnly && !gone && (
+        <Button size="sm" variant="outline" onClick={onUse}>
+          <Undo2Icon />
+          {file.previous ? 'Use previous file' : 'Use starter template'}
+        </Button>
+      )}
     </div>
   );
 }
