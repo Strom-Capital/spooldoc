@@ -116,6 +116,7 @@ To run from source instead, see [Contributing](docs/contributing.md).
 | [Deployment](docs/deployment.md) | Docker, Compose, ports, backups, upgrades |
 | [Security](docs/security.md) | What the model sees, what is stored, how |
 | [FAQ](docs/faq.md) | Short answers to common questions |
+| [Principles](docs/principles.md) | What every change is checked against |
 | [Contributing](docs/contributing.md) | Development setup, tests, conventions |
 
 ## Status

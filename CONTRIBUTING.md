@@ -4,6 +4,9 @@ Thanks for helping. The development setup, the tests and the layout are in
 [docs/contributing.md](docs/contributing.md). The rules that every pull
 request must follow:
 
+- **The principles.** Check the change against
+  [docs/principles.md](docs/principles.md). Coding agents read it
+  through [AGENTS.md](AGENTS.md).
 - **Conventional Commits.** `feat:`, `fix:`, `docs:`, `chore:`, `ci:`,
   `test:`, with a scope when it helps (`feat(web): ...`). Pull requests
   are squash merged, so the pull request title is the commit message on
