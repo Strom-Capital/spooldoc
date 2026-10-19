@@ -7,6 +7,8 @@ process.env.BETTER_AUTH_SECRET = 'test-auth-secret-that-is-at-least-32-character
 process.env.SPOOLDOC_SECRET_KEY = Buffer.alloc(32, 7).toString('base64');
 process.env.APP_URL = 'http://localhost:3000';
 process.env.SPOOLDOC_WATCHER = 'off';
+// Tests that check the log turn it on and catch the lines with `setLogSink`.
+process.env.SPOOLDOC_LOG_LEVEL = 'off';
 delete process.env.DATABASE_URL;
 delete process.env.SPOOLDOC_ALLOWED_HOSTS;
 delete process.env.SPOOLDOC_CHROMIUM_PATH;

@@ -10,6 +10,7 @@ import { clearChat, readChat, saveChat } from '@/lib/server/job-chat';
 import { jobFilesReader } from '@/lib/server/job-files';
 import { draftAndSample } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
+import { log } from '@/lib/server/log';
 import { createModel } from '@/lib/server/models';
 
 export const dynamic = 'force-dynamic';
@@ -98,8 +99,8 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
       tools: buildTools({ sample, store: draftStore(job.id), masked: config.mask, assets, jobs: jobFilesReader(job.id) }),
       stopWhen: isStepCount(MAX_STEPS),
       abortSignal: request.signal,
-      // The default handler logs to the console; the client gets the error from the stream instead.
-      onError: () => undefined,
+      // The client gets the error from the stream; the server log gets it here, redacted.
+      onError: ({ error }) => log.warn('The AI chat failed', { jobId: job.id, error: safe(error) }),
     });
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
@@ -107,12 +108,15 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
       generateMessageId: generateId,
       // Also after a stop: the part that arrived stays on screen, so it stays in the thread.
       // A turn whose answer failed before its first token leaves the thread as it was. A
-      // thread that cannot be written (the job was deleted meanwhile) is let go.
+      // thread that cannot be written (the job was deleted meanwhile) is let go, and logged.
       onFinish: ({ responseMessage, messages: thread }) =>
-        hasContent(responseMessage) ? saveChat(job.id, thread).catch(() => undefined) : undefined,
+        hasContent(responseMessage)
+          ? saveChat(job.id, thread).catch((error: unknown) => log.warn('Could not save the AI chat', { jobId: job.id, error: safe(error) }))
+          : undefined,
       onError: safe,
     });
   } catch (error) {
+    log.error('The AI chat could not start', { jobId: job.id, error: safe(error) });
     return errorResponse(500, safe(error));
   }
 }

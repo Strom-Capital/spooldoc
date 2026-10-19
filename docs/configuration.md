@@ -24,10 +24,31 @@ to `apps/web/.env.local` for development, or put the same variables in the
 | `SPOOLDOC_DEFAULT_CCSID` | No | | The code page for spooled files that have no CHRID when the job CCSID is not supported, for example `273` or `37`. |
 | `SPOOLDOC_CHROMIUM_PATH` | No | | A Chrome or Chromium executable for PDF rendering. The container image sets `/usr/bin/chromium`. Without it, HTML output works and PDF reports that it is unavailable. |
 | `SPOOLDOC_ALLOWED_HOSTS` | No | | Comma-separated hosts servers may use. When set, the server form shows a list instead of a free text field. |
+| `SPOOLDOC_LOG_LEVEL` | No | `info` | How much the server logs: `off`, `error`, `warn`, `info` or `debug`. See [Server log](#server-log). |
 
 The server refuses to start with a missing or malformed required variable
 and says which one. The chat model, its key and effort are not environment
 variables: they are set in the app under Settings.
+
+## Server log
+
+The server writes its log to stdout, one JSON object per line, so
+`docker compose logs` or any log collector can read it. Each line has
+`time`, `level` and `msg`, and fields such as `serverId`, `jobId`, `runId`
+and `error`. Passwords and keys are taken out of error text before it is
+logged.
+
+```json
+{"time":"2026-10-19T08:12:03.512Z","level":"warn","msg":"Real-time watching failed; the queues are polled meanwhile","serverId":"6f1c...","dataQueue":"SPOOLDOC/SPOOLDOC","error":"Connection reset","retryInSeconds":5}
+```
+
+At the default level, `info`, the log has what fails before a run exists:
+a server the watcher cannot reach, a queue list it cannot read, real-time
+watching that stopped and started again, a job whose active version cannot
+be read, runs a stopped server cut off, a failed cleanup, assistant chats
+that fail, and the warnings and errors of the sign-in library. A problem
+that lasts is logged once, and again when it is gone. `warn` keeps only
+the problems.
 
 ## Settings in the app
 

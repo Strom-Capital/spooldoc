@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { z } from 'zod';
+import { LOG_LEVELS, type LogLevel } from './log';
 
 /** Settings read from the environment. See .env.example. */
 export interface AppConfig {
@@ -21,6 +22,8 @@ export interface AppConfig {
   chromiumPath?: string;
   /** Lower-cased hosts the connect form may use. Empty means any host. */
   allowedHosts: string[];
+  /** How much the server logs to stdout. */
+  logLevel: LogLevel;
 }
 
 const optional = z
@@ -65,6 +68,13 @@ const envSchema = z.object({
   ),
   SPOOLDOC_CHROMIUM_PATH: optional,
   SPOOLDOC_ALLOWED_HOSTS: optional,
+  SPOOLDOC_LOG_LEVEL: optional.pipe(
+    z
+      .string()
+      .transform((value) => value.toLowerCase())
+      .pipe(z.enum(LOG_LEVELS, { error: `SPOOLDOC_LOG_LEVEL must be one of ${LOG_LEVELS.join(', ')}` }))
+      .optional(),
+  ),
 });
 
 let cached: AppConfig | undefined;
@@ -98,6 +108,7 @@ export function getConfig(): AppConfig {
       .split(',')
       .map((host) => host.trim().toLowerCase())
       .filter(Boolean),
+    logLevel: env.SPOOLDOC_LOG_LEVEL ?? 'info',
   };
   return cached;
 }
