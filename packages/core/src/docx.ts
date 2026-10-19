@@ -4,7 +4,6 @@ import {
   convertMillimetersToTwip,
   Document,
   Footer,
-  ImportedXmlComponent,
   Packer,
   Paragraph,
   Tab,
@@ -17,6 +16,7 @@ import {
 } from "docx";
 import { unzipSync } from "fflate";
 import type { Definition } from "./definition.js";
+import { pageField } from "./docx-design.js";
 import { short, tagProblems, templatePaths } from "./tags.js";
 import { fieldLabel, starterLayout, valueTag, type StarterBlock, type StarterColumn } from "./template.js";
 
@@ -283,17 +283,6 @@ const TEXT_WIDTH = convertMillimetersToTwip(210 - 2 * MARGIN_MM);
 const none = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" } as const;
 const rule = { style: BorderStyle.SINGLE, size: 2, color: "CCCCCC" } as const;
 const heavy = { style: BorderStyle.SINGLE, size: 6, color: "333333" } as const;
-
-/**
- * A page field such as PAGE or NUMPAGES, with each part in its own run as Word writes it.
- * The `docx` library puts the parts in one run, and ICE then prints nothing.
- */
-function pageField(code: string, style: { size: number; color: string }): TextRun[] {
-  const char = (type: string) => new ImportedXmlComponent("w:fldChar", { "w:fldCharType": type });
-  const instruction = new ImportedXmlComponent("w:instrText", { "xml:space": "preserve" });
-  instruction.push(` ${code} `);
-  return [char("begin"), instruction, char("separate"), char("end")].map((part) => new TextRun({ ...style, children: [part] }));
-}
 
 /** The fields as one paragraph, a line each: every line after the first is hidden when its field is empty. */
 function fieldsParagraph(fields: StarterColumn[]): Paragraph {

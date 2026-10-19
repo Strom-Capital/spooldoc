@@ -3,10 +3,14 @@ import { carboneRender, carboneStatus, isCarboneError, probeEdition, type Carbon
 import { convertNunjucks } from "../src/convert.js";
 import { extract } from "../src/extract.js";
 import { checkDocx, readDocx, starterDocx } from "../src/docx.js";
-import { renderDocument } from "../src/render.js";
+import { buildDocx } from "../src/docx-design.js";
+import { editDocx } from "../src/docx-edit.js";
+import { pdfPageCount, renderDocument } from "../src/render.js";
 import { checkTemplate } from "../src/tags.js";
 import { starterTemplate, templateData } from "../src/template.js";
 import { FIXTURES, fixtureText, loadFixture } from "./helpers/fixtures.js";
+import { invoiceDesign } from "./helpers/invoice-design.js";
+import { testPng } from "./helpers/png.js";
 
 /**
  * Against a real Carbone server, when SPOOLDOC_CARBONE_URL is set, such as
@@ -78,6 +82,37 @@ describe.skipIf(!url)("Carbone server", () => {
     expect(text.match(/\{d\.|\[i/g)).toBeNull();
     // hardRefresh: false, so Carbone Enterprise does not pass the file through LibreOffice.
     expect(readDocx(out).fields).toEqual(["PAGE", "NUMPAGES"]);
+  });
+
+  it("renders a designed Word template on every page, and page 1 as a PNG", async () => {
+    const { sample, definition } = loadFixture("invoice");
+    const { documents } = extract(definition, sample);
+    const template = await buildDocx(invoiceDesign, (name) => (name === "logo" ? { data: testPng(400, 100), type: "png", width: 400, height: 100 } : undefined));
+    const read = readDocx(template);
+    expect(checkDocx(read, definition)).toEqual([]);
+    // Enough lines for a second page, which has the running header and the totals.
+    const first = documents[0]!;
+    const long = { ...first, lines: Array.from({ length: 12 }, () => first.lines as unknown[]).flat() };
+    const data = templateData(read, long, documents, sample);
+    const docx = readDocx(await renderDocument(server, { kind: "docx", template, data, format: "docx" }));
+    expect(docx.text).not.toMatch(/\{d\.|\[i/);
+    expect(docx.text).toContain("NORTHERN SUPPLY CO");
+    const pdf = await renderDocument(server, { kind: "docx", template, data, format: "pdf" });
+    expect(pdfPageCount(pdf)).toBe(2);
+    const png = Buffer.from(await renderDocument(server, { kind: "docx", template, data, format: "png" }));
+    expect(png.subarray(1, 4).toString()).toBe("PNG");
+    // A4 at 96 dpi.
+    expect(png.readUInt32BE(16)).toBeGreaterThan(780);
+    expect(png.readUInt32BE(20) / png.readUInt32BE(16)).toBeCloseTo(297 / 210, 1);
+  });
+
+  it("renders a Word template after an edit", async () => {
+    const { sample, definition } = loadFixture("invoice");
+    const { documents } = extract(definition, sample);
+    const template = editDocx(await starterDocx(definition), [{ part: "word/document.xml", find: ">Invoice<", replace: ">Invoice {d.doc.invoiceNo}<" }]);
+    const read = readDocx(template);
+    const out = readDocx(await renderDocument(server, { kind: "docx", template, data: templateData(read, documents[0]!, documents, sample), format: "docx" }));
+    expect(out.paragraphs[0]!.text).toBe(`Invoice ${String(documents[0]!.invoiceNo)}`);
   });
 
   it("renders the converted Nunjucks invoice like the original", async () => {
