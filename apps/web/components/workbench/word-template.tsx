@@ -217,7 +217,7 @@ function PreviousFile({ file, readOnly, onUse }: { file: TemplateFileDetails; re
       <SparklesIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <p className="min-w-0 flex-1 text-muted-foreground">
         {file.previous
-          ? `The AI assistant made this file from ${file.previous.name}, which is kept.`
+          ? `The AI assistant made this file in place of ${file.previous.name} from ${dateTime(file.previous.createdAt)}, which is kept.`
           : gone
             ? 'The AI assistant made this file. The file before it is no longer kept.'
             : 'The AI assistant made this file in place of the starter template.'}

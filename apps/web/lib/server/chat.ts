@@ -859,6 +859,19 @@ export function buildTools({ sample: current, store, masked, assets = [], render
   }
 
   /**
+   * The tools that read or write the draft run one at a time, in the order the model
+   * called them, so a render it asks for next to an edit sees the edit.
+   */
+  let queue: Promise<unknown> = Promise.resolve();
+  function inTurn<I, O>(run: (input: I, options: { toolCallId: string }) => Promise<O>) {
+    return (input: I, options: { toolCallId: string }): Promise<O> => {
+      const next = queue.then(() => run(input, options));
+      queue = next.catch(() => undefined);
+      return next;
+    };
+  }
+
+  /**
    * What each Word render of this request showed, by tool call. Only the step after the
    * call gets it: the stored thread and later requests carry the result's text only.
    */
@@ -976,7 +989,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
       description:
         "Save the document definition YAML as the job's definition, run the extraction on this sample and return the report: documents found, each field of the first document with its status, missing fields, warnings and the first document as JSON.",
       inputSchema: z.object({ yaml: z.string().min(1).max(200_000).describe('The complete definition YAML') }),
-      execute: async ({ yaml }): Promise<WriteDefinitionResult> => {
+      execute: inTurn(async ({ yaml }): Promise<WriteDefinitionResult> => {
         let def: Definition;
         try {
           def = parseDefinition(yaml);
@@ -1012,14 +1025,14 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           warnings: extractWarnings(def, sample, result),
           preview: first ? truncate(JSON.stringify(masked ? maskDocument(first) : first, null, 1), 2000) : '',
         };
-      },
+      }),
     }),
 
     write_template: tool({
       description:
         "Save the HTML template (Carbone tags) as the template of one of the job's outputs (the first unless `output` names another), check it, render the first document and return any errors, by line, and its visible text.",
       inputSchema: z.object({ html: z.string().min(1).max(500_000).describe('The complete HTML template'), output: outputParam }),
-      execute: async ({ html, output: key }): Promise<WriteTemplateResult> => {
+      execute: inTurn(async ({ html, output: key }): Promise<WriteTemplateResult> => {
         const sample = await readSample();
         if ('ok' in sample) {
           return sample;
@@ -1051,7 +1064,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         }
         const rendered = await renderDocument(html, current.def, documents, 0, sample, masked, assets, renderer);
         return { ok: rendered.errors.length === 0, path, output: output.label, errors: rendered.errors, warnings, textPreview: rendered.textPreview };
-      },
+      }),
     }),
 
     render_preview: tool({
@@ -1061,7 +1074,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         document: z.number().int().min(0).optional().describe('0-based document index (default 0)'),
         output: outputParam,
       }),
-      execute: async ({ document, output: key }, { toolCallId }): Promise<RenderPreviewResult> => {
+      execute: inTurn(async ({ document, output: key }, { toolCallId }): Promise<RenderPreviewResult> => {
         const sample = await readSample();
         if ('ok' in sample) {
           return sample;
@@ -1110,7 +1123,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           ...(rendered.view !== undefined ? { view: rendered.view, pages: rendered.pages ?? null } : {}),
           ...(rendered.note ? { note: rendered.note } : {}),
         };
-      },
+      }),
       toModelOutput: withVisual,
     }),
 
@@ -1122,7 +1135,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         name: z.string().trim().min(1).max(120).optional().describe("The file's name, such as invoice.docx (default: the current file's name, or the definition type)"),
         output: outputParam,
       }),
-      execute: async ({ design, name, output: key }, { toolCallId }): Promise<WordTemplateResult> => {
+      execute: inTurn(async ({ design, name, output: key }, { toolCallId }): Promise<WordTemplateResult> => {
         const sample = await readSample();
         if ('ok' in sample) {
           return sample;
@@ -1145,7 +1158,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         const previousId = output.template.kind === 'docx' ? output.template.fileId : null;
         const word = output.template.kind === 'docx' && previousId !== null ? await templateFile?.(previousId).catch(() => null) : null;
         return saveWord(toolCallId, output, { name: docxName(name ?? word?.name ?? `${current.def.type}.docx`), content, previousId }, current.def, sample);
-      },
+      }),
       toModelOutput: withVisual,
     }),
 
@@ -1157,7 +1170,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         from: z.number().int().min(0).optional().describe('The character to start at (default 0)'),
         output: outputParam,
       }),
-      execute: async ({ part, from = 0, output: key }): Promise<ReadWordTemplateResult> => {
+      execute: inTurn(async ({ part, from = 0, output: key }): Promise<ReadWordTemplateResult> => {
         const current = await linked();
         if ('ok' in current) {
           return current;
@@ -1184,7 +1197,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         } catch (error) {
           return fail(message(error));
         }
-      },
+      }),
     }),
 
     edit_word_template: tool({
@@ -1203,7 +1216,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           .max(50),
         output: outputParam,
       }),
-      execute: async ({ edits, output: key }, { toolCallId }): Promise<WordTemplateResult> => {
+      execute: inTurn(async ({ edits, output: key }, { toolCallId }): Promise<WordTemplateResult> => {
         const sample = await readSample();
         if ('ok' in sample) {
           return sample;
@@ -1230,7 +1243,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           return fail(message(error));
         }
         return saveWord(toolCallId, output, { name: word.name, content, previousId: word.fileId }, current.def, sample);
-      },
+      }),
       toModelOutput: withVisual,
     }),
 
@@ -1246,7 +1259,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           .optional()
           .describe('The formats to make (default PDF)'),
       }),
-      execute: async ({ label, kind = 'html', formats }): Promise<OutputChangeResult> => {
+      execute: inTurn(async ({ label, kind = 'html', formats }): Promise<OutputChangeResult> => {
         const other = formats?.find((format) => !KIND_FORMATS[kind].includes(format));
         if (other) {
           return fail(`${kind === 'docx' ? 'A Word' : 'An HTML'} template makes ${formatList(KIND_FORMATS[kind])} files, not ${other.toUpperCase()}.`);
@@ -1267,13 +1280,13 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         } catch (error) {
           return fail(message(error));
         }
-      },
+      }),
     }),
 
     remove_output: tool({
       description: 'Remove one of the job\'s outputs and its template. The last output cannot be removed. Only when the user asks.',
       inputSchema: z.object({ output: z.string().min(1).max(40).describe("The output's id or name") }),
-      execute: async ({ output: key }): Promise<OutputChangeResult> => {
+      execute: inTurn(async ({ output: key }): Promise<OutputChangeResult> => {
         let removed: JobOutput | undefined;
         try {
           const outputs = await store.changeOutputs((outputs) => {
@@ -1290,7 +1303,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         } catch (error) {
           return fail(message(error));
         }
-      },
+      }),
     }),
 
     list_jobs: tool({

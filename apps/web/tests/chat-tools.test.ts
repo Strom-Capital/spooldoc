@@ -605,6 +605,18 @@ describe('Word templates by the assistant', () => {
     expect(store.outputs[0]!.template).toEqual({ kind: 'docx', fileId: null });
   });
 
+  it('runs a render the model calls next to an edit after the edit', async () => {
+    store.outputs = wordOutput(null);
+    const tools = word();
+    const edit = call<WordTemplateResult>(tools.edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Invoice<', replace: '>Sales invoice<' }] });
+    const render = call<RenderPreviewResult>(tools.render_preview, {});
+    const [edited, rendered] = await Promise.all([edit, render]);
+    expect(edited).toMatchObject({ ok: true });
+    expect(rendered).toMatchObject({ ok: true, template: 'saved' });
+    if (!rendered.ok) throw new Error(rendered.error);
+    expect(rendered.textPreview.split('\n')[0]).toBe('Sales invoice');
+  });
+
   it('shows the model the Word document in render_preview too', async () => {
     store.outputs = wordOutput(null);
     const tools = word({ visual: true });
