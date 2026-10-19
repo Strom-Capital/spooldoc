@@ -20,7 +20,6 @@ to `apps/web/.env.local` for development, or put the same variables in the
 | `APP_URL` | No | | The address users reach the app at, such as `https://spooldoc.example.com`. Origin checks accept it and the request's own host, and cookies are marked secure when it is https. Set it behind a reverse proxy. |
 | `SPOOLDOC_WATCHER` | No | `on` | Run the queue watcher in this process. Turn it off on every instance but one; the watcher also takes database locks, so two instances never read the same data queue or run the same job at once. |
 | `SPOOLDOC_MIGRATE` | No | `on` | Apply the database migrations when the server starts. With it off, run `pnpm --filter @spooldoc/web db:migrate` yourself. |
-| `SPOOLDOC_MASK` | No | `true` | Mask values (digits to 9, letters to X or x) in page text and tool results before they go to the model. See [AI assistant](ai-assistant.md#masking). |
 | `SPOOLDOC_DEFAULT_CCSID` | No | | The code page for spooled files that have no CHRID when the job CCSID is not supported, for example `273` or `37`. |
 | `SPOOLDOC_ALLOWED_HOSTS` | No | | Comma-separated hosts servers may use. When set, the server form shows a list instead of a free text field. |
 | `SPOOLDOC_LOG_LEVEL` | No | `info` | How much the server logs: `off`, `error`, `warn`, `info` or `debug`. See [Server log](#server-log). |
@@ -28,7 +27,9 @@ to `apps/web/.env.local` for development, or put the same variables in the
 The server refuses to start with a missing or malformed required variable
 and says which one. The chat model, its key and effort, and the Carbone
 connection are not environment variables: they are set in the app under
-Settings. See [Carbone](carbone.md).
+Settings. So is masking, which was `SPOOLDOC_MASK` before; the server log
+says so when that variable is still set. See [Carbone](carbone.md) and
+[Masking](ai-assistant.md#masking).
 
 The Compose file passes two more variables from `.env` to the `carbone`
 service:

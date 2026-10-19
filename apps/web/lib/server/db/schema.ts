@@ -329,6 +329,8 @@ export const settings = pgTable(
     retentionDays: integer('retention_days').notNull().default(90),
     /** The provider the chat uses. Null turns the chat off. */
     aiProvider: text('ai_provider'),
+    /** Mask values (digits to 9, letters to X or x) before page text and tool results go to the model. */
+    aiMask: boolean('ai_mask').notNull().default(false),
     /** Where documents are rendered: a Carbone server of the user's own (`onprem`) or Carbone Cloud. */
     carboneMode: text('carbone_mode').notNull().default('onprem'),
     /** The on-prem Carbone server. Null is the Compose service, http://carbone:4000. */

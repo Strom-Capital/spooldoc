@@ -75,7 +75,11 @@ function PanelHeader({ header, children }: { header?: ReactNode; children?: Reac
       <Badge
         variant="secondary"
         className="ml-auto gap-1 font-normal"
-        title={session.masking ? 'Digits and letters of values are masked before page text goes to the model (SPOOLDOC_MASK).' : 'Page text goes to the model as printed (SPOOLDOC_MASK=false).'}
+        title={
+          session.masking
+            ? 'Digits and letters of values are masked before page text goes to the model. Change it under Settings, AI model.'
+            : 'Page text goes to the model as printed. Mask values under Settings, AI model.'
+        }
       >
         {session.masking ? <EyeOffIcon /> : <EyeIcon />}
         {session.masking ? 'Values masked' : 'Values sent in clear'}

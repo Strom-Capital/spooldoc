@@ -83,8 +83,10 @@ In practice:
   the model writes runs on the server.
 - The assistant never overwrites what the user made. A Word file it
   writes or edits is a new file, and the earlier one stays to go back to.
-- Values are masked before page text leaves the server, and the
-  assistant panel says whether they are.
+- Where values go is the user's choice, made in Settings and shown in
+  the assistant panel: as printed, so the model can read them, or masked
+  before page text leaves the server. A local model keeps them on the
+  user's network either way.
 - Nothing the assistant proposes runs on the IBM i or goes live until the
   user saves and activates it.
 

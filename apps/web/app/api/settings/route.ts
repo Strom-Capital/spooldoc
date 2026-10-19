@@ -30,6 +30,7 @@ const aiSchema = z
       .transform((value) => value.replace(/\/+$/, ''))
       .optional(),
     apiKey: z.string().trim().max(500, 'The key is too long').nullable().optional(),
+    mask: z.boolean('Masking is on or off').optional(),
   })
   .refine((ai) => ai.provider !== 'local' || ai.baseUrl, { message: 'Enter the base URL of the local model', path: ['baseUrl'] })
   .refine((ai) => ai.provider !== 'local' || ai.model, { message: 'Enter a model', path: ['model'] });

@@ -25,6 +25,7 @@ describe('AI settings', () => {
   it('starts with the chat off and nothing saved', async () => {
     const view = await ai();
     expect(view.provider).toBeNull();
+    expect(view.mask).toBe(false);
     expect(view.providers.anthropic).toEqual({ model: null, effort: 'provider-default', baseUrl: null, hasKey: false });
     expect(Object.keys(view.providers).sort()).toEqual(['anthropic', 'gateway', 'google', 'local', 'openai', 'openrouter']);
   });
@@ -91,6 +92,19 @@ describe('AI settings', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual(message);
     expect((await ai()).provider).toBeNull();
+  });
+
+  it('turns masking on and off, and keeps it when a change does not say', async () => {
+    expect((await put({ ai: { provider: 'anthropic', mask: true } })).status).toBe(200);
+    expect(await ai()).toMatchObject({ provider: 'anthropic', mask: true });
+    await put({ ai: { provider: 'openai' } });
+    await put({ ai: { provider: null } });
+    expect((await ai()).mask).toBe(true);
+    await put({ ai: { provider: 'anthropic', mask: false } });
+    expect((await ai()).mask).toBe(false);
+    const wrong = await put({ ai: { provider: 'anthropic', mask: 'yes' } });
+    expect(wrong.status).toBe(400);
+    expect(((await wrong.json()) as { error: string }).error).toContain('Masking is on or off');
   });
 
   it('needs a session', async () => {

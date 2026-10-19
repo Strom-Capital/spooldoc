@@ -15,8 +15,6 @@ export interface AppConfig {
   secretKey: Buffer;
   /** Run the queue watcher in this process. */
   watcher: boolean;
-  /** Mask values before page text goes to a model. */
-  mask: boolean;
   /** Code page used when a spooled file has no CHRID and the job CCSID is not supported. */
   defaultCcsid?: number;
   /** Lower-cased hosts the connect form may use. Empty means any host. */
@@ -61,7 +59,6 @@ const envSchema = z.object({
     .refine((value) => Buffer.from(value, 'base64').length === 32, 'SPOOLDOC_SECRET_KEY must be 32 bytes in base64. Generate one with: openssl rand -base64 32'),
   APP_URL: url('APP_URL'),
   SPOOLDOC_WATCHER: flag('SPOOLDOC_WATCHER'),
-  SPOOLDOC_MASK: flag('SPOOLDOC_MASK'),
   SPOOLDOC_DEFAULT_CCSID: optional.pipe(
     z.string().regex(/^\d+$/, 'SPOOLDOC_DEFAULT_CCSID must be a number such as 273 or 37').optional(),
   ),
@@ -99,7 +96,6 @@ export function getConfig(): AppConfig {
     appUrl: env.APP_URL ? new URL(new URL(env.APP_URL).origin) : undefined,
     secretKey: Buffer.from(env.SPOOLDOC_SECRET_KEY, 'base64'),
     watcher: isTrue(env.SPOOLDOC_WATCHER, true),
-    mask: isTrue(env.SPOOLDOC_MASK, true),
     defaultCcsid: env.SPOOLDOC_DEFAULT_CCSID ? Number(env.SPOOLDOC_DEFAULT_CCSID) : undefined,
     allowedHosts: (env.SPOOLDOC_ALLOWED_HOSTS ?? '')
       .split(',')
@@ -108,6 +104,18 @@ export function getConfig(): AppConfig {
     logLevel: env.SPOOLDOC_LOG_LEVEL ?? 'info',
   };
   return cached;
+}
+
+/** Settings Spooldoc no longer reads, with where they went, by name. */
+const RETIRED: Record<string, string> = {
+  SPOOLDOC_MASK: 'SPOOLDOC_MASK is no longer read. Masking is set in the app, under Settings, AI model.',
+};
+
+/** What to say about settings in the environment that Spooldoc no longer reads, one message each. */
+export function retiredSettings(env: Record<string, string | undefined> = process.env): string[] {
+  return Object.entries(RETIRED)
+    .filter(([name]) => env[name] !== undefined)
+    .map(([, message]) => message);
 }
 
 /** Forget the cached settings. For tests. */

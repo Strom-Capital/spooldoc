@@ -39,7 +39,7 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.svg">
-    <img src="docs/assets/architecture-light.svg" alt="Architecture: programs on the IBM i print to an output queue, optionally with a data queue; Spooldoc's watcher picks up new spooled files by polling or in real time, and a run captures, extracts, renders, delivers and finishes each one, reading and then holding, moving or deleting the file through jt400; the job builder and the AI assistant, which sends masked page text to a model provider, write to the same Postgres database that holds servers, jobs, versions, samples, runs, files and assets; delivered files go to a destination" width="1000">
+    <img src="docs/assets/architecture-light.svg" alt="Architecture: programs on the IBM i print to an output queue, optionally with a data queue; Spooldoc's watcher picks up new spooled files by polling or in real time, and a run captures, extracts, renders, delivers and finishes each one, reading and then holding, moving or deleting the file through jt400; the job builder and the AI assistant, which sends page text to a model provider, write to the same Postgres database that holds servers, jobs, versions, samples, runs, files and assets; delivered files go to a destination" width="1000">
   </picture>
 </p>
 
@@ -60,8 +60,8 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 - **AI assistant**: Anthropic, Google, OpenAI, OpenRouter, Vercel AI
   Gateway or a local model writes the first definition and template, reads
   the extraction report and fixes what is missing. It designs and edits Word
-  templates too, looking at every page it renders. Values are masked before
-  page text leaves the server.
+  templates too, looking at every page it renders. Use a local model, or
+  turn on masking, to keep values on your network.
 - **Job log**: every run with its steps, errors and files; retention you set.
 - **One Compose file**: the web app with its Java runtime, Postgres and
   Carbone, amd64 and arm64.

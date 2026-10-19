@@ -30,7 +30,7 @@
 <text x="757.5" y="213.0" text-anchor="middle" font-size="11" fill="#60615e">proposes the definition and</text>
 <text x="757.5" y="227.0" text-anchor="middle" font-size="11" fill="#60615e">the template, fixes what is missing</text>
 <path d="M865 205 H960" fill="none" stroke="#3a3a38" stroke-width="1.5" marker-end="url(#head)"/>
-<text x="912" y="196" text-anchor="middle" font-size="11" fill="#60615e">masked page text</text>
+<text x="912" y="196" text-anchor="middle" font-size="11" fill="#60615e">page text</text>
 <rect x="960" y="170" width="200" height="70" rx="8" fill="#fafafa" stroke="#d6d6d3" stroke-width="1.5"/>
 <text x="1060.0" y="196.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0f0f0f">Model provider</text>
 <text x="1060.0" y="213.0" text-anchor="middle" font-size="11" fill="#60615e">Anthropic, OpenAI, Google,</text>

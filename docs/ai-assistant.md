@@ -157,13 +157,24 @@ tool results are masked too.
 
 ## Masking
 
-Masking is on by default (`SPOOLDOC_MASK=true`): before page text or a
-tool result goes to the model, digits become `9` and letters `X` or `x`,
-while labels that repeat across pages, positions and lengths stay as
-printed. The model sees the layout, not the customer. The chat panel shows
-"Values masked", or "Values sent in clear" with `SPOOLDOC_MASK=false`.
-What the model writes, and the job builder itself, use the real values.
+The model works best with the values as printed: it reads the pages,
+checks what it extracted and designs templates around real names,
+amounts and dates. That is how it works unless you turn on **Mask values**
+under Settings, AI model.
 
-A hosted provider processes what it receives under its own terms; a local
-model keeps it on your network. A local model's base URL is called by the
-server, so only enter one you trust. See [Security](security.md).
+With masking on, before page text or a tool result goes to the model,
+digits become `9` and letters `X` or `x`, while labels that repeat across
+pages, positions and lengths stay as printed. The model sees the layout,
+not the customer, and does less well with values it cannot read. The chat
+panel shows "Values masked" or "Values sent in clear". What the model
+writes, and the job builder itself, always use the real values.
+
+Masking is off on a new install. An install set up before masking was a
+setting has it on after the upgrade, as it was by default then; turn it
+off under Settings. `SPOOLDOC_MASK` is no longer read, and the server log
+says so when it is still set.
+
+A hosted provider processes what it receives under its own terms. To keep
+the values on your network, use a local model; to send only the layout,
+turn masking on. A local model's base URL is called by the server, so only
+enter one you trust. See [Security](security.md).

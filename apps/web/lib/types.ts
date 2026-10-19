@@ -157,9 +157,11 @@ export interface AiProviderView {
   hasKey: boolean;
 }
 
-/** The chat model: the chosen provider (null when the chat is off) and every provider's settings. */
+/** The chat model: the chosen provider (null when the chat is off), masking and every provider's settings. */
 export interface AiSettingsView {
   provider: AiProviderId | null;
+  /** Values are masked before page text and tool results go to the model. */
+  mask: boolean;
   providers: Record<AiProviderId, AiProviderView>;
 }
 
