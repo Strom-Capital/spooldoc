@@ -130,6 +130,22 @@ export function hasOwnContent(template: TemplateContent): boolean {
   return template.kind === 'html' ? template.source !== null : template.fileId !== null;
 }
 
+/** Why a template's kind is settled (`settledKind`). */
+export type KindReason = 'content' | 'chosen' | 'formats';
+
+/**
+ * The kind a template is for good, so the agent makes that kind without asking: its own
+ * when it has content of its own, or when it is not HTML (a new template starts as HTML,
+ * so another kind was chosen); else the one kind that makes every format it has. Null
+ * when more than one kind would do, as for a new job's template, which makes PDF only.
+ */
+export function settledKind(template: JobTemplate): { kind: TemplateKind; reason: KindReason } | null {
+  if (hasOwnContent(template)) return { kind: template.kind, reason: 'content' };
+  if (template.kind !== 'html') return { kind: template.kind, reason: 'chosen' };
+  const kinds = TEMPLATE_KINDS.filter((kind) => template.formats.every((format) => KIND_FORMATS[kind].includes(format)));
+  return kinds.length === 1 ? { kind: kinds[0]!, reason: 'formats' } : null;
+}
+
 /** The template of a new job. */
 function firstTemplate(): JobTemplate {
   return { id: 'template-1', name: 'Template 1', kind: 'html', source: null, formats: ['pdf'] };

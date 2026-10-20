@@ -1,4 +1,7 @@
 import type {
+  AskUserInput,
+  AskUserOption,
+  AskUserResult,
   ListJobsResult,
   ReadCarboneReferenceResult,
   ReadJobFilesResult,
@@ -130,6 +133,12 @@ export function toolSummary(part: ToolPartLike): ToolSummary {
       if (!out.ok) return { text: firstLine(out.error), tone: 'warn' };
       return { text: `Read the Carbone reference ${out.name}`, tone: 'ok' };
     }
+    case 'ask_user': {
+      if (!done(part.state)) return { text: 'Asking a question', tone: 'running' };
+      const out = part.output as AskUserResult;
+      if (!out.ok) return { text: `Question not asked: ${firstLine(out.error)}`, tone: 'warn' };
+      return { text: 'Asked a question', tone: 'ok' };
+    }
     default:
       return { text: done(part.state) ? part.toolName : `Running ${part.toolName}`, tone: done(part.state) ? 'ok' : 'running' };
   }
@@ -195,4 +204,43 @@ export function chatActivity(messages: MessageLike[], status: string): string | 
     return part.state === 'streaming' && part.text?.trim() ? null : 'Thinking';
   }
   return 'Working';
+}
+
+/** A question `ask_user` put on screen: its text, and the answers to show as buttons (none when there are none to show). */
+export interface AskedQuestion {
+  question: string;
+  options: AskUserOption[];
+}
+
+/**
+ * The question of an `ask_user` call that was asked, or null while it streams in or when
+ * it was turned down. Answers without a label are left out, so no empty button shows.
+ *
+ * @param part - The tool name, state, input and output of a tool UI part
+ */
+export function askedQuestion(part: ToolPartLike): AskedQuestion | null {
+  if (part.toolName !== 'ask_user' || !done(part.state) || (part.output as AskUserResult | undefined)?.ok !== true) return null;
+  const input = (part.input ?? {}) as Partial<AskUserInput>;
+  if (typeof input.question !== 'string' || !input.question.trim()) return null;
+  const options = (Array.isArray(input.options) ? input.options : []).filter(
+    (option): option is AskUserOption => typeof option?.label === 'string' && option.label.trim().length > 0,
+  );
+  return { question: input.question, options };
+}
+
+/**
+ * The answer to a question in message `index`: the text of the user's next message, or
+ * null while there is none. A question is answered once, so its buttons work only before.
+ *
+ * @param messages - The chat messages
+ * @param index - The index of the message with the question
+ */
+export function questionAnswer(messages: MessageLike[], index: number): string | null {
+  const next = messages.slice(index + 1).find((message) => message.role === 'user');
+  if (!next) return null;
+  return next.parts
+    .filter((part) => part.type === 'text')
+    .map((part) => part.text ?? '')
+    .join('')
+    .trim();
 }

@@ -140,6 +140,7 @@ describe('POST /api/jobs/[id]/chat', () => {
     expect(instructions).toContain('260101');
     expect(model.doStreamCalls[0]?.tools?.map((t) => t.name).sort()).toEqual([
       'add_template',
+      'ask_user',
       'edit_word_template',
       'list_jobs',
       'read_carbone_reference',
@@ -152,6 +153,18 @@ describe('POST /api/jobs/[id]/chat', () => {
       'write_template',
       'write_word_template',
     ]);
+  });
+
+  it('ends the turn when the model asks the user a question with ask_user', async () => {
+    const question = { question: 'Both make PDF. For this invoice I recommend HTML.', options: [{ label: 'HTML', recommended: true }, { label: 'Word' }] };
+    const model = scriptedModel(toolStep('ask_user', question), textStep('This step must not run.'));
+    createModel.mockResolvedValue(withKey(model));
+
+    const { parts } = await chunks(await chat());
+
+    expect(model.doStreamCalls).toHaveLength(1);
+    expect(parts.find((p) => p.type === 'tool-output-available')?.output).toEqual({ ok: true, asked: true });
+    expect(parts.some((p) => p.type === 'text-delta')).toBe(false);
   });
 
   it('runs write_template from the model and writes the template', async () => {
