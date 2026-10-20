@@ -76,9 +76,12 @@ the preview show, such as "Document". The menu next to it has the files
 the template makes, Make it a Word template (or an HTML template),
 Rename, Remove and Add template. An HTML template makes PDF and HTML
 files; a [Word template](templates.md#word-templates) makes PDF and DOCX
-files. Switching the kind starts the template from the other kind's
-starter, and asks first when it has HTML or a Word file of its own;
-saved versions keep theirs. The last template cannot be removed. The
+files, and the menu says so under each kind. Switching the kind starts
+the template from the other kind's starter, and asks first when it has
+HTML or a Word file of its own; saved versions keep theirs. A format the
+other kind does not make is turned off, and the switch says so: an HTML
+template that makes PDF and HTML files makes only PDFs as a Word
+template. The last template cannot be removed. The
 pipeline shows one template as its kind and formats, and several as
 "2 templates" with each name and its formats.
 

@@ -12,6 +12,7 @@ import {
   templateFileName,
   templateSlug,
   triggerStatuses,
+  kindSwitchNote,
   withContent,
   type JobTemplate,
 } from '@/lib/job-spec';
@@ -113,5 +114,15 @@ describe('Word templates', () => {
     expect(hasOwnContent({ kind: 'docx', fileId: null })).toBe(false);
     expect(hasOwnContent(html)).toBe(true);
     expect(formatList(['pdf', 'docx'])).toBe('PDF and DOCX');
+  });
+
+  it('says which files a switch to the other kind stops making', () => {
+    expect(kindSwitchNote({ ...html, formats: ['pdf', 'html'] }, 'docx')).toBe('It makes PDF files, not HTML. A Word template makes PDF and DOCX.');
+    expect(kindSwitchNote({ ...html, formats: ['html'] }, 'docx')).toBe('It makes PDF files, not HTML. A Word template makes PDF and DOCX.');
+    expect(kindSwitchNote({ ...html, formats: ['pdf'] }, 'docx')).toBeNull();
+    expect(kindSwitchNote(withContent({ ...html, formats: ['pdf'] }, { kind: 'docx', fileId: null }), 'html')).toBeNull();
+    expect(kindSwitchNote({ id: 'main', name: 'Document', kind: 'docx', fileId: null, formats: ['pdf', 'docx'] }, 'html')).toBe(
+      'It makes PDF files, not DOCX. An HTML template makes PDF and HTML.',
+    );
   });
 });
