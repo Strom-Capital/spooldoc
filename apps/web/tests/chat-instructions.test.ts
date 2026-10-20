@@ -2,6 +2,7 @@ import { definitionJsonSchema, parseDefinition, starterDocx } from '@spooldoc/co
 import { describe, expect, it } from 'vitest';
 import { jobSpecSchema, type JobTemplate } from '@/lib/job-spec';
 import { ASK_KIND_RULE, ASK_RULE, buildInstructions, DATA_NOT_INSTRUCTIONS, KIND_ADVICE, NO_ASK_RULE, OTHER_JOBS_RULE, wordTemplates } from '@/lib/server/chat';
+import { CARBONE_REFERENCES } from '@/lib/server/carbone-skill.generated';
 import { fixtureText, loadSample } from './helpers/fake-connection';
 
 const sample = loadSample('invoice');
@@ -102,6 +103,9 @@ describe('buildInstructions', () => {
     const reference = clear.slice(clear.indexOf('## Carbone syntax reference'));
     expect(reference).toMatch(/^## Carbone syntax reference\n\nThe Carbone Skill [\d.]+ by Carbone \(https:\/\/github.com\/carboneio\/carbone-skill, Apache-2.0\)/);
     expect(reference).toContain('## 4. Loops (Repetitions)');
+    const readable = /read_carbone_reference reads these of its reference files: ([a-z, -]+)\./.exec(reference)?.[1]?.split(', ');
+    expect(readable).toEqual(Object.keys(CARBONE_REFERENCES));
+    expect(readable).toEqual(expect.arrayContaining(['html-templates', 'docx-tips']));
     expect(reference).not.toMatch(/^---\nname: carbone/m);
   });
 

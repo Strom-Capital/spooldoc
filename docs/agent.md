@@ -155,9 +155,11 @@ upload it again, or ask the agent for the next change.
 
 The agent writes [Carbone tags](templates.md). Its instructions hold
 the [Carbone Skill](https://github.com/carboneio/carbone-skill) by Carbone
-(Apache License 2.0) as the syntax reference, and say which Carbone
-features the connected server has: on the Community Edition it leaves out
-Enterprise features such as `:aggSum`. See [Carbone](carbone.md).
+(Apache License 2.0) as the syntax reference. The agent can read its
+reference files for HTML and Word templates, such as the formatters and
+the tips on Word headers and footers. The instructions also say which
+Carbone features the connected server has: on the Community Edition it
+leaves out Enterprise features such as `:aggSum`. See [Carbone](carbone.md).
 
 ## What it sees
 
