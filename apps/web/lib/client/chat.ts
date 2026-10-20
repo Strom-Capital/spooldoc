@@ -255,3 +255,16 @@ export function questionAnswer(messages: MessageLike[], index: number): string |
     .join('')
     .trim();
 }
+
+/**
+ * The label of the answer the user chose, or null before they answer or when they typed
+ * another one. The match ignores case and surrounding spaces.
+ *
+ * @param question - The question that was asked
+ * @param answer - The user's answer, as `questionAnswer` gives it
+ */
+export function chosenOption(question: AskedQuestion, answer: string | null): string | null {
+  if (answer === null) return null;
+  const label = question.options.find((option) => option.label.trim().toLowerCase() === answer.trim().toLowerCase())?.label;
+  return label?.trim() ?? null;
+}

@@ -73,7 +73,8 @@ right.
 starts or what a value means, the agent asks instead of guessing, one
 question at a time. Its answer ends there, and the question shows with
 its answers as buttons, the one it recommends first. Click an answer or
-type your own; once you answer, the buttons no longer send. If the answer
+type your own in the message box. Once you answer, the one you chose
+is checked and the buttons no longer send. If the answer
 cannot be sent, the panel shows the error; type the answer again to retry.
 
 ## Which kind of template

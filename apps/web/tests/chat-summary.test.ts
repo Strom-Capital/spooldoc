@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { askedQuestion, chatActivity, chatErrorText, questionAnswer, savedFile, toolSummary } from '@/lib/client/chat';
+import { askedQuestion, chatActivity, chatErrorText, chosenOption, questionAnswer, savedFile, toolSummary } from '@/lib/client/chat';
 
 const done = (toolName: string, output: unknown, input: unknown = {}) => ({ toolName, state: 'output-available', input, output });
 
@@ -229,5 +229,13 @@ describe('ask_user in the chat', () => {
     expect(questionAnswer([user('Propose a template'), asked], 1)).toBeNull();
     expect(questionAnswer([user('Propose a template'), asked, user('Word')], 1)).toBe('Word');
     expect(questionAnswer([asked, { role: 'assistant', parts: [] }, user(' Make it Word, please ')], 0)).toBe('Make it Word, please');
+  });
+
+  it('checks the answer the user chose, and none before an answer or for a typed one', () => {
+    const odd = { question: 'Which kind?', options: [{ label: ' Word ' }] };
+    expect(chosenOption(input, null)).toBeNull();
+    expect(chosenOption(input, 'word')).toBe('Word');
+    expect(chosenOption(odd, 'Word')).toBe('Word');
+    expect(chosenOption(input, 'Make it Word, please')).toBeNull();
   });
 });
