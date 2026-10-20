@@ -15,7 +15,10 @@ The job builder shows the pipeline as six steps, and each step opens an
 inspector. Click a step to open it, or use Next and Back to go through them
 in order. Next sits at the end of each form, and in the bar above the page
 on Extract and Render. On Finish, Save version takes its place while the
-draft has changes that are not in the active version. The draft saves as
+draft has changes that are not in the active version. Next turns primary
+when its step is ready, and Run now turns primary when every step is
+ready. Only one of them is primary at a time, and Save version on Finish
+looks as Next would. The draft saves as
 you type, so moving between steps loses nothing. Hide pipeline under the
 steps makes more room, and Show pipeline brings them back.
 

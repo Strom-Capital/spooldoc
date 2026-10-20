@@ -4,7 +4,9 @@ import { ChevronLeftIcon, ChevronRightIcon, SaveIcon } from 'lucide-react';
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { STEP_TITLE, stepAfter, stepBefore, type Step } from '@/lib/client/job-steps';
+import { nextVariant, type ForwardVariant } from '@/lib/client/step-status';
 import { useJob } from './job-provider';
+import { useStepStatuses } from './use-step-statuses';
 
 interface StepNavState {
   /** Open the step, and give it the focus when it opens. */
@@ -57,13 +59,22 @@ export function useFocusOnArrival(ref: RefObject<HTMLElement | null>) {
   }, [arrived, ref]);
 }
 
+/** How Next looks on the open step: primary when the step is ready and the pipeline is not. */
+function useNextVariant(): ForwardVariant {
+  const { step } = useJob();
+  const { statuses, ready } = useStepStatuses();
+  return nextVariant(statuses[step], ready);
+}
+
 /**
  * Back and Next at the end of a form step. On Finish, Next is Save version while the
- * draft has changes that no active version has.
+ * draft has changes that no active version has. Save version looks as Next would, so it
+ * is never primary next to a primary Run now.
  */
 export function StepFooter() {
   const { step, job, viewing, draftDiffers } = useJob();
   const { go, onSaveVersion } = useStepNav();
+  const variant = useNextVariant();
   const before = stepBefore(step);
   const after = stepAfter(step);
   const unsaved = viewing === 'draft' && (job.activeVersion === null || draftDiffers);
@@ -77,13 +88,13 @@ export function StepFooter() {
       )}
       <div className="ml-auto">
         {after ? (
-          <Button size="sm" onClick={() => go(after)}>
+          <Button size="sm" variant={variant} onClick={() => go(after)}>
             Next: {STEP_TITLE[after]}
             <ChevronRightIcon />
           </Button>
         ) : (
           unsaved && (
-            <Button size="sm" onClick={onSaveVersion}>
+            <Button size="sm" variant={variant} onClick={onSaveVersion}>
               <SaveIcon />
               Save version
             </Button>
@@ -98,12 +109,13 @@ export function StepFooter() {
 export function NextStepButton() {
   const { step } = useJob();
   const { go } = useStepNav();
+  const variant = useNextVariant();
   const ref = useRef<HTMLButtonElement>(null);
   useFocusOnArrival(ref);
   const after = stepAfter(step);
   if (!after) return null;
   return (
-    <Button ref={ref} size="sm" variant="outline" className="ml-auto shrink-0" onClick={() => go(after)}>
+    <Button ref={ref} size="sm" variant={variant} className="ml-auto shrink-0" onClick={() => go(after)}>
       Next: {STEP_TITLE[after]}
       <ChevronRightIcon />
     </Button>
