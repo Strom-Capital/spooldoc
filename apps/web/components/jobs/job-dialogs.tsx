@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Loading } from '@/components/empty-state';
 import { ErrorNote } from '@/components/page';
 import { ServerErrorNote } from '@/components/server-status';
+import { SpooledFileStatus } from '@/components/spooled-file-status';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -344,7 +345,9 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
                             </div>
                           </td>
                           <td className="px-2 py-2 text-xs">{file.attributes.userData}</td>
-                          <td className="px-2 py-2 text-xs">{file.status}</td>
+                          <td className="px-2 py-2">
+                            <SpooledFileStatus status={file.status} />
+                          </td>
                           <td className="px-2 py-2 text-muted-foreground text-xs">
                             {file.processedBy ? `Processed in run #${file.processedBy.seq ?? '?'}` : file.attributes.created.replace('T', ' ')}
                           </td>

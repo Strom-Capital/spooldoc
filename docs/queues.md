@@ -35,14 +35,26 @@ names. See [Servers](servers.md).
 ## The files of a queue
 
 Open a queue to list its spooled files: name, number, job, user data, form
-type, status, pages and when it was created. Three filters narrow the list,
-each a "contains" match:
+type, status, pages and when it was created. Four filters narrow the list.
+The first three are a "contains" match:
 
 | Filter | Matches |
 |--------|---------|
 | Spooled file name contains | The spooled file name |
 | Job contains | The job as `number/user/name` |
 | User data contains | The `USRDTA` attribute |
+| Status | One of the statuses picked. Pick several to see, say, ready and held files. With none picked, any status matches. |
+
+Each status shows as a colored pill with an icon. Hover over it for the
+status as the IBM i spells it, such as `READY`.
+
+| Color | Statuses | Means |
+|-------|----------|-------|
+| Green | Ready | Ready to print. Every job on the queue picks these up. |
+| Amber | Held | Held. A job picks these up when it takes held files too. |
+| Blue | Open, Writing, Pending, Printing, Sending | Still being written, or a printer or writer is working on it. |
+| Red | Message | Waits for a reply to a message. |
+| Gray | Saved, Deferred, Closed, Finished | Kept after printing, put off, or done. A status Spooldoc does not know also shows gray, with its IBM i name. |
 
 The list shows the newest 200 files. When the queue has more, or more
 match the filters, the page says so under the list, and Load more lists
