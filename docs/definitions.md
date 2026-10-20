@@ -15,7 +15,9 @@ says why.
 
 The [agent](agent.md) writes the first definition from a
 sample; this page is what it, and you, work with. The workbench checks the
-YAML as you type and highlights every field hit on the page.
+YAML as you type and highlights every field hit on the page. Hover a hit
+for its page group, the tag a template writes for it and its value, such
+as "Page group 2: d.pg.invoiceNo = 260102".
 
 ## An example
 
