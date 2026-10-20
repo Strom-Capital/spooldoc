@@ -65,7 +65,7 @@ function Interval({
 
 type Draft = Pick<SettingsView, 'pollSeconds' | 'safetyCheckSeconds' | 'retentionDays'>;
 
-/** The chat model as edited. The key field starts empty: a saved key is never sent to the page. */
+/** The agent's model as edited. The key field starts empty: a saved key is never sent to the page. */
 interface AiDraft {
   provider: AiProviderId | null;
   model: string;
@@ -109,15 +109,15 @@ function aiChange(ai: AiDraft) {
   };
 }
 
-/** The provider, key, model and effort the workbench chat uses, and whether values are masked. */
+/** The provider, key, model and effort the agent uses, and whether values are masked. */
 function AiSection({ saved, ai, onChange }: { saved: AiSettingsView; ai: AiDraft; onChange(ai: AiDraft): void }) {
   const meta = ai.provider ? aiProvider(ai.provider) : null;
   const hasKey = ai.provider ? saved.providers[ai.provider].hasKey : false;
   return (
     <section className="rounded-lg border p-5">
-      <h2 className="font-semibold">AI model</h2>
+      <h2 className="font-semibold">Agent</h2>
       <p className="mt-0.5 mb-5 text-muted-foreground text-sm">
-        The model the job workbench chat uses. Each provider keeps its own key, model and effort, so you can switch back and forth.
+        The model the agent in the job builder uses. Each provider keeps its own key, model and effort, so you can switch back and forth.
       </p>
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
@@ -130,7 +130,7 @@ function AiSection({ saved, ai, onChange }: { saved: AiSettingsView; ai: AiDraft
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">None (chat off)</SelectItem>
+              <SelectItem value="none">None (agent off)</SelectItem>
               {AI_PROVIDERS.map((provider) => (
                 <SelectItem key={provider.id} value={provider.id}>
                   {provider.label}
@@ -218,7 +218,7 @@ function AiSection({ saved, ai, onChange }: { saved: AiSettingsView; ai: AiDraft
               {ai.removeKey
                 ? 'The saved key is removed when you save.'
                 : meta.needsKey && !hasKey && !ai.apiKey
-                  ? `No key saved yet: the chat stays off until you add one. ${meta.keyHint}`
+                  ? `No key saved yet: the agent stays off until you add one. ${meta.keyHint}`
                   : `Stored encrypted on the server and never shown again. ${meta.keyHint}`}
             </p>
           </div>
@@ -428,7 +428,7 @@ function cleanupText(cleanup: NonNullable<SettingsView['cleanup']>): string {
   return `The last cleanup, at ${at}, deleted ${runs}${files ? ', ' : ' and '}${samples}${files}.`;
 }
 
-/** App-wide settings: the Carbone connection, the chat model, the watcher intervals and how long runs are kept. */
+/** App-wide settings: the Carbone connection, the agent's model, the watcher intervals and how long runs are kept. */
 export function SettingsPage() {
   const router = useRouter();
   const [settings, setSettings] = useState<SettingsView | null>(null);
@@ -482,9 +482,9 @@ export function SettingsPage() {
       if (change && !data.rendering.check?.ok) {
         toast.error('Saved the settings, but Carbone does not work yet', { description: data.rendering.check?.error });
       } else {
-        toast.success('Settings saved', { description: 'The watcher uses them from its next check, the chat from its next message.' });
+        toast.success('Settings saved', { description: 'The watcher uses them from its next check, the agent from its next message.' });
       }
-      // The layout tells the chat panel which model is set up, and the workbench whether Carbone works.
+      // The layout tells the agent which model is set up, and the workbench whether Carbone works.
       router.refresh();
     } catch (err) {
       toast.error('Could not save the settings', { description: errorText(err) });

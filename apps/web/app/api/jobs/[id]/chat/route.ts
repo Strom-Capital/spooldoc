@@ -119,7 +119,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
       stopWhen: isStepCount(MAX_STEPS),
       abortSignal: request.signal,
       // The client gets the error from the stream; the server log gets it here, redacted.
-      onError: ({ error }) => log.warn('The AI chat failed', { jobId: job.id, error: safe(error) }),
+      onError: ({ error }) => log.warn('The agent chat failed', { jobId: job.id, error: safe(error) }),
     });
     return result.toUIMessageStreamResponse({
       originalMessages: messages,
@@ -130,12 +130,12 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
       // thread that cannot be written (the job was deleted meanwhile) is let go, and logged.
       onFinish: ({ responseMessage, messages: thread }) =>
         hasContent(responseMessage)
-          ? saveChat(job.id, thread).catch((error: unknown) => log.warn('Could not save the AI chat', { jobId: job.id, error: safe(error) }))
+          ? saveChat(job.id, thread).catch((error: unknown) => log.warn('Could not save the agent chat', { jobId: job.id, error: safe(error) }))
           : undefined,
       onError: safe,
     });
   } catch (error) {
-    log.error('The AI chat could not start', { jobId: job.id, error: safe(error) });
+    log.error('The agent chat could not start', { jobId: job.id, error: safe(error) });
     return errorResponse(500, safe(error));
   }
 }

@@ -45,7 +45,7 @@ import { JobProvider, useJob } from './job-provider';
 import { PipelineStrip } from './pipeline-strip';
 import { ExtractStep, JobChat, JobWorkbench, RenderStep } from './workbench-steps';
 
-/** The job builder: the pipeline, the selected step, and the AI assistant. */
+/** The job builder: the pipeline, the selected step, and the agent. */
 export function JobBuilder({ initial }: { initial: JobDetail }) {
   return (
     <JobProvider initial={initial}>

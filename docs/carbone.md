@@ -84,7 +84,7 @@ Carbone Cloud has the Enterprise features.
 `/status` does not say which edition a server runs, so Spooldoc renders a
 one-line probe with `:aggSum`. Enterprise renders it; Community refuses it
 with "disabled in the Community Edition". Spooldoc keeps the answer, shows
-it in Settings, and tells the [AI assistant](ai-assistant.md) not to use
+it in Settings, and tells the [agent](agent.md) not to use
 Enterprise features on Community. Carbone Cloud is not probed, since each
 probe there counts as a document. A template that uses an Enterprise
 feature on Community fails with a message that names the feature.

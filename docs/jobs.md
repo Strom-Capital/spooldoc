@@ -54,7 +54,7 @@ corner of the page fit it to the pane or show its actual size. Hover the
 spooled file for when the copy was saved, its page count, page size and
 CCSID.
 
-The [AI assistant](ai-assistant.md) sits beside the workbench. It writes
+The [agent](agent.md) sits beside the workbench. It writes
 the definition and the template to the draft, reads the extraction report
 and renders the result, and the page view, JSON and preview update as it
 works. Everything it writes can be edited by hand.

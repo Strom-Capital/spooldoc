@@ -23,8 +23,8 @@ import { z } from "zod";
  * Word templates designed as data: a JSON tree that mirrors the `docx` library's API
  * (`{ "type": "Paragraph", "children": [{ "type": "TextRun", "text": "..." }] }`), built
  * into a `.docx` with an allow-list of the library's constructors. Nothing in the tree
- * runs: an unknown node, key or value is refused with its path. This is how the AI
- * assistant writes a Word template.
+ * runs: an unknown node, key or value is refused with its path. This is how the
+ * agent writes a Word template.
  */
 
 /** An image a design can place by name: an uploaded PNG or JPEG asset. */

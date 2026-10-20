@@ -13,7 +13,7 @@ between reading the page and laying out the document; the
 [FAQ](faq.md#why-turn-the-pages-into-json-first-instead-of-rendering-straight-from-the-spooled-file)
 says why.
 
-The [AI assistant](ai-assistant.md) writes the first definition from a
+The [agent](agent.md) writes the first definition from a
 sample; this page is what it, and you, work with. The workbench checks the
 YAML as you type and highlights every field hit on the page.
 
@@ -186,7 +186,7 @@ xml:
 ## Checking a definition
 
 The workbench shows every hit on the page and the JSON beside it. The
-extraction report, which the assistant reads after every write, lists the
+extraction report, which the agent reads after every write, lists the
 page groups found, each field of the first page group with its status, the
 missing fields and warnings such as a table with no rows. The core package
 exports the same schema as JSON Schema, so an editor can check the YAML

@@ -9,14 +9,14 @@ GitHub, not a public issue.
 
 ## What the model receives
 
-The assistant is the only part of Spooldoc that talks to anything but
+The agent is the only part of Spooldoc that talks to anything but
 your IBM i and your database. What it sends to the model provider:
 
 - The page text of the job's preview sample: the first pages in the
   instructions, any other page on request. Values go as printed unless
-  masking is on (Settings, AI model): then digits become 9 and letters X
+  masking is on (Settings, Agent): then digits become 9 and letters X
   or x, while labels, positions and lengths stay as printed. See
-  [Masking](ai-assistant.md#masking).
+  [Masking](agent.md#masking).
 - The sample's metadata: spooled file name, queue, user data, page size,
   code page.
 - The job's current definition and template, and the names of the

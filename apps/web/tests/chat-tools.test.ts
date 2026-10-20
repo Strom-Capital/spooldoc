@@ -53,7 +53,7 @@ class MemoryDraft implements DraftStore {
     this.templates = jobSpecSchema.shape.render.parse({ templates: change(this.templates) }).templates;
     return this.templates;
   }
-  /** The Word files the assistant saved, by id, as the database would keep them. */
+  /** The Word files the agent saved, by id, as the database would keep them. */
   files = new Map<string, { name: string; content: Uint8Array; previousId: string | null }>();
   async writeWordTemplate(templateId: string, file: { name: string; content: Uint8Array; previousId: string | null }): Promise<TemplateFileView> {
     const template = this.templates.find((t) => t.id === templateId);
@@ -64,7 +64,7 @@ class MemoryDraft implements DraftStore {
     await this.changeTemplates((templates) => templates.map((t) => (t.id === templateId ? withContent(t, { kind: 'docx', fileId: id }) : t)));
     return { id, name: file.name, size: file.content.length, createdAt: new Date(0).toISOString(), madeBy: 'assistant', previousId: file.previousId };
   }
-  /** Reads a file the assistant saved, as the chat route's `templateFile` does. */
+  /** Reads a file the agent saved, as the chat route's `templateFile` does. */
   readFile = async (id: string) => this.files.get(id) ?? null;
 }
 
@@ -458,7 +458,7 @@ describe('Word templates', () => {
   });
 });
 
-describe('Word templates by the assistant', () => {
+describe('Word templates by the agent', () => {
   /** A small design: a title, the invoice number, and the lines as a loop. */
   const design = {
     styles: { default: { document: { run: { font: 'Arial', size: 20 } } } },

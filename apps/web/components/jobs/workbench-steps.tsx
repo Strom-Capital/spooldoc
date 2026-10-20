@@ -181,19 +181,19 @@ export function RenderStep() {
   );
 }
 
-/** The chat, or why it cannot start yet. */
+/** The agent, or why it cannot start yet. */
 export function JobChat() {
   const { sampleId } = useWorkbench();
   if (!sampleId) {
     return (
       <div className="flex h-full flex-col">
-        <div className="flex h-10 shrink-0 items-center border-b px-3 font-medium text-sm">AI assistant</div>
+        <div className="flex h-10 shrink-0 items-center border-b px-3 font-medium text-sm">Agent</div>
         <p className="m-3 rounded-md border bg-muted/40 p-3 text-muted-foreground text-sm">
-          Set the source server and queue. The assistant works on a spooled file from that queue.
+          Set the source server and queue. The agent works on a spooled file from that queue.
         </p>
       </div>
     );
   }
   // A new chat per preview file: the model's context is that file.
-  return <ChatPanel key={sampleId} header={<span className="font-medium">AI assistant</span>} />;
+  return <ChatPanel key={sampleId} header={<span className="font-medium">Agent</span>} />;
 }

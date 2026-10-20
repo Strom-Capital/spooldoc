@@ -1,5 +1,5 @@
 /**
- * An invoice designed as a Word template, as the AI assistant writes one: a letterhead
+ * An invoice designed as a Word template, as the agent writes one: a letterhead
  * with a logo on the first page and a running header after it, the address, the details
  * in a borderless table, the lines with a repeating header row, totals aligned with the
  * amounts, and page numbers in the footer.

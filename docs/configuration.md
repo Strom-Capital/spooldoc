@@ -25,11 +25,11 @@ to `apps/web/.env.local` for development, or put the same variables in the
 | `SPOOLDOC_LOG_LEVEL` | No | `info` | How much the server logs: `off`, `error`, `warn`, `info` or `debug`. See [Server log](#server-log). |
 
 The server refuses to start with a missing or malformed required variable
-and says which one. The chat model, its key and effort, and the Carbone
+and says which one. The agent's model, its key and effort, and the Carbone
 connection are not environment variables: they are set in the app under
 Settings. So is masking, which was `SPOOLDOC_MASK` before; the server log
 says so when that variable is still set. See [Carbone](carbone.md) and
-[Masking](ai-assistant.md#masking).
+[Masking](agent.md#masking).
 
 The Compose file passes two more variables from `.env` to the `carbone`
 service:
@@ -54,7 +54,7 @@ logged.
 At the default level, `info`, the log has what fails before a run exists:
 a server the watcher cannot reach, a queue list it cannot read, real-time
 watching that stopped and started again, a job whose active version cannot
-be read, runs a stopped server cut off, a failed cleanup, assistant chats
+be read, runs a stopped server cut off, a failed cleanup, agent chats
 that fail, and the warnings and errors of the sign-in library. A problem
 that lasts is logged once, and again when it is gone. `warn` keeps only
 the problems.
@@ -68,7 +68,7 @@ Under Settings, for the whole app:
 | Poll interval | 30 seconds | How often the watcher lists a polled queue. |
 | Safety check | 5 minutes | How often a real-time queue is listed anyway, in case a data queue entry was missed. |
 | Keep runs for | 90 days | How long runs are kept, 1 to 3650 days. See [Retention](job-log.md#retention). |
-| AI model | None | The provider, key, model and effort of the assistant. See [AI assistant](ai-assistant.md#choosing-a-model). |
+| Agent | None | The provider, key, model and effort of the agent. See [Agent](agent.md#choosing-a-model). |
 
 ## Per server and per job
 

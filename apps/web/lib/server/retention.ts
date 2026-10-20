@@ -51,7 +51,7 @@ export async function failStaleRuns(now: Date = new Date()): Promise<number> {
  * Delete what is older than the retention: runs that finished before the cutoff (their
  * files go with them), samples captured by runs that no longer exist, and preview samples
  * captured before the cutoff that no job draft points at, and Word template files made
- * before the cutoff that no job draft or version uses. A file the AI assistant replaced
+ * before the cutoff that no job draft or version uses. A file the agent replaced
  * is kept while the file a draft uses names it as its previous one, so the Word panel
  * can offer it back. Runs still running are kept,
  * and so are the `watch_seen` rows, which stop a spooled file from being processed again.

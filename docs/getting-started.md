@@ -10,7 +10,7 @@ description: "Install Spooldoc, create the first account, add an IBM i and build
   ports jt400 uses: 449 and 8470 to 8476. See [Network](deployment.md#network).
 - Docker, or Node 22 with a JDK 17, Postgres and a Carbone server to run
   from source.
-- Optional: an API key for a model provider, so the assistant can write
+- Optional: an API key for a model provider, so the agent can write
   definitions and templates. Spooldoc works without one.
 
 No demo queues yet? [demo-spool](../demo-spool/README.md) creates three
@@ -68,8 +68,8 @@ Rendering. See [Contributing](contributing.md) for the tools and the tests.
 5. **Start a job.** From a queue, choose New job. The job builder shows the
    pipeline: source, trigger, extract, render, destination, finish. Pick a
    spooled file on the queue as the preview sample.
-6. **Let the assistant propose.** With a model set under Settings, ask the
-   assistant for a definition. It reads the sample pages, writes a YAML
+6. **Let the agent propose.** With a model set under Settings, ask the
+   agent for a definition. It reads the sample pages, writes a YAML
    definition, reads the extraction report and fixes missing fields, then
    writes a template and renders it. The page view, the JSON and the
    preview update as it works. Without a model, write the definition by

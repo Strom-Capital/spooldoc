@@ -36,18 +36,18 @@ const SUGGESTIONS = [
 ];
 
 /**
- * The AI chat for the job's preview spooled file. The model proposes a definition and a
+ * The agent for the job's preview spooled file. The model proposes a definition and a
  * template, writes them to the job's draft through tools and checks the extraction
  * report; the workbench reloads as it goes. The thread is kept with the job: it comes
  * back after a reload, and New chat clears it. Without a configured model it shows how
  * to set one up.
  *
- * @param header - Controls for the pane header (the Preview and Chat tabs)
+ * @param header - Controls for the pane header (the Agent title)
  */
 export function ChatPanel({ header }: { header?: ReactNode }) {
   const session = useAppInfo();
   return (
-    <section className="flex h-full min-h-0 flex-col" aria-label="Chat">
+    <section className="flex h-full min-h-0 flex-col" aria-label="Agent">
       {session.model ? (
         <ChatConversation modelId={session.model.id} header={header} />
       ) : (
@@ -71,14 +71,14 @@ function PanelHeader({ header, children }: { header?: ReactNode; children?: Reac
   const session = useAppInfo();
   return (
     <div className="flex h-10 shrink-0 items-center gap-2 border-b px-2 text-sm">
-      {header ?? <span className="font-medium">Chat</span>}
+      {header ?? <span className="font-medium">Agent</span>}
       <Badge
         variant="secondary"
         className="ml-auto gap-1 font-normal"
         title={
           session.masking
-            ? 'Digits and letters of values are masked before page text goes to the model. Change it under Settings, AI model.'
-            : 'Page text goes to the model as printed. Mask values under Settings, AI model.'
+            ? 'Digits and letters of values are masked before page text goes to the model. Change it under Settings, Agent.'
+            : 'Page text goes to the model as printed. Mask values under Settings, Agent.'
         }
       >
         {session.masking ? <EyeOffIcon /> : <EyeIcon />}

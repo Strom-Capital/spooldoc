@@ -1,6 +1,6 @@
 'use client';
 
-import { PanelRightCloseIcon, SparklesIcon } from 'lucide-react';
+import { MousePointerClickIcon, PanelRightCloseIcon } from 'lucide-react';
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
@@ -35,7 +35,7 @@ function writeChoice(jobId: string, value: 'open' | 'closed') {
 }
 
 /**
- * Whether the AI sidebar is open. It remembers the choice per job, and opens by itself
+ * Whether the agent sidebar is open. It remembers the choice per job, and opens by itself
  * the first time the job has a preview spooled file and no definition yet, so the first
  * version is one click away.
  */
@@ -63,14 +63,14 @@ export function useAiSidebar(): { open: boolean; setOpen(open: boolean): void } 
 
 const subscribeNothing = () => () => undefined;
 
-/** The AI assistant beside the builder (a sheet on small screens), and the button that opens it. */
+/** The agent beside the builder (a sheet on small screens), and the button that opens it. */
 export function AiSidebar({ open, setOpen, children }: { open: boolean; setOpen(open: boolean): void; children: ReactNode }) {
   const phone = useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE).matches, () => false);
   if (phone) {
     return (
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="w-full p-0 sm:max-w-md">
-          <SheetTitle className="sr-only">AI assistant</SheetTitle>
+          <SheetTitle className="sr-only">Agent</SheetTitle>
           <div className="h-full pt-8">{children}</div>
         </SheetContent>
       </Sheet>
@@ -78,26 +78,26 @@ export function AiSidebar({ open, setOpen, children }: { open: boolean; setOpen(
   }
   // Stays mounted while closed, so a running answer keeps streaming.
   return (
-    <aside aria-label="AI assistant" className={open ? 'relative flex w-[380px] shrink-0 flex-col border-l' : 'hidden'}>
-      <Button variant="ghost" size="icon-sm" className="absolute top-1.5 right-1.5 z-10" onClick={() => setOpen(false)} aria-label="Close the AI assistant">
+    <aside aria-label="Agent" className={open ? 'relative flex w-[380px] shrink-0 flex-col border-l' : 'hidden'}>
+      <Button variant="ghost" size="icon-sm" className="absolute top-1.5 right-1.5 z-10" onClick={() => setOpen(false)} aria-label="Close the agent">
         <PanelRightCloseIcon />
       </Button>
-      <div className="min-h-0 flex-1 [&_[aria-label=Chat]>div:first-child]:pr-10">{children}</div>
+      <div className="min-h-0 flex-1 [&_section[aria-label=Agent]>div:first-child]:pr-10">{children}</div>
     </aside>
   );
 }
 
-/** Opens the AI assistant. */
+/** Opens the agent. */
 export function AiButton({ open, setOpen }: { open: boolean; setOpen(open: boolean): void }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button variant={open ? 'secondary' : 'outline'} size="sm" onClick={() => setOpen(!open)} aria-pressed={open}>
-          <SparklesIcon />
-          <span className="hidden sm:inline">AI</span>
+          <MousePointerClickIcon />
+          <span className="hidden sm:inline">Agent</span>
         </Button>
       </TooltipTrigger>
-      <TooltipContent>{open ? 'Close' : 'Open'} the AI assistant</TooltipContent>
+      <TooltipContent>{open ? 'Close' : 'Open'} the agent</TooltipContent>
     </Tooltip>
   );
 }

@@ -89,7 +89,7 @@ export const DEFAULT_LOCAL_BASE_URL = 'http://localhost:11434/v1';
 export function aiProvider(id: AiProviderId): AiProvider {
   const provider = AI_PROVIDERS.find((entry) => entry.id === id);
   if (!provider) {
-    throw new Error(`Unknown AI provider: ${id}`);
+    throw new Error(`Unknown model provider: ${id}`);
   }
   return provider;
 }

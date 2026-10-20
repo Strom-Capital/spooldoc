@@ -266,7 +266,7 @@ describe('template files', () => {
     expect((await cleanUp(30, NOW))?.templateFiles).toBe(2);
   });
 
-  it("keeps a file the assistant replaced while the draft's file names it, and says so in the file's details", async () => {
+  it("keeps a file the agent replaced while the draft's file names it, and says so in the file's details", async () => {
     const id = await readyJob();
     const insert = async (values: Partial<typeof templateFiles.$inferInsert>) =>
       (await db().insert(templateFiles).values({ name: 't.docx', contentType: DOCX, size: 2, content: Buffer.from('PK'), createdAt: daysAgo(100), ...values }).returning())[0]!;
@@ -284,7 +284,7 @@ describe('template files', () => {
     expect((await cleanUp(30, NOW))?.templateFiles).toBe(1);
     expect((await db().select({ id: templateFiles.id }).from(templateFiles)).map((row) => row.id).sort()).toEqual([current.id, replaced.id].sort());
 
-    // Once the draft uses the replaced file again, nothing names it, and the assistant's file goes.
+    // Once the draft uses the replaced file again, nothing names it, and the agent's file goes.
     await jobRoute.PATCH(
       patch(`/api/jobs/${id}`, { draft: { render: { templates: [{ id: 'main', name: 'Document', kind: 'docx', fileId: replaced.id, formats: ['pdf'] }] } } }),
       params({ id }),

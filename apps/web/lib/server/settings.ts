@@ -52,7 +52,7 @@ export async function getAiRows(): Promise<{ provider: AiProviderId | null; mask
   return { provider: (row?.aiProvider ?? null) as AiProviderId | null, mask: row?.aiMask ?? false, rows };
 }
 
-/** True when values are masked before page text and tool results go to the model (Settings, AI model). */
+/** True when values are masked before page text and tool results go to the model (Settings, Agent). */
 export async function maskingOn(): Promise<boolean> {
   const [row] = await getDb().select({ aiMask: settings.aiMask }).from(settings).where(eq(settings.id, 1));
   return row?.aiMask ?? false;

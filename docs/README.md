@@ -13,7 +13,7 @@ overview and the architecture diagram, see the [project README](../README.md).
 | [Definitions](definitions.md) | The YAML that turns pages into JSON |
 | [Templates](templates.md) | HTML and Word templates with Carbone tags, the template check, assets, PDF layout |
 | [Carbone](carbone.md) | The Carbone server, Settings, Community and Enterprise |
-| [AI assistant](ai-assistant.md) | Models, tools, masking |
+| [Agent](agent.md) | Models, tools, masking |
 | [Destinations](destinations.md) | Where documents go |
 | [Job log](job-log.md) | Runs, statuses, retry, retention |
 | [Configuration](configuration.md) | Environment variables and settings |
