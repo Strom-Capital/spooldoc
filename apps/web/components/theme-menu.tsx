@@ -1,39 +1,37 @@
 'use client';
 
-import { CheckIcon, MonitorIcon, MoonIcon, SunIcon } from 'lucide-react';
+import { MonitorIcon, MoonIcon, SunIcon } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useSyncExternalStore } from 'react';
-import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem } from '@/components/ui/dropdown-menu';
 
-const SYSTEM_THEME = { id: 'system', label: 'System', icon: MonitorIcon };
-const THEMES = [SYSTEM_THEME, { id: 'light', label: 'Light', icon: SunIcon }, { id: 'dark', label: 'Dark', icon: MoonIcon }];
+const THEMES = [
+  { id: 'system', label: 'System', icon: MonitorIcon },
+  { id: 'light', label: 'Light', icon: SunIcon },
+  { id: 'dark', label: 'Dark', icon: MoonIcon },
+];
 
 const subscribeNothing = () => () => undefined;
 
-/** Icon button with System, Light and Dark; the icon shows the current choice. */
-export function ThemeMenu() {
+/** System, Light and Dark as menu items, for the account menu. */
+export function ThemeMenuItems() {
   const { theme, setTheme } = useTheme();
   // The saved theme is only known in the browser
   const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false);
-  const current = (hydrated && THEMES.find((item) => item.id === theme)) || SYSTEM_THEME;
+  const current = (hydrated && THEMES.find((item) => item.id === theme)?.id) || 'system';
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={`Theme: ${current.label}`} title={`Theme: ${current.label}`}>
-          <current.icon />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-36">
+    <>
+      <DropdownMenuLabel className="text-muted-foreground text-xs">Theme</DropdownMenuLabel>
+      <DropdownMenuRadioGroup value={current} onValueChange={setTheme}>
         {THEMES.map((item) => (
-          <DropdownMenuItem key={item.id} onSelect={() => setTheme(item.id)}>
+          // Keep the menu open so the change can be seen
+          <DropdownMenuRadioItem key={item.id} value={item.id} onSelect={(event) => event.preventDefault()}>
             <item.icon />
             {item.label}
-            {item.id === current.id && <CheckIcon className="ml-auto" />}
-          </DropdownMenuItem>
+          </DropdownMenuRadioItem>
         ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </DropdownMenuRadioGroup>
+    </>
   );
 }
