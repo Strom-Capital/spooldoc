@@ -1,0 +1,85 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# CodeRabbit reviews pull requests that are ready for review. It reads
+# AGENTS.md and CLAUDE.md on its own; docs/principles.md is added below.
+# CI already runs build, typecheck, lint and test, so the review is for
+# what those miss.
+language: en-US
+
+reviews:
+  profile: chill
+  # The pull request template already asks for what and why.
+  high_level_summary: false
+  poem: false
+  in_progress_fortune: false
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  related_issues: false
+  related_prs: false
+  suggested_labels: false
+  suggested_reviewers: false
+  collapse_walkthrough: true
+
+  auto_review:
+    enabled: true
+    drafts: false
+
+  path_filters:
+    - "!pnpm-lock.yaml"
+    - "!CHANGELOG.md"
+    - "!apps/web/drizzle/meta/**"
+    - "!apps/web/lib/server/carbone-skill.generated.ts"
+
+  path_instructions:
+    - path: "**"
+      instructions: |
+        The repository is public. Flag any real customer, site, host,
+        library, user or person name in code, fixtures, docs or text.
+        Invented values like MYLIB, MYOUTQ and ibmi.example.com are fine.
+        Flag errors that are caught and dropped, and lists cut off
+        without telling the user.
+    - path: "packages/ibmi/**"
+      instructions: |
+        Nothing may change on the IBM i unless the user asks: flag any
+        hold, move, delete, CHGOUTQ or data queue write that is not behind
+        an explicit user action. IBM i errors must say what went wrong and
+        what to do next.
+    - path: "packages/core/**"
+      instructions: |
+        Definitions read the spooled file; templates lay it out. Templates
+        must never see lines and columns.
+    - path: "apps/web/lib/server/db/schema.ts"
+      instructions: |
+        A schema change needs a generated migration in apps/web/drizzle in
+        the same pull request.
+    - path: "apps/web/**/*.tsx"
+      instructions: |
+        Every feature needs its empty, loading and error states. No
+        "coming later" in the app. Reuse an existing component and word
+        for a thing before adding a new one.
+    - path: "docs/**"
+      instructions: |
+        Short sentences, plain words, sentence case. No middle dot as a
+        separator.
+
+  tools:
+    # CI runs ESLint with no warnings allowed; these would repeat or
+    # contradict it.
+    eslint:
+      enabled: false
+    biome:
+      enabled: false
+    oxc:
+      enabled: false
+    # The docs follow their own style rules, above.
+    markdownlint:
+      enabled: false
+    languagetool:
+      enabled: false
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - files: "docs/principles.md"
+        applyTo: "**"
