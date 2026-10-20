@@ -3,7 +3,7 @@
  * Nothing here holds a session, a key or an absolute path.
  */
 
-import type { Format, TemplateKind } from './job-spec';
+import type { Format, TemplateKind, XlsxScope } from './job-spec';
 
 /** Names of the tools the model can call. */
 export const CHAT_TOOL_NAMES = [
@@ -70,8 +70,10 @@ export interface TemplateListing {
   id: string;
   name: string;
   formats: Format[];
-  /** An HTML template, or a Word template. */
+  /** An HTML, Word or Excel template. */
   kind: TemplateKind;
+  /** An Excel template: whether each file holds the whole spooled file or one page group. */
+  scope?: XlsxScope;
   /** `starter` when the template has no content of its own yet. */
   content: 'saved' | 'starter';
 }
@@ -163,7 +165,8 @@ export type ListJobsResult = { ok: true; jobs: JobListing[] } | ToolFailure;
 
 /**
  * One template of another job: its name, formats and content. `html` is an HTML template's
- * text, `fileId` a Word template's file; null for the starter.
+ * text, `fileId` a Word or Excel template's file; null for the starter. `scope` is what
+ * each file of an Excel template holds.
  */
 export interface JobTemplateFiles {
   id: string;
@@ -172,6 +175,7 @@ export interface JobTemplateFiles {
   kind: TemplateKind;
   html: string | null;
   fileId: string | null;
+  scope?: XlsxScope;
 }
 
 /** `read_job_files`. */

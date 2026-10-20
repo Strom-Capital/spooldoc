@@ -1,5 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from "fflate";
-import { MAX_DOCX_BYTES, readDocx } from "./docx.js";
+import { readDocx } from "./docx.js";
+import { MAX_TEMPLATE_FILE_BYTES } from "./template.js";
 
 /**
  * Editing a Word template's XML with `str_replace` rules: a text that occurs exactly once
@@ -288,7 +289,7 @@ function rezip(files: Record<string, Uint8Array>, changed: Map<string, string>):
     out[name] = xml !== undefined ? strToU8(xml) : [content, { level: /\.(png|jpe?g|gif|emf|wmf)$/i.test(name) ? 0 : 6 }];
   }
   const result = zipSync(out);
-  if (result.length > MAX_DOCX_BYTES) throw new DocxEditError(`After the edits, the file is larger than ${MAX_DOCX_BYTES / 1024 / 1024} MB.`);
+  if (result.length > MAX_TEMPLATE_FILE_BYTES) throw new DocxEditError(`After the edits, the file is larger than ${MAX_TEMPLATE_FILE_BYTES / 1024 / 1024} MB.`);
   try {
     readDocx(result);
   } catch (error) {

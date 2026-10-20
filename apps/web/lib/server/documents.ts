@@ -9,6 +9,7 @@ import { getTemplateFile } from './template-files';
 
 /**
  * The file name of the document of a page group: the definition's `output.name`, or `<fallback>-<n>`.
+ * A document of the whole spooled file is named by `spooledFileName` in `lib/job-spec`.
  */
 export function fileNameFor(def: Definition | null, pageGroup: Record<string, unknown>, index: number, fallback: string): string {
   if (def?.output?.name) {
@@ -27,14 +28,14 @@ export function templateHtml(source: string | null | undefined, def: Definition)
 }
 
 /**
- * A template's content as `renderSample` takes it: HTML as it is, a Word template with
- * its file read. Null when the Word file is gone.
+ * A template's content as `renderSample` takes it: HTML as it is, a Word or Excel template
+ * with its file read. Null when the file is gone.
  */
 export async function sampleTemplate(template: TemplateContent): Promise<SampleTemplate | null> {
   if (template.kind === 'html') return { kind: 'html', source: template.source };
-  if (template.fileId === null) return { kind: 'docx', file: null };
-  const file = await getTemplateFile(template.fileId);
-  return file ? { kind: 'docx', file } : null;
+  const file = template.fileId === null ? null : await getTemplateFile(template.fileId);
+  if (template.fileId !== null && !file) return null;
+  return template.kind === 'xlsx' ? { kind: 'xlsx', file, scope: template.scope } : { kind: 'docx', file };
 }
 
 /** Renders one document to a file. */

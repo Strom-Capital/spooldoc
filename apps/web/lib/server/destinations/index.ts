@@ -7,7 +7,8 @@ import { getDb } from '../db';
 
 /** A file a destination receives. */
 export interface RunFile {
-  pageGroupIndex: number;
+  /** The page group the file is the document of; null for a file of the whole spooled file. */
+  pageGroupIndex: number | null;
   /** The name of the job template the file was rendered with, and its place in the job's templates. */
   template: string;
   templateIndex: number;

@@ -308,7 +308,8 @@ export const runFiles = pgTable(
     runId: uuid('run_id')
       .notNull()
       .references(() => runs.id, { onDelete: 'cascade' }),
-    pageGroupIndex: integer('page_group_index').notNull(),
+    /** The page group the file is the document of; null for a file of the whole spooled file, from an Excel template. */
+    pageGroupIndex: integer('page_group_index'),
     /** The name of the job template the file was rendered with. */
     template: text('template').notNull(),
     /** The template's place in the job version's templates, to list files in that order. */
@@ -394,17 +395,18 @@ export const assets = pgTable(
 );
 
 /**
- * A Word template file, uploaded or made by the agent. A row never changes (a
+ * A Word or Excel template file, uploaded or made by the agent. A row never changes (a
  * trigger refuses updates): uploading again, or a change by the agent, adds a row,
  * so a job version keeps the exact file it ran with. Templates point at it with
- * `{ kind: 'docx', fileId }`; a file no draft or version points at is deleted after the
- * retention, unless a file a draft uses names it as its previous one.
+ * `{ kind: 'docx', fileId }` or `{ kind: 'xlsx', fileId }`; a file no draft or version
+ * points at is deleted after the retention, unless a file a draft uses names it as its
+ * previous one.
  */
 export const templateFiles = pgTable(
   'template_files',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    /** The file's name, such as `invoice.docx`. */
+    /** The file's name, such as `invoice.docx` or `invoice-lines.xlsx`. */
     name: text('name').notNull(),
     contentType: text('content_type').notNull(),
     size: integer('size').notNull(),

@@ -12,7 +12,9 @@ use each.
 The built-in destination keeps every file in Spooldoc's database. The
 files appear on the run in the [job log](job-log.md), a file per document
 in each format of its [template](jobs.md#templates), named after the
-definition's `output.name`, and can be downloaded from there. They are deleted with the run when it passes the
+definition's `output.name`, and can be downloaded from there. An Excel
+template of the whole spooled file makes one file per format for the
+spooled file, named after it. They are deleted with the run when it passes the
 retention period.
 
 Delivery happens in the run's transaction, so a run and its files are

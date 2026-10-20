@@ -7,6 +7,9 @@ import { ASSET_TAG, renamedRootProblem, templateUses } from "./tags.js";
 /** Turns an asset name into its data URI, or undefined when there is no such asset. */
 export type AssetResolver = (name: string) => string | undefined;
 
+/** The largest Word or Excel template Spooldoc takes. Every render sends it to Carbone. */
+export const MAX_TEMPLATE_FILE_BYTES = 10 * 1024 * 1024;
+
 /** What a template's `d` holds: `pg`, the page group; `pgs`, every page group of the spooled file; and `splf`, the spooled file. */
 export interface TemplateData {
   pg: Record<string, unknown>;
@@ -14,21 +17,35 @@ export interface TemplateData {
   splf: unknown;
 }
 
+/** What `d` holds for a template that makes one document of the whole spooled file: every page group and the spooled file, no `pg`. */
+export interface SpooledFileData {
+  pgs: Record<string, unknown>[];
+  splf: unknown;
+}
+
+/** The data of one document: of a page group, or of the whole spooled file. */
+export type DocumentData = TemplateData | SpooledFileData;
+
 /**
  * The data for the document of one page group. `pgs` is only sent when the template
  * reads it, so a spooled file with many page groups does not send all of them with each
  * one.
  *
- * @param template - An HTML template, or a Word template as `readDocx` reads it
+ * @param template - An HTML template, or a Word or Excel template as `readDocx` or `readXlsx` reads it
  */
 export function templateData(
-  template: string | DocxTemplate,
+  template: string | Pick<DocxTemplate, "text">,
   pageGroup: Record<string, unknown>,
   pageGroups: Record<string, unknown>[],
   sample: { splf: unknown },
 ): TemplateData {
   const text = typeof template === "string" ? template : template.text;
   return { pg: pageGroup, ...(templateUses(text, "pgs") ? { pgs: pageGroups } : {}), splf: sample.splf };
+}
+
+/** The data for the one document of a whole spooled file: every page group and the spooled file. */
+export function spooledFileData(pageGroups: Record<string, unknown>[], sample: { splf: unknown }): SpooledFileData {
+  return { pgs: pageGroups, splf: sample.splf };
 }
 
 /** CSS that hides Carbone's PDF header, footer and options in HTML output; Carbone leaves those elements in. */
@@ -144,6 +161,8 @@ export const fieldLabel = (name: string): string =>
 export interface StarterColumn {
   name: string;
   type?: ValueType;
+  /** The characters it takes on the page, when the definition says. */
+  length?: number;
 }
 
 /** A table, record or group of a starter template, with its columns. */
@@ -169,9 +188,10 @@ export function starterLayout(def: Definition): { title: string; fields: Starter
   const fields: StarterColumn[] = [];
   const blocks: StarterBlock[] = [];
   if (def.source === "text" && def.text) {
-    for (const f of def.text.fields ?? []) fields.push({ name: f.name, type: f.type });
-    for (const t of def.text.tables ?? []) blocks.push({ name: t.name, columns: t.columns.map((c) => ({ name: c.name, type: c.type })) });
-    for (const r of def.text.records ?? []) blocks.push({ name: r.name, columns: r.columns.map((c) => ({ name: c.name, type: c.type })) });
+    const column = (c: { name: string; type?: ValueType; length?: number }): StarterColumn => ({ name: c.name, type: c.type, ...(c.length ? { length: c.length } : {}) });
+    for (const f of def.text.fields ?? []) fields.push({ name: f.name, type: f.type, ...(f.anchor.length ? { length: f.anchor.length } : {}) });
+    for (const t of def.text.tables ?? []) blocks.push({ name: t.name, columns: t.columns.map(column) });
+    for (const r of def.text.records ?? []) blocks.push({ name: r.name, columns: r.columns.map(column) });
   } else if (def.xml) {
     for (const [name, value] of Object.entries(def.xml.fields ?? {})) fields.push({ name, type: xmlType(value) });
     for (const [name, g] of Object.entries(def.xml.groups ?? {})) {

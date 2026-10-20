@@ -1,6 +1,6 @@
 'use client';
 
-import { FileCodeIcon, FileTypeIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { FileCodeIcon, FileSpreadsheetIcon, FileTypeIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -22,6 +22,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -32,23 +34,34 @@ import {
   formatList,
   hasOwnContent,
   KIND_FORMATS,
+  KIND_NAMES,
+  kindName,
   kindSwitchNote,
   nameTaken,
   newTemplate,
   FORMATS,
+  starterContent,
+  TEMPLATE_KINDS,
   withContent,
   type JobTemplate,
   type Format,
   type TemplateKind,
+  type XlsxScope,
 } from '@/lib/job-spec';
 import { useJob } from './job-provider';
 
-const KIND_NAME: Record<TemplateKind, string> = { html: 'an HTML template', docx: 'a Word template' };
+const KIND_ICONS: Record<TemplateKind, LucideIcon> = { html: FileCodeIcon, docx: FileTypeIcon, xlsx: FileSpreadsheetIcon };
+
+/** What one file of an Excel template holds, and what that makes. */
+const SCOPES: { scope: XlsxScope; label: string; makes: string }[] = [
+  { scope: 'splf', label: 'Whole spooled file', makes: 'One file per spooled file, a row per line' },
+  { scope: 'pageGroup', label: 'Page group', makes: 'One file per page group' },
+];
 
 /**
  * The render step's end of the path: which template the editor and preview show, and a
- * menu with the files it makes (at least one), its kind (HTML or Word), Rename, Remove
- * and Add template.
+ * menu with the files it makes (at least one), what each file of an Excel template holds,
+ * its kind (HTML, Word or Excel), Rename, Remove and Add template.
  */
 export function TemplateControls({ template, onPick }: { template: JobTemplate; onPick(id: string): void }) {
   const { spec, readOnly, updateDraft } = useJob();
@@ -67,12 +80,17 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
     }
   };
 
-  /** Use the other kind of template, starting from its starter. */
+  /** Use another kind of template, starting from its starter. */
   const switchKind = (next: TemplateKind) => {
-    const content = next === 'docx' ? ({ kind: 'docx', fileId: null } as const) : ({ kind: 'html', source: null } as const);
-    save(templates.map((t) => (t.id === template.id ? withContent(t, content) : t)));
+    save(templates.map((t) => (t.id === template.id ? withContent(t, starterContent(next)) : t)));
     setSwitching(null);
-    toast.success(`${template.name} is ${next === 'docx' ? 'a Word' : 'an HTML'} template`, { description: kindSwitchNote(template, next) ?? undefined });
+    toast.success(`${template.name} is ${kindName(next, true)}`, { description: kindSwitchNote(template, next) ?? undefined });
+  };
+
+  /** What each file of an Excel template holds. The file stays; the check says when its tags are for the other scope. */
+  const setScope = (scope: XlsxScope) => {
+    if (template.kind !== 'xlsx' || template.scope === scope) return;
+    save(templates.map((t) => (t.id === template.id && t.kind === 'xlsx' ? { ...t, scope } : t)));
   };
 
   const pickKind = (next: TemplateKind) => {
@@ -95,7 +113,7 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
     toast.success(`Removed ${template.name}`);
   };
 
-  const other: TemplateKind = kind === 'html' ? 'docx' : 'html';
+  const others = TEMPLATE_KINDS.filter((k) => k !== kind);
 
   return (
     <>
@@ -119,7 +137,7 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
                 <MoreHorizontalIcon />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuContent align="start" className="w-64">
               <DropdownMenuLabel className="text-muted-foreground text-xs">Files it makes</DropdownMenuLabel>
               {KIND_FORMATS[kind].map((format) => {
                 const checked = template.formats.includes(format);
@@ -135,14 +153,35 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
                   </DropdownMenuCheckboxItem>
                 );
               })}
+              {template.kind === 'xlsx' && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-muted-foreground text-xs">Each file holds</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={template.scope} onValueChange={(value) => setScope(value as XlsxScope)}>
+                    {SCOPES.map(({ scope, label, makes }) => (
+                      <DropdownMenuRadioItem key={scope} value={scope} onSelect={(event) => event.preventDefault()}>
+                        <span className="flex flex-col">
+                          {label}
+                          <span className="text-muted-foreground text-xs">{makes}</span>
+                        </span>
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </>
+              )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => pickKind(other)}>
-                {other === 'docx' ? <FileTypeIcon /> : <FileCodeIcon />}
-                <span className="flex flex-col">
-                  Make it {KIND_NAME[other]}
-                  <span className="text-muted-foreground text-xs">Makes {formatList(KIND_FORMATS[other])}</span>
-                </span>
-              </DropdownMenuItem>
+              {others.map((other) => {
+                const Icon = KIND_ICONS[other];
+                return (
+                  <DropdownMenuItem key={other} onSelect={() => pickKind(other)}>
+                    <Icon />
+                    <span className="flex flex-col">
+                      Make it {kindName(other, true)}
+                      <span className="text-muted-foreground text-xs">Makes {formatList(KIND_FORMATS[other])}</span>
+                    </span>
+                  </DropdownMenuItem>
+                );
+              })}
               <DropdownMenuItem onSelect={() => setRenaming(true)}>
                 <PencilIcon />
                 Rename
@@ -173,10 +212,12 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
       <AlertDialog open={switching !== null} onOpenChange={(open) => !open && setSwitching(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Make {template.name} {switching === 'docx' ? 'a Word' : 'an HTML'} template?</AlertDialogTitle>
+            <AlertDialogTitle>
+              Make {template.name} {switching && kindName(switching, true)}?
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {kind === 'html' ? 'Its HTML' : 'Its uploaded Word file'} is removed from the draft, and the template starts from the{' '}
-              {switching === 'docx' ? 'Word' : 'HTML'} starter. Saved versions keep it. {switching && kindSwitchNote(template, switching)}
+              {kind === 'html' ? 'Its HTML' : `Its ${KIND_NAMES[kind].app} file`} is removed from the draft, and the template starts from the{' '}
+              {switching && (KIND_NAMES[switching].app ?? 'HTML')} starter. Saved versions keep it. {switching && kindSwitchNote(template, switching)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

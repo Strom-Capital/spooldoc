@@ -46,7 +46,7 @@ was cut off". Retry it to run the file again.
 |------|--------------|
 | Capture | Reads the spooled file and stores it as a sample. |
 | Extract | Matches the file against the definition and reads its page groups. |
-| Render | Checks each template, then makes the document of each page group with it, in the template's formats, with [Carbone](carbone.md). A failed render shows Carbone's own text under Details. |
+| Render | Checks each template, then makes the document of each page group with it, in the template's formats, with [Carbone](carbone.md). An Excel template of the whole spooled file makes one document of all of them. A failed render shows Carbone's own text under Details. |
 | Deliver | Hands every file to the destination. |
 | Finish | Holds, moves, deletes or leaves the spooled file. |
 
@@ -68,6 +68,6 @@ processed, so the watcher never runs a file a second time on its own.
 Settings holds how long runs are kept: 90 days by default, 1 to 3650. Once
 an hour the watcher deletes runs that finished longer ago, with their
 captured spooled files and delivered files, preview samples no job
-uses, and uploaded Word templates that no draft or version uses. The record of which spooled files were processed is kept, so a file
+uses, and uploaded Word and Excel templates that no draft or version uses. The record of which spooled files were processed is kept, so a file
 is not run again after its run is gone. Runs are deleted in small batches
 so no single delete holds its locks for long.

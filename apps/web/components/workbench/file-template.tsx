@@ -1,6 +1,6 @@
 'use client';
 
-import { DownloadIcon, FileTextIcon, FolderInputIcon, MousePointerClickIcon, Undo2Icon, UploadIcon } from 'lucide-react';
+import { DownloadIcon, FileSpreadsheetIcon, FileTextIcon, FolderInputIcon, MousePointerClickIcon, Undo2Icon, UploadIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ErrorNote } from '@/components/page';
@@ -9,7 +9,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
 import { postForFile } from '@/lib/client/download';
 import { bytes, dateTime } from '@/lib/client/format';
-import { FORMAT_FILES } from '@/lib/job-spec';
+import { FORMAT_FILES, KIND_NAMES, type FileTemplateContent } from '@/lib/job-spec';
 import type { TemplateFileDetails, TemplateFileView } from '@/lib/types';
 import { EditorBar, EditorMessage } from './editor-bar';
 import { StartFromJobDialog } from './start-from-job-dialog';
@@ -19,15 +19,18 @@ import { useWorkbench } from './workbench-provider';
 type FileInfo = { id: string; file: TemplateFileDetails } | { id: string; error: string };
 
 /**
- * The Word template shown: its `.docx`, uploaded or made by the agent,
- * or the starter template generated from the definition until there is one.
- * The user changes the file in Word; here they upload it, download it or the starter
- * template, see what the tag check finds, by part, and put back the file the agent
- * replaced.
+ * The Word or Excel template shown: its `.docx` or `.xlsx`, uploaded or (Word) made by the
+ * agent, or the starter template generated from the definition until there is one. The
+ * user changes the file in Word or Excel; here they upload it, download it or the starter
+ * template, see what the tag check finds, by part or by sheet and cell, and put back the
+ * file the agent replaced.
  */
-export function WordTemplate() {
+export function FileTemplate({ kind }: { kind: FileTemplateContent['kind'] }) {
   const { jobId, content, render, readOnly, yaml, templateId, onDraftWritten, setContent } = useWorkbench();
-  const fileId = content.kind === 'docx' ? content.fileId : null;
+  const fileId = content.kind === kind ? content.fileId : null;
+  const scope = content.kind === 'xlsx' ? content.scope : 'splf';
+  const { app, name: kindLabel } = KIND_NAMES[kind];
+  const { extension, contentType } = FORMAT_FILES[kind];
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<'upload' | 'starter' | null>(null);
   const [error, setError] = useState<ShownError | null>(null);
@@ -47,8 +50,9 @@ export function WordTemplate() {
   }, [fileId]);
 
   const current = info?.id === fileId ? info : null;
-  const shown = render?.template?.kind === 'docx' ? render.template : undefined;
+  const shown = render?.template?.kind === kind ? render.template : undefined;
   const problems = shown?.problems ?? [];
+  const noPageSetup = shown?.kind === 'xlsx' ? (shown.noPageSetup ?? []) : [];
 
   async function upload(file: File | undefined) {
     if (!file) {
@@ -57,6 +61,7 @@ export function WordTemplate() {
     const form = new FormData();
     form.set('file', file);
     form.set('templateId', templateId);
+    form.set('kind', kind);
     setBusy('upload');
     setError(null);
     try {
@@ -74,7 +79,8 @@ export function WordTemplate() {
 
   /** Use the file the agent replaced, or the starter template when it replaced none. */
   function restorePrevious(file: TemplateFileDetails) {
-    setContent({ kind: 'docx', fileId: file.previous?.id ?? null });
+    const fileId = file.previous?.id ?? null;
+    setContent(kind === 'xlsx' ? { kind, fileId, scope } : { kind, fileId });
     toast.success(file.previous ? `Using ${file.previous.name} again` : 'Using the starter template again');
   }
 
@@ -82,7 +88,7 @@ export function WordTemplate() {
     setBusy('starter');
     setError(null);
     try {
-      await postForFile(`/api/jobs/${jobId}/starter-docx`, { yaml }, 'template.docx');
+      await postForFile(`/api/jobs/${jobId}/starter`, { yaml, kind, scope }, `template.${extension}`);
     } catch (err) {
       setError(shownError(err));
     } finally {
@@ -98,17 +104,17 @@ export function WordTemplate() {
             <input
               ref={input}
               type="file"
-              accept={`.docx,${FORMAT_FILES.docx.contentType}`}
+              accept={`.${extension},${contentType}`}
               className="hidden"
               onChange={(event) => void upload(event.target.files?.[0])}
-              aria-label="Word template file"
+              aria-label={`${kindLabel} file`}
             />
             <Button
               size="sm"
               variant="ghost"
               disabled={busy !== null}
               onClick={() => input.current?.click()}
-              title="Upload a .docx made in Word. This template uses it from then on; saved versions keep theirs."
+              title={`Upload a .${extension} made in ${app}. This template uses it from then on; saved versions keep theirs.`}
             >
               {busy === 'upload' ? <Spinner /> : <UploadIcon />}
               Upload template
@@ -123,7 +129,7 @@ export function WordTemplate() {
             </a>
           </Button>
         ) : (
-          <Button size="sm" variant="ghost" disabled={busy !== null || !yaml.trim()} onClick={downloadStarter} title="The starter template for the definition, to change in Word">
+          <Button size="sm" variant="ghost" disabled={busy !== null || !yaml.trim()} onClick={downloadStarter} title={`The starter template for the definition, to change in ${app}`}>
             {busy === 'starter' ? <Spinner /> : <DownloadIcon />}
             Download starter template
           </Button>
@@ -143,14 +149,21 @@ export function WordTemplate() {
       )}
       {!fileId && (
         <EditorMessage tone="note">
-          This template has no Word file yet. The preview uses a starter template generated from the definition. Download it, change it in
-          Word and upload it, or ask the agent to design one.
+          This template has no {app} file yet. The preview uses a starter template generated from the definition. Download it, change it in{' '}
+          {app} and upload it{kind === 'docx' ? ', or ask the agent to design one' : ''}.
+        </EditorMessage>
+      )}
+      {fileId && noPageSetup.length > 0 && (
+        <EditorMessage tone="note">
+          {noPageSetup.length === 1 ? `The sheet ${noPageSetup[0]} has` : `The sheets ${noPageSetup.join(', ')} have`} no page setup, so the PDF prints on US
+          Letter and can cut columns off. In Excel, set it on the Page Layout tab: Size A4, Orientation, Width 1 page under Scale to Fit, and Print
+          Titles for the header row.
         </EditorMessage>
       )}
       {current && 'error' in current && <EditorMessage tone="error">{current.error}</EditorMessage>}
       {shown?.error && (
         <EditorMessage tone="error">
-          {problems.length > 0 && `${problems.length === 1 ? '1 problem' : `${problems.length} problems`} to fix in Word before the template renders:\n`}
+          {problems.length > 0 && `${problems.length === 1 ? '1 problem' : `${problems.length} problems`} to fix in ${app} before the template renders:\n`}
           {shown.error}
           {shown.detail && (
             <details className="mt-1">
@@ -163,7 +176,11 @@ export function WordTemplate() {
       <div className="min-h-0 flex-1 overflow-auto p-4 text-sm">
         {fileId && (
           <div className="mb-4 flex items-center gap-3 rounded-md border p-3">
-            <FileTextIcon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+            {kind === 'xlsx' ? (
+              <FileSpreadsheetIcon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+            ) : (
+              <FileTextIcon className="size-5 shrink-0 text-muted-foreground" aria-hidden />
+            )}
             {current && 'file' in current ? (
               <div className="min-w-0">
                 <p className="truncate font-medium">{current.file.name}</p>
@@ -183,8 +200,18 @@ export function WordTemplate() {
         {current && 'file' in current && current.file.madeBy === 'assistant' && (
           <PreviousFile file={current.file} readOnly={readOnly} onUse={() => restorePrevious(current.file)} />
         )}
-        <h3 className="mb-2 font-medium">Tags in Word</h3>
-        <ul className="list-disc space-y-1.5 pl-5 text-muted-foreground">
+        {kind === 'xlsx' ? <ExcelTips scope={scope} /> : <WordTips />}
+      </div>
+    </div>
+  );
+}
+
+/** How to write tags in Word. */
+function WordTips() {
+  return (
+    <>
+      <h3 className="mb-2 font-medium">Tags in Word</h3>
+      <ul className="list-disc space-y-1.5 pl-5 text-muted-foreground">
           <li>
             Turn off smart quotes before you type tags: File, Options, Proofing, AutoCorrect Options, AutoFormat As You Type. Carbone prints a
             tag with curly quotes as text.
@@ -199,9 +226,50 @@ export function WordTemplate() {
           </li>
           <li>Insert a logo as a picture, set to In line with text. It is the same in every document.</li>
           <li>Page numbers are Word&apos;s own fields: Insert, Page Number.</li>
-        </ul>
-      </div>
-    </div>
+      </ul>
+    </>
+  );
+}
+
+const code = (text: string) => <code className="font-mono text-foreground">{text}</code>;
+
+/** How to write tags in Excel, for the template's scope. */
+function ExcelTips({ scope }: { scope: 'splf' | 'pageGroup' }) {
+  const list = scope === 'splf' ? 'd.pgs[i].lines[i]' : 'd.pg.lines[i]';
+  return (
+    <>
+      <h3 className="mb-2 font-medium">Tags in Excel</h3>
+      <ul className="list-disc space-y-1.5 pl-5 text-muted-foreground">
+        <li>
+          {scope === 'splf' ? (
+            <>
+              Each file holds the whole spooled file. A row with {code('{d.pgs[i].invoiceNo}')} and {code(`{${list}.item}`)}, and below it a row
+              with {code('{d.pgs[i+1].lines[i+1]}')}, makes a row per line with its page group&apos;s fields.
+            </>
+          ) : (
+            <>
+              Each file holds one page group, as {code('{d.pg.invoiceNo}')}. Repeat a row with a row of {code('[i]')} tags and, below it, a row
+              with {code('{d.pg.lines[i+1]}')}.
+            </>
+          )}{' '}
+          The JSON tab has the names.
+        </li>
+        <li>
+          Write numbers as {code(`{${list}.amount:formatN}`)}, and give the cell a number format such as {code('#,##0.00')}. Without{' '}
+          {code(':formatN')} the cell is text and SUM gives 0.
+        </li>
+        <li>
+          Write dates as {code(`{${list}.shipDate:formatD(X):div(86400):add(25569):formatN}`)}, with a date format such as{' '}
+          {code('dd.mm.yyyy')} on the cell. This makes a real date.
+        </li>
+        <li>
+          Under a loop, total a column with {code('=SUM(INDIRECT("D5:D"&ROW()-1))')}, from the loop&apos;s row: a plain SUM does not grow with
+          the rows.
+        </li>
+        <li>Merge no cells in or below a loop. Put filters and conditional formatting on whole columns, such as A:G.</li>
+        <li>The PDF follows the page setup of each sheet: Page Layout, Size, Orientation, Scale to Fit and Print Titles.</li>
+      </ul>
+    </>
   );
 }
 

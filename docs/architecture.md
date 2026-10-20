@@ -49,7 +49,9 @@ where a run stopped.
 3. **Render.** Spooldoc checks each template against the definition,
    then sends it to Carbone once per page group and format, with the
    page group's JSON as the data and uploaded assets written in as data
-   URIs. Carbone answers with the HTML file or the PDF. See
+   URIs, or once per format with every page group for an Excel template
+   of the whole spooled file. Carbone answers with the file: HTML, PDF,
+   DOCX or XLSX. See
    [Templates](templates.md).
 4. **Deliver.** Every file goes to the job's destination in the run's
    transaction. See [Destinations](destinations.md).
@@ -100,7 +102,7 @@ sends to another data queue. See [Jobs](jobs.md#watching-a-queue).
 
 | Package | What it holds |
 |---------|---------------|
-| `packages/core` | Pure TypeScript, no UI and no IBM i dependency: the capture format, the *SCS parser with EBCDIC decode tables, definitions in YAML, text and XML extraction, the Carbone client with Spooldoc's tag check, Word templates (reading their tags, the starter `.docx`), starter templates, value masking for model prompts and a file workspace. Tested against the demo spooled files in `packages/core/fixtures`. |
+| `packages/core` | Pure TypeScript, no UI and no IBM i dependency: the capture format, the *SCS parser with EBCDIC decode tables, definitions in YAML, text and XML extraction, the Carbone client with Spooldoc's tag check, Word and Excel templates (reading their tags, the starter `.docx` and `.xlsx`), starter templates, value masking for model prompts and a file workspace. Tested against the demo spooled files in `packages/core/fixtures`. |
 | `packages/ibmi` | Connects to an IBM i through jt400: lists output queues and spooled files with SQL services, reads a spooled file, holds, moves and deletes it, reads data queue entries and runs CL commands. The root export does not load Java; `@spooldoc/ibmi/jt400` is the driver (one JVM per process, cached connections). `scripts/capture.ts` captures a sample from the command line. |
 | `apps/web` | The web app. `lib/server` holds config, the database (Drizzle schema and migrations), sign-in, the IBM i connection (`ibmi.ts` is the only module that loads jt400), the Carbone connection and rendering, the job runner, destinations and the queue watcher, started from `instrumentation.ts`. Route handlers are under `app/api`, the job builder under `components/jobs`. |
 | `demo-spool` | CL and RPG sources that create output queues and print invented documents on any IBM i, for demos and end-to-end tests. |
@@ -121,7 +123,7 @@ backup:
 | `watch_seen` | Which spooled files each job has processed |
 | `destinations` | Where jobs deliver |
 | `assets` | Logos, images and fonts for templates |
-| `template_files` | Uploaded Word templates. A row never changes, so a version keeps the file it was saved with |
+| `template_files` | Uploaded Word and Excel templates. A row never changes, so a version keeps the file it was saved with |
 | `settings`, `ai_providers` | Intervals, retention, and the agent's model per provider with its key encrypted |
 
 The server applies migrations when it starts (`SPOOLDOC_MIGRATE=off` to

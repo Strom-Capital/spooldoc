@@ -22,11 +22,11 @@ export const STALE_RUN_MS = 3 * 60_000;
 export interface CleanupResult {
   runs: number;
   samples: number;
-  /** Word template files no job draft or version uses any more. */
+  /** Word and Excel template files no job draft or version uses any more. */
   templateFiles: number;
 }
 
-/** True when a job spec (a draft or a version) has a template with this Word file. */
+/** True when a job spec (a draft or a version) has a template with this Word or Excel file. */
 const usesFile = (spec: SQL, fileId: SQL): SQL =>
   sql`${spec} @> jsonb_build_object('render', jsonb_build_object('templates', jsonb_build_array(jsonb_build_object('fileId', ${fileId}::text))))`;
 
@@ -50,10 +50,10 @@ export async function failStaleRuns(now: Date = new Date()): Promise<number> {
 /**
  * Delete what is older than the retention: runs that finished before the cutoff (their
  * files go with them), samples captured by runs that no longer exist, and preview samples
- * captured before the cutoff that no job draft points at, and Word template files made
- * before the cutoff that no job draft or version uses. A file the agent replaced
- * is kept while the file a draft uses names it as its previous one, so the Word panel
- * can offer it back. Runs still running are kept,
+ * captured before the cutoff that no job draft points at, and Word and Excel template
+ * files made before the cutoff that no job draft or version uses. A file the agent
+ * replaced is kept while the file a draft uses names it as its previous one, so the
+ * template's panel can offer it back. Runs still running are kept,
  * and so are the `watch_seen` rows, which stop a spooled file from being processed again.
  * Runs a stopped process cut off are marked failed first (`failStaleRuns`), and kept for
  * the retention from then.

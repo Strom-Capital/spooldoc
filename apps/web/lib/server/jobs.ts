@@ -3,7 +3,7 @@ import 'server-only';
 import { parseDefinition } from '@spooldoc/core';
 import { and, desc, eq, isNotNull, max, sql } from 'drizzle-orm';
 import type { ZodError } from 'zod';
-import { deleteNotice, emptySpec, jobSpecSchema, missingParts, startsDeleting, versionSpec, type JobSpec } from '@/lib/job-spec';
+import { deleteNotice, emptySpec, isFileTemplate, jobSpecSchema, KIND_NAMES, missingParts, startsDeleting, versionSpec, type JobSpec } from '@/lib/job-spec';
 import type { JobDetail, JobSummary, RunStatus } from '@/lib/types';
 import { getDb, type Db, type Tx } from './db';
 import { destinations, jobs, jobVersions, queueHealth, runs, servers } from './db/schema';
@@ -204,12 +204,12 @@ export function versionProblems(spec: JobSpec): string[] {
   return problems;
 }
 
-/** Word files a spec's templates point at that are gone, one line per template. */
+/** Word and Excel files a spec's templates point at that are gone, one line per template. */
 async function templateFileProblems(spec: JobSpec): Promise<string[]> {
   const problems: string[] = [];
   for (const template of spec.render.templates) {
-    if (template.kind === 'docx' && template.fileId !== null && !(await getTemplateFile(template.fileId))) {
-      problems.push(`Render: the Word file of the ${template.name} template is gone. Upload it again.`);
+    if (isFileTemplate(template) && template.fileId !== null && !(await getTemplateFile(template.fileId))) {
+      problems.push(`Render: the ${KIND_NAMES[template.kind].app} file of the ${template.name} template is gone. Upload it again.`);
     }
   }
   return problems;

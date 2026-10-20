@@ -1,4 +1,5 @@
-import type { CodePageSource, DocxProblem, ExtractResult, FieldHit, PageRange, Sample, SamplePage, TemplateProblem } from '@spooldoc/core';
+import type { CodePageSource, DocxProblem, ExtractResult, FieldHit, PageRange, Sample, SamplePage, TemplateProblem, XlsxProblem } from '@spooldoc/core';
+import type { XlsxScope } from '@/lib/job-spec';
 import type { TemplateFileView } from '@/lib/types';
 
 export type { FieldHit, SamplePage };
@@ -12,11 +13,22 @@ export interface RenderResult {
   definition?: { type: string; yaml: string; error?: string };
   /**
    * The template and what is wrong with it: `problems` from Spooldoc's tag check (by line
-   * for HTML, by part for Word), or `error` from Carbone with its own text in `detail`.
+   * for HTML, by part for Word, by sheet and cell for Excel), or `error` from Carbone with
+   * its own text in `detail`. An Excel template also says which sheets have no page setup.
    */
   template?:
     | { kind: 'html'; html: string; error?: string; detail?: string; problems?: TemplateProblem[]; generated?: boolean }
-    | { kind: 'docx'; file: TemplateFileView | null; error?: string; detail?: string; problems?: DocxProblem[]; generated?: boolean };
+    | { kind: 'docx'; file: TemplateFileView | null; error?: string; detail?: string; problems?: DocxProblem[]; generated?: boolean }
+    | {
+        kind: 'xlsx';
+        file: TemplateFileView | null;
+        scope: XlsxScope;
+        noPageSetup?: string[];
+        error?: string;
+        detail?: string;
+        problems?: XlsxProblem[];
+        generated?: boolean;
+      };
   /** Carbone is not connected or did not answer, so nothing was rendered. */
   carbone?: { error: string; detail?: string };
   extract?: ExtractResult;
@@ -24,7 +36,7 @@ export interface RenderResult {
   names?: string[];
   /** The rendered HTML, from an HTML template. */
   html?: string;
-  /** The rendered PDF in base64, from a Word template. */
+  /** The rendered PDF in base64, from a Word or Excel template. */
   pdf?: string;
   /** 0-based index of the rendered page group. */
   pageGroup: number;

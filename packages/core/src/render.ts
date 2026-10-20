@@ -1,6 +1,7 @@
 import { carboneRender, type CarboneServer } from "./carbone.js";
 import { docxConverter, readDocx } from "./docx.js";
-import { pdfLandscape, prepareHtml, type AssetResolver, type TemplateData } from "./template.js";
+import { pdfLandscape, prepareHtml, type AssetResolver, type DocumentData, type TemplateData } from "./template.js";
+import { readXlsx, xlsxHardRefresh } from "./xlsx.js";
 
 /** One document to render from an HTML template: its data and the format to make. */
 export interface HtmlRender {
@@ -27,20 +28,42 @@ export interface DocxRender {
   converter?: "I" | "L";
 }
 
+/**
+ * One document to render from an Excel template (the `.xlsx` file's bytes): its data, of
+ * one page group or of the whole spooled file, and the format to make.
+ */
+export interface XlsxRender {
+  kind: "xlsx";
+  template: Uint8Array;
+  data: DocumentData;
+  format: "xlsx" | "pdf";
+  /** Pass the XLSX through LibreOffice; `xlsxHardRefresh` works it out from the template when not given. */
+  hardRefresh?: boolean;
+}
+
 /** One document to render with Carbone. */
-export type DocumentRender = HtmlRender | DocxRender;
+export type DocumentRender = HtmlRender | DocxRender | XlsxRender;
 
 /**
  * Renders one document with Carbone. HTML: as it is, or a PDF with the Chromium
  * converter. Word: a DOCX with `hardRefresh: false`, so Carbone Enterprise and Community
  * return the same file and Word fills in page fields when it opens it, or a PDF with ICE
  * or LibreOffice (`docxConverter`), or a PNG of page 1 with LibreOffice (ICE makes no
- * pictures). Check the template with `checkTemplate` or
- * `checkDocx` first; Carbone prints some mistakes silently.
+ * pictures). Excel: an XLSX, passed through LibreOffice when `xlsxHardRefresh` says so,
+ * or a PDF with LibreOffice, which follows each sheet's page setup. Check the template
+ * with `checkTemplate`, `checkDocx` or `checkXlsx` first; Carbone prints some mistakes
+ * silently.
  *
- * @throws CarboneError, or Error for an asset that is not uploaded or a file that is not a `.docx`
+ * @throws CarboneError, or Error for an asset that is not uploaded or a file that is not a `.docx` or `.xlsx`
  */
 export async function renderDocument(server: CarboneServer, input: DocumentRender): Promise<Uint8Array> {
+  if (input.kind === "xlsx") {
+    if (input.format === "xlsx") {
+      const hardRefresh = input.hardRefresh ?? xlsxHardRefresh(readXlsx(input.template));
+      return carboneRender(server, { template: input.template, data: input.data, convertTo: "xlsx", hardRefresh });
+    }
+    return carboneRender(server, { template: input.template, data: input.data, convertTo: "pdf", converter: "L" });
+  }
   if (input.kind === "docx") {
     if (input.format === "docx") {
       return carboneRender(server, { template: input.template, data: input.data, convertTo: "docx", hardRefresh: false });

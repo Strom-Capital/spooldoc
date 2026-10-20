@@ -1,3 +1,4 @@
+import { XLSX_SCOPES, type XlsxScope } from '@spooldoc/core/xlsx-scope';
 import { z } from 'zod';
 
 /** An IBM i object name: 1 to 10 characters, upper-cased. */
@@ -14,24 +15,53 @@ export const queueRefSchema = z.object({ library: ibmiName, name: ibmiName });
 export type QueueRefSpec = z.infer<typeof queueRefSchema>;
 
 /** The files a job makes from each document. */
-export const FORMATS = ['pdf', 'html', 'docx'] as const;
+export const FORMATS = ['pdf', 'html', 'docx', 'xlsx'] as const;
 export type Format = (typeof FORMATS)[number];
 
-/** The kinds of template: HTML, written in the app, or a Word file made in Word and uploaded. */
-export const TEMPLATE_KINDS = ['html', 'docx'] as const;
+/** The kinds of template: HTML, written in the app, or a Word or Excel file made in Word or Excel and uploaded. */
+export const TEMPLATE_KINDS = ['html', 'docx', 'xlsx'] as const;
 export type TemplateKind = (typeof TEMPLATE_KINDS)[number];
 
 /** The formats an HTML template renders to. */
 export const HTML_FORMATS = ['pdf', 'html'] as const;
 
 /** The formats each kind of template renders to. */
-export const KIND_FORMATS: Record<TemplateKind, readonly Format[]> = { html: HTML_FORMATS, docx: ['pdf', 'docx'] };
+export const KIND_FORMATS: Record<TemplateKind, readonly Format[]> = { html: HTML_FORMATS, docx: ['pdf', 'docx'], xlsx: ['xlsx', 'pdf'] };
+
+/**
+ * How each kind of template is named in the app: "Word template", and with an article,
+ * "a Word template", "an HTML template". The kinds made in another program upload a file
+ * of `fileFormat`.
+ */
+export const KIND_NAMES: Record<TemplateKind, { name: string; article: 'A' | 'An'; app: string | null; fileFormat: Format | null }> = {
+  html: { name: 'HTML template', article: 'An', app: null, fileFormat: null },
+  docx: { name: 'Word template', article: 'A', app: 'Word', fileFormat: 'docx' },
+  xlsx: { name: 'Excel template', article: 'An', app: 'Excel', fileFormat: 'xlsx' },
+};
+
+/** What a template has as its content, in a summary: "Starter Word template", "Excel template", "Custom template" for HTML. */
+export function contentLabel(kind: TemplateKind, own: boolean): string {
+  if (kind === 'html') return own ? 'Custom template' : 'Starter template';
+  return own ? KIND_NAMES[kind].name : `Starter ${KIND_NAMES[kind].name}`;
+}
+
+/** "A Word template", "an HTML template" (with `lower`). */
+export function kindName(kind: TemplateKind, lower = false): string {
+  const { article, name } = KIND_NAMES[kind];
+  return `${lower ? article.toLowerCase() : article} ${name}`;
+}
+
+/** The formats a new template of a kind makes: PDF, or XLSX only for an Excel template. */
+export function kindDefaultFormats(kind: TemplateKind): Format[] {
+  return kind === 'xlsx' ? ['xlsx'] : ['pdf'];
+}
 
 /** How each format is named in the app and stored as a file. */
 export const FORMAT_FILES: Record<Format, { label: string; extension: string; contentType: string }> = {
   pdf: { label: 'PDF', extension: 'pdf', contentType: 'application/pdf' },
   html: { label: 'HTML', extension: 'html', contentType: 'text/html; charset=utf-8' },
   docx: { label: 'DOCX', extension: 'docx', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+  xlsx: { label: 'XLSX', extension: 'xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
 };
 
 /** "PDF and HTML". */
@@ -79,11 +109,32 @@ const htmlContent = z.object({ kind: z.literal('html'), source: z.string().max(5
 const docxContent = z.object({ kind: z.literal('docx'), fileId: z.string().uuid().nullable().default(null) });
 
 /**
- * What a template lays out with. HTML: `source: null` is the starter template generated
- * from the definition. Word: `fileId` is an uploaded template file, which never changes,
- * or null for the Word starter template generated from the definition.
+ * What one file of an Excel template holds: the whole spooled file (`splf`, the default),
+ * a row per line, or one page group (`pageGroup`), as HTML and Word templates do.
  */
-export type TemplateContent = z.infer<typeof htmlContent> | z.infer<typeof docxContent>;
+export { XLSX_SCOPES, type XlsxScope };
+const xlsxContent = z.object({ kind: z.literal('xlsx'), fileId: z.string().uuid().nullable().default(null), scope: z.enum(XLSX_SCOPES).default('splf') });
+
+/**
+ * What a template lays out with. HTML: `source: null` is the starter template generated
+ * from the definition. Word and Excel: `fileId` is an uploaded template file, which never
+ * changes, or null for the starter template generated from the definition. Excel: `scope`
+ * says whether one file holds the whole spooled file or one page group.
+ */
+export type TemplateContent = z.infer<typeof htmlContent> | z.infer<typeof docxContent> | z.infer<typeof xlsxContent>;
+
+/** The kinds of template whose content is an uploaded file. */
+export type FileTemplateContent = Exclude<TemplateContent, { kind: 'html' }>;
+
+/** True for a template whose content is a file made in Word or Excel. */
+export function isFileTemplate<T extends TemplateContent>(template: T): template is Extract<T, { kind: 'docx' | 'xlsx' }> {
+  return template.kind !== 'html';
+}
+
+/** True when the template makes one file of the whole spooled file, not one per page group. */
+export function perSpooledFile(template: TemplateContent): boolean {
+  return template.kind === 'xlsx' && template.scope === 'splf';
+}
 
 const templateFields = {
   id: z.string().regex(TEMPLATE_ID, 'Use lowercase letters, digits and dashes for a template id'),
@@ -96,7 +147,7 @@ const templateFields = {
 
 /** One template of a job: what it lays out with, and the formats it makes from each page group. */
 const templateSchema = z
-  .discriminatedUnion('kind', [htmlContent.extend(templateFields), docxContent.extend(templateFields)])
+  .discriminatedUnion('kind', [htmlContent.extend(templateFields), docxContent.extend(templateFields), xlsxContent.extend(templateFields)])
   .superRefine((template, ctx) => {
     const allowed = KIND_FORMATS[template.kind];
     const other = template.formats.find((format) => !allowed.includes(format));
@@ -104,7 +155,7 @@ const templateSchema = z
       ctx.addIssue({
         code: 'custom',
         path: ['formats'],
-        message: `${template.kind === 'docx' ? 'A Word' : 'An HTML'} template makes ${formatList(allowed)} files, not ${FORMAT_FILES[other].label}.`,
+        message: `${kindName(template.kind)} makes ${formatList(allowed)} files, not ${FORMAT_FILES[other].label}.`,
       });
     }
   });
@@ -112,33 +163,42 @@ export type JobTemplate = z.infer<typeof templateSchema>;
 
 /** A template's content alone, without its id, name and formats. */
 export function templateContent(template: TemplateContent): TemplateContent {
-  return template.kind === 'html' ? { kind: 'html', source: template.source } : { kind: 'docx', fileId: template.fileId };
+  if (template.kind === 'html') return { kind: 'html', source: template.source };
+  if (template.kind === 'xlsx') return { kind: 'xlsx', fileId: template.fileId, scope: template.scope };
+  return { kind: 'docx', fileId: template.fileId };
+}
+
+/** The starter content of a kind: no HTML, no file, and for Excel the whole spooled file in one file. */
+export function starterContent(kind: TemplateKind): TemplateContent {
+  if (kind === 'html') return { kind, source: null };
+  if (kind === 'xlsx') return { kind, fileId: null, scope: 'splf' };
+  return { kind, fileId: null };
 }
 
 /**
  * The template with other content, and the formats that kind makes: the ones it kept,
- * or PDF when none is left.
+ * or the kind's default (`kindDefaultFormats`) when none is left.
  */
 export function withContent(template: JobTemplate, content: TemplateContent): JobTemplate {
   const allowed = KIND_FORMATS[content.kind];
   const formats = template.formats.filter((format) => allowed.includes(format));
-  return { id: template.id, name: template.name, ...templateContent(content), formats: formats.length > 0 ? formats : ['pdf'] };
+  return { id: template.id, name: template.name, ...templateContent(content), formats: formats.length > 0 ? formats : kindDefaultFormats(content.kind) };
 }
 
 /**
- * What switching a template to the other kind does to the files it makes, or null when it
+ * What switching a template to another kind does to the files it makes, or null when it
  * makes the same files: "It makes PDF files, not HTML. A Word template makes PDF and DOCX."
  */
 export function kindSwitchNote(template: JobTemplate, kind: TemplateKind): string | null {
-  const kept = withContent(template, kind === 'docx' ? { kind, fileId: null } : { kind, source: null }).formats;
+  const kept = withContent(template, starterContent(kind)).formats;
   const dropped = template.formats.filter((format) => !kept.includes(format));
   if (dropped.length === 0) return null;
-  return `It makes ${formatList(kept)} files, not ${formatList(dropped)}. ${kind === 'docx' ? 'A Word' : 'An HTML'} template makes ${formatList(KIND_FORMATS[kind])}.`;
+  return `It makes ${formatList(kept)} files, not ${formatList(dropped)}. ${kindName(kind)} makes ${formatList(KIND_FORMATS[kind])}.`;
 }
 
-/** True when the template has content of its own: HTML that was written, or an uploaded Word file. */
+/** True when the template has content of its own: HTML that was written, or an uploaded Word or Excel file. */
 export function hasOwnContent(template: TemplateContent): boolean {
-  return template.kind === 'html' ? template.source !== null : template.fileId !== null;
+  return isFileTemplate(template) ? template.fileId !== null : template.source !== null;
 }
 
 /** Why a template's kind is settled (`settledKind`). */
@@ -192,6 +252,11 @@ export function templateSlug(template: Pick<JobTemplate, 'id' | 'name'>): string
  */
 export function templateFileName(documentName: string, templates: Pick<JobTemplate, 'id'>[], template: Pick<JobTemplate, 'id' | 'name'>): string {
   return templates[0]?.id === template.id ? documentName : `${documentName}-${templateSlug(template)}`;
+}
+
+/** The file name (without extension) of a document of the whole spooled file: the spooled file's name, such as `spdinvoice`. */
+export function spooledFileName(sample: { splf: { name: string } }): string {
+  return sample.splf.name.toLowerCase().replace(/[^a-z0-9._-]+/g, '_') || 'document';
 }
 
 /** True when another template than `except` already has this name (any case). */

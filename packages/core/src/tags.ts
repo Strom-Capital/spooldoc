@@ -138,20 +138,39 @@ export function renamedRootProblem(tag: string): string | undefined {
   return undefined;
 }
 
-/** The path of a `d` tag, before its formatters: `{d.pg.lines[i].amount:formatN(2)}` gives `d.pg.lines[i].amount`. */
-function tagPath(tag: string): string {
+/** A tag split at its colons, outside brackets and quotes: the path, then each formatter. */
+function tagSplit(tag: string): string[] {
   const inner = tag.slice(1, tag.endsWith("}") ? -1 : undefined);
+  const parts: string[] = [];
   let depth = 0;
   let quote = false;
+  let from = 0;
   for (let i = 0; i < inner.length; i++) {
     const c = inner[i];
     if (c === "'") quote = !quote;
     else if (quote) continue;
     else if (c === "[" || c === "(") depth++;
     else if (c === "]" || c === ")") depth--;
-    else if (c === ":" && depth === 0) return inner.slice(0, i).trim();
+    else if (c === ":" && depth === 0) {
+      parts.push(inner.slice(from, i).trim());
+      from = i + 1;
+    }
   }
-  return inner.trim();
+  parts.push(inner.slice(from).trim());
+  return parts;
+}
+
+/** The path of a `d` tag, before its formatters: `{d.pg.lines[i].amount:formatN(2)}` gives `d.pg.lines[i].amount`. */
+const tagPath = (tag: string): string => tagSplit(tag)[0] ?? "";
+
+/**
+ * What a tag reads and how: its path as the check compares it (`pg.lines[].amount`, or
+ * undefined for a path it does not follow) and its formatters' names, in order.
+ * `{d.pg.lines[i].amount:formatN(2)}` gives `pg.lines[].amount` and `["formatN"]`.
+ */
+export function tagParts(tag: string): { path: string | undefined; formatters: string[] } {
+  const [path = "", ...rest] = tagSplit(tag);
+  return { path: normalPath(path), formatters: rest.map((f) => /^[A-Za-z]\w*/.exec(f)?.[0] ?? f) };
 }
 
 /**

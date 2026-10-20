@@ -29,7 +29,9 @@ describe('toolSummary', () => {
       ),
     ).toEqual({ text: 'Rendered Document: 37 found, 0 missing', tone: 'ok' });
     const lines = { id: 'lines', name: 'Lines', formats: ['pdf', 'html'], kind: 'html', content: 'starter' };
-    expect(toolSummary(done('add_template', { ok: true, template: lines, templates: [lines] }))).toEqual({ text: 'Added template Lines: PDF and HTML', tone: 'ok' });
+    expect(toolSummary(done('add_template', { ok: true, template: lines, templates: [lines] }))).toEqual({ text: 'Added HTML template Lines: PDF and HTML', tone: 'ok' });
+    const sheet = { id: 'sheet', name: 'Sheet', formats: ['xlsx'], kind: 'xlsx', scope: 'splf', content: 'starter' };
+    expect(toolSummary(done('add_template', { ok: true, template: sheet, templates: [lines, sheet] }))).toEqual({ text: 'Added Excel template Sheet: XLSX', tone: 'ok' });
     expect(toolSummary(done('remove_template', { ok: true, template: lines, templates: [] }))).toEqual({ text: 'Removed template Lines', tone: 'ok' });
     expect(toolSummary(done('remove_template', { ok: false, error: 'A job needs at least one template, so the last one cannot be removed.' })).text).toBe(
       'Template not removed: A job needs at least one template, so the last one cannot be removed.',

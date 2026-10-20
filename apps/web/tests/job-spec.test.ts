@@ -15,6 +15,11 @@ import {
   triggerStatuses,
   kindSwitchNote,
   withContent,
+  contentLabel,
+  kindName,
+  perSpooledFile,
+  spooledFileName,
+  starterContent,
   type JobTemplate,
 } from '@/lib/job-spec';
 
@@ -135,5 +140,47 @@ describe('Word templates', () => {
     expect(kindSwitchNote({ id: 'main', name: 'Document', kind: 'docx', fileId: null, formats: ['pdf', 'docx'] }, 'html')).toBe(
       'It makes PDF files, not DOCX. An HTML template makes PDF and HTML.',
     );
+  });
+});
+
+describe('Excel templates', () => {
+  const excel: JobTemplate = { id: 'lines', name: 'Lines', kind: 'xlsx', fileId: null, scope: 'splf', formats: ['xlsx'] };
+  const file = '00000000-0000-4000-8000-000000000001';
+
+  it('holds the whole spooled file unless it says one page group, and makes XLSX and PDF only', () => {
+    const parsed = jobSpecSchema.parse({ render: { templates: [{ id: 'lines', name: 'Lines', kind: 'xlsx', formats: ['pdf', 'xlsx'] }] } }).render.templates[0]!;
+    expect(parsed).toEqual({ id: 'lines', name: 'Lines', kind: 'xlsx', fileId: null, scope: 'splf', formats: ['pdf', 'xlsx'] });
+    expect(perSpooledFile(parsed)).toBe(true);
+    expect(perSpooledFile({ ...excel, scope: 'pageGroup' })).toBe(false);
+    expect(perSpooledFile({ kind: 'docx', fileId: null })).toBe(false);
+    const html = jobSpecSchema.safeParse({ render: { templates: [{ ...excel, formats: ['html'] }] } });
+    expect(html.success ? null : html.error.issues[0]?.message).toBe('An Excel template makes XLSX and PDF files, not HTML.');
+    expect(jobSpecSchema.safeParse({ render: { templates: [{ ...excel, scope: 'page' }] } }).success).toBe(false);
+  });
+
+  it('switches to and from Excel, keeping the formats the new kind makes, else its own', () => {
+    const html: JobTemplate = { id: 'lines', name: 'Lines', kind: 'html', source: '<p>x</p>', formats: ['pdf', 'html'] };
+    expect(withContent(html, starterContent('xlsx'))).toEqual({ ...excel, formats: ['pdf'] });
+    expect(withContent({ ...html, formats: ['html'] }, starterContent('xlsx')).formats).toEqual(['xlsx']);
+    expect(withContent(excel, starterContent('docx')).formats).toEqual(['pdf']);
+    expect(kindSwitchNote(html, 'xlsx')).toBe('It makes PDF files, not HTML. An Excel template makes XLSX and PDF.');
+    expect(kindSwitchNote(excel, 'html')).toBe('It makes PDF files, not XLSX. An HTML template makes PDF and HTML.');
+    expect(kindSwitchNote({ ...excel, formats: ['pdf', 'xlsx'] }, 'docx')).toBe('It makes PDF files, not XLSX. A Word template makes PDF and DOCX.');
+    expect(kindSwitchNote({ ...html, formats: ['pdf'] }, 'xlsx')).toBeNull();
+  });
+
+  it('settles the kind of an Excel template, and names each kind the same way everywhere', () => {
+    expect(settledKind(excel)).toEqual({ kind: 'xlsx', reason: 'chosen' });
+    expect(settledKind({ ...excel, fileId: file })).toEqual({ kind: 'xlsx', reason: 'content' });
+    expect(hasOwnContent({ ...excel, fileId: file })).toBe(true);
+    expect([kindName('html'), kindName('docx', true), kindName('xlsx', true)]).toEqual(['An HTML template', 'a Word template', 'an Excel template']);
+    expect([contentLabel('xlsx', false), contentLabel('xlsx', true), contentLabel('html', false)]).toEqual(['Starter Excel template', 'Excel template', 'Starter template']);
+    expect(formatList(['xlsx', 'pdf'])).toBe('XLSX and PDF');
+  });
+
+  it("names a document of the whole spooled file after the spooled file, and later templates' files after their name", () => {
+    expect(spooledFileName({ splf: { name: 'SPDINVOICE' } })).toBe('spdinvoice');
+    expect(spooledFileName({ splf: { name: 'INV#1' } })).toBe('inv_1');
+    expect(templateFileName('spdinvoice', [{ id: 'main' }, excel], excel)).toBe('spdinvoice-lines');
   });
 });

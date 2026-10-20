@@ -3,6 +3,14 @@ import 'server-only';
 import {
   checkDocx,
   checkTemplate,
+  checkXlsx,
+  readXlsx,
+  spooledFileData,
+  starterXlsx,
+  xlsxHardRefresh,
+  xlsxProblemText,
+  type DocumentData,
+  type XlsxTemplate,
   docxConverter,
   docxProblemText,
   extract,
@@ -17,13 +25,13 @@ import {
   type Definition,
   type DocumentRender,
   type DocxTemplate,
-  type TemplateData,
   type Sample,
+  type TemplateData,
   type SpooledFileId,
 } from '@spooldoc/core';
 import type { Connection } from '@spooldoc/ibmi';
 import { and, eq } from 'drizzle-orm';
-import { FORMAT_FILES, jobSpecSchema, templateFileName, splfKey, type JobTemplate, type JobSpec, type Format } from '@/lib/job-spec';
+import { FORMAT_FILES, jobSpecSchema, perSpooledFile, spooledFileName, templateFileName, splfKey, type JobTemplate, type JobSpec, type Format } from '@/lib/job-spec';
 import { assetNames, assetResolver } from './assets';
 import { getDb } from './db';
 import { jobVersions, runs, watchSeen, type RunStep } from './db/schema';
@@ -85,7 +93,8 @@ export async function startRun(request: RunRequest): Promise<{ id: string; seq: 
 
 /**
  * Process one spooled file with a job version: capture, extract, render the document of
- * every page group with each template to that template's formats (PDF, HTML, DOCX) with Carbone,
+ * every page group with each template to that template's formats (PDF, HTML, DOCX, XLSX)
+ * with Carbone (an Excel template of the whole spooled file renders one document of all of them),
  * deliver, then hold, move or delete the file as the version says. Every step is
  * recorded on the run; a failure stops the run and is stored, never thrown. A file the
  * definition's `match` rules do not accept ends the run as `skipped`, untouched. The
@@ -191,17 +200,26 @@ export async function executeRun(runId: string, request: RunRequest, connection?
         for (const [templateIndex, template] of spec.render.templates.entries()) {
           // Checked once per template: Carbone prints some mistakes without an error.
           const prepared = await prepareTemplate(template, def, assets);
-          for (const [index, group] of groups.entries()) {
-            const base = templateFileName(fileNameFor(def, group, index, sample.splf.name.toLowerCase()), spec.render.templates, template);
-            const file = { pageGroupIndex: index, template: template.name, templateIndex };
+          // The documents to make: one of the whole spooled file, or one per page group.
+          const documents = perSpooledFile(template)
+            ? [{ index: null, base: spooledFileName(sample), data: spooledFileData(groups, sample) as DocumentData, where: 'the spooled file' }]
+            : groups.map((group, index) => ({
+                index,
+                base: fileNameFor(def, group, index, sample.splf.name.toLowerCase()),
+                data: templateData(prepared.data, group, groups, sample) as DocumentData,
+                where: `page group ${index + 1}`,
+              }));
+          for (const document of documents) {
+            const base = templateFileName(document.base, spec.render.templates, template);
+            const file = { pageGroupIndex: document.index, template: template.name, templateIndex };
             for (const format of template.formats) {
               let content: Uint8Array;
               try {
-                content = await render(prepared.input(templateData(prepared.data, group, groups, sample), format, sample.attributes.pageWidth, asset));
+                content = await render(prepared.input(document.data, format, sample.attributes.pageWidth, asset));
               } catch (err) {
                 if (isCarboneError(err) && SERVER_KINDS.includes(err.kind)) throw err;
                 const text = err instanceof Error ? err.message : String(err);
-                throw new StepError('render', `The "${template.name}" template, page group ${index + 1}: ${text}`, isCarboneError(err) ? err.detail : undefined);
+                throw new StepError('render', `The "${template.name}" template, ${document.where}: ${text}`, isCarboneError(err) ? err.detail : undefined);
               }
               const { extension, contentType } = FORMAT_FILES[format];
               out.push({ ...file, name: unique(base, extension), contentType, content });
@@ -255,13 +273,16 @@ export async function executeRun(runId: string, request: RunRequest, connection?
 
 /** A template, checked: what `templateData` reads, and the render of one document to one format. */
 interface PreparedTemplate {
-  data: string | DocxTemplate;
-  input(data: TemplateData, format: Format, pageWidth: number, asset: AssetResolver): DocumentRender;
+  data: string | DocxTemplate | XlsxTemplate;
+  input(data: DocumentData, format: Format, pageWidth: number, asset: AssetResolver): DocumentRender;
 }
 
+/** The data of a page group's document: only an Excel template of the whole spooled file gets data without `pg`. */
+const pageGroupData = (data: DocumentData): TemplateData => data as TemplateData;
+
 /**
- * A template, checked and ready to render each page group: its HTML, or its Word file
- * (the starter when none is uploaded).
+ * A template, checked and ready to render each page group, or the whole spooled file: its
+ * HTML, or its Word or Excel file (the starter when none is uploaded).
  *
  * @throws StepError when the template has problems or its file is gone
  */
@@ -274,16 +295,29 @@ async function prepareTemplate(template: JobTemplate, def: Definition, assets: s
     if (found.length > 0) throw problems(found.length, problemText(found.slice(0, 3)));
     return {
       data: html,
-      input: (data, format, pageWidth, asset) => ({ template: html, data, format: format === 'html' ? 'html' : 'pdf', pageWidth, asset }),
+      input: (data, format, pageWidth, asset) => ({ template: html, data: pageGroupData(data), format: format === 'html' ? 'html' : 'pdf', pageWidth, asset }),
     };
   }
   let bytes: Uint8Array;
   if (template.fileId === null) {
-    bytes = await starterDocx(def);
+    bytes = template.kind === 'xlsx' ? starterXlsx(def, template.scope) : await starterDocx(def);
   } else {
     const file = await getTemplateFile(template.fileId);
     if (!file) throw new StepError('render', `The "${template.name}" template: ${TEMPLATE_FILE_GONE}`);
     bytes = file.content;
+  }
+  if (template.kind === 'xlsx') {
+    let read: XlsxTemplate;
+    try {
+      read = readXlsx(bytes);
+    } catch (err) {
+      throw new StepError('render', `The "${template.name}" template's Excel file: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    const found = checkXlsx(read, def, template.scope);
+    if (found.length > 0) throw problems(found.length, xlsxProblemText(found.slice(0, 3)));
+    // Worked out once, so a render per page group does not unzip the file again.
+    const hardRefresh = xlsxHardRefresh(read);
+    return { data: read, input: (data, format) => ({ kind: 'xlsx', template: bytes, data, format: format === 'xlsx' ? 'xlsx' : 'pdf', hardRefresh }) };
   }
   let read: DocxTemplate;
   try {
@@ -296,11 +330,11 @@ async function prepareTemplate(template: JobTemplate, def: Definition, assets: s
   const converter = docxConverter(read);
   return {
     data: read,
-    input: (data, format) => ({ kind: 'docx', template: bytes, data, format: format === 'docx' ? 'docx' : 'pdf', converter }),
+    input: (data, format) => ({ kind: 'docx', template: bytes, data: pageGroupData(data), format: format === 'docx' ? 'docx' : 'pdf', converter }),
   };
 }
 
-/** "6 PDFs and 6 DOCX files". */
+/** "6 PDFs and 6 DOCX files", "1 XLSX file". */
 function fileCount(files: RunFile[]): string {
   const counts = new Map<string, number>();
   for (const file of files) {

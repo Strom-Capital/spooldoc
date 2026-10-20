@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { assets, jobs, jobVersions, queueHealth, runFiles, runs, watchSeen } from '@/lib/server/db/schema';
 import type { JobDetail, JobSummary, RunView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
-import { fakeCarbone, fakeRenderer, PDF_BYTES } from './helpers/carbone';
+import { fakeCarbone, fakeRenderer, PDF_BYTES, sentPageGroup } from './helpers/carbone';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, loadSample } from './helpers/fake-connection';
 import { db, insertServer } from './helpers/fixtures';
@@ -183,7 +183,7 @@ describe('jobs', () => {
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(PDF_BYTES);
     // The HTML is rendered and checked first, then the PDF, with the page width for the paper rule.
     expect(sent(1)).toMatchObject({ format: 'pdf', pageWidth: sample.attributes.pageWidth });
-    expect(sent(1).data.pg.invoiceNo).toBe('260102');
+    expect(sentPageGroup(sent(1))?.invoiceNo).toBe('260102');
 
     expect((await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { pageGroup: 50 }), params({ id }))).status).toBe(400);
     const broken = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { html: '<p>{d.pg.invoiceNumber}</p>' }), params({ id }));

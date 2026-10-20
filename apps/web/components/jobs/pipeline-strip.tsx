@@ -18,7 +18,7 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useAppInfo } from '@/components/app-info';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
 import { STEP_TITLE, STEPS } from '@/lib/client/job-steps';
-import { formatList, type TemplateContent } from '@/lib/job-spec';
+import { contentLabel, formatList, hasOwnContent, type TemplateContent } from '@/lib/job-spec';
 import { cn } from '@/lib/utils';
 import { useJob, type Step } from './job-provider';
 
@@ -242,8 +242,7 @@ function useSteps(): StepInfo[] {
 
 /** What a template has as its content, for the Render step's summary. */
 function contentName(template: TemplateContent): string {
-  if (template.kind === 'docx') return template.fileId === null ? 'Starter Word template' : 'Word template';
-  return template.source === null ? 'Starter template' : 'Custom template';
+  return contentLabel(template.kind, hasOwnContent(template));
 }
 
 /**

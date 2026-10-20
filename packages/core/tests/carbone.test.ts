@@ -81,7 +81,7 @@ describe("carboneRender", () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(415, { success: false, error: "Template format not supported", code: "w118" }));
     const error = await failure(carboneRender(server, { template: "x", data: {}, convertTo: "html" }));
     expect(error).toMatchObject({ kind: "file", status: 415 });
-    expect(error.message).toMatch(/damaged, or not an HTML or Word document/);
+    expect(error.message).toMatch(/damaged, or not an HTML, Word or Excel document/);
   });
 
   it("says where to fix a refused token, or a refused Cloud key", async () => {

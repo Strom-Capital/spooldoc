@@ -246,6 +246,36 @@ describe('POST /api/jobs/[id]/chat', () => {
     ]);
   });
 
+  it("shows the model an Excel template's cells, adds one and never writes over it", async () => {
+    await setDefinition(yaml);
+    setDocumentRenderer(fakeRenderer);
+    const { parseDefinition, starterXlsx } = await import('@spooldoc/core');
+    const content = Buffer.from(starterXlsx(parseDefinition(yaml)));
+    const [file] = await db().insert(templateFiles).values({ name: 'lines.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size: content.length, content }).returning();
+    const current = await draft();
+    const templates = [{ id: 'lines', name: 'Lines', kind: 'xlsx' as const, fileId: file!.id, scope: 'splf' as const, formats: ['xlsx' as const] }];
+    await db().update(jobs).set({ draft: { ...current, render: { templates } } }).where(eq(jobs.id, jobId));
+    const model = scriptedModel(
+      toolStep('write_word_template', { design: { sections: [{ children: [] }] }, template: 'Lines' }),
+      toolStep('add_template', { name: 'Per invoice', kind: 'xlsx', scope: 'pageGroup' }),
+      textStep('Done.'),
+    );
+    createModel.mockResolvedValue(withKey(model));
+    try {
+      const { parts } = await chunks(await chat());
+      const outputs = parts.filter((p) => p.type === 'tool-output-available').map((p) => p.output as Record<string, unknown>);
+      expect(outputs[0]).toMatchObject({ ok: false, error: expect.stringMatching(/^The Lines template is an Excel template\. You cannot write or edit Excel files yet/) });
+      expect(outputs[1]).toMatchObject({ ok: true, template: { name: 'Per invoice', kind: 'xlsx', scope: 'pageGroup', formats: ['xlsx'] } });
+    } finally {
+      setDocumentRenderer(null);
+    }
+    const system = JSON.stringify(model.doStreamCalls[0]!.prompt[0]);
+    expect(system).toContain('An Excel template file, `lines.xlsx`. Each file holds the whole spooled file');
+    expect(system).toContain('Lines!A2: {d.pgs[i].invoiceNo}');
+    expect((await draft()).render.templates).toEqual([templates[0], { id: 'per-invoice', name: 'Per invoice', kind: 'xlsx', fileId: null, scope: 'pageGroup', formats: ['xlsx'] }]);
+    expect(await db().select({ id: templateFiles.id }).from(templateFiles)).toHaveLength(1);
+  });
+
   it("reads another job's active version through read_job_files, never the job itself", async () => {
     const serverId = (await draft()).source.serverId!;
     const otherId = await insertJob(serverId, {

@@ -18,7 +18,8 @@ import { unzipSync } from "fflate";
 import type { Definition } from "./definition.js";
 import { pageField } from "./docx-design.js";
 import { short, tagProblems, templatePaths } from "./tags.js";
-import { fieldLabel, starterLayout, valueTag, type StarterBlock, type StarterColumn } from "./template.js";
+import { decodeXml as decode, isOle, isZip, xmlAttribute as attribute } from "./xml.js";
+import { fieldLabel, MAX_TEMPLATE_FILE_BYTES, starterLayout, valueTag, type StarterBlock, type StarterColumn } from "./template.js";
 
 /**
  * Word templates: a `.docx` made in Word with Carbone tags in its text. Spooldoc reads the
@@ -28,9 +29,6 @@ import { fieldLabel, starterLayout, valueTag, type StarterBlock, type StarterCol
 
 /** The content type of a Word document. */
 export const DOCX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-
-/** The largest Word template Spooldoc takes. Every render sends it to Carbone. */
-export const MAX_DOCX_BYTES = 10 * 1024 * 1024;
 
 /** The most one part of the file (the body, a header) may unzip to. */
 const MAX_PART_BYTES = 32 * 1024 * 1024;
@@ -67,39 +65,6 @@ function partOf(name: string): DocxPart | undefined {
   if (name === "word/document.xml") return "body";
   const header = /^word\/(header|footer)\d*\.xml$/.exec(name);
   return header ? (header[1] as DocxPart) : undefined;
-}
-
-const ENTITIES: Record<string, string> = { lt: "<", gt: ">", amp: "&", quot: '"', apos: "'" };
-
-/** XML text with its entities written out. A loop, so a stray `&` costs nothing. */
-function decode(text: string): string {
-  if (!text.includes("&")) return text;
-  let out = "";
-  let from = 0;
-  for (let at = text.indexOf("&"); at !== -1; at = text.indexOf("&", at + 1)) {
-    const end = text.indexOf(";", at);
-    if (end === -1 || end - at > 10) continue;
-    const name = text.slice(at + 1, end);
-    let value = ENTITIES[name];
-    if (value === undefined && name.startsWith("#")) {
-      const code = name[1] === "x" || name[1] === "X" ? Number.parseInt(name.slice(2), 16) : Number.parseInt(name.slice(1), 10);
-      if (Number.isInteger(code) && code >= 0 && code <= 0x10ffff) value = String.fromCodePoint(code);
-    }
-    if (value === undefined) continue;
-    out += text.slice(from, at) + value;
-    from = end + 1;
-    at = end;
-  }
-  return out + text.slice(from);
-}
-
-/** The value of an attribute in an XML tag's text, or undefined. */
-function attribute(tag: string, name: string): string | undefined {
-  const at = tag.indexOf(` ${name}="`);
-  if (at === -1) return undefined;
-  const start = at + name.length + 3;
-  const end = tag.indexOf('"', start);
-  return end === -1 ? undefined : decode(tag.slice(start, end));
 }
 
 /** The code of a field instruction: ` PAGEREF _Toc1 \h ` gives `PAGEREF`. */
@@ -180,10 +145,10 @@ const NOT_DOCX = "The file is not a Word document. Save it in Word as a Word Doc
  * @throws Error saying what is wrong with the file and what to do, when it is not a `.docx`
  */
 export function readDocx(bytes: Uint8Array): DocxTemplate {
-  if (bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0) {
+  if (isOle(bytes)) {
     throw new Error("The file is a Word 97-2003 document (.doc). Save it in Word as a Word Document (.docx) and upload it again.");
   }
-  if (!(bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04)) {
+  if (!isZip(bytes)) {
     throw new Error(NOT_DOCX);
   }
   let tooLarge = false;
@@ -216,7 +181,7 @@ export function readDocx(bytes: Uint8Array): DocxTemplate {
 
 /** Why a file is not a Word template Spooldoc can use, or null when it is one. */
 export function docxProblem(bytes: Uint8Array): string | null {
-  if (bytes.length > MAX_DOCX_BYTES) return `The file is too large: Word templates can be at most ${MAX_DOCX_BYTES / 1024 / 1024} MB.`;
+  if (bytes.length > MAX_TEMPLATE_FILE_BYTES) return `The file is too large: Word templates can be at most ${MAX_TEMPLATE_FILE_BYTES / 1024 / 1024} MB.`;
   try {
     readDocx(bytes);
     return null;

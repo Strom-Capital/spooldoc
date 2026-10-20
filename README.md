@@ -19,8 +19,9 @@ Spooled files into documents, for IBM i. Open output management.
 
 Spooldoc watches the output queues of your IBM i, splits each spooled file
 into page groups and reads each into JSON with a definition you write in
-YAML, makes documents of them with ordinary HTML templates (PDF or HTML) or
-Word templates (DOCX or PDF), and delivers the files. The JSON
+YAML, makes documents of them with ordinary HTML templates (PDF or HTML),
+Word templates (DOCX or PDF) or Excel templates (XLSX or PDF), and
+delivers the files. The JSON
 keeps reading the page and laying out the document apart, so a template
 never deals with lines and columns and a new look is just a new template. The
 agent proposes the definition and the template from a sample spooled
@@ -52,10 +53,12 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 - **Definitions in YAML**: fields by label, pattern or position, tables,
   multi-line records, split keys for page groups printed back to back, and
   XML-in-spool.
-- **HTML and Word templates**: [Carbone](https://carbone.io) tags with your
-  logos, images and fonts, rendered to PDF, HTML or DOCX by a Carbone server
-  of your own or Carbone Cloud. A Word template is made in Word and uploaded,
-  or designed by the agent. Spooldoc checks every tag against the
+- **HTML, Word and Excel templates**: [Carbone](https://carbone.io) tags
+  with your logos, images and fonts, rendered to PDF, HTML, DOCX or XLSX by
+  a Carbone server of your own or Carbone Cloud. A Word template is made in
+  Word and uploaded, or designed by the agent. An Excel template is made in
+  Excel and uploaded, and by default makes one sheet of the whole spooled
+  file, a row per line, to sort, filter and sum. Spooldoc checks every tag against the
   definition first.
 - **Agent**: Anthropic, Google, OpenAI, OpenRouter, Vercel AI
   Gateway or a local model writes the first definition and template, reads
@@ -113,7 +116,7 @@ To run from source instead, see [Contributing](docs/contributing.md).
 | [Queues](docs/queues.md) | Output queues and spooled files |
 | [Jobs](docs/jobs.md) | The job builder, versions, triggers, finish actions |
 | [Definitions](docs/definitions.md) | The YAML that turns pages into JSON |
-| [Templates](docs/templates.md) | HTML and Word templates, filters, assets, PDF layout |
+| [Templates](docs/templates.md) | HTML, Word and Excel templates, filters, assets, PDF layout |
 | [Carbone](docs/carbone.md) | The Carbone server, Settings, Community and Enterprise |
 | [Agent](docs/agent.md) | Models, tools, masking |
 | [Destinations](docs/destinations.md) | Where documents go |
@@ -128,10 +131,10 @@ To run from source instead, see [Contributing](docs/contributing.md).
 ## Status
 
 Spooldoc is young. The web app, the *SCS parser, text and XML extraction,
-HTML and PDF output and the Spooldoc download destination work and are
-tested against demo spooled files captured from PUB400. Next: SFTP, S3,
-IFS, email and webhook destinations, more users and roles, and DOCX and
-XLSX output.
+HTML, PDF, DOCX and XLSX output and the Spooldoc download destination
+work and are tested against demo spooled files captured from PUB400.
+Next: SFTP, S3, IFS, email and webhook destinations, and more users and
+roles.
 
 Until 1.0, a minor release (0.1 to 0.2) can include breaking changes. Read
 the [release notes](https://github.com/Strom-Capital/spooldoc/releases)
