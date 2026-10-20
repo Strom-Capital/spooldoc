@@ -1,3 +1,4 @@
+import { ConnectionError } from '@spooldoc/ibmi';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { aiProviders, jobs, jobVersions, queueHealth, runs, servers, settings } from '@/lib/server/db/schema';
@@ -6,13 +7,14 @@ import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
 import { builtinDestination, db, insertJob, insertServer } from './helpers/fixtures';
 import { emptySpec } from '@/lib/job-spec';
-import { appRequest } from './helpers/mocks';
+import { appRequest, fakeJt400 } from './helpers/mocks';
 
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
 
 const route = await import('@/app/api/dashboard/route');
 const attention = await import('@/app/api/attention/route');
 const { encryptSecret } = await import('@/lib/server/secrets');
+const { CONNECT_RETRY_MS, Watcher } = await import('@/lib/server/watcher');
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -167,6 +169,29 @@ describe('GET /api/dashboard', () => {
     expect(view.attention.jobs.map((j) => j.error)).toEqual(['Queue not found']);
 
     expect((await dismiss([{ kind: 'bogus', id: runId }])).status).toBe(400);
+  });
+
+  it('lists a server the watcher cannot reach, with since when, until it works again', async () => {
+    const serverId = await insertServer({ name: 'Remote', lastCheckedAt: new Date() });
+    const jobId = await insertJob(serverId);
+    const base = emptySpec({ serverId, library: 'MYLIB', queue: 'FORMS', destinationId: await builtinDestination() });
+    await db().insert(jobVersions).values({ jobId, number: 1, spec: { ...base, trigger: { ...base.trigger, mode: 'watch' } } });
+    await db().update(jobs).set({ activeVersion: 1 }).where(eq(jobs.id, jobId));
+    const reason = 'Cannot reach ibmi.example.com: connection timed out. Check the network and that a firewall lets ports 449 and 8470 to 8476 through.';
+    fakeJt400.getConnection.mockRejectedValueOnce(new ConnectionError('host', reason));
+
+    let clock = Date.now();
+    const watcher = new Watcher({ now: () => clock, carbone: async () => ({ ok: true, at: new Date(0).toISOString() }) });
+    try {
+      await watcher.tick();
+      expect((await load('?tz=UTC')).attention.servers).toEqual([{ id: serverId, name: 'Remote', error: reason, errorCode: 'host', since: expect.any(String) }]);
+
+      clock += CONNECT_RETRY_MS;
+      await watcher.tick();
+      expect((await load('?tz=UTC')).attention.servers).toEqual([]);
+    } finally {
+      await watcher.stop();
+    }
   });
 
   it('needs a session', async () => {

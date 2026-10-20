@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Loading } from '@/components/empty-state';
 import { ErrorNote } from '@/components/page';
+import { ServerErrorNote } from '@/components/server-status';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -141,8 +142,9 @@ const idOf = (f: SpooledFileView) => ({ name: f.name, number: f.number, jobName:
  * also held, are listed. Mount it when it opens, so it starts empty each time.
  */
 export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; onClose(): void; onSaveVersion(): void }) {
-  const { job, activeSpec, draftDiffers } = useJob();
+  const { job, activeSpec, draftDiffers, servers, reloadServers, noteServerCall } = useJob();
   const [showAll, setShowAll] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [files, setFiles] = useState<SpooledFileView[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [error, setError] = useState<ShownError | null>(null);
@@ -154,20 +156,36 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
   useEffect(() => {
     if (!open || !source?.serverId) return;
     let cancelled = false;
+    const serverId = source.serverId;
     const params = new URLSearchParams({ forJob: job.id, limit: '200' });
     filterParams(source.filter, params);
     api<{ files: SpooledFileView[] }>(
-      `/api/servers/${source.serverId}/queues/${encodeURIComponent(source.library)}/${encodeURIComponent(source.queue)}/files?${params}`,
+      `/api/servers/${serverId}/queues/${encodeURIComponent(source.library)}/${encodeURIComponent(source.queue)}/files?${params}`,
     ).then(
-      (data) => !cancelled && setFiles(data.files),
-      (err) => !cancelled && setError(shownError(err)),
+      (data) => {
+        noteServerCall(serverId, null);
+        if (!cancelled) setFiles(data.files);
+      },
+      (err) => {
+        const shown = shownError(err);
+        noteServerCall(serverId, shown);
+        if (!cancelled) setError(shown);
+      },
     );
     return () => {
       cancelled = true;
     };
     // The filters are compared by value through filterKey.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, job.id, source?.serverId, source?.library, source?.queue, filterKey]);
+  }, [open, job.id, source?.serverId, source?.library, source?.queue, filterKey, attempt]);
+
+  const server = servers.find((s) => s.id === source?.serverId) ?? null;
+  const retry = () => {
+    setError(null);
+    setFiles(null);
+    reloadServers();
+    setAttempt((n) => n + 1);
+  };
 
   const includeHeld = activeSpec?.trigger.includeHeld ?? false;
   const statuses = triggerStatuses({ includeHeld });
@@ -290,7 +308,7 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
                 {includeHeld ? 'Show processed files' : 'Show held and processed files'}
               </Label>
             </div>
-            {error && <ErrorNote detail={error.detail}>{error.message}</ErrorNote>}
+            {error && (files === null ? <ServerErrorNote error={error} server={server} onRetry={retry} /> : <ErrorNote detail={error.detail}>{error.message}</ErrorNote>)}
             <div className="max-h-80 overflow-auto rounded-md border">
               {files === null && !error ? (
                 <Loading className="p-3">Loading spooled files...</Loading>

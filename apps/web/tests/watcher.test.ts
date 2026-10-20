@@ -1,4 +1,5 @@
 import { encoderFor } from '@spooldoc/core';
+import { ConnectionError } from '@spooldoc/ibmi';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptySpec, splfKey } from '@/lib/job-spec';
@@ -8,11 +9,11 @@ import { fakeRenderer } from './helpers/carbone';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, loadSample } from './helpers/fake-connection';
 import { builtinDestination, db, insertServer, testDb } from './helpers/fixtures';
-import { connections } from './helpers/mocks';
+import { connections, fakeJt400 } from './helpers/mocks';
 
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
 
-const { Watcher } = await import('@/lib/server/watcher');
+const { CONNECT_RETRY_MS, Watcher } = await import('@/lib/server/watcher');
 const { connectServer } = await import('@/lib/server/ibmi');
 const { setLogSink } = await import('@/lib/server/log');
 const { HEARTBEAT_MS } = await import('@/lib/server/retention');
@@ -350,6 +351,63 @@ describe('watcher', () => {
     down = false;
     await watcher.tick();
     expect(log.at(-1)).toMatchObject({ level: 'info', msg: 'Connected to the server again', serverId });
+  });
+
+  it('does not sign on again after a failed sign-on, so the user profile is not disabled', async () => {
+    const log = captureLog();
+    const jobId = await watchingJob();
+    const reason = 'ibmi.example.com did not accept the password for DEMOUSER. Check it on the Servers page; repeated wrong passwords can disable the profile.';
+    fakeJt400.getConnection.mockRejectedValueOnce(new ConnectionError('auth', reason));
+    await watcher.tick();
+    const [server] = await db().select().from(servers).where(eq(servers.id, serverId));
+    expect(server).toMatchObject({ lastError: reason, errorCode: 'auth', errorSince: expect.any(Date) });
+    const [job] = await db().select().from(jobs).where(eq(jobs.id, jobId));
+    expect(job!.lastWatchError).toBe(reason);
+
+    fakeJt400.getConnection.mockClear();
+    for (let i = 0; i < 3; i++) {
+      clock += 10 * 60_000;
+      await watcher.tick();
+    }
+    expect(fakeJt400.getConnection).not.toHaveBeenCalled();
+    // The jobs keep what they said; the server says why it waits.
+    expect((await db().select().from(jobs).where(eq(jobs.id, jobId)))[0]!.lastWatchError).toBe(reason);
+    expect(log).toContainEqual(
+      expect.objectContaining({ level: 'warn', msg: 'Could not connect to watch the queues of a server', error: expect.stringMatching(/does not sign on again until you edit the password or press Reconnect/) }),
+    );
+  });
+
+  it('waits longer between attempts while a server cannot be reached, and clears its state once it answers', async () => {
+    const log = captureLog();
+    await watchingJob();
+    const reason = 'Cannot reach ibmi.example.com: connection timed out. Check the network and that a firewall lets ports 449 and 8470 to 8476 through.';
+    for (let i = 0; i < 3; i++) fakeJt400.getConnection.mockRejectedValueOnce(new ConnectionError('host', reason));
+    fakeJt400.getConnection.mockClear();
+    const attempts = () => fakeJt400.getConnection.mock.calls.length;
+
+    await watcher.tick();
+    expect(attempts()).toBe(1);
+    await watcher.tick();
+    expect(attempts()).toBe(1);
+    clock += CONNECT_RETRY_MS;
+    await watcher.tick();
+    expect(attempts()).toBe(2);
+    // Now 20 seconds.
+    clock += CONNECT_RETRY_MS;
+    await watcher.tick();
+    expect(attempts()).toBe(2);
+    clock += CONNECT_RETRY_MS;
+    await watcher.tick();
+    expect(attempts()).toBe(3);
+    const [failing] = await db().select().from(servers).where(eq(servers.id, serverId));
+    expect(failing).toMatchObject({ lastError: reason, errorCode: 'host', errorSince: expect.any(Date) });
+
+    clock += 4 * CONNECT_RETRY_MS;
+    await watcher.tick();
+    expect(attempts()).toBe(4);
+    const [working] = await db().select().from(servers).where(eq(servers.id, serverId));
+    expect(working).toMatchObject({ lastError: null, errorCode: null, errorSince: null });
+    expect(log).toContainEqual(expect.objectContaining({ level: 'info', msg: 'Connection to Test system works again', serverId }));
   });
 
   it('keeps which data queue a queue sends to when the queue list cannot be read', async () => {

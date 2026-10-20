@@ -115,7 +115,12 @@ export const servers = pgTable('servers', {
   ccsid: integer('ccsid'),
   vrm: text('vrm'),
   lastCheckedAt: timestamp('last_checked_at', { withTimezone: true }),
+  /** Why the last attempt to reach the server failed, until one works again. */
   lastError: text('last_error'),
+  /** The class of `lastError`: `host` (cannot reach) or `auth` (sign-on failed, and paused). */
+  errorCode: text('error_code'),
+  /** When the attempts first failed since the last one that worked. */
+  errorSince: timestamp('error_since', { withTimezone: true }),
   /** The error dismissed on Home; it shows again when the error changes or clears and comes back. */
   errorDismissed: text('error_dismissed'),
   ...timestamps,

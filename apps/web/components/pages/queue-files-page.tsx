@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ErrorNote, Page } from '@/components/page';
+import { Page } from '@/components/page';
+import { ServerErrorNote } from '@/components/server-status';
 import { Input } from '@/components/ui/input';
 import { EyeIcon, InboxIcon, RefreshCwIcon, SearchXIcon, XIcon } from 'lucide-react';
 import { SkeletonRows } from '@/components/skeleton-rows';
@@ -187,7 +188,7 @@ export function QueueFilesPage({
             spellCheck={false}
           />
         </div>
-        {error && <ErrorNote detail={error.detail}>{error.message}</ErrorNote>}
+        {error && <ServerErrorNote error={error} server={{ id: serverId, name: serverName }} onRetry={() => setNonce((n) => n + 1)} />}
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-muted-foreground">
@@ -287,7 +288,9 @@ export function QueueFilesPage({
           </div>
         )}
       </div>
-      {viewing && <SpoolFileDialog serverId={serverId} library={library} queue={queue} file={viewing} onClose={() => setViewing(null)} />}
+      {viewing && (
+        <SpoolFileDialog server={{ id: serverId, name: serverName }} library={library} queue={queue} file={viewing} onClose={() => setViewing(null)} />
+      )}
     </Page>
   );
 }

@@ -1,3 +1,4 @@
+import { ConnectionError } from '@spooldoc/ibmi';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { servers } from '@/lib/server/db/schema';
@@ -5,13 +6,13 @@ import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
 import { GOOD_PASSWORD } from './helpers/fake-connection';
 import { db, insertJob } from './helpers/fixtures';
-import { appRequest, connections, params, spyConsole } from './helpers/mocks';
+import { appRequest, connections, fakeJt400, params, spyConsole } from './helpers/mocks';
 
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
 
 const list = await import('@/app/api/servers/route');
 const one = await import('@/app/api/servers/[id]/route');
-const test = await import('@/app/api/servers/[id]/test/route');
+const reconnect = await import('@/app/api/servers/[id]/reconnect/route');
 
 let auth: Record<string, string>;
 const input = { name: 'Production', host: 'ibmi.example.com', user: 'demouser', password: GOOD_PASSWORD, libraries: ['mylib', 'MYLIB', 'qgpl'] };
@@ -90,11 +91,41 @@ describe('/api/servers', () => {
     expect((await db().select().from(servers))[0]).toMatchObject({ host: 'ibmi.example.com', user: 'DEMOUSER' });
   });
 
-  it('tests the sign-on and records the result', async () => {
+  async function pressReconnect(id: string) {
+    return reconnect.POST(appRequest(`/api/servers/${id}/reconnect`, { method: 'POST', headers: auth }), params({ id }));
+  }
+
+  it('reconnects with a new sign-on, not the cached connection', async () => {
     const { id } = await (await addServer()).json();
-    const response = await test.POST(appRequest(`/api/servers/${id}/test`, { method: 'POST', headers: auth }), params({ id }));
+    const cached = connections.get('ibmi.example.com|DEMOUSER')!;
+    const response = await pressReconnect(id);
     expect(response.status).toBe(200);
-    expect((await response.json()).lastCheckedAt).toBeTruthy();
+    expect(await response.json()).toMatchObject({ vrm: 'V7R5', ccsid: 273, lastError: null, errorCode: null, errorSince: null, lastCheckedAt: expect.any(String) });
+    expect(cached.closed).toBe(true);
+    expect(connections.get('ibmi.example.com|DEMOUSER')).not.toBe(cached);
+  });
+
+  it('records why Reconnect failed and since when, and clears it once it works', async () => {
+    const { id } = await (await addServer()).json();
+    const reason = 'Cannot reach ibmi.example.com: connection timed out. Check the network and that a firewall lets ports 449 and 8470 to 8476 through.';
+    fakeJt400.getConnection.mockRejectedValueOnce(new ConnectionError('host', reason));
+    const failed = await pressReconnect(id);
+    expect(failed.status).toBe(502);
+    expect(await failed.json()).toMatchObject({ error: reason, code: 'host' });
+    const [row] = await db().select().from(servers).where(eq(servers.id, id));
+    expect(row).toMatchObject({ lastError: reason, errorCode: 'host', errorSince: expect.any(Date) });
+
+    const worked = await pressReconnect(id);
+    expect(worked.status).toBe(200);
+    expect(await worked.json()).toMatchObject({ lastError: null, errorCode: null, errorSince: null });
+  });
+
+  it('signs on again when the password is saved, which ends a pause after a failed sign-on', async () => {
+    const { id } = await (await addServer()).json();
+    await db().update(servers).set({ lastError: 'Password is incorrect for user DEMOUSER.', errorCode: 'auth', errorSince: new Date() }).where(eq(servers.id, id));
+    const response = await one.PATCH(appRequest(`/api/servers/${id}`, { method: 'PATCH', body: { password: GOOD_PASSWORD }, headers: auth }), params({ id }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ lastError: null, errorCode: null, errorSince: null });
   });
 
   it('refuses to delete a server a job reads from, and deletes it otherwise', async () => {

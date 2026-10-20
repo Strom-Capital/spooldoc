@@ -4,6 +4,7 @@ import { Trash2Icon } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { ServerSelect } from '@/components/server-select';
+import { ServerErrorNote } from '@/components/server-status';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -96,12 +97,14 @@ const FILTERS: { key: keyof SourceFilter; label: string; hint?: string; placehol
 
 /** Source: the server, the output queue and optional filters. */
 export function SourceInspector() {
-  const { spec, updateDraft, readOnly, servers } = useJob();
+  const { spec, updateDraft, readOnly, servers, serversError, reloadServers } = useJob();
   const source = spec.source;
   const set = (change: Partial<typeof source>, debounce = false) => updateDraft({ source: { ...source, ...change } }, { debounce });
   return (
     <Panel title="Source" description="The output queue the job reads spooled files from.">
-      {servers.length === 0 ? (
+      {serversError ? (
+        <ServerErrorNote error={serversError} server={null} onRetry={reloadServers} />
+      ) : servers.length === 0 ? (
         <p className="text-muted-foreground text-sm">
           No servers yet. <Link href="/servers" className="text-primary hover:underline">Add one on the Servers page.</Link>
         </p>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { ErrorNote } from '@/components/page';
+import { ServerErrorNote } from '@/components/server-status';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -124,10 +125,10 @@ async function queueAction(url: string, body: unknown): Promise<Outcome> {
  * jobs on the same queue; and pause and resume.
  */
 export function TriggerInspector() {
-  const { spec, updateDraft, readOnly, job, updateJob, servers, activeSpec } = useJob();
+  const { spec, updateDraft, readOnly, job, updateJob, servers, reloadServers, activeSpec } = useJob();
   const settings = useSettings();
   const { serverId, library, queue } = spec.source;
-  const { queues, error: queuesError } = useQueues(serverId);
+  const { queues, error: queuesError, reload: reloadQueues } = useQueues(serverId);
   const others = useSameQueueJobs(job.id, spec.source);
   const server = servers.find((s) => s.id === serverId) ?? null;
   const info = queues?.find((q) => q.library === library && q.name === queue) ?? null;
@@ -245,7 +246,14 @@ export function TriggerInspector() {
           {!library ? (
             <p className="text-muted-foreground text-sm">Pick the source queue first.</p>
           ) : queuesError ? (
-            <ErrorNote detail={queuesError.detail}>{queuesError.message}</ErrorNote>
+            <ServerErrorNote
+              error={queuesError}
+              server={server}
+              onRetry={() => {
+                reloadServers();
+                reloadQueues();
+              }}
+            />
           ) : queues === null ? (
             <div className="flex flex-col gap-2" aria-label="Checking the queue" aria-busy>
               <Skeleton className="h-4 w-4/5" />

@@ -3,7 +3,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { jobSpecSchema, specsDiffer, type DraftPatch, type JobSpec } from '@/lib/job-spec';
-import { api, errorText } from '@/lib/client/api';
+import { api, errorText, shownError, type ShownError } from '@/lib/client/api';
+import { withLatestCall, type LatestCall } from '@/lib/client/server-state';
 import type { DestinationView, JobDetail, ServerView } from '@/lib/types';
 
 /** Which spec the builder shows: the draft, or a saved version (read-only). */
@@ -37,6 +38,15 @@ export interface JobState {
   step: Step;
   setStep(step: Step): void;
   servers: ServerView[];
+  /** Why the servers could not be loaded, if they could not. */
+  serversError: ShownError | null;
+  /** Load the servers again, for example after Reconnect changed the state of one. */
+  reloadServers(): void;
+  /**
+   * Say what a call to a server came to, so its status shows it at once: an error from
+   * the call, or null when it worked. The servers are not loaded again.
+   */
+  noteServerCall(serverId: string, error: ShownError | null): void;
   destinations: DestinationView[];
 }
 
@@ -57,16 +67,40 @@ export function JobProvider({ initial, children }: { initial: JobDetail; childre
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>(initial.draft.source.serverId && initial.draft.source.queue ? 'extract' : 'source');
-  const [servers, setServers] = useState<ServerView[]>([]);
+  const [loadedServers, setServers] = useState<ServerView[]>([]);
+  // The latest call to each server since the servers loaded.
+  const [calls, setCalls] = useState<Record<string, LatestCall>>({});
+  const [serversError, setServersError] = useState<ShownError | null>(null);
   const [destinations, setDestinations] = useState<DestinationView[]>([]);
   const pending = useRef<DraftPatch>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlight = useRef(0);
 
-  useEffect(() => {
-    api<{ servers: ServerView[] }>('/api/servers').then((data) => setServers(data.servers), () => undefined);
-    api<{ destinations: DestinationView[] }>('/api/destinations').then((data) => setDestinations(data.destinations), () => undefined);
+  const reloadServers = useCallback(() => {
+    api<{ servers: ServerView[] }>('/api/servers').then(
+      (data) => {
+        setServers(data.servers);
+        setCalls({});
+        setServersError(null);
+      },
+      (err) => setServersError(shownError(err)),
+    );
   }, []);
+
+  const noteServerCall = useCallback((serverId: string, error: ShownError | null) => {
+    setCalls((current) => {
+      const last = current[serverId];
+      if (last && last.error?.message === error?.message && last.error?.code === error?.code) return current;
+      return { ...current, [serverId]: { error, at: new Date().toISOString() } };
+    });
+  }, []);
+  // The servers as they read after the latest calls. Nothing fetches on `servers`, so this starts no call.
+  const servers = useMemo(() => loadedServers.map((server) => withLatestCall(server, calls[server.id])), [loadedServers, calls]);
+
+  useEffect(() => {
+    reloadServers();
+    api<{ destinations: DestinationView[] }>('/api/destinations').then((data) => setDestinations(data.destinations), () => undefined);
+  }, [reloadServers]);
 
   // The active version's spec, to show whether the draft has changes that are not saved as a version.
   useEffect(() => {
@@ -217,9 +251,12 @@ export function JobProvider({ initial, children }: { initial: JobDetail; childre
       step,
       setStep,
       servers,
+      serversError,
+      reloadServers,
+      noteServerCall,
       destinations,
     }),
-    [job, spec, viewing, setViewing, activeSpec, draftDiffers, updateDraft, updateJob, refresh, flush, saveState, saveError, step, servers, destinations],
+    [job, spec, viewing, setViewing, activeSpec, draftDiffers, updateDraft, updateJob, refresh, flush, saveState, saveError, step, servers, serversError, reloadServers, noteServerCall, destinations],
   );
 
   return <JobContext.Provider value={value}>{children}</JobContext.Provider>;

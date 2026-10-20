@@ -76,6 +76,7 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
     system.setGuiAvailableSync(false);
     const socketProperties = new (java.import("com.ibm.as400.access.SocketProperties"))();
     socketProperties.setLoginTimeoutSync(LOGIN_TIMEOUT_SECONDS * 1000);
+    socketProperties.setKeepAliveSync(true);
     system.setSocketPropertiesSync(socketProperties);
     classes = {
       SpooledFile: java.import("com.ibm.as400.access.SpooledFile"),

@@ -17,8 +17,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ErrorNote, Page } from '@/components/page';
+import { Page } from '@/components/page';
 import { ServerSelect } from '@/components/server-select';
+import { ServerErrorNote, ServerStatus } from '@/components/server-status';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ import { EmptyState, TableEmpty } from '@/components/empty-state';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
+import { withLatestCall, type LatestCall } from '@/lib/client/server-state';
 import type { QueueView, ServerView } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { NewJobButton } from './new-job-button';
@@ -55,14 +57,29 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'library', desc: false });
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
+  // What the latest queue list call came to, shown on the server until the servers load
+  // again. Kept apart from `servers`, so it does not start another call.
+  const [latest, setLatest] = useState<(LatestCall & { serverId: string }) | null>(null);
+
+  // Loading the servers again also loads the queues again, as the server changes.
+  const loadServers = useCallback(() => {
     api<{ servers: ServerView[] }>('/api/servers').then(
-      (data) => setServers(data.servers),
+      (data) => {
+        setServers(data.servers);
+        setLatest(null);
+      },
       (err) => setError(shownError(err)),
     );
   }, []);
+  useEffect(loadServers, [loadServers]);
 
   const server = servers?.find((s) => s.id === serverId) ?? null;
+  // The servers as they read after the latest call, for the status and the picker.
+  const shownServers = useMemo(
+    () => servers?.map((s) => (latest?.serverId === s.id ? withLatestCall(s, latest) : s)) ?? null,
+    [servers, latest],
+  );
+  const shownServer = shownServers?.find((s) => s.id === serverId) ?? null;
   const queues = loaded && server && loaded.serverId === server.id ? loaded.queues : null;
   const setQueues = useCallback(
     (update: (current: QueueView[] | null) => QueueView[] | null) =>
@@ -93,9 +110,12 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
         });
         setLoaded({ serverId: server.id, queues: data.queues });
         setError(null);
+        setLatest({ serverId: server.id, error: null, at: new Date().toISOString() });
       } catch (err) {
         if (!isAbort(err)) {
-          setError(shownError(err));
+          const shown = shownError(err);
+          setError(shown);
+          setLatest({ serverId: server.id, error: shown, at: new Date().toISOString() });
           setLoaded(null);
         }
       } finally {
@@ -179,7 +199,10 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
       }
       actions={
         servers && servers.length > 0 ? (
-          <ServerSelect servers={servers} value={server?.id ?? null} onChange={(id) => router.push(`/queues?server=${id}`)} />
+          <>
+            {shownServer && <ServerStatus server={shownServer} variant="inline" />}
+            <ServerSelect servers={shownServers ?? servers} value={server?.id ?? null} onChange={(id) => router.push(`/queues?server=${id}`)} />
+          </>
         ) : null
       }
     >
@@ -217,11 +240,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
           </div>
         )}
       </div>
-      {error && (
-        <ErrorNote className="mb-4" detail={error.detail}>
-          {error.message}
-        </ErrorNote>
-      )}
+      {error && <ServerErrorNote className="mb-4" error={error} server={server} onRetry={loadServers} />}
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-muted-foreground">

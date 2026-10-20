@@ -1,15 +1,18 @@
 /**
  * A failed API call, with the server's `{ error }` text and the HTTP status. For an IBM i
- * error, `detail` is the system's own text and `messageId` its message, such as `CPF2204`.
+ * error, `code` is its class (`host`, `auth`, `notfound`, `authority` or `other`), `detail`
+ * the system's own text and `messageId` its message, such as `CPF2204`.
  */
 export class ApiError extends Error {
   readonly status: number;
+  readonly code?: string;
   readonly detail?: string;
   readonly messageId?: string;
-  constructor(status: number, message: string, info: { detail?: string; messageId?: string } = {}) {
+  constructor(status: number, message: string, info: { code?: string; detail?: string; messageId?: string } = {}) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    if (info.code) this.code = info.code;
     if (info.detail) this.detail = info.detail;
     if (info.messageId) this.messageId = info.messageId;
   }
@@ -44,9 +47,9 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   if (response.status === 204) {
     return undefined as T;
   }
-  const data = (await response.json().catch(() => ({}))) as { error?: string; detail?: string; messageId?: string };
+  const data = (await response.json().catch(() => ({}))) as { error?: string; code?: string; detail?: string; messageId?: string };
   if (!response.ok) {
-    throw new ApiError(response.status, data.error ?? `Request failed (HTTP ${response.status}).`, { detail: data.detail, messageId: data.messageId });
+    throw new ApiError(response.status, data.error ?? `Request failed (HTTP ${response.status}).`, { code: data.code, detail: data.detail, messageId: data.messageId });
   }
   return data as T;
 }
@@ -56,17 +59,22 @@ export function errorText(error: unknown): string {
   return error instanceof Error ? error.message : 'Something went wrong.';
 }
 
-/** An error to show: what went wrong and, for an IBM i error, the system's own text. */
+/**
+ * An error to show: what went wrong and, for an IBM i error, the system's own text and
+ * the class of error, which says whether Reconnect can help.
+ */
 export interface ShownError {
   message: string;
   detail?: string;
+  code?: string;
 }
 
-/** The message and detail of anything thrown by `api`, for `ErrorNote`. */
+/** The message, detail and code of anything thrown by `api`, for `ErrorNote`. */
 export function shownError(error: unknown): ShownError {
   const message = errorText(error);
   const detail = error instanceof ApiError ? error.detail : undefined;
-  return detail && detail !== message ? { message, detail } : { message };
+  const code = error instanceof ApiError ? error.code : undefined;
+  return { message, ...(detail && detail !== message ? { detail } : {}), ...(code ? { code } : {}) };
 }
 
 /** True for an aborted fetch, which needs no message. */

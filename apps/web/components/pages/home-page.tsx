@@ -150,7 +150,7 @@ export function HomePage() {
           />
         </div>
         <RunsChart series={view?.range === range ? view.data.series : null} range={range} onRange={chooseRange} />
-        {data && <AttentionList attention={data.attention} onDismiss={(items) => void dismiss(items)} />}
+        {data && <AttentionList attention={data.attention} onDismiss={(items) => void dismiss(items)} onReconnected={() => setReloads((n) => n + 1)} />}
       </div>
     </Page>
   );

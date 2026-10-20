@@ -8,7 +8,7 @@ import type { CarboneCheck } from '@/lib/types';
 import { getDb, getLocks } from './db';
 import { jobs, jobVersions, queueHealth, watchSeen } from './db/schema';
 import { redact } from './http';
-import { connectServer, ibmiFields, type ServerConnection } from './ibmi';
+import { connectServer, ibmiFields, isConnectionError, SignOnPausedError, type ServerConnection } from './ibmi';
 import { log } from './log';
 import { renderingCheck } from './rendering';
 import { cleanUp, failStaleRuns } from './retention';
@@ -43,6 +43,13 @@ const defaultDeps: WatcherDeps = { connect: connectServer, run: runJob, carbone:
 const QUEUE_INFO_MS = 60_000;
 /** How often the watcher looks at the jobs. */
 export const TICK_MS = 10_000;
+/**
+ * The first wait before the watcher tries again to reach a server it could not reach; it
+ * doubles up to `CONNECT_RETRY_MAX_MS` and starts over once the server answers.
+ */
+export const CONNECT_RETRY_MS = 10_000;
+/** The longest wait between attempts to reach a server. */
+export const CONNECT_RETRY_MAX_MS = 2 * 60_000;
 /** Files a job looks at per pass, newest first. */
 const LIST_LIMIT = 500;
 /**
@@ -97,6 +104,8 @@ export class Watcher {
   private readonly lastPoll = new Map<string, number>();
   private readonly queueInfo = new Map<string, { at: number; queues: OutputQueue[] }>();
   private readonly readers = new Map<string, Reader>();
+  /** When to try again to reach a server that could not be reached, and the wait that led there. */
+  private readonly connectRetry = new Map<string, { at: number; wait: number }>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private ticking: Promise<void> | null = null;
   private lastCleanup: number | null = null;
@@ -159,17 +168,29 @@ export class Watcher {
     const health = new Map<string, Health>();
     for (const [serverId, list] of byServer) {
       const queues = uniqueQueues(list);
+      const retry = this.connectRetry.get(serverId);
+      if (retry && this.deps.now() < retry.at) {
+        // Waiting before the next attempt to reach the server: nothing new to say.
+        for (const queue of queues) health.set(queueKey(serverId, queue), 'keep');
+        continue;
+      }
       let opened: ServerConnection;
       try {
         opened = await this.deps.connect(serverId);
       } catch (error) {
         const message = redact(error);
         this.report(`connect:${serverId}`, 'Could not connect to watch the queues of a server', { serverId, error: message, ...ibmiFields(error) });
-        await markError(list.map((j) => j.jobId), message);
+        if (isConnectionError(error) && error.code === 'host') {
+          const wait = Math.min((retry?.wait ?? CONNECT_RETRY_MS / 2) * 2, CONNECT_RETRY_MAX_MS);
+          this.connectRetry.set(serverId, { at: this.deps.now() + wait, wait });
+        }
+        // A paused sign-on is shown on the server; the jobs keep what they said before.
+        if (!(error instanceof SignOnPausedError)) await markError(list.map((j) => j.jobId), message);
         // What real time last said stays until the server can be reached again.
         for (const queue of queues) health.set(queueKey(serverId, queue), 'keep');
         continue;
       }
+      this.connectRetry.delete(serverId);
       this.resolve(`connect:${serverId}`, 'Connected to the server again', { serverId });
       let info: OutputQueue[];
       try {
