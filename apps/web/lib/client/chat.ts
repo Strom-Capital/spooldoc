@@ -13,6 +13,7 @@ import type {
   WriteDefinitionResult,
   WriteTemplateResult,
 } from '@/lib/chat-types';
+import { formatList, KIND_NAMES } from '@/lib/job-spec';
 
 /** What `toolSummary` reads from a tool part. */
 export interface ToolPartLike {
@@ -104,7 +105,7 @@ export function toolSummary(part: ToolPartLike): ToolSummary {
       if (!done(part.state)) return { text: 'Adding a template', tone: 'running' };
       const out = part.output as TemplateChangeResult;
       if (!out.ok) return { text: `Template not added: ${firstLine(out.error)}`, tone: 'warn' };
-      return { text: `Added template ${out.template.name}: ${out.template.formats.map((f) => f.toUpperCase()).join(' and ')}`, tone: 'ok' };
+      return { text: `Added ${KIND_NAMES[out.template.kind].name} ${out.template.name}: ${formatList(out.template.formats)}`, tone: 'ok' };
     }
     case 'remove_template': {
       if (!done(part.state)) return { text: 'Removing a template', tone: 'running' };

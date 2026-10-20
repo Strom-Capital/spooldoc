@@ -1,4 +1,4 @@
-import { extract, parseDefinition, readDocx, starterDocx, type HtmlRender } from '@spooldoc/core';
+import { extract, parseDefinition, readDocx, starterDocx, starterXlsx, type HtmlRender } from '@spooldoc/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import type {
@@ -18,7 +18,7 @@ import { jobSpecSchema, withContent, type JobTemplate } from '@/lib/job-spec';
 import { ASK_USER_TOOL, buildTools, optionsProblem, visibleText, type DraftStore, type JobFiles, type JobFilesReader } from '@/lib/server/chat';
 import type { DocumentRenderer } from '@/lib/server/documents';
 import type { TemplateFileView } from '@/lib/types';
-import { fakeCarbone, fakeRenderer, PDF_BYTES, PNG_BYTES } from './helpers/carbone';
+import { fakeCarbone, fakeRenderer, PDF_BYTES, PNG_BYTES, sentPageGroup } from './helpers/carbone';
 import { fixtureText, loadSample } from './helpers/fake-connection';
 
 const sample = loadSample('invoice');
@@ -552,7 +552,7 @@ describe('Word templates by the agent', () => {
   it('renders the preview with masked values when masking is on', async () => {
     await call(word({ visual: true, masked: true }).write_word_template, { design });
     const pdf = fakeCarbone.mock.calls.findLast(([input]) => input.format === 'pdf')![0];
-    expect((pdf.data.pg as { invoiceNo: string }).invoiceNo).toMatch(/^9+$/);
+    expect(sentPageGroup(pdf)?.invoiceNo).toMatch(/^9+$/);
   });
 
   it('places uploaded images and refuses a design with problems, saving nothing', async () => {
@@ -651,6 +651,63 @@ describe('Word templates by the agent', () => {
     expect(added).toMatchObject({ ok: true, template: { name: 'Letter', kind: 'docx', formats: ['docx'], content: 'starter' } });
     const wrong = await call<TemplateChangeResult>(tools().add_template, { name: 'Web', kind: 'docx', formats: ['html'] });
     expect(wrong).toEqual({ ok: false, error: 'A Word template makes PDF and DOCX files, not HTML.' });
+  });
+});
+
+describe('Excel templates', () => {
+  const excel = (fileId: string | null = null, scope: 'splf' | 'pageGroup' = 'splf'): JobTemplate[] => [
+    { id: 'lines', name: 'Lines', kind: 'xlsx', fileId, scope, formats: ['xlsx', 'pdf'] },
+  ];
+  const withFile = (bytes: Uint8Array | null, visual = false) =>
+    buildTools({ sample, store, masked: false, renderer: fakeRenderer, visual, templateFile: async (id) => (id === 'file-1' && bytes ? { name: 'lines.xlsx', content: bytes } : null) });
+  const byUser = 'The Lines template is an Excel template. You cannot write or edit Excel files yet: the user downloads the starter template from the template\'s panel, changes it in Excel and uploads it. Check it with render_preview.';
+
+  it('adds an Excel template of the whole spooled file making XLSX, or of page groups, and refuses a format or scope it does not take', async () => {
+    const added = await call<TemplateChangeResult>(tools().add_template, { name: 'Lines', kind: 'xlsx' });
+    expect(added).toMatchObject({ ok: true, template: { name: 'Lines', kind: 'xlsx', scope: 'splf', formats: ['xlsx'], content: 'starter' } });
+    expect(store.templates[1]).toEqual({ id: 'lines', name: 'Lines', kind: 'xlsx', fileId: null, scope: 'splf', formats: ['xlsx'] });
+    const perGroup = await call<TemplateChangeResult>(tools().add_template, { name: 'Per invoice', kind: 'xlsx', scope: 'pageGroup', formats: ['pdf', 'xlsx'] });
+    expect(perGroup).toMatchObject({ ok: true, template: { kind: 'xlsx', scope: 'pageGroup', formats: ['pdf', 'xlsx'] } });
+    expect(await call(tools().add_template, { name: 'Web', kind: 'xlsx', formats: ['html'] })).toEqual({ ok: false, error: 'An Excel template makes XLSX and PDF files, not HTML.' });
+    expect(await call(tools().add_template, { name: 'Letter', kind: 'docx', scope: 'splf' })).toMatchObject({ ok: false, error: expect.stringMatching(/^Only an Excel template has a scope/) });
+  });
+
+  it('never writes or edits an Excel template, and says the user makes it in Excel', async () => {
+    await call(tools().write_definition, { yaml });
+    store.templates = excel();
+    expect(await call(tools().write_template, { html: '<p>{d.pg.invoiceNo}</p>' })).toEqual({ ok: false, error: byUser });
+    expect(await call(withFile(null).write_word_template, { design: { sections: [{ children: [] }] } })).toEqual({ ok: false, error: byUser });
+    expect(await call(withFile(null).read_word_template, {})).toEqual({ ok: false, error: byUser });
+    expect(await call(withFile(null).edit_word_template, { edits: [{ part: 'word/document.xml', find: 'a', replace: 'b' }] })).toEqual({ ok: false, error: byUser });
+    expect(store.templates).toEqual(excel());
+  });
+
+  it('renders the whole spooled file to XLSX and returns its text by sheet and cell', async () => {
+    await call(tools().write_definition, { yaml });
+    store.templates = excel();
+    const result = await call<RenderPreviewResult>(withFile(null).render_preview, { pageGroup: 3 });
+    if (!result.ok) throw new Error(result.error);
+    expect(result).toMatchObject({ content: 'starter', templateErrors: [] });
+    // The fake Carbone sends the file back as it was: its cells are the text.
+    expect(result.textPreview).toContain('Lines!A3: {d.pgs[i].invoiceNo}');
+    const sent = fakeCarbone.mock.calls.at(-1)![0];
+    expect(sent).toMatchObject({ kind: 'xlsx', format: 'xlsx' });
+    expect(sentPageGroup(sent)).toBeUndefined();
+    expect((sent.data as { pgs: unknown[] }).pgs).toHaveLength(6);
+  });
+
+  it('reports the tag check by sheet and cell, a file that is gone, and shows the model the PDF', async () => {
+    await call(tools().write_definition, { yaml });
+    store.templates = excel('file-1');
+    const pageGroupFile = starterXlsx(parseDefinition(yaml), 'pageGroup');
+    const wrong = await call<RenderPreviewResult>(withFile(pageGroupFile).render_preview, {});
+    expect(wrong).toMatchObject({ ok: true, templateErrors: [expect.stringMatching(/^Invoice!B3: \{d\.pg\.invoiceNo\} and 23 other cells read one page group/)] });
+    expect(await call(withFile(null).render_preview, {})).toEqual({ ok: false, error: 'The Excel file of the Lines template is gone. The user uploads it again.' });
+
+    store.templates = excel('file-1', 'pageGroup');
+    const shown = await call<RenderPreviewResult>(withFile(pageGroupFile, true).render_preview, { pageGroup: 1 });
+    expect(shown).toMatchObject({ ok: true, templateErrors: [], view: 'pdf', pages: 1 });
+    expect(sentPageGroup(fakeCarbone.mock.calls.at(-1)![0])?.invoiceNo).toBe('260102');
   });
 });
 

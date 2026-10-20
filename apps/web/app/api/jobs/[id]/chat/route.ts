@@ -2,7 +2,7 @@ import { convertToModelMessages, generateId, isStepCount, streamText, type UIMes
 import { z } from 'zod';
 import { assetNames, imageAssets } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
-import { askedUser, buildInstructions, buildTools, hasContent, trimHistory, wordTemplates } from '@/lib/server/chat';
+import { askedUser, buildInstructions, buildTools, fileTemplates, hasContent, trimHistory } from '@/lib/server/chat';
 import { previewRenderer } from '@/lib/server/documents';
 import { draftStore } from '@/lib/server/draft-store';
 import { errorResponse, json, readJson, redact } from '@/lib/server/http';
@@ -51,7 +51,7 @@ export async function GET(request: Request, { params }: Context): Promise<Respon
  * Stream the model's answer for one job. The model gets the job's preview spooled file
  * (page text masked when masking is on, under Settings), its metadata and the draft's
  * definition and template, the recent part of the thread, and tools that read the sample,
- * write the draft (definitions, HTML templates, Word template files) and read other jobs'
+ * write the draft (definitions, HTML templates, Word template files; Excel files are the user's) and read other jobs'
  * definitions and templates. It never gets the login session or the
  * IBM i connection. When the answer ends, the whole thread is stored with the job.
  */
@@ -87,7 +87,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   const { model, info, reasoning, secrets } = chat;
   const assets = await assetNames();
   const templateFile = getTemplateFile;
-  const words = await wordTemplates(draft.render.templates, draft.extract.definition, getTemplateFile);
+  const words = await fileTemplates(draft.render.templates, draft.extract.definition, getTemplateFile);
   const safe = (error: unknown): string => redact(error, secrets).replace(KEY_PATTERN, '***');
 
   try {
@@ -101,7 +101,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
         masked,
         assets,
         carbone: (await getRendering()).check,
-        wordTemplates: words,
+        fileTemplates: words,
         visual: takesFiles(info),
       }),
       messages: await convertToModelMessages(trimHistory(messages), { ignoreIncompleteToolCalls: true }),

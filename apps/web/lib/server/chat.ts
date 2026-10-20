@@ -7,8 +7,15 @@ import {
   DesignError,
   docxParts,
   editDocx,
-  MAX_DOCX_BYTES,
+  checkXlsx,
+  MAX_TEMPLATE_FILE_BYTES,
   pdfPageCount,
+  readXlsx,
+  sheetsWithoutPageSetup,
+  spooledFileData,
+  starterXlsx,
+  type XlsxCell,
+  type XlsxProblem,
   readDocxPart,
   definitionJsonSchema,
   extract,
@@ -57,6 +64,10 @@ import {
   formatList,
   hasOwnContent,
   KIND_FORMATS,
+  KIND_NAMES,
+  kindDefaultFormats,
+  kindName,
+  starterContent,
   nameTaken,
   newTemplate,
   FORMATS,
@@ -66,6 +77,7 @@ import {
   type JobTemplate,
   type KindReason,
   type TemplateKind,
+  type XlsxScope,
 } from '@/lib/job-spec';
 import type { CarboneCheck, TemplateFileView } from '@/lib/types';
 import { CARBONE_REFERENCES, CARBONE_SKILL, CARBONE_SKILL_SOURCE, type CarboneReference } from './carbone-skill.generated';
@@ -92,8 +104,8 @@ export interface InstructionsInput {
   assets?: ChatAsset[];
   /** The last check of the Carbone server: whether it works, and its edition. */
   carbone?: CarboneCheck | null;
-  /** What Spooldoc read from each Word template, by template id (`wordTemplates`). */
-  wordTemplates?: Record<string, WordTemplateNote>;
+  /** What Spooldoc read from each Word and Excel template, by template id (`fileTemplates`). */
+  fileTemplates?: Record<string, FileTemplateNote>;
   /** The model is shown Word renders as files (`ToolsInput.visual`). */
   visual?: boolean;
   config?: InstructionsConfig;
@@ -104,39 +116,64 @@ export interface InstructionsInput {
  * template), its paragraphs with text, and what the tag check finds; or why it could not
  * be read.
  */
-export type WordTemplateNote = { name: string | null; paragraphs: DocxParagraph[]; problems: DocxProblem[] } | { error: string };
+export type WordTemplateNote = { kind?: 'docx'; name: string | null; paragraphs: DocxParagraph[]; problems: DocxProblem[] } | { error: string };
 
-/** Most characters of a Word template's paragraphs in the instructions. */
+/**
+ * An Excel template as the model sees it: the file's name (null for the starter
+ * template), what each file holds, the cells with text, what the tag check finds and the
+ * sheets without a page setup; or why it could not be read.
+ */
+export type ExcelTemplateNote = { kind: 'xlsx'; name: string | null; scope: XlsxScope; cells: XlsxCell[]; problems: XlsxProblem[]; noPageSetup: string[] } | { error: string };
+
+/** A Word or Excel template as the model sees it. */
+export type FileTemplateNote = WordTemplateNote | ExcelTemplateNote;
+
+/** Most characters of a Word or Excel template's text in the instructions. */
 const WORD_TEXT_MAX = 20_000;
 
 /**
- * What the instructions say about each Word template: its paragraphs and the
- * tag check's problems, read from the uploaded file or the starter template.
+ * What the instructions say about each Word and Excel template: its paragraphs, or its
+ * cells by sheet, and the tag check's problems, read from the uploaded file or the
+ * starter template.
  *
  * @param read - The bytes and name of an uploaded template file, or null when it is gone
  */
-export async function wordTemplates(
+export async function fileTemplates(
   templates: JobTemplate[],
   definitionYaml: string,
   read: (fileId: string) => Promise<{ name: string; content: Uint8Array } | null>,
-): Promise<Record<string, WordTemplateNote>> {
+): Promise<Record<string, FileTemplateNote>> {
   let def: Definition | null = null;
   try {
     def = definitionYaml.trim() ? parseDefinition(definitionYaml) : null;
   } catch {
     // The template is still shown, without the field check.
   }
-  const notes: Record<string, WordTemplateNote> = {};
+  const notes: Record<string, FileTemplateNote> = {};
   for (const template of templates) {
-    if (template.kind !== 'docx') continue;
+    if (template.kind === 'html') continue;
     try {
       const file = template.fileId === null ? null : await read(template.fileId);
       if (template.fileId !== null && !file) {
-        notes[template.id] = { error: 'The file is gone; write a new one with write_word_template, or the user uploads one.' };
+        notes[template.id] = {
+          error: template.kind === 'docx' ? 'The file is gone; write a new one with write_word_template, or the user uploads one.' : 'The file is gone; the user uploads one again.',
+        };
         continue;
       }
       if (!file && !def) {
         notes[template.id] = { error: 'No file uploaded yet, and the starter template needs a definition that parses.' };
+        continue;
+      }
+      if (template.kind === 'xlsx') {
+        const xlsx = readXlsx(file ? file.content : starterXlsx(def!, template.scope));
+        notes[template.id] = {
+          kind: 'xlsx',
+          name: file?.name ?? null,
+          scope: template.scope,
+          cells: xlsx.cells,
+          problems: checkXlsx(xlsx, def, template.scope),
+          noPageSetup: sheetsWithoutPageSetup(xlsx),
+        };
         continue;
       }
       const docx = readDocx(file ? file.content : await starterDocx(def!));
@@ -148,10 +185,37 @@ export async function wordTemplates(
   return notes;
 }
 
+/** A sheet and cell as Excel writes them: `Lines!B5`, `'Order lines'!B5`. */
+const cellRef = (sheet: string, ref: string): string => `${/^[A-Za-z_][A-Za-z0-9_.]*$/.test(sheet) ? sheet : `'${sheet.replace(/'/g, "''")}'`}!${ref}`;
+
+/** An Excel template in the instructions: its cells with text, by sheet and cell. */
+function excelTemplateText(note: ExcelTemplateNote | undefined): string {
+  if (!note) return 'An Excel template. Its text is not available here.';
+  if ('error' in note) return `An Excel template that could not be read: ${note.error}`;
+  const holds =
+    note.scope === 'splf'
+      ? 'Each file holds the whole spooled file: `d` is `{ pgs, splf }`, with no `pg`.'
+      : 'Each file holds one page group: `d` is `{ pg, pgs, splf }`, as in HTML.';
+  const source =
+    note.name === null
+      ? `No Excel template file yet: the Excel starter template generated from the definition is used. ${holds} Its text, a cell per line:`
+      : `An Excel template file, \`${note.name}\`. ${holds} Its text, a cell per line:`;
+  let text = note.cells.map((cell) => `${cellRef(cell.sheet, cell.ref)}: ${cell.text.replace(/\n/g, '\\n')}`).join('\n');
+  if (text.length > WORD_TEXT_MAX) text = `${text.slice(0, WORD_TEXT_MAX)}\n(cut after ${WORD_TEXT_MAX} characters)`;
+  const problems =
+    note.problems.length === 0
+      ? 'The tag check finds no problems.'
+      : `The tag check finds:\n${note.problems.map((p) => `- ${cellRef(p.sheet, p.ref)}: ${p.message}`).join('\n')}`;
+  const pageSetup =
+    note.noPageSetup.length > 0 ? `\n\nWithout a page setup, so its PDF prints on US Letter portrait: ${note.noPageSetup.join(', ')}.` : '';
+  return `${source}\n\n${fence('text', text)}\n\n${problems}${pageSetup}`;
+}
+
 /** A Word template in the instructions. */
-function wordTemplateText(note: WordTemplateNote | undefined): string {
+function wordTemplateText(note: FileTemplateNote | undefined): string {
   if (!note) return 'A Word template. Its text is not available here.';
   if ('error' in note) return `A Word template that could not be read: ${note.error}`;
+  if (note.kind === 'xlsx') return excelTemplateText(note);
   const source =
     note.name === null
       ? 'No Word template file yet: the Word starter template generated from the definition is used. Its text:'
@@ -216,8 +280,8 @@ function visiblePages(sample: Sample, masked: boolean): SamplePage[] {
   return masked ? maskPages(sample.pages) : sample.pages;
 }
 
-/** A template's kind in the instructions. */
-const KIND_NAMES = { html: 'HTML', docx: 'Word' } as const;
+/** A template's kind in the instructions: HTML, Word or Excel. */
+const kindWord = (kind: TemplateKind): string => KIND_NAMES[kind].app ?? 'HTML';
 
 /**
  * What the agent tells the user about each kind of template when it asks which to make:
@@ -233,25 +297,32 @@ export const KIND_ADVICE: Record<TemplateKind, { edited: string; recommend: stri
     edited: 'edited in Word by the user; it can also make a DOCX',
     recommend: 'Recommend it when people want to change the layout themselves, the recipient needs a DOCX, or the document is a letter with long fixed text.',
   },
+  xlsx: {
+    edited: 'edited in Excel by the user, from the starter template; it makes an XLSX, by default one per spooled file with a row per line, and can also make a PDF of it',
+    recommend: 'Recommend it when people want to sort, filter or sum the lines, or the recipient asks for a spreadsheet.',
+  },
 };
+
+/** When the kind question offers Excel. Tests look for it. */
+export const EXCEL_OFFER_RULE =
+  'Offer Excel only when the user\'s message points to a spreadsheet (Excel, XLSX, or sorting, filtering or summing the lines); otherwise offer HTML and Word.';
 
 /** Why a template's kind is settled, in the instructions. */
 function kindReason(kind: TemplateKind, reason: KindReason, template: JobTemplate): string {
   if (reason === 'content') return 'it has content of its own';
-  if (reason === 'chosen') return `the user chose ${KIND_NAMES[kind]} for it`;
+  if (reason === 'chosen') return `the user chose ${kindWord(kind)} for it`;
   const only = template.formats.filter((format) => TEMPLATE_KINDS.every((other) => other === kind || !KIND_FORMATS[other].includes(format)));
-  return `its formats include ${formatList(only)}, which only ${KIND_NAMES[kind]} templates make`;
+  return `its formats include ${formatList(only)}, which only ${kindWord(kind)} templates make`;
 }
 
 /** The section on which kind of template to make, and when to ask the user. Tests look for its rules. */
 export function kindSection(templates: JobTemplate[]): string {
-  const kinds = TEMPLATE_KINDS.map((kind) => `- ${KIND_NAMES[kind]}: ${KIND_ADVICE[kind].edited}. ${KIND_ADVICE[kind].recommend}`).join('\n');
-  const names = TEMPLATE_KINDS.map((kind) => KIND_NAMES[kind]).join(' or ');
+  const kinds = TEMPLATE_KINDS.map((kind) => `- ${kindWord(kind)}: ${KIND_ADVICE[kind].edited}. ${KIND_ADVICE[kind].recommend}`).join('\n');
   const each = templates
     .map((template) => {
       const settled = settledKind(template);
       return settled
-        ? `- ${template.name} (id \`${template.id}\`): make it ${KIND_NAMES[settled.kind]} without asking: ${kindReason(settled.kind, settled.reason, template)}.`
+        ? `- ${template.name} (id \`${template.id}\`): make it ${kindWord(settled.kind)} without asking: ${kindReason(settled.kind, settled.reason, template)}.`
         : `- ${template.name} (id \`${template.id}\`): not settled; ask before you write it.`;
     })
     .join('\n');
@@ -260,9 +331,9 @@ export function kindSection(templates: JobTemplate[]): string {
 Every kind of template makes PDF, so the choice is about who edits the layout and where:
 ${kinds}
 
-${ASK_KIND_RULE} Offer one option per kind, labelled ${names}, each with a one-line description. Put the one you recommend first, with \`recommended: true\`, and give the reason in the question, from what you extracted. For example: "Both make PDF. HTML is edited here in Spooldoc and can also make an HTML page, for example for an email. Word is edited in Word and can also make a DOCX. For this invoice I recommend HTML."
+${ASK_KIND_RULE} Offer one option per kind, labelled with its name (HTML, Word, Excel), each with a one-line description. ${EXCEL_OFFER_RULE} Put the one you recommend first, with \`recommended: true\`, and give the reason in the question, from what you extracted. For example: "Both make PDF. HTML is edited here in Spooldoc and can also make an HTML page, for example for an email. Word is edited in Word and can also make a DOCX. For this invoice I recommend HTML."
 ${NO_ASK_RULE}
-For Word, write_word_template switches a template that still uses the HTML starter. The user picks the formats, such as DOCX, in the render step.
+For Word, write_word_template switches a template that still uses the HTML starter. For Excel, add an Excel template with add_template (kind xlsx), or the user switches the template in the app. The user picks the formats, such as DOCX or PDF, in the render step.
 
 The templates of this job:
 ${each}`;
@@ -293,7 +364,7 @@ export function buildInstructions({
   masked,
   assets = [],
   carbone = null,
-  wordTemplates: words = {},
+  fileTemplates: words = {},
   visual = false,
   config = {},
 }: InstructionsInput): string {
@@ -325,7 +396,7 @@ export function buildInstructions({
 How to work:
 1. Read the pages below. Propose a definition in YAML and save it with write_definition.
 2. Read the extraction report it returns. Fix fields that are missing, empty when they should not be, or hold the wrong text, and write the definition again.
-3. Settle the kind of template (see Which kind of template); ask the user when it is not settled. Then write the template: HTML with write_template, or a Word template with write_word_template or edit_word_template. Check it with render_preview. A job has one or more templates, each with its own content and formats; the tools take the template, and default to the first.
+3. Settle the kind of template (see Which kind of template); ask the user when it is not settled. Then write the template: HTML with write_template, or a Word template with write_word_template or edit_word_template. An Excel template the user makes in Excel (see Excel templates). Check it with render_preview. A job has one or more templates, each with its own content and formats; the tools take the template, and default to the first.
 4. Repeat until nothing that should be found is missing.
 5. End with a short summary of what you did and anything the user should check.
 When the layout is ambiguous (where a page group starts, which page is a cover page, what a value means), ask the user instead of guessing.
@@ -374,7 +445,7 @@ Rules:
     }
 - ${carboneLine(carbone)}
 - Show every field the definition extracts, laid out like a clean version of the printed document.
-- The Carbone syntax reference is below. Read a reference file it names with read_carbone_reference when you need more. Its parts on DOCX and other office files are for Word templates too.`,
+- The Carbone syntax reference is below. Read a reference file it names with read_carbone_reference when you need more. Its parts on DOCX, XLSX and other office files are for Word and Excel templates too.`,
 
     `## Word templates
 
@@ -413,6 +484,23 @@ The tags and data are the same as in HTML: \`{d.pg.invoiceNo}\`, \`{d.pg.invoice
 - Pictures are inserted in the file and are the same in every document; \`{asset('name')}\` is for HTML only.
 - When the user types tags in Word themselves: Word types curly quotes by default, and Carbone prints a tag with them as text. Tell them to turn off smart quotes (File, Options, Proofing, AutoCorrect Options, AutoFormat As You Type).`,
 
+    `## Excel templates
+
+A template can be an Excel template: a .xlsx made in Excel with tags in its cells, which makes XLSX and PDF files. You cannot write or edit Excel files yet. Add one with add_template (kind xlsx), check it with render_preview, and tell the user to download the starter template from the template's panel, change it in Excel and upload it. Its text is in Current templates, a cell per line, such as \`Lines!B3\`.
+
+What each file holds, its scope, is a setting of the template:
+- The whole spooled file (\`splf\`, the default): one file per spooled file, named after it. \`d\` is \`{ pgs, splf }\`, with no \`pg\`. A flat sheet has a row with \`{d.pgs[i].invoiceNo}\` and \`{d.pgs[i].lines[i].item}\`, and right under it a row with \`{d.pgs[i+1].lines[i+1]}\`: a row per line, with its page group's fields. A page group without lines has no row.
+- One page group (\`pageGroup\`): one file per page group, with \`d\` = \`{ pg, pgs, splf }\` as in HTML.
+
+The rules of Excel output, which the tag check enforces and you explain when the user asks:
+- Numbers: \`{d.pgs[i].lines[i].amount:formatN}\`. Without :formatN the cell is text and SUM gives 0. The cell's number format, such as #,##0.00, decides how it shows; the precision in formatN is ignored.
+- Dates: \`{d.pgs[i].invoiceDate:formatD(X):div(86400):add(25569):formatN}\` makes a real date cell; give the cell a date format such as dd.mm.yyyy. :formatN straight on a date is refused.
+- Totals under a loop: \`=SUM(INDIRECT("D5:D"&ROW()-1))\`, from the loop's row. A plain SUM is not moved when rows are added. The starter's flat sheet totals each column above the header with SUBTOTAL over the whole column, which also follows filters.
+- No merged cells in or below a loop. Filters, data validation and conditional formatting stay on the template's rows, so put them on whole columns, such as A:G.
+- Pictures are inserted in the file, above any loop. \`{asset('name')}\` is for HTML only.
+- The PDF follows each sheet's page setup in Excel: Page Layout, Size A4, Orientation, Scale to Fit (Width 1 page) and Print Titles for the header row. A sheet without one prints on US Letter portrait and can cut columns off.
+read_carbone_reference with xlsx-tips has Carbone's own tips.`,
+
     kindSection(templates),
 
     `## Designing a document
@@ -432,12 +520,12 @@ Business documents are read quickly, filed and often printed in black and white.
 
 - read_sample_page: the numbered text of any page${masked ? ' (masked)' : ''}.
 - write_definition: saves the YAML as the job's definition and returns the extraction report.
-- write_template: saves the HTML of one template (\`template\`: its id or name, default the first) and returns the visible text of the first document. Not for a Word template.
+- write_template: saves the HTML of one template (\`template\`: its id or name, default the first) and returns the visible text of the first document. Not for a Word or Excel template.
 - write_word_template: designs a Word template from a JSON tree and saves it as a new file the template uses.
 - read_word_template: lists a Word template's parts, or returns one part's XML as edit_word_template matches it.
 - edit_word_template: replaces text in a Word template's XML and saves the result as a new file the template uses.
-- render_preview: renders the document of any page group with the job's definition and one template, HTML or Word, and returns the counts, the tag check's problems and its visible text${visual ? ', and for Word, the document as it prints' : ''}.
-- add_template: adds a template, HTML or Word, with a name and formats, using the starter until you write it. Only when the user asks for another set of documents, such as the lines of an invoice as a separate document.
+- render_preview: renders the document of any page group with the job's definition and one template, HTML, Word or Excel, and returns the counts, the tag check's problems and its visible text${visual ? ', and for Word and Excel, the document as it prints' : ''}. An Excel template of the whole spooled file renders every page group.
+- add_template: adds a template, HTML, Word or Excel, with a name and formats, using the starter until you write it or the user uploads a file. Only when the user asks for another set of documents, such as the lines of an invoice as a separate document.
 - remove_template: removes a template. Only when the user asks; the last template cannot be removed.
 - list_jobs: the other jobs with their definition type, templates and whether those have content of their own.
 - read_job_files: another job's definition YAML and the content of each of its templates.
@@ -470,12 +558,14 @@ ${definitionYaml ? fence('yaml', definitionYaml) : 'None yet.'}`,
 
     `## Current templates
 
-Each page group of a run becomes a document through every template. The first template's files are named after the document; the others add their name, so a document named \`invoice\` gives \`invoice.pdf\` and \`invoice-lines.pdf\`.
+Each page group of a run becomes a document through every template, except an Excel template of the whole spooled file, which makes one document of the spooled file, named after it. The first template's files are named after the document; the others add their name, so a document named \`invoice\` gives \`invoice.pdf\` and \`invoice-lines.pdf\`.
 
-${templates.map((template, index) => `### ${index + 1}. ${template.name} (id \`${template.id}\`): ${KIND_NAMES[template.kind]}, ${formatList(template.formats)}
+${templates.map((template, index) => `### ${index + 1}. ${template.name} (id \`${template.id}\`): ${kindWord(template.kind)}, ${formatList(template.formats)}${template.kind === 'xlsx' ? (template.scope === 'splf' ? ', one file per spooled file' : ', one file per page group') : ''}
 
 ${
-  template.kind === 'docx'
+  template.kind === 'xlsx'
+    ? excelTemplateText(words[template.id] as ExcelTemplateNote | undefined)
+    : template.kind === 'docx'
     ? wordTemplateText(words[template.id])
     : template.source
       ? fence('html', template.source)
@@ -875,6 +965,68 @@ async function renderWord(
   }
 }
 
+/**
+ * Check an Excel template, render it to XLSX (one page group's document, or the whole
+ * spooled file's) and return the problems and the text of its cells, by sheet and cell.
+ * With `visual`, also render it to PDF for the model, as a run makes it, when it has at most
+ * `PREVIEW_PAGES` pages. Without Carbone only the check runs.
+ */
+async function renderExcel(
+  bytes: Uint8Array,
+  def: Definition,
+  scope: XlsxScope,
+  pageGroups: Record<string, unknown>[],
+  index: number,
+  sample: Sample,
+  masked: boolean,
+  renderer: DocumentRenderer | null,
+  visual: boolean,
+): Promise<WordRender> {
+  const none = (errors: string[]): WordRender => ({ errors, textPreview: '', view: null, pages: null });
+  let template;
+  try {
+    template = readXlsx(bytes);
+  } catch (error) {
+    return none([message(error)]);
+  }
+  const problems = checkXlsx(template, def, scope);
+  if (problems.length > 0) {
+    return none(problems.map((p) => `${cellRef(p.sheet, p.ref)}: ${p.message}`));
+  }
+  const shown = masked ? (pageGroups.map(maskPageGroup) as Record<string, unknown>[]) : pageGroups;
+  const group = shown[index];
+  if (!group) {
+    return none(['The definition finds no page groups, so there is nothing to render.']);
+  }
+  if (!renderer) {
+    return none(['Carbone is not connected, so the template was checked but not rendered. The user sets it up in Settings, under Rendering.']);
+  }
+  const data = scope === 'splf' ? spooledFileData(shown, sample) : templateData(template, group, shown, sample);
+  let textPreview: string;
+  try {
+    const out = readXlsx(await renderer({ kind: 'xlsx', template: bytes, data, format: 'xlsx' }));
+    textPreview = truncate(out.cells.map((cell) => `${cellRef(cell.sheet, cell.ref)}: ${cell.text}`).join('\n'), 1500);
+  } catch (error) {
+    return none([carboneMessage(error)]);
+  }
+  const noPageSetup = sheetsWithoutPageSetup(template);
+  const setupNote = noPageSetup.length > 0 ? `Without a page setup, so the PDF prints on US Letter portrait: ${noPageSetup.join(', ')}.` : undefined;
+  if (!visual) {
+    return { errors: [], textPreview, view: null, pages: null, ...(setupNote ? { note: setupNote } : {}) };
+  }
+  try {
+    const pdf = await renderer({ kind: 'xlsx', template: bytes, data, format: 'pdf' });
+    const pages = pdfPageCount(pdf);
+    if (pages !== null && pages <= PREVIEW_PAGES) {
+      return { errors: [], textPreview, view: 'pdf', visual: { mediaType: 'application/pdf', data: pdf }, pages, ...(setupNote ? { note: setupNote } : {}) };
+    }
+    const long = `The PDF has ${pages ?? `more than ${PREVIEW_PAGES}`} pages, so you see the cells' text only.`;
+    return { errors: [], textPreview, view: null, pages, note: setupNote ? `${long} ${setupNote}` : long };
+  } catch (error) {
+    return { errors: [], textPreview, view: null, pages: null, note: `The document could not be rendered to PDF, so you see its text only: ${carboneMessage(error)}` };
+  }
+}
+
 /** A render error with Carbone's own text, when it gave one. */
 function carboneMessage(error: unknown): string {
   const detail = error instanceof Error && 'detail' in error && typeof error.detail === 'string' ? ` Carbone said: ${error.detail}` : '';
@@ -907,14 +1059,27 @@ export function jobListing(job: JobFiles): JobListing {
 /** A template's files as another job's reader hands them over. */
 export function templateFiles(template: JobTemplate): JobTemplateFiles {
   const html = template.kind === 'html' ? template.source : null;
-  const fileId = template.kind === 'docx' ? template.fileId : null;
-  return { id: template.id, name: template.name, formats: template.formats, kind: template.kind, html, fileId };
+  const fileId = template.kind === 'html' ? null : template.fileId;
+  return { id: template.id, name: template.name, formats: template.formats, kind: template.kind, html, fileId, ...(template.kind === 'xlsx' ? { scope: template.scope } : {}) };
 }
 
 /** A template as tool results report it. */
 function templateListing(template: JobTemplate): TemplateListing {
-  return { id: template.id, name: template.name, formats: template.formats, kind: template.kind, content: hasOwnContent(template) ? 'saved' : 'starter' };
+  return {
+    id: template.id,
+    name: template.name,
+    formats: template.formats,
+    kind: template.kind,
+    ...(template.kind === 'xlsx' ? { scope: template.scope } : {}),
+    content: hasOwnContent(template) ? 'saved' : 'starter',
+  };
 }
+
+/** Why the agent cannot write or edit an Excel template, and what the user does instead. */
+const excelByUser = (template: JobTemplate): ToolFailure =>
+  fail(
+    `The ${template.name} template is an Excel template. You cannot write or edit Excel files yet: the user downloads the starter template from the template's panel, changes it in Excel and uploads it. Check it with render_preview.`,
+  );
 
 /** Why there is no template `key`, with the templates there are. */
 function noTemplate(key: string, templates: JobTemplate[]): ToolFailure {
@@ -1006,8 +1171,8 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
   /** Save a Word template the agent made, render the first document and report both. */
   async function saveWord(toolCallId: string, template: JobTemplate, file: { name: string; content: Uint8Array; previousId: string | null }, def: Definition, sample: Sample): Promise<WordTemplateResult> {
-    if (file.content.length > MAX_DOCX_BYTES) {
-      return fail(`The file is larger than ${MAX_DOCX_BYTES / 1024 / 1024} MB, the most Spooldoc takes. Use smaller pictures.`);
+    if (file.content.length > MAX_TEMPLATE_FILE_BYTES) {
+      return fail(`The file is larger than ${MAX_TEMPLATE_FILE_BYTES / 1024 / 1024} MB, the most Spooldoc takes. Use smaller pictures.`);
     }
     let saved: TemplateFileView;
     try {
@@ -1134,6 +1299,9 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         if (template.kind === 'docx') {
           return fail(`The ${template.name} template is a Word template. Change it with edit_word_template, or design a new one with write_word_template.`);
         }
+        if (template.kind === 'xlsx') {
+          return excelByUser(template);
+        }
         try {
           await store.writeHtml(template.id, html);
         } catch (error) {
@@ -1189,6 +1357,20 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           }
           const { errors, textPreview, view, pages, note } = await showWord(toolCallId, word.bytes, current.def, sample, index);
           rendered = { errors, textPreview, view, pages, ...(note ? { note } : {}) };
+        } else if (template.kind === 'xlsx') {
+          let bytes = starterXlsx(current.def, template.scope);
+          if (template.fileId !== null) {
+            const file = await templateFile?.(template.fileId).catch(() => null);
+            if (!file) {
+              return fail(`The Excel file of the ${template.name} template is gone. The user uploads it again.`);
+            }
+            bytes = file.content;
+          }
+          const excel = await renderExcel(bytes, current.def, template.scope, result.pageGroups, index, sample, masked, renderer, visual);
+          if (excel.visual) {
+            visuals.set(toolCallId, excel.visual);
+          }
+          rendered = { errors: excel.errors, textPreview: excel.textPreview, view: excel.view, pages: excel.pages, ...(excel.note ? { note: excel.note } : {}) };
         } else {
           const html = template.source ?? starterTemplate(current.def);
           rendered = await renderDocument(html, current.def, result.pageGroups, index, sample, masked, assets, renderer);
@@ -1236,6 +1418,9 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         if ('ok' in template) {
           return template;
         }
+        if (template.kind === 'xlsx') {
+          return excelByUser(template);
+        }
         let content: Uint8Array;
         try {
           const pictures = images ? await images() : new Map<string, DesignImage>();
@@ -1266,6 +1451,9 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         const template = await pickTemplate(key);
         if ('ok' in template) {
           return template;
+        }
+        if (template.kind === 'xlsx') {
+          return excelByUser(template);
         }
         if (template.kind !== 'docx') {
           return fail(`The ${template.name} template is an HTML template, which is in the instructions. Design a Word template with write_word_template.`);
@@ -1317,6 +1505,9 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         if ('ok' in template) {
           return template;
         }
+        if (template.kind === 'xlsx') {
+          return excelByUser(template);
+        }
         if (template.kind !== 'docx') {
           return fail(`The ${template.name} template is an HTML template. Change it with write_template, or design a Word template with write_word_template.`);
         }
@@ -1337,20 +1528,30 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
     add_template: tool({
       description:
-        "Add a template to the job: another document made from each page group, with its own content and formats. It uses the starter until write_template or write_word_template writes it. Only when the user asks for another template.",
+        "Add a template to the job: another document made from each page group (or, for an Excel template, by default one of the whole spooled file), with its own content and formats. It uses the starter until write_template or write_word_template writes it, or the user uploads an Excel file. Only when the user asks for another template.",
       inputSchema: z.object({
         name: z.string().trim().min(1).max(40).describe('A short name, such as "Lines". The files of every template but the first add it to their names.'),
-        kind: z.enum(['html', 'docx']).optional().describe('html (default) for an HTML template, which makes PDF and HTML; docx for a Word template, which makes PDF and DOCX'),
+        kind: z
+          .enum(['html', 'docx', 'xlsx'])
+          .optional()
+          .describe('html (default) for an HTML template, which makes PDF and HTML; docx for a Word template, which makes PDF and DOCX; xlsx for an Excel template, which makes XLSX and PDF'),
+        scope: z
+          .enum(['splf', 'pageGroup'])
+          .optional()
+          .describe('An Excel template only: splf (default) for one file of the whole spooled file, a row per line; pageGroup for one file per page group'),
         formats: z
           .array(z.enum(FORMATS))
           .min(1)
           .optional()
-          .describe('The formats to make (default PDF)'),
+          .describe('The formats to make (default PDF; XLSX for an Excel template)'),
       }),
-      execute: inTurn(async ({ name, kind = 'html', formats }): Promise<TemplateChangeResult> => {
+      execute: inTurn(async ({ name, kind = 'html', scope, formats }): Promise<TemplateChangeResult> => {
         const other = formats?.find((format) => !KIND_FORMATS[kind].includes(format));
         if (other) {
-          return fail(`${kind === 'docx' ? 'A Word' : 'An HTML'} template makes ${formatList(KIND_FORMATS[kind])} files, not ${other.toUpperCase()}.`);
+          return fail(`${kindName(kind)} makes ${formatList(KIND_FORMATS[kind])} files, not ${other.toUpperCase()}.`);
+        }
+        if (scope && kind !== 'xlsx') {
+          return fail('Only an Excel template has a scope. Leave it out for an HTML or Word template.');
         }
         let added: JobTemplate | undefined;
         try {
@@ -1358,9 +1559,11 @@ export function buildTools({ sample: current, store, masked, assets = [], render
             if (nameTaken(templates, name)) {
               throw new Error(`There is already a template named "${name}". Pick another name.`);
             }
-            added = newTemplate(templates, name, formats);
-            if (kind === 'docx') {
-              added = withContent(added, { kind: 'docx', fileId: null });
+            added = newTemplate(templates, name, formats ?? kindDefaultFormats(kind));
+            if (kind === 'xlsx') {
+              added = withContent(added, { kind, fileId: null, scope: scope ?? 'splf' });
+            } else if (kind === 'docx') {
+              added = withContent(added, starterContent(kind));
             }
             return [...templates, added];
           });
