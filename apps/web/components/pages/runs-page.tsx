@@ -143,7 +143,6 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
 
   return (
     <Page
-      className="max-w-7xl"
       title="Job log"
       breadcrumbs={jobName ? [{ label: 'Job log', href: '/runs' }, { label: jobName }] : undefined}
       description="Every run of every job: what was read, what was delivered and what failed.">
