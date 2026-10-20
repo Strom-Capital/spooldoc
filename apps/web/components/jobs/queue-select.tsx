@@ -1,21 +1,28 @@
 'use client';
 
 import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Loading } from '@/components/empty-state';
+import { ServerErrorNote } from '@/components/server-status';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { api, shownError, type ShownError } from '@/lib/client/api';
 import type { QueueView } from '@/lib/types';
+import { useJob } from './job-provider';
 
-/** The visible output queues of a server, loaded once per server. */
-export function useQueues(serverId: string | null): { queues: QueueView[] | null; error: ShownError | null } {
+/** The visible output queues of a server, loaded once per server, and again on `reload`. */
+export function useQueues(serverId: string | null): { queues: QueueView[] | null; error: ShownError | null; reload(): void } {
   const [state, setState] = useState<{ serverId: string | null; queues: QueueView[] | null; error: ShownError | null }>({
     serverId: null,
     queues: null,
     error: null,
   });
+  const [attempt, setAttempt] = useState(0);
+  const reload = useCallback(() => {
+    setState((current) => ({ ...current, queues: null, error: null }));
+    setAttempt((n) => n + 1);
+  }, []);
   useEffect(() => {
     if (!serverId) {
       return;
@@ -28,8 +35,8 @@ export function useQueues(serverId: string | null): { queues: QueueView[] | null
     return () => {
       cancelled = true;
     };
-  }, [serverId]);
-  return state.serverId === serverId ? state : { queues: null, error: null };
+  }, [serverId, attempt]);
+  return state.serverId === serverId ? { ...state, reload } : { queues: null, error: null, reload };
 }
 
 /** Pick an output queue of a server, searchable. Hidden queues are left out. */
@@ -47,7 +54,9 @@ export function QueueSelect({
   id?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const { queues, error } = useQueues(open || value ? serverId : null);
+  const { servers, reloadServers } = useJob();
+  const { queues, error, reload } = useQueues(open || value ? serverId : null);
+  const server = servers.find((s) => s.id === serverId) ?? null;
   const label = value?.library && value.name ? `${value.library}/${value.name}` : null;
 
   return (
@@ -65,8 +74,18 @@ export function QueueSelect({
             {queues === null && !error && (
               <Loading className="p-3">Loading queues...</Loading>
             )}
-            {error && <p className="p-3 text-destructive text-sm">{error.message}</p>}
-            <CommandEmpty>No queue matches.</CommandEmpty>
+            {error && (
+              <ServerErrorNote
+                className="m-2"
+                error={error}
+                server={server}
+                onRetry={() => {
+                  reloadServers();
+                  reload();
+                }}
+              />
+            )}
+            {!error && <CommandEmpty>No queue matches.</CommandEmpty>}
             <CommandGroup>
               {queues?.map((queue) => {
                 const key = `${queue.library}/${queue.name}`;

@@ -17,8 +17,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { ErrorNote, Page } from '@/components/page';
+import { Page } from '@/components/page';
 import { ServerSelect } from '@/components/server-select';
+import { ServerErrorNote, ServerStatus } from '@/components/server-status';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -55,12 +56,14 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'library', desc: false });
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
+  // Loading the servers again also loads the queues again, as the server changes.
+  const loadServers = useCallback(() => {
     api<{ servers: ServerView[] }>('/api/servers').then(
       (data) => setServers(data.servers),
       (err) => setError(shownError(err)),
     );
   }, []);
+  useEffect(loadServers, [loadServers]);
 
   const server = servers?.find((s) => s.id === serverId) ?? null;
   const queues = loaded && server && loaded.serverId === server.id ? loaded.queues : null;
@@ -179,7 +182,10 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
       }
       actions={
         servers && servers.length > 0 ? (
-          <ServerSelect servers={servers} value={server?.id ?? null} onChange={(id) => router.push(`/queues?server=${id}`)} />
+          <>
+            {server && <ServerStatus server={server} variant="inline" />}
+            <ServerSelect servers={servers} value={server?.id ?? null} onChange={(id) => router.push(`/queues?server=${id}`)} />
+          </>
         ) : null
       }
     >
@@ -217,11 +223,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
           </div>
         )}
       </div>
-      {error && (
-        <ErrorNote className="mb-4" detail={error.detail}>
-          {error.message}
-        </ErrorNote>
-      )}
+      {error && <ServerErrorNote className="mb-4" error={error} server={server} onRetry={loadServers} />}
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-muted-foreground">

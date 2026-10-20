@@ -3,11 +3,12 @@
 import { ChevronsUpDownIcon, FileTextIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Loading } from '@/components/empty-state';
+import { ServerErrorNote } from '@/components/server-status';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Spinner } from '@/components/ui/spinner';
-import { api, errorText } from '@/lib/client/api';
+import { api, shownError, type ShownError } from '@/lib/client/api';
 import { dateTime } from '@/lib/client/format';
 import { filterParams, splfKey } from '@/lib/job-spec';
 import type { SampleView } from '@/lib/client/render';
@@ -23,11 +24,15 @@ const idOf = (f: SpooledFileView) => ({ name: f.name, number: f.number, jobName:
  * held, moved or deleted. Once the queue is set, the newest file is picked when none is.
  */
 export function PreviewPicker({ sample }: { sample: SampleView | null }) {
-  const { job, spec, refresh } = useJob();
+  const { job, spec, refresh, servers, reloadServers } = useJob();
   const { serverId, library, queue, filter } = spec.source;
+  const server = servers.find((s) => s.id === serverId) ?? null;
   const [open, setOpen] = useState(false);
   const [listed, setListed] = useState<{ key: string; files: SpooledFileView[] } | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Why the list in the popover could not be loaded.
+  const [listError, setListError] = useState<{ key: string; error: ShownError } | null>(null);
+  // Why picking a file failed, and how to try again.
+  const [error, setError] = useState<{ error: ShownError; retry(): void } | null>(null);
   const [busy, setBusy] = useState(false);
   const ready = !!serverId && !!library && !!queue;
   const sourceKey = `${serverId}/${library}/${queue}?${filterParams(filter)}`;
@@ -50,7 +55,7 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
       await api<{ sample: SampleView }>(`/api/jobs/${job.id}/preview-sample`, { method: 'POST', body: { splf: idOf(file) } });
       await refresh();
     } catch (err) {
-      setError(errorText(err));
+      setError({ error: shownError(err), retry: () => void pick(file) });
     } finally {
       setBusy(false);
     }
@@ -60,12 +65,13 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
   const [opened, setOpened] = useState(0);
   const listKey = `${sourceKey}#${opened}`;
   const files = listed?.key === listKey ? listed.files : null;
+  const shownListError = listError?.key === listKey ? listError.error : null;
   useEffect(() => {
     if (!open || !ready) return;
     let cancelled = false;
     list(100).then(
       (rows) => !cancelled && setListed({ key: listKey, files: rows }),
-      (err) => !cancelled && setError(errorText(err)),
+      (err) => !cancelled && setListError({ key: listKey, error: shownError(err) }),
     );
     return () => {
       cancelled = true;
@@ -75,15 +81,24 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
 
   // Pick the newest file once the queue is set and nothing is picked yet.
   const tried = useRef<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (!ready || spec.preview.sampleId || tried.current === sourceKey) return;
     tried.current = sourceKey;
     list(1).then(
       (rows) => rows[0] && void pick(rows[0]),
-      (err) => setError(errorText(err)),
+      (err) =>
+        setError({
+          error: shownError(err),
+          retry: () => {
+            setError(null);
+            tried.current = null;
+            setAttempt((n) => n + 1);
+          },
+        }),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per source
-  }, [ready, spec.preview.sampleId, sourceKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per source, and again on Try again or Reconnect
+  }, [ready, spec.preview.sampleId, sourceKey, attempt]);
 
   const current = sample ? `${sample.splf.name} #${sample.splf.number}` : null;
 
@@ -126,8 +141,19 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
           <Command>
             <CommandInput placeholder="Search by name, job or user data" />
             <CommandList>
-              {files === null && !error && (
+              {files === null && !shownListError && (
                 <Loading className="p-3">Loading spooled files...</Loading>
+              )}
+              {shownListError && (
+                <ServerErrorNote
+                  className="m-2"
+                  error={shownListError}
+                  server={server}
+                  onRetry={() => {
+                    reloadServers();
+                    setOpened((n) => n + 1);
+                  }}
+                />
               )}
               {files !== null && (
                 <CommandEmpty>{files.length === 0 ? `${library}/${queue} has no spooled files.` : 'No spooled file matches.'}</CommandEmpty>
@@ -156,9 +182,15 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
         </PopoverContent>
       </Popover>
       {error && (
-        <span role="alert" className="truncate text-destructive text-xs" title={error}>
-          {error}
-        </span>
+        <ServerErrorNote
+          className="py-1 text-xs"
+          error={error.error}
+          server={server}
+          onRetry={() => {
+            reloadServers();
+            error.retry();
+          }}
+        />
       )}
     </div>
   );

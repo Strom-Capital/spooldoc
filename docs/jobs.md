@@ -119,7 +119,9 @@ deleted or the connection dropped, the queue is polled at the poll
 interval meanwhile and Spooldoc keeps trying to read it again. The trigger
 step and Needs attention on the Home page say why and since when, and the
 [server log](configuration.md#server-log) has each attempt. Once reading
-works again, the note goes away.
+works again, the note goes away. After a dropped connection, Spooldoc opens
+a new one by itself, so real-time watching comes back without a restart;
+see [Connection status](servers.md#connection-status).
 
 Every run renders with [Carbone](carbone.md). While Carbone does not work,
 the watcher starts no runs: new spooled files wait on the queue, and the

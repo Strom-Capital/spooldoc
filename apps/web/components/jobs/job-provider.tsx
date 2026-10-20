@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { toast } from 'sonner';
 import { jobSpecSchema, specsDiffer, type DraftPatch, type JobSpec } from '@/lib/job-spec';
-import { api, errorText } from '@/lib/client/api';
+import { api, errorText, shownError, type ShownError } from '@/lib/client/api';
 import type { DestinationView, JobDetail, ServerView } from '@/lib/types';
 
 /** Which spec the builder shows: the draft, or a saved version (read-only). */
@@ -37,6 +37,10 @@ export interface JobState {
   step: Step;
   setStep(step: Step): void;
   servers: ServerView[];
+  /** Why the servers could not be loaded, if they could not. */
+  serversError: ShownError | null;
+  /** Load the servers again, for example after Reconnect changed the state of one. */
+  reloadServers(): void;
   destinations: DestinationView[];
 }
 
@@ -58,15 +62,26 @@ export function JobProvider({ initial, children }: { initial: JobDetail; childre
   const [saveError, setSaveError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>(initial.draft.source.serverId && initial.draft.source.queue ? 'extract' : 'source');
   const [servers, setServers] = useState<ServerView[]>([]);
+  const [serversError, setServersError] = useState<ShownError | null>(null);
   const [destinations, setDestinations] = useState<DestinationView[]>([]);
   const pending = useRef<DraftPatch>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlight = useRef(0);
 
-  useEffect(() => {
-    api<{ servers: ServerView[] }>('/api/servers').then((data) => setServers(data.servers), () => undefined);
-    api<{ destinations: DestinationView[] }>('/api/destinations').then((data) => setDestinations(data.destinations), () => undefined);
+  const reloadServers = useCallback(() => {
+    api<{ servers: ServerView[] }>('/api/servers').then(
+      (data) => {
+        setServers(data.servers);
+        setServersError(null);
+      },
+      (err) => setServersError(shownError(err)),
+    );
   }, []);
+
+  useEffect(() => {
+    reloadServers();
+    api<{ destinations: DestinationView[] }>('/api/destinations').then((data) => setDestinations(data.destinations), () => undefined);
+  }, [reloadServers]);
 
   // The active version's spec, to show whether the draft has changes that are not saved as a version.
   useEffect(() => {
@@ -217,9 +232,11 @@ export function JobProvider({ initial, children }: { initial: JobDetail; childre
       step,
       setStep,
       servers,
+      serversError,
+      reloadServers,
       destinations,
     }),
-    [job, spec, viewing, setViewing, activeSpec, draftDiffers, updateDraft, updateJob, refresh, flush, saveState, saveError, step, servers, destinations],
+    [job, spec, viewing, setViewing, activeSpec, draftDiffers, updateDraft, updateJob, refresh, flush, saveState, saveError, step, servers, serversError, reloadServers, destinations],
   );
 
   return <JobContext.Provider value={value}>{children}</JobContext.Provider>;
