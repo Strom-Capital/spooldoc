@@ -114,7 +114,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
     const def = tryDefinition(yaml);
     if (content.kind === 'xlsx') {
-      const bytes = content.file ? content.file.content : def ? starterXlsx(def, content.scope) : null;
+      const bytes = content.file ? content.file.content : def ? await starterXlsx(def, content.scope) : null;
       if (!bytes) {
         return json({ error: 'Nothing to render.', templateErrors: result.errors }, { status: 422 });
       }

@@ -47,7 +47,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return errorResponse(400, `Fix the definition first: ${error instanceof Error ? error.message : String(error)}`);
   }
   const { kind, scope } = body.data;
-  const bytes = kind === 'xlsx' ? starterXlsx(def, scope) : await starterDocx(def);
+  const bytes = kind === 'xlsx' ? await starterXlsx(def, scope) : await starterDocx(def);
   return new Response(Buffer.from(bytes), {
     headers: {
       'Content-Type': FORMAT_FILES[kind].contentType,

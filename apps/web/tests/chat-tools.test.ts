@@ -653,7 +653,7 @@ describe('Excel templates', () => {
   it('reports the tag check by sheet and cell, a file that is gone, and shows the model the PDF', async () => {
     await call(tools().write_definition, { yaml });
     store.templates = excel('file-1');
-    const pageGroupFile = starterXlsx(parseDefinition(yaml), 'pageGroup');
+    const pageGroupFile = await starterXlsx(parseDefinition(yaml), 'pageGroup');
     const wrong = await call<RenderPreviewResult>(withFile(pageGroupFile).render_preview, {});
     expect(wrong).toMatchObject({ ok: true, templateErrors: [expect.stringMatching(/^Invoice!B3: \{d\.pg\.invoiceNo\} and 23 other cells read one page group/)] });
     expect(await call(withFile(null).render_preview, {})).toEqual({
@@ -894,7 +894,7 @@ describe('Excel templates by the agent', () => {
     const sheet = await call<ReadFileTemplateResult>(agent().read_excel_template, { part: SHEET });
     if (!sheet.ok || !('xml' in sheet)) throw new Error('no part');
     expect(sheet).toMatchObject({ sheet: 'Lines', from: 0, more: false });
-    expect(sheet.xml).toContain('<c r="A2" t="inlineStr"><is><t xml:space="preserve">{d.pgs[i].invoiceNo}</t></is></c>');
+    expect(sheet.xml).toContain('<c r="A2" t="inlineStr"><is><t>{d.pgs[i].invoiceNo}</t></is></c>');
     const rest = await call<ReadFileTemplateResult>(agent().read_excel_template, { part: SHEET, from: sheet.size - 10 });
     expect(rest).toMatchObject({ from: sheet.size - 10, xml: sheet.xml.slice(-10), more: false });
     const styles = await call<ReadFileTemplateResult>(agent().read_excel_template, { part: 'xl/styles.xml' });

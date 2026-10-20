@@ -202,7 +202,28 @@ describe("buildXlsx", () => {
     expect(workbook).toContain('<definedName name="Local" localSheetId="0">Lines!$A$1</definedName>');
     expect(workbook).toContain('<definedName name="_xlnm.Print_Area" localSheetId="0">Lines!$A$1:$H$50</definedName>');
     expect(workbook).toContain('<definedName name="_xlnm.Print_Titles" localSheetId="0">Lines!$4:$4,Lines!$A:$A</definedName>');
+    expect(workbook).toContain('<definedName name="_xlnm._FilterDatabase" hidden="1" localSheetId="0">Lines!$A$4:$F$4</definedName>');
     expect(workbook).toContain('activeTab="1"');
+  });
+
+  it("names a sheet's print area, print titles and filter with the sheet in quotes when it needs them, the filter's name hidden", async () => {
+    const workbook = (
+      await partsOf({
+        sheets: [
+          { name: "Order lines", autoFilter: "A:F", pageSetup: { printArea: "A1:F50", printTitlesRow: "1:1" } },
+          { name: "Bob's", pageSetup: { printTitlesColumn: "A:B" } },
+        ],
+      })
+    )["xl/workbook.xml"]!;
+    const names = [...workbook.matchAll(/<definedName [^>]*>[^<]*<\/definedName>/g)].map((m) => m[0]);
+    expect(names).toEqual([
+      `<definedName name="_xlnm.Print_Area" localSheetId="0">'Order lines'!$A$1:$F$50</definedName>`,
+      `<definedName name="_xlnm.Print_Titles" localSheetId="0">'Order lines'!$1:$1</definedName>`,
+      `<definedName name="_xlnm._FilterDatabase" hidden="1" localSheetId="0">'Order lines'!$A$1:$F$1048576</definedName>`,
+      `<definedName name="_xlnm.Print_Titles" localSheetId="1">'Bob''s'!$A:$B</definedName>`,
+    ]);
+    // No filter, no filter name.
+    expect((await partsOf(one({ cells: [{ ref: "A1", value: "x" }] })))["xl/workbook.xml"]).not.toContain("_FilterDatabase");
   });
 
   it("anchors a picture with tl to its cell with its size, and one with range over the range", async () => {

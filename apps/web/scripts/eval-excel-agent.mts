@@ -569,7 +569,7 @@ async function runAgent(c: Case, store: MemoryDraft, input: Uint8Array | undefin
   const carbone = { ok: true, at: new Date().toISOString(), edition };
   const tools = buildTools({ sample, store, masked: false, renderer, templateFile: store.readFile, images: async () => new Map(), visual });
   const messages: ModelMessage[] = [{ role: 'user', content: c.prompt }];
-  const run: Run = { bytes: input ?? starterXlsx(def, c.scope), wroteFile: false, steps: 0, toolErrors: [], asked: 0, answer: '', ms: 0 };
+  const run: Run = { bytes: input ?? await starterXlsx(def, c.scope), wroteFile: false, steps: 0, toolErrors: [], asked: 0, answer: '', ms: 0 };
   for (;;) {
     const instructions = buildInstructions({
       sample,
@@ -692,7 +692,7 @@ for (const c of cases) {
   const { store, input } = await draftFor(c);
   console.error(`${c.id}: ${dryRun ? 'scoring the starting file' : 'running the agent'}...`);
   let run: Run | null = null;
-  let bytes = input ?? starterXlsx(def, c.scope);
+  let bytes = input ?? await starterXlsx(def, c.scope);
   if (!dryRun) {
     try {
       run = await runAgent(c, store, input);

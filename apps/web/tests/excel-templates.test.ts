@@ -33,10 +33,10 @@ const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
 /** The Excel starter templates of the invoice definition: their tags all pass the check. */
-const flatXlsx = Buffer.from(starterXlsx(def, 'splf'));
-const pageGroupXlsx = Buffer.from(starterXlsx(def, 'pageGroup'));
+const flatXlsx = Buffer.from(await starterXlsx(def, 'splf'));
+const pageGroupXlsx = Buffer.from(await starterXlsx(def, 'pageGroup'));
 /** An Excel starter with `{d.pgs[i].invoiceNumber}`, which the invoice definition does not have. */
-const badXlsx = Buffer.from(starterXlsx(parseDefinition(yaml.replace('name: invoiceNo,', 'name: invoiceNumber,').replace('field: invoiceNo }', 'field: invoiceNumber }'))));
+const badXlsx = Buffer.from(await starterXlsx(parseDefinition(yaml.replace('name: invoiceNo,', 'name: invoiceNumber,').replace('field: invoiceNo }', 'field: invoiceNumber }'))));
 
 let auth: Record<string, string>;
 let serverId: string;

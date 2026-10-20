@@ -178,7 +178,7 @@ export async function fileTemplates(
         continue;
       }
       if (template.kind === 'xlsx') {
-        const xlsx = readXlsx(file ? file.content : starterXlsx(def!, template.scope));
+        const xlsx = readXlsx(file ? file.content : await starterXlsx(def!, template.scope));
         notes[template.id] = {
           kind: 'xlsx',
           name: file?.name ?? null,
@@ -1458,7 +1458,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         ? { bytes: file.content, name: file.name, fileId: template.fileId }
         : fail(`The ${KIND_NAMES[template.kind].app} file of the ${template.name} template is gone. Write a new one with ${FILE_TOOLS[template.kind].write}, or the user uploads one.`);
     }
-    const bytes = template.kind === 'xlsx' ? starterXlsx(def, template.scope) : await starterDocx(def);
+    const bytes = template.kind === 'xlsx' ? await starterXlsx(def, template.scope) : await starterDocx(def);
     return { bytes, name: `${def.type}.${template.kind}`, fileId: null };
   }
 

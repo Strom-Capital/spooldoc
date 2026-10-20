@@ -300,7 +300,7 @@ describe('POST /api/jobs/[id]/chat', () => {
     await setDefinition(yaml);
     setDocumentRenderer(fakeRenderer);
     const { parseDefinition, starterXlsx } = await import('@spooldoc/core');
-    const content = Buffer.from(starterXlsx(parseDefinition(yaml)));
+    const content = Buffer.from(await starterXlsx(parseDefinition(yaml)));
     const [file] = await db().insert(templateFiles).values({ name: 'lines.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size: content.length, content }).returning();
     const current = await draft();
     const templates = [{ id: 'lines', name: 'Lines', kind: 'xlsx' as const, fileId: file!.id, scope: 'splf' as const, formats: ['xlsx' as const] }];
