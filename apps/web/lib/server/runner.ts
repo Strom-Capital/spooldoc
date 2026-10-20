@@ -38,10 +38,11 @@ import { jobVersions, runs, watchSeen, type RunStep } from './db/schema';
 import { destinationFor, type RunFile } from './destinations';
 import { documentRenderer, fileNameFor, templateHtml } from './documents';
 import { redact } from './http';
-import { connectServer } from './ibmi';
+import { connectServer, isConnectionError } from './ibmi';
 import { log } from './log';
 import { HEARTBEAT_MS } from './retention';
 import { capture, storeSample } from './samples';
+import { StepError } from './step-error';
 import { getTemplateFile, TEMPLATE_FILE_GONE } from './template-files';
 
 /** What starts a run. */
@@ -56,16 +57,6 @@ export interface RunRequest {
 /** Ends a run as skipped: the file is not one the definition is for. The file is left alone. */
 class SkipRun extends Error {}
 
-class StepError extends Error {
-  constructor(
-    readonly step: RunStep['step'],
-    message: string,
-    /** The system's own text, such as Carbone's, kept for support. */
-    readonly detail?: string,
-  ) {
-    super(message);
-  }
-}
 
 /** Shown as it is: the problem is the Carbone server, not the template. */
 const SERVER_KINDS = ['unreachable', 'timeout', 'auth', 'server'];
@@ -120,7 +111,7 @@ export async function executeRun(runId: string, request: RunRequest, connection?
       return value;
     } catch (err) {
       const message = err instanceof StepError ? err.message : firstLine(err, secrets);
-      const detail = err instanceof StepError ? err.detail : isCarboneError(err) ? err.detail : undefined;
+      const detail = err instanceof StepError ? err.detail : isCarboneError(err) || isConnectionError(err) ? err.detail : undefined;
       steps.push({ step: name, ok: false, ms: Math.round(performance.now() - started), error: message, ...(detail ? { detail } : {}) });
       throw new StepError(name, message, detail);
     }
@@ -231,11 +222,15 @@ export async function executeRun(runId: string, request: RunRequest, connection?
       (out) => fileCount(out),
     );
 
-    await step('deliver', async () => {
-      const destination = await destinationFor(spec.destination.destinationId);
-      if (!destination) throw new Error('The destination is gone.');
-      await db.transaction((tx) => destination.deliver({ runId, files, tx }));
-    });
+    await step(
+      'deliver',
+      async () => {
+        const destination = await destinationFor(spec.destination.destinationId);
+        if (!destination) throw new Error('The destination is gone.');
+        return destination.deliver({ runId, files, conn, host });
+      },
+      (note) => note,
+    );
 
     try {
       await step(

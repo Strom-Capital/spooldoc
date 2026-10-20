@@ -348,7 +348,11 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                 <div>
                   <h3 className="mb-2 font-medium text-sm">Files</h3>
                   {open.files.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">None delivered.</p>
+                    <p className="text-muted-foreground text-sm">
+                      {open.steps.some((step) => step.step === 'deliver' && step.ok)
+                        ? 'No copy kept in Spooldoc. The Deliver step says where the files went.'
+                        : 'None delivered.'}
+                    </p>
                   ) : (
                     <div className="flex flex-col gap-3">
                       {fileGroups(open.files).map((group) => (

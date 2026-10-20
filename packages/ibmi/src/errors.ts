@@ -26,9 +26,31 @@ const RULES: [ConnectionErrorCode, RegExp][] = [
   ["notfound", /CPF3C40|CPF3344|CPF3342|CPF3330|CPF2105|CPF2110|ObjectDoesNotExistException|not found|does not exist|no longer in the system|SQL0204/i],
 ];
 
-/** Classifies an error text into a `ConnectionError` code. */
-export function classifyError(text: string): ConnectionErrorCode {
-  for (const [code, re] of RULES) if (re.test(text)) return code;
+/**
+ * Rules for an IFS call. jt400 reports a missing authority on a folder as an
+ * `AS400SecurityException`, which the general rules take for a failed sign-on. Here only
+ * a password or profile problem is a sign-on problem.
+ */
+const IFS_RULES: [ConnectionErrorCode, RegExp][] = [
+  [
+    "auth",
+    /password (is )?(not correct|incorrect|expired|not set)|user (id|profile) (is )?(not known|disabled|does not exist)|profile .*disabled|CPF22E[2-5]|CPF2204/i,
+  ],
+  ...RULES.filter(([code]) => code === "host"),
+  ["authority", /AS400SecurityException|access (to (the )?request )?(was |is )?denied|not authorized|permission denied|CPFA0B1|CPFA09C|CPF3401/i],
+  ["notfound", /(file|path|directory|object) not found|no such (path|file|directory)|does not exist|CPFA0A9|CPFA0A7/i],
+];
+
+/** Whether a context is about the IFS, such as "IFS /home/docs/out/invoice-1001.pdf". */
+const isIfs = (context?: string): boolean => context?.startsWith("IFS ") ?? false;
+
+/**
+ * Classifies an error text into a `ConnectionError` code.
+ *
+ * @param context - What was being done; an IFS call is classified with its own rules
+ */
+export function classifyError(text: string, context?: string): ConnectionErrorCode {
+  for (const [code, re] of isIfs(context) ? IFS_RULES : RULES) if (re.test(text)) return code;
   return "other";
 }
 
@@ -202,6 +224,11 @@ export function guidance(code: ConnectionErrorCode, text: string, context?: stri
     }
 
     case "authority": {
+      if (isIfs(context)) {
+        const { path, folder, writing } = ifsTarget(context!);
+        if (!writing) return `${Profile} needs *X authority on every folder in ${path}. A security officer can grant it with CHGAUT, for example CHGAUT OBJ('${folder}') USER(${user ?? "name"}) DTAAUT(*X).`;
+        return `${Profile} needs *WX authority on ${folder} and *X on every folder above it. A security officer can grant it with CHGAUT OBJ('${folder}') USER(${user ?? "name"}) DTAAUT(*WX).`;
+      }
       if (context?.startsWith("Spooled file") || /authorized to spooled file/i.test(text)) {
         return `${Profile} is not authorized to this spooled file. Working with other users' spooled files needs *SPLCTL special authority, or *JOBCTL on an output queue created with OPRCTL(*YES).`;
       }
@@ -218,6 +245,10 @@ export function guidance(code: ConnectionErrorCode, text: string, context?: stri
     }
 
     case "notfound": {
+      if (isIfs(context)) {
+        const { folder } = ifsTarget(context!);
+        return `The folder ${folder} does not exist on ${system}. Create it, or change the destination's folder.`;
+      }
       if (context?.startsWith("Spooled file") || /CPF3C40|CPF3344|CPF3342|no longer in the system/i.test(text)) {
         return `${context ?? "The spooled file"} is no longer on ${system}. It was deleted or printed, or its job's output was cleaned up.`;
       }
@@ -244,6 +275,17 @@ export function guidance(code: ConnectionErrorCode, text: string, context?: stri
   }
 }
 
+/**
+ * The path of an IFS context and the folder it is in. "IFS file /x/a.pdf" is a write of a
+ * file; "IFS /x" is a look at a path.
+ */
+function ifsTarget(context: string): { path: string; folder: string; writing: boolean } {
+  const writing = context.startsWith("IFS file ");
+  const path = context.slice(writing ? "IFS file ".length : "IFS ".length);
+  const at = path.lastIndexOf("/");
+  return { path, folder: at > 0 ? path.slice(0, at) : "/", writing };
+}
+
 const lowerFirst = (text: string): string => text.charAt(0).toLowerCase() + text.slice(1);
 const upperFirst = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
 
@@ -263,7 +305,7 @@ export function toConnectionError(err: unknown, secrets: readonly string[], cont
     });
   }
   const full = redact(errorText(err), secrets);
-  const code = classifyError(full);
+  const code = classifyError(full, context);
   const messageId = messageIdOf(full);
   const own = (code === "host" && hostMessage(full)) || summarize(full);
   const advice = guidance(code, full, context, target);

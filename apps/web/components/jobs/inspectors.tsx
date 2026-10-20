@@ -4,11 +4,13 @@ import { Trash2Icon } from 'lucide-react';
 import Link from 'next/link';
 import { useRef, type ReactNode } from 'react';
 import { ServerSelect } from '@/components/server-select';
+import { ErrorNote } from '@/components/page';
 import { ServerErrorNote } from '@/components/server-status';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { destinationText } from '@/lib/destination-config';
 import type { FinishAction, SourceFilter } from '@/lib/job-spec';
 import { useJob } from './job-provider';
 import { QueueSelect } from './queue-select';
@@ -168,9 +170,10 @@ export function SourceInspector() {
 
 /** Destination: where the documents go. */
 export function DestinationInspector() {
-  const { spec, updateDraft, readOnly, destinations } = useJob();
+  const { spec, updateDraft, readOnly, destinations, destinationsError } = useJob();
   return (
     <Panel title="Destination" description="Where the job delivers its documents.">
+      {destinationsError && <ErrorNote>Could not load the destinations. {destinationsError}</ErrorNote>}
       <div role="radiogroup" aria-label="Destination" className="grid gap-3 sm:grid-cols-2">
         {destinations.map((destination) => (
           <Choice
@@ -180,10 +183,17 @@ export function DestinationInspector() {
             onSelect={() => updateDraft({ destination: { destinationId: destination.id } }, { debounce: false })}
             title={destination.name}
           >
-            Files (PDF and HTML) are kept in Spooldoc and can be downloaded from the Job log.
+            {Object.values(destinationText(destination)).join(' ')}
           </Choice>
         ))}
       </div>
+      <p className="text-muted-foreground text-xs">
+        Add a folder in the IFS, or change one, on the{' '}
+        <Link href="/destinations" className="text-primary hover:underline">
+          Destinations
+        </Link>{' '}
+        page.
+      </p>
     </Panel>
   );
 }

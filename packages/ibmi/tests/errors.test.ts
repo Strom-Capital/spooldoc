@@ -225,3 +225,44 @@ describe("helpers", () => {
     expect(summarize("just text")).toBe("just text");
   });
 });
+
+describe("IFS errors", () => {
+  const target = { host: "ibmi.example.com", user: "demouser" };
+
+  it("calls a missing authority on a folder an authority error, not a failed sign-on", () => {
+    const err = toConnectionError(
+      javaError("com.ibm.as400.access.AS400SecurityException: Access to request was denied."),
+      [PASSWORD],
+      "IFS file /home/docs/out/invoice-1001.pdf",
+      target,
+    );
+    expect(err.code).toBe("authority");
+    expect(err.message).toBe(
+      "DEMOUSER needs *WX authority on /home/docs/out and *X on every folder above it. A security officer can grant it with CHGAUT OBJ('/home/docs/out') USER(DEMOUSER) DTAAUT(*WX).",
+    );
+    expect(err.detail).toBe("IFS file /home/docs/out/invoice-1001.pdf: Access to request was denied.");
+  });
+
+  it("asks for *X on the folders when a path cannot be looked at", () => {
+    const err = toConnectionError(javaError("com.ibm.as400.access.ExtendedIOException: Access to request was denied."), [PASSWORD], "IFS /home/docs/out", target);
+    expect(err.code).toBe("authority");
+    expect(err.message).toMatch(/^DEMOUSER needs \*X authority on every folder in \/home\/docs\/out\./);
+  });
+
+  it("says which folder does not exist", () => {
+    const err = toConnectionError(
+      javaError("com.ibm.as400.access.ExtendedIOException: Path not found."),
+      [PASSWORD],
+      "IFS file /home/docs/out/invoice-1001.pdf",
+      target,
+    );
+    expect(err.code).toBe("notfound");
+    expect(err.message).toBe("The folder /home/docs/out does not exist on ibmi.example.com. Create it, or change the destination's folder.");
+  });
+
+  it("still calls a wrong password a failed sign-on", () => {
+    expect(classifyError("com.ibm.as400.access.AS400SecurityException: Password is not correct.", "IFS file /home/docs/out/a.pdf")).toBe("auth");
+    expect(classifyError("java.net.ConnectException: Connection refused", "IFS /home/docs/out")).toBe("host");
+    expect(classifyError("com.ibm.as400.access.AS400SecurityException: Access to request was denied.")).toBe("auth");
+  });
+});

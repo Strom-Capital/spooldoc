@@ -4,6 +4,8 @@ import {
   ConnectionError,
   type CommandResult,
   type Connection,
+  type IfsEntry,
+  type IfsWriteOptions,
   type OutputQueue,
   type QueueFileCount,
   type SpooledFileEntry,
@@ -32,6 +34,12 @@ export interface FakeOptions {
 export class FakeConnection implements Connection {
   readonly samples: Sample[];
   readonly calls: string[] = [];
+  /** Files in the IFS, by path, with the CCSID they were written with. */
+  readonly ifs = new Map<string, { bytes: Uint8Array; ccsid: number }>();
+  /** Folders in the IFS. */
+  readonly folders = new Set<string>(["/"]);
+  /** Methods that throw this error when called. */
+  readonly failures = new Map<string, Error>();
   closed = false;
   constructor(
     names: readonly FixtureName[] = FIXTURES,
@@ -113,6 +121,25 @@ export class FakeConnection implements Connection {
   async runCommand(): Promise<CommandResult> {
     this.calls.push("runCommand");
     return { ok: true, messages: [] };
+  }
+
+  async ifsStat(path: string): Promise<IfsEntry | null> {
+    this.calls.push("ifsStat");
+    const failure = this.failures.get("ifsStat");
+    if (failure) throw failure;
+    return this.folders.has(path) ? "directory" : this.ifs.has(path) ? "file" : null;
+  }
+
+  async writeIfsFile(path: string, bytes: Uint8Array, { ccsid }: IfsWriteOptions): Promise<{ replaced: boolean }> {
+    this.calls.push("writeIfsFile");
+    const failure = this.failures.get("writeIfsFile");
+    if (failure) throw failure;
+    if (!this.folders.has(path.slice(0, path.lastIndexOf("/")) || "/")) {
+      throw new ConnectionError("notfound", `The folder of ${path} does not exist.`);
+    }
+    const replaced = this.ifs.has(path);
+    this.ifs.set(path, { bytes: new Uint8Array(bytes), ccsid });
+    return { replaced };
   }
 
   async close(): Promise<void> {

@@ -122,7 +122,7 @@ server to render documents. See [Contributing](contributing.md).
 
 ## What is coming?
 
-SFTP, S3, IFS, email and webhook destinations, and more users and roles.
+SFTP, S3, email and webhook destinations, and more users and roles.
 See the roadmap in the [README](../README.md#status).
 
 ## Where do I ask a question?

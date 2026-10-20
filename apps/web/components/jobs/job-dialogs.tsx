@@ -143,7 +143,7 @@ const idOf = (f: SpooledFileView) => ({ name: f.name, number: f.number, jobName:
  * also held, are listed. Mount it when it opens, so it starts empty each time.
  */
 export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; onClose(): void; onSaveVersion(): void }) {
-  const { job, activeSpec, draftDiffers, servers, reloadServers, noteServerCall } = useJob();
+  const { job, activeSpec, draftDiffers, servers, reloadServers, noteServerCall, destinations } = useJob();
   const [showAll, setShowAll] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [files, setFiles] = useState<SpooledFileView[] | null>(null);
@@ -200,6 +200,9 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
         : finish === 'delete'
           ? 'Files will be deleted from the IBM i after delivery.'
           : 'Files are left as they are.';
+  // Writing to the IFS changes the IBM i, so it is named before it happens.
+  const destination = destinations.find((d) => d.id === activeSpec?.destination.destinationId);
+  const deliverText = destination?.kind === 'ifs' ? `Documents will be written to ${destination.config.folder} on the IBM i. ` : '';
 
   async function onRun() {
     setBusy(true);
@@ -223,7 +226,7 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
           <DialogDescription>
             {job.activeVersion === null
               ? 'Save a version first: every run is logged against the version it used.'
-              : `Runs version ${job.activeVersion} on the spooled files you pick. ${finishText}`}
+              : `Runs version ${job.activeVersion} on the spooled files you pick. ${deliverText}${finishText}`}
           </DialogDescription>
         </DialogHeader>
         {job.activeVersion === null ? (
@@ -265,7 +268,9 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
                     <div className="text-muted-foreground text-xs">
                       {run.status === 'running'
                         ? 'Still running; see the Job log.'
-                        : run.error ?? `${run.files.length} ${run.files.length === 1 ? 'file' : 'files'} delivered`}
+                        : (run.error ??
+                          run.steps.find((step) => step.step === 'deliver')?.note ??
+                          `${run.files.length} ${run.files.length === 1 ? 'file' : 'files'} delivered`)}
                     </div>
                   </div>
                   {run.files.slice(0, 3).map((file) => (

@@ -127,7 +127,7 @@ const splfName = (id: SpooledFileId): string => `spooled file ${id.name} number 
  *
  * A call that fails because the connection dropped evicts the entry. A read is then tried
  * once more on a new connection, and later calls use that one. A change on the IBM i
- * (hold, move, delete, a command) is not tried again, since the IBM i may have done it
+ * (hold, move, delete, a command, an IFS write) is not tried again, since the IBM i may have done it
  * already: it fails with a host error that says what to check.
  */
 function tracked(key: string, creds: Credentials, first: Entry): Connection {
@@ -189,6 +189,8 @@ function tracked(key: string, creds: Credentials, first: Entry): Connection {
     moveSpooledFile: (id, queue) => write((conn) => conn.moveSpooledFile(id, queue), `${splfName(id)} was moved to ${queue.library}/${queue.name}`),
     deleteSpooledFile: (id) => write((conn) => conn.deleteSpooledFile(id), `${splfName(id)} was deleted`),
     runCommand: (command) => write((conn) => conn.runCommand(command), "the command ran"),
+    ifsStat: (path) => read((conn) => conn.ifsStat(path)),
+    writeIfsFile: (path, bytes, options) => write((conn) => conn.writeIfsFile(path, bytes, options), `${path} was written`),
     close: () => closeConnection(key),
   };
 }

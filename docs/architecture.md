@@ -53,8 +53,9 @@ where a run stopped.
    of the whole spooled file. Carbone answers with the file: HTML, PDF,
    DOCX or XLSX. See
    [Templates](templates.md).
-4. **Deliver.** Every file goes to the job's destination in the run's
-   transaction. See [Destinations](destinations.md).
+4. **Deliver.** Every file goes to the job's destination: kept in
+   Spooldoc's database, or written to a folder in the IFS of the job's
+   server. See [Destinations](destinations.md).
 5. **Finish.** Only after every document was delivered, the spooled file
    is held, moved, deleted or left as it is. A finish that fails gives the
    run the status warning: the documents are out, the file is still there.
