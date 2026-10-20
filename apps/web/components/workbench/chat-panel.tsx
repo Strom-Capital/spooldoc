@@ -29,7 +29,16 @@ import { ToolSummary } from './tool-summary';
 import { useWorkbenchSync } from './use-workbench-sync';
 import { useWorkbench } from './workbench-provider';
 
-const SUGGESTIONS = ['Generate a definition and a template from this spooled file'];
+/**
+ * One starting prompt per format. Each names the kind of template, so the agent makes it
+ * without asking which kind (`NO_ASK_RULE`).
+ */
+const SUGGESTIONS = [
+  'Generate a definition and a Word template',
+  'Generate a definition and an Excel template',
+  'Generate a definition and an HTML template for an HTML page',
+  'Generate a definition and an HTML template for a PDF',
+];
 
 /**
  * The agent for the job's preview spooled file. The model proposes a definition and a
@@ -194,8 +203,9 @@ function ChatThread({
             {messages.length === 0 && (
               <div className="flex flex-col gap-3 pt-2">
                 <p className="text-muted-foreground text-sm">
-                  Ask the agent to propose a definition and a template for the selected spooled file. It writes them
-                  to the job&apos;s draft, checks what it extracted and fixes what is missing.
+                  Pick the format you want, or ask the agent in your own words. It writes a definition and a template
+                  for the selected spooled file to the job&apos;s draft, checks what it extracted and fixes what is
+                  missing.
                 </p>
                 <div className="flex flex-col items-start gap-2">
                   {SUGGESTIONS.map((suggestion) => (
