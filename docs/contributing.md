@@ -95,6 +95,20 @@ A destination is a `kind` and a `deliver` call in
 the run's transaction, and stores or sends them. Register it in the kinds
 map and add its settings to the Destinations page.
 
+### Writing the docs
+
+The guides in `docs/` are also the docs in the app: it serves them at
+`/docs`, built with the app so they match the version that runs. The
+groups and the order come from [docs/README.md](README.md): a new page
+goes into one of its tables, and starts with a `title` and a
+`description` header in place of a `#` heading. Link to another guide by
+its file name, such as `[Versions](jobs.md#versions)`. The app turns
+those links into its own, and links outside `docs/` into links to the
+file on GitHub at that version. The web app's tests check that every
+page is listed once and that every link and anchor between the guides
+lands. A link from the app into the docs uses `DocsLink`, which opens
+the page in a new tab.
+
 ## Conventions
 
 - Check the change against the [principles](principles.md). When it

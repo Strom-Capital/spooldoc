@@ -2,6 +2,7 @@
 
 import { FolderInputIcon, FilePenLineIcon, RotateCcwIcon } from 'lucide-react';
 import { useState } from 'react';
+import { DocsLink } from '@/components/docs-link';
 import { Button } from '@/components/ui/button';
 import { CodeEditor } from './code-editor';
 import { EditorBar, EditorMessage } from './editor-bar';
@@ -49,6 +50,9 @@ function HtmlTemplateEditor() {
             Start from job
           </Button>
         )}
+        <DocsLink page="templates" anchor="the-data" className="ml-auto px-2">
+          Tags and formatters
+        </DocsLink>
       </EditorBar>
       {startFrom && <StartFromJobDialog onClose={() => setStartFrom(false)} />}
       {html === null && (

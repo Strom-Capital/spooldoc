@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
+import { DocsLink } from '@/components/docs-link';
 import { Logo } from '@/components/logo';
 import { LoginForm } from '@/components/pages/login-form';
 import { currentUser, userCount } from '@/lib/server/auth';
@@ -27,6 +28,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             : 'Sign in to manage servers, jobs and documents.'}
         </p>
         <LoginForm firstRun={firstRun} next={target} />
+        <p className="mt-6 text-center text-muted-foreground text-sm">
+          New to Spooldoc? Read the <DocsLink page="getting-started">Getting started</DocsLink> guide.
+        </p>
       </div>
     </main>
   );

@@ -1,7 +1,8 @@
 'use client';
 
+import { DocsLink } from '@/components/docs-link';
 import { CodeEditor } from './code-editor';
-import { EditorMessage } from './editor-bar';
+import { EditorBar, EditorMessage } from './editor-bar';
 import { useWorkbench } from './workbench-provider';
 
 /** The definition YAML of the job. Changes are saved to the draft and rendered as you type. */
@@ -10,6 +11,11 @@ export function DefinitionEditor() {
   const error = render?.definition?.error;
   return (
     <div className="flex h-full min-h-0 flex-col">
+      <EditorBar>
+        <DocsLink page="definitions" className="ml-auto px-2">
+          Definitions
+        </DocsLink>
+      </EditorBar>
       {error && <EditorMessage tone="error">{error}</EditorMessage>}
       <CodeEditor
         value={yaml}
