@@ -2,7 +2,7 @@
 
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, getToolName, isToolUIPart, type UIMessage } from 'ai';
-import { MessageSquarePlusIcon } from 'lucide-react';
+import { CheckIcon, MessageSquarePlusIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
@@ -14,6 +14,7 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from '@/components/ai-elements/prompt-input';
+import { Question, QuestionDescription, QuestionOption, QuestionOptions } from '@/components/ai-elements/question';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Suggestion } from '@/components/ai-elements/suggestion';
@@ -21,10 +22,9 @@ import { useAppInfo } from '@/components/app-info';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { api, errorText, isAbort } from '@/lib/client/api';
-import { askedQuestion, chatActivity, chatErrorText, questionAnswer } from '@/lib/client/chat';
+import { askedQuestion, chatActivity, chatErrorText, chosenOption, questionAnswer, type AskedQuestion } from '@/lib/client/chat';
 import { usageText } from '@/lib/client/format';
 import type { UsageTotals } from '@/lib/types';
-import { AgentQuestion } from './agent-question';
 import { ToolSummary } from './tool-summary';
 import { useWorkbenchSync } from './use-workbench-sync';
 import { useWorkbench } from './workbench-provider';
@@ -230,7 +230,7 @@ function ChatThread({
                     if (isToolUIPart(part)) {
                       const question = askedQuestion({ toolName: getToolName(part), state: part.state, input: part.input, output: part.output });
                       return question ? (
-                        <AgentQuestion key={part.toolCallId} question={question} answer={questionAnswer(messages, messageIndex)} busy={busy} onAnswer={send} />
+                        <AskedQuestionPart key={part.toolCallId} question={question} answer={questionAnswer(messages, messageIndex)} busy={busy} onAnswer={send} />
                       ) : (
                         <ToolSummary key={part.toolCallId} part={part} />
                       );
@@ -283,5 +283,65 @@ function ChatThread({
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * A question the agent asked with `ask_user`, with its answers as options. A click sends
+ * the answer as the user's next message; the user can also type one in the message box.
+ * Once answered, the options stay as they were, with the chosen one checked, and no longer
+ * send.
+ *
+ * @param answer - The user's answer, or null while there is none
+ * @param busy - The chat is answering, so nothing can be sent
+ * @param onAnswer - Sends an answer
+ */
+function AskedQuestionPart({
+  question,
+  answer,
+  busy,
+  onAnswer,
+}: {
+  question: AskedQuestion;
+  answer: string | null;
+  busy: boolean;
+  onAnswer: (answer: string) => void;
+}) {
+  const open = answer === null && !busy;
+  const chosen = chosenOption(question, answer);
+  return (
+    <Question
+      role="group"
+      aria-label="Question from the agent"
+      disabled={!open}
+      value={{ selectedValues: chosen === null ? [] : [chosen], text: '' }}
+      className="space-y-3 p-3"
+    >
+      <MessageResponse>{question.question}</MessageResponse>
+      {question.options.length > 0 && (
+        <QuestionOptions className="flex-col items-start">
+          {question.options.map((option) => (
+            <QuestionOption
+              key={option.label}
+              value={option.label.trim()}
+              onClick={() => onAnswer(option.label.trim())}
+              className="flex-col items-start gap-0.5 py-1.5 text-left"
+            >
+              <span className="flex items-center gap-1.5">
+                {chosen === option.label.trim() && <CheckIcon className="size-3.5" aria-hidden />}
+                {option.label}
+                {option.recommended && <span className="font-normal text-xs opacity-70">Recommended</span>}
+              </span>
+              {option.description && <span className="font-normal text-xs opacity-70">{option.description}</span>}
+            </QuestionOption>
+          ))}
+        </QuestionOptions>
+      )}
+      {open && (
+        <QuestionDescription className="text-xs">
+          {question.options.length > 0 ? 'Pick an answer, or type your own below.' : 'Type your answer below.'}
+        </QuestionDescription>
+      )}
+    </Question>
   );
 }
