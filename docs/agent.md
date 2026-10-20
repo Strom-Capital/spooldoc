@@ -6,7 +6,8 @@ description: "The agent beside the job builder: which models it uses, what it ca
 The agent sits beside the workbench in the job builder. Ask it for a
 definition and it reads the sample pages, writes the YAML to the job's
 draft, reads the extraction report, fixes missing fields, then writes a
-template and renders it: HTML, or a Word template it designs or edits. When
+template and renders it: HTML, or a Word template it designs or edits. It
+can add and check an Excel template, which you make in Excel. When
 it is not clear which kind you want, it
 [asks you first](#which-kind-of-template). The page view, the JSON and the preview update as
 it works, and everything it writes can be edited by hand. Without a model
@@ -45,12 +46,12 @@ Carbone syntax reference, and one that asks you a question:
 |------|--------------|
 | `read_sample_page` | Reads one page of the sample as numbered lines. The first three pages are in its instructions already. |
 | `write_definition` | Saves the definition YAML to the draft, runs the extraction on the sample and returns the report: page groups found, each field with its status, missing fields, warnings and the first page group as JSON. |
-| `write_template` | Saves the HTML of one [template](jobs.md#templates), the first unless it names another, checks it, renders the first document with Carbone and returns any errors, by line, and its visible text. Without a working Carbone server it only checks. It refuses a Word template. |
+| `write_template` | Saves the HTML of one [template](jobs.md#templates), the first unless it names another, checks it, renders the first document with Carbone and returns any errors, by line, and its visible text. Without a working Carbone server it only checks. It refuses a Word or Excel template. |
 | `write_word_template` | Designs a [Word template](templates.md#word-templates) and saves it as a new file the template uses. Returns what the check and Carbone find, the text of the first document and, for models that take files, the document itself. |
 | `read_word_template` | Lists the parts of a Word template (the body, headers and footers), or reads one part's XML. |
 | `edit_word_template` | Changes a Word template, yours or the starter template, by replacing text in its XML, and saves the result as a new file. Returns what `write_word_template` returns. |
-| `render_preview` | Renders the document of a page group with one template, HTML or Word, again after a change to the definition, and returns what the check finds and the visible text. For a Word template it also shows models that take files the document. |
-| `add_template` | Adds a template, HTML or Word, with a name and formats. It uses the starter until the agent writes it. |
+| `render_preview` | Renders the document of a page group with one template, HTML, Word or Excel, again after a change to the definition, and returns what the check finds and the visible text (an Excel template's by sheet and cell). An Excel template of the whole spooled file renders every page group. For a Word or Excel template it also shows models that take files the PDF. |
+| `add_template` | Adds a template, HTML, Word or Excel, with a name and formats, and for Excel what each file holds. It uses the starter until the agent writes it or you upload a file. |
 | `remove_template` | Removes a template. The last template cannot be removed. |
 | `list_jobs` | Lists the other jobs with their definition type, templates and whether those have content of their own. |
 | `read_job_files` | Reads another job's definition YAML and each of its templates, from its active version or else its draft, so a new job can start from them. |
@@ -75,20 +76,26 @@ cannot be sent, the panel shows the error; type the answer again to retry.
 
 ## Which kind of template
 
-Both kinds of [template](templates.md) make PDF. The choice is about who
+Every kind of [template](templates.md) makes PDF. The choice is about who
 edits the layout, and where:
 
 - **HTML** is edited here in Spooldoc. It is the quickest to make, the
   preview shows it right away, and it can also make an HTML page, for
   example an email body.
 - **Word** is edited in Word, by you. It can also make a DOCX.
+- **Excel** is edited in Excel, by you, from the starter template. It
+  makes an XLSX, by default one of the whole spooled file with a row per
+  line, and can also make a PDF of it.
 
 Once the definition reads the sample well, and before it writes the
 template, the agent asks which kind to make. It recommends one, with a
 reason from what it extracted: HTML for business documents sent as PDF,
 such as invoices, delivery notes and order confirmations; Word when
 people want to change the layout themselves, the recipient needs a DOCX,
-or the document is a letter with long fixed text. For example: "Both make
+or the document is a letter with long fixed text; Excel when people want
+to sort, filter or sum the lines, or the recipient asks for a spreadsheet.
+It offers Excel only when your message points to a spreadsheet. For
+example: "Both make
 PDF. HTML is edited here in Spooldoc and can also make an HTML page, for
 example for an email. Word is edited in Word and can also make a DOCX.
 For this invoice I recommend HTML."
@@ -98,8 +105,13 @@ It does not ask when:
 - your message already names a kind ("make a Word invoice", "an HTML
   template"),
 - the template already has content of its own,
-- the template is a Word template already, or its formats settle it: a
-  template that makes HTML is an HTML template.
+- the template is a Word or Excel template already, or its formats settle
+  it: a template that makes HTML is an HTML template.
+
+The agent cannot write or edit Excel files yet. For an Excel template it
+adds the template, checks it with `render_preview` and tells you to
+download the starter template, change it in Excel and upload it. See
+[Excel templates](templates.md#excel-templates).
 
 ## Word templates
 
@@ -156,8 +168,9 @@ upload it again, or ask the agent for the next change.
 The agent writes [Carbone tags](templates.md). Its instructions hold
 the [Carbone Skill](https://github.com/carboneio/carbone-skill) by Carbone
 (Apache License 2.0) as the syntax reference. The agent can read its
-reference files for HTML and Word templates, such as the formatters and
-the tips on Word headers and footers. The instructions also say which
+reference files for HTML, Word and Excel templates, such as the
+formatters, the tips on Word headers and footers and the tips on Excel
+totals. The instructions also say which
 Carbone features the connected server has: on the Community Edition it
 leaves out Enterprise features such as `:aggSum`. See [Carbone](carbone.md).
 
@@ -170,10 +183,11 @@ What the model receives:
 - The sample's metadata: spooled file name, queue, user data, page size
   and code page.
 - The job's current definition, its templates with their formats and
-  content (the text of a Word template, paragraph by paragraph), the
+  content (the text of a Word template, paragraph by paragraph, and of an
+  Excel template, cell by cell), the
   names of the uploaded assets, and the Carbone edition.
 - Tool results: the extraction report and the rendered text, and for a
-  Word template, the rendered document (see
+  Word or Excel template, the rendered document (see
   [Word templates](#word-templates)).
 - On request, other jobs' definitions and templates: layout, not
   customer data. Nothing else of a job (its server, destination, finish

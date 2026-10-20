@@ -1,17 +1,20 @@
 ---
 title: "Templates"
-description: "The HTML and Word templates that make each document with Carbone tags, the check Spooldoc runs before each render, assets, and how PDFs are laid out."
+description: "The HTML, Word and Excel templates that make each document with Carbone tags, the check Spooldoc runs before each render, assets, and how PDFs are laid out."
 ---
 
 A template is an ordinary HTML page with [Carbone](https://carbone.io)
-tags, such as `{d.pg.invoiceNo}`, or a Word document with the same
-tags in its text (see [Word templates](#word-templates)). A job has one
-or more templates. Each page group the definition finds becomes a
-document through every template, in that template's formats: an HTML
-template makes HTML files, PDFs or both, and a Word template makes DOCX
-files, PDFs or both. Until you write or upload one, the starter template
-renders the fields in a header block and a table for each table, record
-or group. See [Templates](jobs.md#templates).
+tags, such as `{d.pg.invoiceNo}`, a Word document with the same
+tags in its text (see [Word templates](#word-templates)), or an Excel
+workbook with the tags in its cells (see [Excel templates](#excel-templates)).
+A job has one or more templates. Each page group the definition finds
+becomes a document through every template, in that template's formats:
+an HTML template makes HTML files, PDFs or both, and a Word template makes
+DOCX files, PDFs or both. An Excel template makes XLSX files, PDFs or
+both, by default one of the whole spooled file with a row per line.
+Until you write or upload one, the starter template renders the fields in
+a header block and a table for each table, record or group. See
+[Templates](jobs.md#templates).
 
 Spooldoc renders every document with a Carbone server, your own or Carbone
 Cloud. See [Carbone](carbone.md) to set one up.
@@ -24,7 +27,7 @@ Cloud. See [Carbone](carbone.md) to set one up.
 </p>
 
 "Start from job" in the template editor's bar copies another job's
-template, HTML or Word, into the template shown, and on request its
+template, HTML, Word or Excel, into the template shown, and on request its
 definition into the draft. When the other job has more than one template, pick the one to copy.
 The [agent](agent.md) does the same when asked.
 
@@ -37,6 +40,9 @@ A tag starts with `d`, the data of the document being made:
 | `d.pg` | `pg` is the page group: the one the document is made from, with the fields, tables, records and groups of the [definition](definitions.md). |
 | `d.pgs` | `pgs` is every page group of the spooled file, for page counts or totals. Sent only to templates that use it. |
 | `d.splf` | The spooled file: `name`, `number`, `jobName`, `jobUser`, `jobNumber`. |
+
+An Excel template that makes one file of the whole spooled file gets
+`d.pgs` and `d.splf`, and no `d.pg`. See [What each file holds](#what-each-file-holds).
 
 ```html
 <h1>Invoice {d.pg.invoiceNo}</h1>
@@ -106,7 +112,8 @@ Carbone renders some mistakes without an error: it prints nothing for a
 field that is not in the data, and prints quotes it does not accept. So
 Spooldoc checks each template before it renders, and the Template tab
 lists each problem with its line (for a Word template, with its part:
-body, header or footer):
+body, header or footer, and for an Excel template, with its sheet and
+cell, such as `Lines!B3`):
 
 - a tag whose field is not in the definition, such as `{d.pg.invoiceNumber}`,
   with the field it most likely means;
@@ -117,6 +124,8 @@ body, header or footer):
 - a tag with an old name, `d.pageGroup` or `d.pageGroups`, with
   its new name, `d.pg` or `d.pgs`;
 - an asset name that is not uploaded.
+
+An Excel template has [its own rules](#the-check-of-an-excel-template) on top.
 
 A template with problems is not rendered, in the preview or in a run.
 Carbone's own errors, such as a loop without an `[i+1]` row or a
@@ -205,10 +214,117 @@ Anything else in a design is refused with where it is, and nothing is
 saved. The tags, loops and optional lines are the ones in
 [Tags in Word](#tags-in-word).
 
+## Excel templates
+
+A template can be an Excel workbook instead, for documents people want to
+sort, filter and sum: you lay it out in Excel, with Excel's own formats,
+formulas and page setup, and type the tags into its cells. It makes XLSX
+files, PDFs or both; a new Excel template makes XLSX only. Pick Make it
+an Excel template in the template's menu on the render step.
+
+Until you upload one, the preview uses an Excel starter template made
+from the definition. To make your own:
+
+1. Choose Download starter template in the Template tab.
+2. Open it in Excel. Change the layout, the formats and the columns, and
+   keep the rules below.
+3. Choose Upload template and pick the `.xlsx`.
+
+Uploads are kept as for [Word templates](#word-templates): each is its
+own file, and a saved version keeps the file it was saved with. Spooldoc
+takes `.xlsx` files up to 10 MB; it refuses an Excel 97-2003 `.xls` and
+says to save it as an Excel Workbook. The agent cannot write or edit
+Excel files yet; it can add an Excel template and check it.
+
+### What each file holds
+
+An Excel template has a setting, Each file holds, in the template's menu:
+
+- **Whole spooled file** (the default): one file per spooled file, named
+  after it, such as `spdinvoice.xlsx`. `d` is `{ pgs, splf }`. A row
+  with `{d.pgs[i].invoiceNo}` and `{d.pgs[i].lines[i].item}`, and right
+  under it a row with `{d.pgs[i+1].lines[i+1]}`, makes a row per line,
+  with its page group's fields on each row. That is the flat sheet people
+  filter and pivot. A page group without lines has no row.
+- **Page group**: one file per page group, named like other documents,
+  with `d` as for HTML and Word templates (`d.pg`, `d.pgs`, `d.splf`).
+
+For a file of the whole spooled file, the starter template has a sheet
+per table, record or group:
+
+| Row | What it holds |
+|-----|---------------|
+| 1 | A total of each number column of the table, `=SUBTOTAL(9,W3:W1048576)`, which stays right when rows are added, sorted or filtered. |
+| 2 | The header row: frozen, filtered, and repeated on each printed page. |
+| 3 | `{d.pgs[i].invoiceNo}` ... `{d.pgs[i].lines[i].amount:formatN}`: the page group's fields, then the table's columns. |
+| 4 | `{d.pgs[i+1].lines[i+1]}`, the end of the loop. |
+
+For one page group, it has the title and the fields, then the first
+table with a total under each number column. Each other table is on a
+sheet of its own.
+
+### Tags in Excel
+
+- **Numbers**: write every number as `{d.pgs[i].lines[i].amount:formatN}`,
+  and give the cell a number format, such as `#,##0.00`. Without
+  `:formatN` the cell is text and SUM gives 0. The cell's format decides
+  the decimals: `:formatN(2)` writes the same number.
+- **Dates**: write a date as
+  `{d.pgs[i].invoiceDate:formatD(X):div(86400):add(25569):formatN}`, and
+  give the cell a date format, such as `dd.mm.yyyy`. This makes a real
+  date cell. Without the formula, the date is the text `2026-10-15`.
+- **Totals under a loop**: `=SUM(INDIRECT("D5:D"&ROW()-1))`, where 5 is
+  the loop's row. A plain `=SUM(D5:D6)` is not moved when rows are added,
+  so it gives a wrong total.
+- **No merged cells in or below a loop.** Carbone does not move merged
+  cells with the rows it adds. A merge above the loop is fine.
+- **Filters, data validation and conditional formatting** stay on the
+  template's rows; they do not grow with the loop. Put them on whole
+  columns, such as `A:G`.
+- **Pictures**, such as a logo, are inserted in Excel, above any loop.
+  `{asset('name')}` is for HTML templates only.
+- One sheet per document does not work. A block per page group in one
+  sheet does: a loop over `d.pgs`.
+
+The formulas are worked out before the file is delivered, so a preview or
+a mail viewer shows the totals. To do that, Carbone has LibreOffice save
+the XLSX when the template has formulas or numbers.
+
+### The check of an Excel template
+
+Before each render, Spooldoc checks the tags in every cell, as for HTML
+and Word, and these rules:
+
+- a number field alone in a cell without `:formatN`;
+- `:formatN` straight on a date field, which writes a number cell with no
+  number in it;
+- merged cells in or below a loop row;
+- `d.pg` in a template that holds the whole spooled file, with the
+  `d.pgs[i]` tag to use instead;
+- `{asset('name')}`.
+
+### The PDF
+
+The PDF of an Excel template is made by LibreOffice and follows each
+sheet's page setup in Excel, on the Page Layout tab:
+
+- **Size**: A4.
+- **Orientation**: landscape for wide sheets.
+- **Scale to Fit**: Width 1 page, Height Automatic, so every column is on
+  the page.
+- **Print Titles**: the header row in Rows to repeat at top.
+- **Header & Footer**: Page 1 of ? for page numbers.
+
+The starter template has all of these. A sheet without a page setup
+prints on US Letter portrait, and its columns can be cut off; the
+Template tab says which sheets have none. Every sheet is printed, one
+after the other. Many columns on one page make small text: keep the
+columns a printed copy needs, or use the PDF of a page group instead.
+
 ## Logos, images and fonts
 
-This section is about HTML templates. In a Word template, insert the
-picture in Word (see [Word templates](#word-templates)).
+This section is about HTML templates. In a Word or Excel template, insert
+the picture in Word or Excel (see [Word templates](#word-templates)).
 
 Templates cannot fetch anything, so an `<img src="https://...">` may stay
 empty. Upload the file on the Assets page instead and print it with
@@ -234,7 +350,8 @@ its image; the `full-...-fonts` image in the Compose file has a wide set.
 ## PDF layout
 
 A Word template's PDF has the page size, margins, headers and footers set
-in Word. The rest of this section is about HTML templates.
+in Word, and an Excel template's follows each sheet's page setup (see
+[The PDF](#the-pdf)). The rest of this section is about HTML templates.
 
 PDFs are printed on A4 by Carbone's Chromium converter: portrait, or
 landscape when the spooled file is wider than 160 columns. A template's
@@ -258,13 +375,18 @@ the PDF only: Spooldoc hides them in HTML output.
 
 Each document becomes a file in each of its template's formats, named
 after the definition's `output.name`, such as `invoice-260102.pdf`,
-`invoice-260102.html` or `invoice-260102.docx`, or after the spooled file
-and a number when there is no name. The files of every template but the
-first add the template's name: `invoice-260102-lines.pdf` for a template
-named Lines. See [Destinations](destinations.md).
+`invoice-260102.html`, `invoice-260102.docx` or `invoice-260102.xlsx`,
+or after the spooled file and a number when there is no name. A file of
+the whole spooled file, from an Excel template, is named after the
+spooled file: `spdinvoice.xlsx`. The files of every template but the
+first add the template's name: `invoice-260102-lines.pdf` or
+`spdinvoice-lines.xlsx` for a template named Lines. See
+[Destinations](destinations.md).
 
 A template with problems fails the run, and the error names the template
 and the lines: `The "Lines" template has 1 problem. Line 12: ...`, or for
-a Word template the parts: `... has 1 problem. Body: ...`. A Word
-template whose file is gone fails the run and says to upload it again.
-An error from Carbone names the template and the page group.
+a Word template the parts: `... has 1 problem. Body: ...`, and for an
+Excel template the sheet and cell: `... has 1 problem. Lines!A3: ...`. A
+Word or Excel template whose file is gone fails the run and says to upload
+it again. An error from Carbone names the template and the page group, or
+the spooled file for a file of the whole spooled file.

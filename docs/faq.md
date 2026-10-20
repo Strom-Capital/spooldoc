@@ -34,8 +34,8 @@ keeping them apart makes both easier:
 - **One spooled file, many documents.** Six invoices printed back to back
   are six page groups, split on the invoice number: six JSON objects and
   six documents.
-- **Same JSON for every template.** PDF and HTML today, DOCX and XLSX
-  later, and destinations such as webhooks can carry the JSON itself.
+- **Same JSON for every template.** PDF, HTML, DOCX and XLSX today, and
+  destinations such as webhooks can carry the JSON itself.
 
 See [Definitions](definitions.md) for the YAML that does the reading and
 [Templates](templates.md) for the HTML that does the layout.
@@ -122,8 +122,8 @@ server to render documents. See [Contributing](contributing.md).
 
 ## What is coming?
 
-SFTP, S3, IFS, email and webhook destinations, more users and roles, and
-DOCX and XLSX output. See the roadmap in the [README](../README.md#status).
+SFTP, S3, IFS, email and webhook destinations, and more users and roles.
+See the roadmap in the [README](../README.md#status).
 
 ## Where do I ask a question?
 

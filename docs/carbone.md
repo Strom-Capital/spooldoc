@@ -5,7 +5,7 @@ description: "The Carbone server that renders every document: running it with Co
 
 Spooldoc renders every document with [Carbone](https://carbone.io): HTML
 and PDF from an HTML [template](templates.md), DOCX and PDF from a Word
-template. Carbone runs as your own
+template, XLSX and PDF from an Excel template. Carbone runs as your own
 service, or you use Carbone Cloud. Spooldoc only calls it over HTTP; it
 never bundles or hosts Carbone. Without a working Carbone server there is
 nothing to render, so the job builder and the setup checklist on Home say
@@ -64,7 +64,7 @@ to be rendered, and each document counts toward your Carbone plan. See
 Carbone's Community Edition is free to run on-prem and renders everything
 the [starter template](templates.md) and the template docs use: tags,
 loops, conditions, `formatN`, `formatD` and the other formatters, `:set`,
-PDF headers and footers, and Word templates. Carbone's team said running it as a service
+PDF headers and footers, and Word and Excel templates. Carbone's team said running it as a service
 that Spooldoc calls appears consistent with the Carbone Community License.
 
 A licence for Carbone Enterprise adds, among others:
@@ -78,6 +78,7 @@ A licence for Carbone Enterprise adds, among others:
 | Colors from the data | `{d.pg.status:color(row, background)}` |
 | Charts | `<img src="{d.pg.chart:chart}">` |
 | Pictures from the data in a Word template | A logo per customer. On Community, Carbone keeps the template's picture without an error. |
+| Aggregators and links from the data in an Excel template | `{d.pgs[].lines[].amount:aggSum}` as a number cell. On Community, total with a formula instead (see [Excel templates](templates.md#tags-in-excel)). |
 
 Carbone Cloud has the Enterprise features.
 
@@ -106,12 +107,24 @@ Carbone makes a PDF with one of its converters. Spooldoc picks it:
 | HTML | Chromium |
 | Word | Carbone's own converter (ICE), the fastest |
 | Word with cross-references (PAGEREF or REF fields) | LibreOffice, which works them out |
+| Excel | LibreOffice, which follows each sheet's page setup and prints every sheet |
 
-The `full` images have all three. A DOCX file is the Word template as
-Carbone filled it in, with no converter. Spooldoc asks for it with
-`hardRefresh` off: otherwise Carbone Enterprise passes a file with page
-fields through LibreOffice, which rewrites its layout. Word fills in the
-page fields when it opens the file.
+The `full` images have all three. Carbone's API has no page size or fit
+to page option for a spreadsheet, so an Excel template's PDF is laid out
+by the sheet's own page setup (see [The PDF](templates.md#the-pdf)).
+
+A DOCX file is the Word template as Carbone filled it in, with no
+converter. Spooldoc asks for it with `hardRefresh` off: otherwise Carbone
+Enterprise passes a file with page fields through LibreOffice, which
+rewrites its layout. Word fills in the page fields when it opens the
+file.
+
+An XLSX file is passed through LibreOffice (`hardRefresh` on) when the
+template has formulas or numbers written with `:formatN`. LibreOffice
+works out the formulas and stores their values, so a preview or a mail
+viewer shows the totals, and it writes an empty number as an empty cell.
+It takes about 40 ms more. A template without either gets the file as
+Carbone filled it in.
 
 ## When Carbone stops working
 

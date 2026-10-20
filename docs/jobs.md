@@ -33,7 +33,7 @@ has changes.
 | Source | The server, the output queue, and filters on spooled file name, user data, job name, job user and form type. Each filter is a "contains" match; empty means any file on the queue. |
 | Trigger | On demand, or Watching the queue, and whether held files count. See [Running on demand](#running-on-demand) and [Watching a queue](#watching-a-queue). |
 | Extract | The [definition](definitions.md): the YAML that turns pages into JSON. |
-| Render | The [templates](templates.md): each has a name, HTML or a Word file, and the formats it makes. The starter template renders every field and table of the definition until you write your own. See [Templates](#templates). |
+| Render | The [templates](templates.md): each has a name, HTML or a Word or Excel file, and the formats it makes. The starter template renders every field and table of the definition until you write your own. See [Templates](#templates). |
 | Destination | Where the files go. See [Destinations](destinations.md). |
 | Finish | What happens to the spooled file after every document was delivered. |
 
@@ -42,7 +42,9 @@ has changes.
 The extract and render steps open the workbench: the sample's pages with
 the field hits highlighted, the definition, the extracted JSON, the
 template and the rendered document of one page group: the HTML of an
-HTML template, or the PDF of a Word template. Pick a spooled file on
+HTML template, or the PDF of a Word or Excel template. An Excel template
+that holds the whole spooled file shows the PDF of every page group at
+once. Pick a spooled file on
 the queue as the preview sample; Spooldoc saves a copy in the database,
 and the workbench shows that copy, marked "saved copy", also after the
 file leaves the queue. Pick another file to save a new copy. Only drafts have a preview sample, and samples no job uses are deleted
@@ -73,21 +75,28 @@ example an invoice as a PDF and its lines as a separate HTML page.
 
 On the render step the path ends at the template that the editor and
 the preview show, such as "Document". The menu next to it has the files
-the template makes, Make it a Word template (or an HTML template),
-Rename, Remove and Add template. An HTML template makes PDF and HTML
-files; a [Word template](templates.md#word-templates) makes PDF and DOCX
-files, and the menu says so under each kind. Switching the kind starts
-the template from the other kind's starter, and asks first when it has
-HTML or a Word file of its own; saved versions keep theirs. A format the
-other kind does not make is turned off, and the switch says so: an HTML
-template that makes PDF and HTML files makes only PDFs as a Word
-template. The last template cannot be removed. The
+the template makes, a Make it item for each other kind (HTML, Word or
+Excel template), Rename, Remove and Add template. An HTML template makes
+PDF and HTML files; a [Word template](templates.md#word-templates) makes
+PDF and DOCX files; an [Excel template](templates.md#excel-templates)
+makes XLSX and PDF files, and the menu says so under each kind. Switching
+the kind starts the template from the other kind's starter, and asks
+first when it has HTML or a file of its own; saved versions keep theirs.
+A format the other kind does not make is turned off, and the switch says
+so: an HTML template that makes PDF and HTML files makes only PDFs as a
+Word template.
+
+An Excel template's menu also has Each file holds: Whole spooled file
+(the default), one file per spooled file with a row per line, or Page
+group, one file per page group. See
+[What each file holds](templates.md#what-each-file-holds). The last template cannot be removed. The
 pipeline shows one template as its kind and formats, and several as
 "2 templates" with each name and its formats.
 
 The first template's files are named after the document, as in
-`invoice-260101.pdf`. Every other template adds its name, so a Lines
-template gives `invoice-260101-lines.html`. Two templates cannot have the
+`invoice-260101.pdf`, or after the spooled file for an Excel template of
+the whole spooled file, as in `spdinvoice.xlsx`. Every other template adds
+its name, so a Lines template gives `invoice-260101-lines.html`. Two templates cannot have the
 same name.
 
 ## Versions
