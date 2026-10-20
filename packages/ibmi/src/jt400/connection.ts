@@ -18,7 +18,15 @@ import {
 } from "../connection.js";
 import { toConnectionError } from "../errors.js";
 import { javaBytes, LOGIN_TIMEOUT_SECONDS, loadJava, openJdbc, plain, readAllSync, type JavaObject, type Jt400Db } from "./bridge.js";
-import { mapQueueRow, mapSpooledFileRow, outputQueuesQuery, spooledFilesQuery, type Row } from "./sql.js";
+import {
+  mapQueueFileCountRow,
+  mapQueueRow,
+  mapSpooledFileRow,
+  outputQueuesQuery,
+  queueFileCountsQuery,
+  spooledFilesQuery,
+  type Row,
+} from "./sql.js";
 
 type AttrKind = "int" | "float" | "string";
 const GETTERS: Record<AttrKind, string> = {
@@ -196,6 +204,10 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
     async listSpooledFiles(queue, filter) {
       const { sql, params } = spooledFilesQuery(queue, filter);
       return (await query(sql, params)).map((row) => mapSpooledFileRow(row, queue));
+    },
+    async countSpooledFiles(filter) {
+      const { sql, params } = queueFileCountsQuery(filter);
+      return (await query(sql, params)).map(mapQueueFileCountRow);
     },
     readSpooledFile,
     // CPF3337: the file is held already, which is what was asked for.

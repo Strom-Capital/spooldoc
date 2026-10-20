@@ -182,6 +182,7 @@ function tracked(key: string, creds: Credentials, first: Entry): Connection {
     describe: (): Promise<SystemInfo> => read((conn) => conn.describe()),
     listOutputQueues: (filter) => read((conn) => conn.listOutputQueues(filter)),
     listSpooledFiles: (queue, filter) => read((conn) => conn.listSpooledFiles(queue, filter)),
+    countSpooledFiles: (filter) => read((conn) => conn.countSpooledFiles(filter)),
     readSpooledFile: (id) => read((conn) => conn.readSpooledFile(id)),
     readDataQueue: (dtaq, wait) => read((conn) => conn.readDataQueue(dtaq, wait)),
     holdSpooledFile: (id) => write((conn) => conn.holdSpooledFile(id), `${splfName(id)} was held`),

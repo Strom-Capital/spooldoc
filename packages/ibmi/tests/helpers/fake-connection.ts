@@ -5,6 +5,7 @@ import {
   type CommandResult,
   type Connection,
   type OutputQueue,
+  type QueueFileCount,
   type SpooledFileEntry,
   type SystemInfo,
 } from "../../src/index.js";
@@ -69,6 +70,19 @@ export class FakeConnection implements Connection {
       .filter((s) => !filter.name || s.splf.name.includes(filter.name.toUpperCase()))
       .map((s) => ({ ...s.splf, status: "HELD", attributes: { ...s.attributes, chrid: null, jobCcsid: null } }))
       .slice(0, filter.limit ?? 200);
+  }
+
+  async countSpooledFiles(filter: { status: string[] }): Promise<QueueFileCount[]> {
+    this.calls.push("countSpooledFiles");
+    // Every fixture file is HELD, as in listSpooledFiles.
+    const counts = new Map<string, QueueFileCount>();
+    for (const s of filter.status.includes("HELD") ? this.samples : []) {
+      const { library, name } = s.attributes.queue;
+      const count = counts.get(`${library}/${name}`) ?? { library, name, status: "HELD", files: 0 };
+      count.files++;
+      counts.set(`${library}/${name}`, count);
+    }
+    return [...counts.values()];
   }
 
   async readSpooledFile(id: SpooledFileId): Promise<{ bytes: Uint8Array; attributes: SpooledFileAttributes }> {

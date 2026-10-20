@@ -4,8 +4,20 @@ description: "The output queues of a server and the spooled files on them."
 ---
 
 The Queues page shows the output queues of one server: library, name,
-description and the number of files, as `WRKOUTQ` would. Pick the server at
-the top.
+description and how many spooled files each holds. With more than one
+server, pick the server at the start of the search row.
+
+Three columns count the files:
+
+| Column | Counts |
+|--------|--------|
+| Ready | Files with the status READY. Every [job](jobs.md) on the queue picks these up. |
+| Held | Files with the status HELD. A job picks these up when it takes held files too. |
+| Total | Every spooled file on the queue, as `WRKOUTQ` counts them. Besides ready and held files, this includes saved and open files and files a printer is working on. |
+
+Ready and held are counted after the list loads, because counting reads
+every spooled file on the system. When counting fails, the page says why
+and the two columns show a dash; the rest of the page still works.
 
 ## Finding a queue
 
@@ -16,8 +28,9 @@ the top.
   from the toast.
 - **New job** starts a [job](jobs.md) with this queue as its source.
 
-A server with libraries set lists only the queues of those libraries. See
-[Servers](servers.md).
+A server with libraries set lists only the queues of those libraries. With
+one library, the page leaves out the Library column and searches queue
+names. See [Servers](servers.md).
 
 ## The files of a queue
 

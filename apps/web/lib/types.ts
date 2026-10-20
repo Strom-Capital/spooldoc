@@ -44,6 +44,14 @@ export interface QueueView {
   dataQueue: { library: string; name: string } | null;
 }
 
+/** The files a job can pick up from an output queue: ready ones, and held ones when it takes them. */
+export interface QueueCountView {
+  library: string;
+  name: string;
+  ready: number;
+  held: number;
+}
+
 /** Spooled files a queue listing shows at first and per Load more, and the most one listing shows. */
 export const SPOOLED_FILE_LIST = { page: 200, max: 5000 } as const;
 

@@ -149,6 +149,7 @@ function recorded(conn: Connection, server: ServerRow, password: string): Connec
     describe: () => note(conn.describe()),
     listOutputQueues: (filter) => note(conn.listOutputQueues(filter)),
     listSpooledFiles: (queue, filter) => note(conn.listSpooledFiles(queue, filter)),
+    countSpooledFiles: (filter) => note(conn.countSpooledFiles(filter)),
     readSpooledFile: (id) => note(conn.readSpooledFile(id)),
     holdSpooledFile: (id) => note(conn.holdSpooledFile(id)),
     moveSpooledFile: (id, queue) => note(conn.moveSpooledFile(id, queue)),

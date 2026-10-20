@@ -17,6 +17,14 @@ export interface OutputQueue {
   dataQueue: QueueRef | null;
 }
 
+/** How many spooled files with one status an output queue holds. */
+export interface QueueFileCount {
+  library: string;
+  name: string;
+  status: string;
+  files: number;
+}
+
 /** A spooled file in a queue listing. `attributes.chrid` is null until the file is read. */
 export interface SpooledFileEntry extends SpooledFileId {
   attributes: SpooledFileAttributes;
@@ -56,6 +64,14 @@ export interface SpooledFileFilter {
   limit?: number;
 }
 
+/** Filter for `countSpooledFiles`. */
+export interface QueueFileCountFilter {
+  /** Only these statuses, such as `READY` and `HELD`. */
+  status: string[];
+  /** Only queues in these libraries (exact names). Empty or missing means every library. */
+  libraries?: string[];
+}
+
 /** A queue by library and name. */
 export interface QueueRef {
   library: string;
@@ -76,6 +92,8 @@ export interface Connection {
   describe(): Promise<SystemInfo>;
   listOutputQueues(filter?: OutputQueueFilter): Promise<OutputQueue[]>;
   listSpooledFiles(queue: QueueRef, filter?: SpooledFileFilter): Promise<SpooledFileEntry[]>;
+  /** The spooled files of each queue, counted by status. Queues with none are left out. */
+  countSpooledFiles(filter: QueueFileCountFilter): Promise<QueueFileCount[]>;
   readSpooledFile(id: SpooledFileId): Promise<{ bytes: Uint8Array; attributes: SpooledFileAttributes }>;
   /** Hold the spooled file (`HLDSPLF OPTION(*IMMED)`). */
   holdSpooledFile(id: SpooledFileId): Promise<void>;

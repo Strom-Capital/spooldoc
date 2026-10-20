@@ -1,7 +1,7 @@
 import { ConnectionError } from '@spooldoc/ibmi';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { samples, servers } from '@/lib/server/db/schema';
-import type { QueueView, SpooledFileView } from '@/lib/types';
+import type { QueueCountView, QueueView, SpooledFileView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
 import { FakeConnection, GOOD_PASSWORD, loadSample } from './helpers/fake-connection';
@@ -12,6 +12,7 @@ vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fa
 
 const queuesRoute = await import('@/app/api/servers/[id]/queues/route');
 const prefsRoute = await import('@/app/api/servers/[id]/queue-prefs/route');
+const countsRoute = await import('@/app/api/servers/[id]/queue-counts/route');
 const filesRoute = await import('@/app/api/servers/[id]/queues/[lib]/[name]/files/route');
 const viewRoute = await import('@/app/api/servers/[id]/queues/[lib]/[name]/files/view/route');
 const realtimeRoute = await import('@/app/api/servers/[id]/queues/[lib]/[name]/realtime/route');
@@ -64,6 +65,26 @@ describe('queues', () => {
     expect((await list()).queues).toEqual([]);
     const call = conn.calls.find((c) => c.method === 'listOutputQueues');
     expect(call?.args[0]).toMatchObject({ libraries: ['NOSUCHLIB'] });
+  });
+
+  it('counts the ready and held files of each queue in the server\'s libraries', async () => {
+    const counts = async () =>
+      (
+        (await (await countsRoute.GET(appRequest(`/api/servers/${serverId}/queue-counts`, { headers: auth }), params({ id: serverId }))).json()) as {
+          counts: QueueCountView[];
+        }
+      ).counts;
+    const s = sample.splf;
+    conn.status.set(`${s.name}/${s.number}/${s.jobNumber}/${s.jobUser}/${s.jobName}`, 'READY');
+    const before = (await counts()).find((c) => c.library === library && c.name === queue);
+    const onQueue = conn.samples.filter((x) => x.attributes.queue.library === library && x.attributes.queue.name === queue).length;
+    expect(before).toEqual({ library, name: queue, ready: 1, held: onQueue - 1 });
+
+    // Saved and other statuses are not asked for.
+    expect(conn.calls.find((c) => c.method === 'countSpooledFiles')?.args[0]).toMatchObject({ status: ['READY', 'HELD'] });
+
+    await db().update(servers).set({ libraries: ['NOSUCHLIB'] });
+    expect(await counts()).toEqual([]);
   });
 
   it('lists the spooled files of a queue with a status filter', async () => {
