@@ -21,9 +21,9 @@ and the two columns show a dash; the rest of the page still works.
 
 The Jobs column counts the [jobs](jobs.md) that read from the queue: the
 source of each job's active version, or of its draft when it has none.
-Hover over or tap the count to list them, each with a link to the job and
-its state: Watching, Paused, On demand or Draft only. On a hidden queue,
-the list notes that its jobs still run.
+Hover over the count, or click, tap or press Enter on it, to list them,
+each with a link to the job and its state: Watching, Paused, On demand or
+Draft only. On a hidden queue, the list notes that its jobs still run.
 
 ## Finding a queue
 

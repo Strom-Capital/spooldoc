@@ -15,16 +15,16 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { toast } from 'sonner';
 import { ErrorNote, Page } from '@/components/page';
 import { ServerSelect } from '@/components/server-select';
 import { ServerErrorNote, ServerStatus } from '@/components/server-status';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SkeletonRows } from '@/components/skeleton-rows';
 import { EmptyState, TableEmpty } from '@/components/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -507,32 +507,84 @@ function CountCell({ column, value, failed }: { column: CountKey; value: number 
 }
 
 /**
- * How many jobs read from a queue. Hovering, focusing or tapping the count lists them, each
- * linked to its job with its state.
+ * How many jobs read from a queue. Hovering the count, or clicking, tapping or pressing
+ * Enter on it, lists them, each linked to its job with its state.
  */
 function JobsCell({ queue }: { queue: QueueView }) {
   const [open, setOpen] = useState(false);
+  // How the list opened: from hover it leaves focus where it is and closes when the pointer leaves.
+  const openedBy = useRef<'hover' | 'press'>('press');
+  const openTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const closeTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(
+    () => () => {
+      clearTimeout(openTimer.current);
+      clearTimeout(closeTimer.current);
+    },
+    [],
+  );
+
   const count = queue.jobs.length;
   if (count === 0) {
     return <td className="tabular px-3 py-2 text-right text-muted-foreground">0</td>;
   }
   const watching = queue.jobs.some((job) => job.mode === 'watch' && !job.paused && job.activeVersion !== null);
+
+  function changeOpen(next: boolean) {
+    clearTimeout(openTimer.current);
+    clearTimeout(closeTimer.current);
+    if (next) openedBy.current = 'press';
+    setOpen(next);
+  }
+  function hoverIn(event: PointerEvent) {
+    if (event.pointerType !== 'mouse') return;
+    clearTimeout(closeTimer.current);
+    if (open) return;
+    clearTimeout(openTimer.current);
+    openTimer.current = setTimeout(() => {
+      openedBy.current = 'hover';
+      setOpen(true);
+    }, 200);
+  }
+  function hoverOut(event: PointerEvent) {
+    if (event.pointerType !== 'mouse') return;
+    clearTimeout(openTimer.current);
+    if (!open || openedBy.current !== 'hover') return;
+    clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setOpen(false), 150);
+  }
+
   return (
     <td className="tabular px-3 py-2 text-right">
-      <HoverCard open={open} onOpenChange={setOpen} openDelay={200} closeDelay={100}>
-        <HoverCardTrigger asChild>
-          {/* Touch has no hover, so a tap opens and closes the list. */}
+      <Popover open={open} onOpenChange={changeOpen}>
+        <PopoverTrigger asChild>
           <button
             type="button"
-            onClick={() => setOpen((current) => !current)}
+            onPointerEnter={hoverIn}
+            onPointerLeave={hoverOut}
+            onClick={(event) => {
+              // A click on a list hover opened keeps it open, as if the click had opened it.
+              if (open && openedBy.current === 'hover') {
+                event.preventDefault();
+                clearTimeout(closeTimer.current);
+                openedBy.current = 'press';
+              }
+            }}
             aria-label={`${count} ${count === 1 ? 'job reads' : 'jobs read'} from ${queueKey(queue)}`}
-            aria-expanded={open}
             className="rounded-sm underline decoration-dotted underline-offset-4 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
           >
             {count}
           </button>
-        </HoverCardTrigger>
-        <HoverCardContent align="end" className="w-72 text-left">
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          className="gap-0 text-left"
+          onPointerEnter={hoverIn}
+          onPointerLeave={hoverOut}
+          onOpenAutoFocus={(event) => {
+            if (openedBy.current === 'hover') event.preventDefault();
+          }}
+        >
           <div className="mb-1.5 font-medium text-muted-foreground text-xs">Jobs that read from this queue</div>
           <ul className="space-y-1">
             {queue.jobs.map((job) => (
@@ -545,8 +597,8 @@ function JobsCell({ queue }: { queue: QueueView }) {
             ))}
           </ul>
           {queue.hidden && watching && <p className="mt-2 border-t pt-2 text-muted-foreground text-xs">{"Hidden. Its jobs still run; new jobs can't pick it."}</p>}
-        </HoverCardContent>
-      </HoverCard>
+        </PopoverContent>
+      </Popover>
     </td>
   );
 }
