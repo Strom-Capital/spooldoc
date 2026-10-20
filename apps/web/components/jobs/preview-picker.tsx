@@ -4,6 +4,7 @@ import { ChevronsUpDownIcon, FileTextIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Loading } from '@/components/empty-state';
 import { ServerErrorNote } from '@/components/server-status';
+import { SpooledFileStatus } from '@/components/spooled-file-status';
 import { Button } from '@/components/ui/button';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -176,9 +177,9 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
                     onSelect={() => void pick(file)}
                     className="flex-col items-start gap-0"
                   >
-                    <span className="font-mono text-xs">
+                    <span className="flex items-center gap-2 font-mono text-xs">
                       {file.name} #{file.number}
-                      <span className="text-muted-foreground"> {file.status}</span>
+                      <SpooledFileStatus status={file.status} className="font-sans" />
                     </span>
                     <span className="text-muted-foreground text-xs">
                       {file.attributes.created.replace('T', ' ')}, {file.attributes.pages} p
