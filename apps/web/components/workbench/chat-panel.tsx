@@ -2,7 +2,7 @@
 
 import { useChat } from '@ai-sdk/react';
 import { DefaultChatTransport, isToolUIPart, type UIMessage } from 'ai';
-import { EyeOffIcon, EyeIcon, MessageSquarePlusIcon } from 'lucide-react';
+import { MessageSquarePlusIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
@@ -13,13 +13,11 @@ import {
   PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
-  PromptInputTools,
 } from '@/components/ai-elements/prompt-input';
 import { Reasoning, ReasoningContent, ReasoningTrigger } from '@/components/ai-elements/reasoning';
 import { Shimmer } from '@/components/ai-elements/shimmer';
 import { Suggestion } from '@/components/ai-elements/suggestion';
 import { useAppInfo } from '@/components/app-info';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { api, errorText, isAbort } from '@/lib/client/api';
@@ -29,10 +27,10 @@ import { useWorkbenchSync } from './use-workbench-sync';
 import { useWorkbench } from './workbench-provider';
 
 const SUGGESTIONS = [
-  'Generate a definition and a template from this spooled file',
-  'This spooled file prints many documents, split it into page groups',
-  'The first page is a parameter page, skip it',
-  'Make the template match the printed layout',
+  'Propose a definition and a template for this spooled file',
+  'Make one document per invoice, not one for the whole spooled file',
+  'Skip the first page, it only prints the run parameters',
+  'Make the document look like the printed page',
 ];
 
 /**
@@ -49,7 +47,7 @@ export function ChatPanel({ header }: { header?: ReactNode }) {
   return (
     <section className="flex h-full min-h-0 flex-col" aria-label="Agent">
       {session.model ? (
-        <ChatConversation modelId={session.model.id} header={header} />
+        <ChatConversation header={header} />
       ) : (
         <>
           <PanelHeader header={header} />
@@ -66,31 +64,18 @@ export function ChatPanel({ header }: { header?: ReactNode }) {
   );
 }
 
-/** The pane header: the given controls, the masking badge and any extra controls. */
+/** The pane header: the given controls, then any extra controls on the right. */
 function PanelHeader({ header, children }: { header?: ReactNode; children?: ReactNode }) {
-  const session = useAppInfo();
   return (
     <div className="flex h-10 shrink-0 items-center gap-2 border-b px-2 text-sm">
       {header ?? <span className="font-medium">Agent</span>}
-      <Badge
-        variant="secondary"
-        className="ml-auto gap-1 font-normal"
-        title={
-          session.masking
-            ? 'Digits and letters of values are masked before page text goes to the model. Change it under Settings, Agent.'
-            : 'Page text goes to the model as printed. Mask values under Settings, Agent.'
-        }
-      >
-        {session.masking ? <EyeOffIcon /> : <EyeIcon />}
-        {session.masking ? 'Values masked' : 'Values sent in clear'}
-      </Badge>
-      {children}
+      <div className="ml-auto flex items-center gap-2">{children}</div>
     </div>
   );
 }
 
 /** Load the job's stored thread, then show the conversation with it. */
-function ChatConversation({ modelId, header }: { modelId: string; header?: ReactNode }) {
+function ChatConversation({ header }: { header?: ReactNode }) {
   const { jobId } = useWorkbench();
   const [stored, setStored] = useState<{ messages: UIMessage[]; notice: string | null } | null>(null);
 
@@ -115,18 +100,16 @@ function ChatConversation({ modelId, header }: { modelId: string; header?: React
       </>
     );
   }
-  return <ChatThread modelId={modelId} jobId={jobId} header={header} initial={stored.messages} initialNotice={stored.notice} />;
+  return <ChatThread jobId={jobId} header={header} initial={stored.messages} initialNotice={stored.notice} />;
 }
 
 /** The conversation, starting from the stored thread. */
 function ChatThread({
-  modelId,
   jobId,
   header,
   initial,
   initialNotice,
 }: {
-  modelId: string;
   jobId: string;
   header?: ReactNode;
   initial: UIMessage[];
@@ -185,8 +168,8 @@ function ChatThread({
             {messages.length === 0 && (
               <div className="flex flex-col gap-3 pt-2">
                 <p className="text-muted-foreground text-sm">
-                  Ask the model to propose a definition and a template. It writes them to the job&apos;s draft, reads
-                  the extraction report and fixes what is missing.
+                  Ask the agent to propose a definition and a template for the selected spooled file. It writes them
+                  to the job&apos;s draft, checks what it extracted and fixes what is missing.
                 </p>
                 <div className="flex flex-col items-start gap-2">
                   {SUGGESTIONS.map((suggestion) => (
@@ -257,12 +240,11 @@ function ChatThread({
               <PromptInputTextarea
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder="Describe the document or ask for a change"
+                placeholder="Ask for a definition, a template or a change"
                 aria-label="Message"
               />
             </PromptInputBody>
-            <PromptInputFooter>
-              <PromptInputTools className="min-w-0 truncate text-muted-foreground text-xs">{modelId}</PromptInputTools>
+            <PromptInputFooter className="justify-end">
               <PromptInputSubmit status={status} onStop={() => void stop()} disabled={!busy && !draft.trim()} />
             </PromptInputFooter>
           </PromptInput>

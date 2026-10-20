@@ -13,7 +13,7 @@ set, the job builder works as before and the agent points to Settings.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/ai-assistant-dark.png">
-    <img src="assets/ai-assistant-light.png" alt="The agent panel beside the workbench, with suggested prompts, the Values masked badge and the model name under the message box" width="900">
+    <img src="assets/ai-assistant-light.png" alt="The agent panel beside the workbench, with suggested prompts and the message box" width="900">
   </picture>
 </p>
 
@@ -166,8 +166,7 @@ under Settings, Agent.
 With masking on, before page text or a tool result goes to the model,
 digits become `9` and letters `X` or `x`, while labels that repeat across
 pages, positions and lengths stay as printed. The model sees the layout,
-not the customer, and does less well with values it cannot read. The agent
-panel shows "Values masked" or "Values sent in clear". What the model
+not the customer, and does less well with values it cannot read. What the model
 writes, and the job builder itself, always use the real values.
 
 Masking is off on a new install. An install set up before masking was a
