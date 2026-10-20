@@ -15,7 +15,10 @@ The job builder shows the pipeline as six steps, and each step opens an
 inspector. Click a step to open it, or use Next and Back to go through them
 in order. Next sits at the end of each form, and in the bar above the page
 on Extract and Render. On Finish, Save version takes its place while the
-draft has changes that are not in the active version. The draft saves as
+draft has changes that are not in the active version. Next turns primary
+when its step is ready, and Run now turns primary when every step is
+ready. Only one of them is primary at a time, and Save version on Finish
+looks as Next would. The draft saves as
 you type, so moving between steps loses nothing. Hide pipeline under the
 steps makes more room, and Show pipeline brings them back.
 
@@ -86,9 +89,10 @@ PDF and DOCX files; an [Excel template](templates.md#excel-templates)
 makes XLSX and PDF files, and the menu says so under each kind. Switching
 the kind starts the template from the other kind's starter, and asks
 first when it has HTML or a file of its own; saved versions keep theirs.
-A format the other kind does not make is turned off, and the switch says
-so: an HTML template that makes PDF and HTML files makes only PDFs as a
-Word template.
+It then makes the files a new template of that kind makes: PDF for an
+HTML template, DOCX for a Word template and XLSX for an Excel template. The switch says which files
+it stops making: an HTML template that makes PDFs makes XLSX files as an
+Excel template, and you can turn PDF back on in the menu.
 
 An Excel template's menu also has Each file holds: Whole spooled file
 (the default), one file per spooled file with a row per line, or Page

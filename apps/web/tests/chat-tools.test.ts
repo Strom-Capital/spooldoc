@@ -472,7 +472,7 @@ describe('Word templates by the agent', () => {
     expect(result).toMatchObject({ ok: true, template: 'Template 1', templateId: 'template-1', errors: [], view: null, pages: null, file: { name: 'invoice.docx' } });
     expect(result.textPreview).toContain('Invoice {d.pg.invoiceNo}');
     // The HTML starter template became a Word one.
-    expect(store.templates[0]).toMatchObject({ kind: 'docx', fileId: result.file.id, formats: ['pdf'] });
+    expect(store.templates[0]).toMatchObject({ kind: 'docx', fileId: result.file.id, formats: ['docx'] });
     const saved = store.files.get(result.file.id)!;
     expect(saved.previousId).toBeNull();
     expect(readDocx(saved.content).fields).toEqual(['PAGE']);
@@ -707,7 +707,7 @@ describe('Excel templates by the agent', () => {
     expect(result.textPreview).toContain('Lines!A2: "{d.pgs[i].invoiceNo}"');
     expect(result.textPreview).toContain('Lines!D1: (no value) (formula =SUM(1,2))');
     // The HTML starter template became an Excel one of the whole spooled file.
-    expect(store.templates[0]).toMatchObject({ kind: 'xlsx', fileId: result.file.id, scope: 'splf', formats: ['pdf'] });
+    expect(store.templates[0]).toMatchObject({ kind: 'xlsx', fileId: result.file.id, scope: 'splf', formats: ['xlsx'] });
     const saved = store.files.get(result.file.id)!;
     expect(saved.previousId).toBeNull();
     expect(readXlsx(saved.content).sheets.map((s) => s.name)).toEqual(['Lines']);
@@ -831,7 +831,7 @@ describe('Excel templates by the agent', () => {
     store.templates = [{ id: 'main', name: 'Document', kind: 'docx', fileId: null, formats: ['pdf'] }];
     const perGroup = { sheets: [{ name: 'Invoice', cells: [{ ref: 'A1', value: '{d.pg.invoiceNo}' }] }] };
     expect(await call(agent().write_excel_template, { design: perGroup, scope: 'pageGroup' })).toMatchObject({ ok: true, errors: [] });
-    expect(store.templates[0]).toMatchObject({ kind: 'xlsx', scope: 'pageGroup', formats: ['pdf'] });
+    expect(store.templates[0]).toMatchObject({ kind: 'xlsx', scope: 'pageGroup', formats: ['xlsx'] });
 
     // An Excel template keeps its scope: the same one is fine, another is the user's to change.
     expect(await call(agent().write_excel_template, { design: perGroup, scope: 'pageGroup' })).toMatchObject({ ok: true });

@@ -126,7 +126,7 @@ describe('uploading an Excel template', () => {
       { id: 'letter', name: 'Letter', kind: 'docx', fileId: null, formats: ['pdf'] },
     ]);
     const saved = (await (await upload(id, flatXlsx, { kind: 'xlsx' })).json()) as TemplateFileView;
-    expect((await job(id)).draft.render.templates[0]).toMatchObject({ kind: 'xlsx', fileId: saved.id, scope: 'splf', formats: ['pdf'] });
+    expect((await job(id)).draft.render.templates[0]).toMatchObject({ kind: 'xlsx', fileId: saved.id, scope: 'splf', formats: ['xlsx'] });
     const word = await upload(id, flatXlsx, { templateId: 'letter', kind: 'xlsx' });
     expect(word.status).toBe(400);
     expect((await word.json()).error).toMatch(/^file: The file is a zip file, but not a Word document/);

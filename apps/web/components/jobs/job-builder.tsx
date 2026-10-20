@@ -39,6 +39,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api, ApiError, errorText } from '@/lib/client/api';
 import { dateTime } from '@/lib/client/format';
+import { runVariant } from '@/lib/client/step-status';
 import { deleteNotice, startsDeleting } from '@/lib/job-spec';
 import type { JobDetail } from '@/lib/types';
 import { AiButton, AiSidebar, useAiSidebar } from './ai-sidebar';
@@ -49,6 +50,7 @@ import { SaveVersionDialog, RunNowDialog } from './job-dialogs';
 import { JobProvider, useJob } from './job-provider';
 import { PipelineStrip } from './pipeline-strip';
 import { StepNavProvider } from './step-nav';
+import { useStepStatuses } from './use-step-statuses';
 import { ExtractStep, JobChat, JobWorkbench, RenderStep } from './workbench-steps';
 
 /** The job builder: the pipeline, the selected step, and the agent. */
@@ -114,6 +116,7 @@ function Builder() {
 function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: boolean): void }; onSave(): void; onRun(): void }) {
   const router = useRouter();
   const { job, viewing, setViewing, draftDiffers, updateJob } = useJob();
+  const { ready } = useStepStatuses();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   // Escape leaves the name field without saving; the blur that follows must not save it.
@@ -232,6 +235,7 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
             </Button>
           </Hint>
         </ButtonGroup>
+        {/* Primary once every step is ready; until then Next is the step to take. */}
         <Hint
           text={
             job.activeVersion === null
@@ -239,7 +243,7 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
               : `Run version ${job.activeVersion} now on spooled files you pick from the source queue.`
           }
         >
-          <Button size="sm" onClick={onRun} aria-label="Run now">
+          <Button size="sm" variant={runVariant(ready)} onClick={onRun} aria-label="Run now">
             <PlayIcon />
             <span className="hidden sm:inline">Run now</span>
           </Button>
