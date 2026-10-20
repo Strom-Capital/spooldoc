@@ -6,7 +6,7 @@ import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
 import { FakeConnection, GOOD_PASSWORD, loadSample } from './helpers/fake-connection';
 import { db, insertServer } from './helpers/fixtures';
-import { appRequest, connections, params } from './helpers/mocks';
+import { appRequest, connections, fakeJt400, params } from './helpers/mocks';
 
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
 
@@ -117,6 +117,41 @@ describe('IBM i errors', () => {
       messageId: 'CPF2105',
       detail: `CPF2105 Object ${queue} in ${library} type *OUTQ not found. ***`,
     });
+    // An error about one queue says nothing about the server.
+    expect(await getServerRow(serverId)).toMatchObject({ lastError: null, errorCode: null });
+  });
+
+  it('show on the server when it cannot be reached, since when, and that it works again', async () => {
+    const reason = 'The connection to ibmi.example.com dropped. Spooldoc connects again on the next try. If it keeps failing, check the network or VPN to ibmi.example.com.';
+    conn.failures.set('listOutputQueues', new ConnectionError('host', reason));
+    const failed = await queuesRoute.GET(appRequest(`/api/servers/${serverId}/queues`, { headers: auth }), params({ id: serverId }));
+    expect(failed.status).toBe(502);
+    expect(await failed.json()).toMatchObject({ error: reason, code: 'host' });
+    const row = await getServerRow(serverId);
+    expect(row).toMatchObject({ lastError: reason, errorCode: 'host', errorSince: expect.any(Date) });
+
+    // A second failure keeps the time of the first.
+    await queuesRoute.GET(appRequest(`/api/servers/${serverId}/queues`, { headers: auth }), params({ id: serverId }));
+    expect((await getServerRow(serverId))!.errorSince).toEqual(row!.errorSince);
+
+    conn.failures.delete('listOutputQueues');
+    const worked = await queuesRoute.GET(appRequest(`/api/servers/${serverId}/queues`, { headers: auth }), params({ id: serverId }));
+    expect(worked.status).toBe(200);
+    expect(await getServerRow(serverId)).toMatchObject({ lastError: null, errorCode: null, errorSince: null });
+  });
+
+  it('do not sign on again after a failed sign-on, until the user acts', async () => {
+    const reason = 'ibmi.example.com did not accept the password for DEMOUSER. Check it on the Servers page; repeated wrong passwords can disable the profile.';
+    await db().update(servers).set({ lastError: reason, errorCode: 'auth', errorSince: new Date() });
+    connections.clear();
+    fakeJt400.getConnection.mockClear();
+    const response = await queuesRoute.GET(appRequest(`/api/servers/${serverId}/queues`, { headers: auth }), params({ id: serverId }));
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      error: `${reason} Spooldoc does not sign on again until you edit the password or press Reconnect on the Servers page.`,
+      code: 'auth',
+    });
+    expect(fakeJt400.getConnection).not.toHaveBeenCalled();
   });
 });
 

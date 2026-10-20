@@ -6,6 +6,7 @@ import { getDb } from './db';
 import { jobs, queueHealth, runs, servers } from './db/schema';
 import { listJobs } from './jobs';
 import { describeModel } from './models';
+import { serverErrorCode } from './servers';
 import { watchStatus } from './watcher';
 
 /** The ranges of the runs chart: how many buckets of which unit. */
@@ -69,7 +70,18 @@ export async function runSeries(range: DashboardRange, tz: string): Promise<RunB
 export async function dashboard(range: DashboardRange, tz: string): Promise<DashboardView> {
   const db = getDb();
   const [serverRows, jobRows, jobErrors, queueErrors, [logged], [anyRun], model, series] = await Promise.all([
-    db.select({ id: servers.id, name: servers.name, lastCheckedAt: servers.lastCheckedAt, lastError: servers.lastError, errorDismissed: servers.errorDismissed }).from(servers).orderBy(servers.name),
+    db
+      .select({
+        id: servers.id,
+        name: servers.name,
+        lastCheckedAt: servers.lastCheckedAt,
+        lastError: servers.lastError,
+        errorCode: servers.errorCode,
+        errorSince: servers.errorSince,
+        errorDismissed: servers.errorDismissed,
+      })
+      .from(servers)
+      .orderBy(servers.name),
     listJobs(),
     db
       .select({ id: jobs.id, name: jobs.name, error: jobs.lastWatchError })
@@ -131,7 +143,7 @@ export async function dashboard(range: DashboardRange, tz: string): Promise<Dash
     runs: { ...totals, logged: logged?.n ?? 0 },
     series,
     attention: {
-      servers: serverRows.filter((s) => s.lastError && s.lastError !== s.errorDismissed).map((s) => ({ id: s.id, name: s.name, error: s.lastError! })),
+      servers: serverRows.filter((s) => s.lastError && s.lastError !== s.errorDismissed).map((s) => ({ id: s.id, name: s.name, error: s.lastError!, errorCode: serverErrorCode(s.errorCode), since: s.errorSince?.toISOString() ?? null })),
       jobs: jobErrors.map((j) => ({ id: j.id, name: j.name, error: j.error! })),
       queues: queueErrors.map((q) => ({ ...q, error: q.error!, since: (q.since ?? new Date()).toISOString() })),
       runs: failed.map((r) => ({ ...r, status: r.status as 'failed' | 'warning', startedAt: r.startedAt.toISOString() })),
