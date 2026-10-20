@@ -1,4 +1,4 @@
-import { extract, parseDefinition, readDocx, starterDocx, starterXlsx, type HtmlRender } from '@spooldoc/core';
+import { editXlsx, extract, parseDefinition, readDocx, readXlsx, starterDocx, starterXlsx, type DocumentRender, type HtmlRender } from '@spooldoc/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import type {
@@ -8,18 +8,18 @@ import type {
   TemplateChangeResult,
   ReadJobFilesResult,
   ReadPageResult,
-  ReadWordTemplateResult,
+  FileTemplateResult,
+  ReadFileTemplateResult,
   RenderPreviewResult,
-  WordTemplateResult,
   WriteDefinitionResult,
   WriteTemplateResult,
 } from '@/lib/chat-types';
-import { jobSpecSchema, withContent, type JobTemplate } from '@/lib/job-spec';
-import { ASK_USER_TOOL, buildTools, optionsProblem, visibleText, type DraftStore, type JobFiles, type JobFilesReader } from '@/lib/server/chat';
+import { jobSpecSchema, type JobTemplate } from '@/lib/job-spec';
+import { ASK_USER_TOOL, buildTools, optionsProblem, visibleText, type JobFiles, type JobFilesReader } from '@/lib/server/chat';
 import type { DocumentRenderer } from '@/lib/server/documents';
-import type { TemplateFileView } from '@/lib/types';
-import { fakeCarbone, fakeRenderer, PDF_BYTES, PNG_BYTES, sentPageGroup } from './helpers/carbone';
+import { fakeCarbone, fakeRenderer, pagedRenderer, PDF_BYTES, PNG_BYTES, sentPageGroup } from './helpers/carbone';
 import { fixtureText, loadSample } from './helpers/fake-connection';
+import { htmlOf, MemoryDraft } from './helpers/memory-draft';
 
 const sample = loadSample('invoice');
 const yaml = fixtureText('invoice', 'definition.yaml');
@@ -27,48 +27,6 @@ const template = fixtureText('invoice', 'template.html');
 const options = { toolCallId: 'call-1', messages: [] };
 /** A 40 x 10 PNG header, enough for the docx library to place. */
 const PNG_LOGO = Uint8Array.from(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAACgAAAAKCAIAAABaL8vzAAAAEklEQVR4nGM4ceIEAAS0AlkWLoFAAAAAAElFTkSuQmCC', 'base64'));
-
-/** A job draft in memory: a definition and templates, checked by the spec schema as the draft store does. */
-/** A template's HTML; undefined for a Word template. */
-const htmlOf = (template: JobTemplate): string | null | undefined => (template.kind === 'html' ? template.source : undefined);
-
-class MemoryDraft implements DraftStore {
-  yaml = '';
-  templates: JobTemplate[] = jobSpecSchema.parse({}).render.templates;
-  /** The first template's HTML. */
-  get html(): string | null | undefined {
-    return htmlOf(this.templates[0]!);
-  }
-  async readDefinition() {
-    return this.yaml;
-  }
-  async readTemplates() {
-    return this.templates;
-  }
-  async writeDefinition(yaml: string) {
-    this.yaml = yaml;
-  }
-  async writeHtml(templateId: string, html: string) {
-    await this.changeTemplates((templates) => templates.map((t) => (t.id === templateId ? withContent(t, { kind: 'html', source: html }) : t)));
-  }
-  async changeTemplates(change: (templates: JobTemplate[]) => JobTemplate[]) {
-    this.templates = jobSpecSchema.shape.render.parse({ templates: change(this.templates) }).templates;
-    return this.templates;
-  }
-  /** The Word files the agent saved, by id, as the database would keep them. */
-  files = new Map<string, { name: string; content: Uint8Array; previousId: string | null }>();
-  async writeWordTemplate(templateId: string, file: { name: string; content: Uint8Array; previousId: string | null }): Promise<TemplateFileView> {
-    const template = this.templates.find((t) => t.id === templateId);
-    if (!template) throw new Error('The template is gone.');
-    if (template.kind === 'html' && template.source !== null) throw new Error(`The ${template.name} template has HTML of its own.`);
-    const id = `00000000-0000-4000-8000-${String(this.files.size + 1).padStart(12, '0')}`;
-    this.files.set(id, file);
-    await this.changeTemplates((templates) => templates.map((t) => (t.id === templateId ? withContent(t, { kind: 'docx', fileId: id }) : t)));
-    return { id, name: file.name, size: file.content.length, createdAt: new Date(0).toISOString(), madeBy: 'assistant', previousId: file.previousId };
-  }
-  /** Reads a file the agent saved, as the chat route's `templateFile` does. */
-  readFile = async (id: string) => this.files.get(id) ?? null;
-}
 
 let store: MemoryDraft;
 
@@ -509,7 +467,7 @@ describe('Word templates by the agent', () => {
   });
 
   it('designs a template, saves it as a new file the template uses and reports its text', async () => {
-    const result = await call<WordTemplateResult>(word().write_word_template, { design });
+    const result = await call<FileTemplateResult>(word().write_word_template, { design });
     if (!('file' in result)) throw new Error(result.error);
     expect(result).toMatchObject({ ok: true, template: 'Template 1', templateId: 'template-1', errors: [], view: null, pages: null, file: { name: 'invoice.docx' } });
     expect(result.textPreview).toContain('Invoice {d.pg.invoiceNo}');
@@ -522,7 +480,7 @@ describe('Word templates by the agent', () => {
 
   it('shows the model every page as a PDF, once, in the step after the call', async () => {
     const tools = word({ visual: true });
-    const result = await call<WordTemplateResult>(tools.write_word_template, { design });
+    const result = await call<FileTemplateResult>(tools.write_word_template, { design });
     expect(result).toMatchObject({ ok: true, view: 'pdf', pages: 1 });
     expect(fakeCarbone.mock.calls.at(-1)![0]).toMatchObject({ kind: 'docx', format: 'pdf' });
     const shown = modelOutput(tools.write_word_template, result) as { type: string; value: { type: string; mediaType?: string; data?: { data: Uint8Array } }[] };
@@ -538,7 +496,7 @@ describe('Word templates by the agent', () => {
     const long = new TextEncoder().encode('%PDF-1.7 << /Type /Pages /Count 9 >>');
     const renderer: DocumentRenderer = async (input) => (input.format === 'pdf' ? long : fakeRenderer(input));
     const tools = word({ visual: true, renderer });
-    const result = await call<WordTemplateResult>(tools.write_word_template, { design });
+    const result = await call<FileTemplateResult>(tools.write_word_template, { design });
     expect(result).toMatchObject({
       ok: true,
       view: 'png',
@@ -558,10 +516,10 @@ describe('Word templates by the agent', () => {
   it('places uploaded images and refuses a design with problems, saving nothing', async () => {
     const images = async () => new Map([['logo', { data: PNG_LOGO, type: 'png' as const, width: 40, height: 10 }]]);
     const withLogo = { ...design, sections: [{ children: [{ type: 'Paragraph', children: [{ type: 'ImageRun', asset: 'logo', width: 120 }] }] }] };
-    const result = await call<WordTemplateResult>(word({ images }).write_word_template, { design: withLogo, name: 'Lasku' });
+    const result = await call<FileTemplateResult>(word({ images }).write_word_template, { design: withLogo, name: 'Lasku' });
     if (!('file' in result)) throw new Error(result.error);
     expect(result.file.name).toBe('Lasku.docx');
-    const bad = await call<WordTemplateResult>(word({ images }).write_word_template, {
+    const bad = await call<FileTemplateResult>(word({ images }).write_word_template, {
       design: { sections: [{ children: [{ type: 'Paragraph', children: [{ type: 'ImageRun', asset: 'missing' }] }, { type: 'Script' }] }] },
     });
     expect(bad).toEqual({
@@ -574,8 +532,8 @@ describe('Word templates by the agent', () => {
 
   it("keeps the file it replaces as the new file's previous one, and its name", async () => {
     store.templates = wordTemplate(null);
-    const first = await call<WordTemplateResult>(word().write_word_template, { design, name: 'sales.docx' });
-    const second = await call<WordTemplateResult>(word().write_word_template, { design });
+    const first = await call<FileTemplateResult>(word().write_word_template, { design, name: 'sales.docx' });
+    const second = await call<FileTemplateResult>(word().write_word_template, { design });
     if (!('file' in first) || !('file' in second)) throw new Error('not saved');
     expect(second.file.name).toBe('sales.docx');
     expect(store.files.get(second.file.id)!.previousId).toBe(first.file.id);
@@ -584,20 +542,23 @@ describe('Word templates by the agent', () => {
 
   it('does not replace the HTML of an HTML template', async () => {
     await call(tools().write_template, { html: template });
-    const result = await call<WordTemplateResult>(word().write_word_template, { design });
-    expect(result).toEqual({ ok: false, error: 'Could not save the Word template: The Template 1 template has HTML of its own.' });
+    const result = await call<FileTemplateResult>(word().write_word_template, { design });
+    expect(result).toEqual({
+      ok: false,
+      error: 'The Template 1 template has HTML of its own. To make it a Word template, ask the user: they switch it in the app, or you add a Word template with add_template (kind docx).',
+    });
     expect(store.html).toBe(template);
   });
 
   it('reads the parts of the file and one part, in pieces', async () => {
     store.templates = wordTemplate(null);
-    const parts = await call<ReadWordTemplateResult>(word().read_word_template, {});
+    const parts = await call<ReadFileTemplateResult>(word().read_word_template, {});
     expect(parts).toMatchObject({ ok: true, template: 'Document', file: null, parts: [{ name: 'word/document.xml' }, { name: 'word/footer1.xml' }] });
-    const body = await call<ReadWordTemplateResult>(word().read_word_template, { part: 'word/document.xml' });
+    const body = await call<ReadFileTemplateResult>(word().read_word_template, { part: 'word/document.xml' });
     if (!body.ok || !('xml' in body)) throw new Error('no part');
     expect(body).toMatchObject({ from: 0, more: false });
     expect(body.xml).toContain('{d.pg.invoiceNo}');
-    const rest = await call<ReadWordTemplateResult>(word().read_word_template, { part: 'word/document.xml', from: body.size - 10 });
+    const rest = await call<ReadFileTemplateResult>(word().read_word_template, { part: 'word/document.xml', from: body.size - 10 });
     expect(rest).toMatchObject({ from: body.size - 10, xml: body.xml.slice(-10), more: false });
     expect(await call(word().read_word_template, { part: 'word/styles.xml' })).toMatchObject({ ok: false, error: expect.stringMatching(/^There is no part "word\/styles.xml"/) });
     store.templates = jobSpecSchema.parse({}).render.templates;
@@ -606,11 +567,11 @@ describe('Word templates by the agent', () => {
 
   it("edits the starter template or the template's file and saves the result as a new file", async () => {
     store.templates = wordTemplate(null);
-    const fromStarter = await call<WordTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Invoice<', replace: '>Sales invoice<' }] });
+    const fromStarter = await call<FileTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Invoice<', replace: '>Sales invoice<' }] });
     if (!('file' in fromStarter)) throw new Error(fromStarter.error);
     expect(fromStarter.textPreview.split('\n')[0]).toBe('Sales invoice');
     expect(store.files.get(fromStarter.file.id)!.previousId).toBeNull();
-    const again = await call<WordTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Sales invoice<', replace: '>Invoice {d.pg.invoiceNo}<' }] });
+    const again = await call<FileTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Sales invoice<', replace: '>Invoice {d.pg.invoiceNo}<' }] });
     if (!('file' in again)) throw new Error(again.error);
     expect(store.files.get(again.file.id)).toMatchObject({ previousId: fromStarter.file.id, name: 'invoice.docx' });
     expect(again.textPreview.split('\n')[0]).toBe('Invoice {d.pg.invoiceNo}');
@@ -618,9 +579,9 @@ describe('Word templates by the agent', () => {
 
   it('refuses an edit it cannot make, and saves nothing', async () => {
     store.templates = wordTemplate(null);
-    const missing = await call<WordTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: 'nowhere', replace: 'x' }] });
+    const missing = await call<FileTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: 'nowhere', replace: 'x' }] });
     expect(missing).toMatchObject({ ok: false, error: expect.stringMatching(/^The text to find is not in word\/document.xml/) });
-    const broken = await call<WordTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Invoice<', replace: '>A & B<' }] });
+    const broken = await call<FileTemplateResult>(word().edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Invoice<', replace: '>A & B<' }] });
     expect(broken).toMatchObject({ ok: false, error: expect.stringMatching(/is not well-formed XML: A bare & in text/) });
     expect(store.files.size).toBe(0);
     expect(store.templates[0]).toMatchObject({ kind: 'docx', fileId: null });
@@ -629,7 +590,7 @@ describe('Word templates by the agent', () => {
   it('runs a render the model calls next to an edit after the edit', async () => {
     store.templates = wordTemplate(null);
     const tools = word();
-    const edit = call<WordTemplateResult>(tools.edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Invoice<', replace: '>Sales invoice<' }] });
+    const edit = call<FileTemplateResult>(tools.edit_word_template, { edits: [{ part: 'word/document.xml', find: '>Invoice<', replace: '>Sales invoice<' }] });
     const render = call<RenderPreviewResult>(tools.render_preview, {});
     const [edited, rendered] = await Promise.all([edit, render]);
     expect(edited).toMatchObject({ ok: true });
@@ -660,7 +621,6 @@ describe('Excel templates', () => {
   ];
   const withFile = (bytes: Uint8Array | null, visual = false) =>
     buildTools({ sample, store, masked: false, renderer: fakeRenderer, visual, templateFile: async (id) => (id === 'file-1' && bytes ? { name: 'lines.xlsx', content: bytes } : null) });
-  const byUser = 'The Lines template is an Excel template. You cannot write or edit Excel files yet: the user downloads the starter template from the template\'s panel, changes it in Excel and uploads it. Check it with render_preview.';
 
   it('adds an Excel template of the whole spooled file making XLSX, or of page groups, and refuses a format or scope it does not take', async () => {
     const added = await call<TemplateChangeResult>(tools().add_template, { name: 'Lines', kind: 'xlsx' });
@@ -672,26 +632,18 @@ describe('Excel templates', () => {
     expect(await call(tools().add_template, { name: 'Letter', kind: 'docx', scope: 'splf' })).toMatchObject({ ok: false, error: expect.stringMatching(/^Only an Excel template has a scope/) });
   });
 
-  it('never writes or edits an Excel template, and says the user makes it in Excel', async () => {
-    await call(tools().write_definition, { yaml });
-    store.templates = excel();
-    expect(await call(tools().write_template, { html: '<p>{d.pg.invoiceNo}</p>' })).toEqual({ ok: false, error: byUser });
-    expect(await call(withFile(null).write_word_template, { design: { sections: [{ children: [] }] } })).toEqual({ ok: false, error: byUser });
-    expect(await call(withFile(null).read_word_template, {})).toEqual({ ok: false, error: byUser });
-    expect(await call(withFile(null).edit_word_template, { edits: [{ part: 'word/document.xml', find: 'a', replace: 'b' }] })).toEqual({ ok: false, error: byUser });
-    expect(store.templates).toEqual(excel());
-  });
-
-  it('renders the whole spooled file to XLSX and returns its text by sheet and cell', async () => {
+  it('renders the whole spooled file to XLSX with formulas computed and returns its cells by sheet and cell', async () => {
     await call(tools().write_definition, { yaml });
     store.templates = excel();
     const result = await call<RenderPreviewResult>(withFile(null).render_preview, { pageGroup: 3 });
     if (!result.ok) throw new Error(result.error);
-    expect(result).toMatchObject({ content: 'starter', templateErrors: [] });
+    expect(result).toMatchObject({ content: 'starter', templateErrors: [], errorCells: 0 });
     // The fake Carbone sends the file back as it was: its cells are the text.
-    expect(result.textPreview).toContain('Lines!A2: {d.pgs[i].invoiceNo}');
+    expect(result.textPreview.split('\n')[0]).toBe('No cell holds a formula error.');
+    expect(result.textPreview).toContain('Lines!A2: "{d.pgs[i].invoiceNo}"');
+    expect(result.textPreview).toContain('Lines!W2: "{d.pgs[i].lines[i].amount:formatN}" (format #,##0.00)');
     const sent = fakeCarbone.mock.calls.at(-1)![0];
-    expect(sent).toMatchObject({ kind: 'xlsx', format: 'xlsx' });
+    expect(sent).toMatchObject({ kind: 'xlsx', format: 'xlsx', hardRefresh: true });
     expect(sentPageGroup(sent)).toBeUndefined();
     expect((sent.data as { pgs: unknown[] }).pgs).toHaveLength(6);
   });
@@ -702,12 +654,293 @@ describe('Excel templates', () => {
     const pageGroupFile = starterXlsx(parseDefinition(yaml), 'pageGroup');
     const wrong = await call<RenderPreviewResult>(withFile(pageGroupFile).render_preview, {});
     expect(wrong).toMatchObject({ ok: true, templateErrors: [expect.stringMatching(/^Invoice!B3: \{d\.pg\.invoiceNo\} and 23 other cells read one page group/)] });
-    expect(await call(withFile(null).render_preview, {})).toEqual({ ok: false, error: 'The Excel file of the Lines template is gone. The user uploads it again.' });
+    expect(await call(withFile(null).render_preview, {})).toEqual({
+      ok: false,
+      error: 'The Excel file of the Lines template is gone. Write a new one with write_excel_template, or the user uploads one.',
+    });
 
     store.templates = excel('file-1', 'pageGroup');
     const shown = await call<RenderPreviewResult>(withFile(pageGroupFile, true).render_preview, { pageGroup: 1 });
     expect(shown).toMatchObject({ ok: true, templateErrors: [], view: 'pdf', pages: 1 });
     expect(sentPageGroup(fakeCarbone.mock.calls.at(-1)![0])?.invoiceNo).toBe('260102');
+  });
+});
+
+describe('Excel templates by the agent', () => {
+  /** A sheet of the whole spooled file: a header row, a row per line and a formula. */
+  const design = {
+    sheets: [
+      {
+        name: 'Lines',
+        views: { frozen: { rows: 1 } },
+        cells: [
+          { ref: 'A1', value: 'Invoice' },
+          { ref: 'B1', value: 'Amount' },
+          { ref: 'D1', value: { formula: 'SUM(1,2)' } },
+          { ref: 'A2', value: '{d.pgs[i].invoiceNo}' },
+          { ref: 'B2', value: '{d.pgs[i].lines[i].amount:formatN}', style: { numFmt: '#,##0.00' } },
+          { ref: 'A3', value: '{d.pgs[i+1].lines[i+1]}' },
+        ],
+        pageSetup: { paperSize: 'A4', fitToWidth: 1, fitToHeight: 0, printTitlesRow: '1:1' },
+      },
+    ],
+  };
+  const SHEET = 'xl/worksheets/sheet1.xml';
+  const excelTemplate = (fileId: string | null, scope: 'splf' | 'pageGroup' = 'splf'): JobTemplate[] => [
+    { id: 'lines', name: 'Lines', kind: 'xlsx', fileId, scope, formats: ['xlsx', 'pdf'] },
+  ];
+  const agent = (input: Partial<Parameters<typeof buildTools>[0]> = {}) =>
+    buildTools({ sample, store, masked: false, renderer: fakeRenderer, templateFile: store.readFile, ...input });
+  const modelOutput = (t: { toModelOutput?: unknown }, output: unknown, toolCallId = options.toolCallId) =>
+    (t.toModelOutput as (o: { toolCallId: string; input: unknown; output: unknown }) => unknown)({ toolCallId, input: {}, output });
+
+  beforeEach(async () => {
+    await call(tools().write_definition, { yaml });
+  });
+
+  it('designs a template, saves it as a new file the template uses and reports its computed cells', async () => {
+    const result = await call<FileTemplateResult>(agent().write_excel_template, { design });
+    if (!('file' in result)) throw new Error(result.error);
+    expect(result).toMatchObject({ ok: true, template: 'Template 1', templateId: 'template-1', errors: [], view: null, pages: null, errorCells: 0, file: { name: 'invoice.xlsx' } });
+    expect(result.textPreview).toContain('Lines!A2: "{d.pgs[i].invoiceNo}"');
+    expect(result.textPreview).toContain('Lines!D1: (no value) (formula =SUM(1,2))');
+    // The HTML starter template became an Excel one of the whole spooled file.
+    expect(store.templates[0]).toMatchObject({ kind: 'xlsx', fileId: result.file.id, scope: 'splf', formats: ['pdf'] });
+    const saved = store.files.get(result.file.id)!;
+    expect(saved.previousId).toBeNull();
+    expect(readXlsx(saved.content).sheets.map((s) => s.name)).toEqual(['Lines']);
+  });
+
+  it('counts formula errors over every cell and names the first', async () => {
+    const renderer: DocumentRenderer = async (input) =>
+      input.kind === 'xlsx' && input.format === 'xlsx'
+        ? editXlsx(input.template, [{ part: SHEET, find: '<c r="D1"><f>SUM(1,2)</f></c>', replace: '<c r="D1" t="e"><f>FOO()</f><v>#NAME?</v></c>' }])
+        : fakeRenderer(input);
+    const result = await call<FileTemplateResult>(agent({ renderer }).write_excel_template, { design });
+    expect(result).toMatchObject({ ok: true, errorCells: 1 });
+    if (!('file' in result)) throw new Error(result.error);
+    expect(result.textPreview.split('\n')[0]).toBe('1 cell holds a formula error: Lines!D1 #NAME?.');
+    expect(result.textPreview).toContain('Lines!D1: #NAME? error (formula =FOO())');
+  });
+
+  it('shows the first 40 and last 5 rows of a long sheet', async () => {
+    const cells = Array.from({ length: 60 }, (_, i) => ({ ref: `A${i + 1}`, value: i + 1 }));
+    const result = await call<FileTemplateResult>(agent().write_excel_template, { design: { sheets: [{ name: 'Order lines', cells }] } });
+    if (!('file' in result)) throw new Error(result.error);
+    const lines = result.textPreview.split('\n');
+    expect(lines).toContain("'Order lines'!A40: 40");
+    expect(lines).toContain('(Order lines: 15 rows left out, rows 41 to 55)');
+    expect(lines).not.toContain("'Order lines'!A41: 41");
+    expect(lines.at(-1)).toBe("'Order lines'!A60: 60");
+  });
+
+  it('shows the model the PDF, once, in the step after the call', async () => {
+    const tools = agent({ visual: true });
+    const result = await call<FileTemplateResult>(tools.write_excel_template, { design });
+    expect(result).toMatchObject({ ok: true, view: 'pdf', pages: 1 });
+    expect(fakeCarbone.mock.calls.at(-1)![0]).toMatchObject({ kind: 'xlsx', format: 'pdf' });
+    const shown = modelOutput(tools.write_excel_template, result) as { type: string; value: { type: string; mediaType?: string; data?: { data: Uint8Array } }[] };
+    expect(shown.type).toBe('content');
+    expect(JSON.parse((shown.value[0] as unknown as { text: string }).text)).toEqual(result);
+    expect(shown.value[1]).toMatchObject({ type: 'file', mediaType: 'application/pdf', data: { type: 'data', data: PDF_BYTES } });
+    expect(modelOutput(agent({ visual: true }).write_excel_template, result)).toEqual({ type: 'json', value: result });
+    expect(modelOutput(tools.write_excel_template, result, 'another-call')).toEqual({ type: 'json', value: result });
+  });
+
+  it('renders a long file again from its first page groups, and says so', async () => {
+    // Five pages for each page group.
+    const renderer = pagedRenderer((input) => 5 * ((input.data as { pgs: unknown[] }).pgs.length));
+    const tools = agent({ visual: true, renderer });
+    const result = await call<FileTemplateResult>(tools.write_excel_template, { design });
+    expect(result).toMatchObject({ ok: true, view: 'pdf', pages: 30, shownPages: 5, note: 'The PDF shows the first of 6 page groups; the whole file prints on 30 pages.' });
+    const pdfs = fakeCarbone.mock.calls.filter(([input]) => input.format === 'pdf').slice(-2);
+    expect((pdfs[0]![0].data as { pgs: unknown[] }).pgs).toHaveLength(6);
+    expect((pdfs[1]![0].data as { pgs: unknown[] }).pgs).toHaveLength(1);
+    expect((modelOutput(tools.write_excel_template, result) as { type: string }).type).toBe('content');
+
+    // Two pages a page group: 12 pages, so the first 2 of 6.
+    const two = await call<FileTemplateResult>(agent({ visual: true, renderer: pagedRenderer((input) => 2 * (input.data as { pgs: unknown[] }).pgs.length) }).write_excel_template, { design });
+    expect(two).toMatchObject({ view: 'pdf', pages: 12, shownPages: 4, note: 'The PDF shows the first 2 of 6 page groups; the whole file prints on 12 pages.' });
+  });
+
+  it("cuts a page group's lists for a long document, and gives the cells only when even that is too long", async () => {
+    store.templates = excelTemplate(null, 'pageGroup');
+    const pageGroupDesign = {
+      sheets: [{ name: 'Invoice', cells: [{ ref: 'A1', value: '{d.pg.invoiceNo}' }, { ref: 'A2', value: '{d.pg.lines[i].item}' }, { ref: 'A3', value: '{d.pg.lines[i+1]}' }] }],
+    };
+    const lines = (input: DocumentRender) => (sentPageGroup(input)!.lines as unknown[]).length;
+    // Page group 1 has 3 lines. Three pages a line: 9 pages, so 1 line, which prints on 3.
+    const cut = await call<FileTemplateResult>(agent({ visual: true, renderer: pagedRenderer((input) => 3 * lines(input)) }).write_excel_template, { design: pageGroupDesign });
+    expect(cut).toMatchObject({
+      ok: true,
+      view: 'pdf',
+      pages: 9,
+      shownPages: 3,
+      note: 'The PDF shows page group 1 with its lists cut to their first rows (lines: 1 of 3); the whole document prints on 9 pages.',
+    });
+    expect(sentPageGroup(fakeCarbone.mock.calls.at(-1)![0])!.lines).toHaveLength(1);
+    // Ten pages a line: even one line is too long.
+    const tools = agent({ visual: true, renderer: pagedRenderer((input) => 10 * lines(input)) });
+    const long = await call<FileTemplateResult>(tools.write_excel_template, { design: pageGroupDesign });
+    expect(long).toMatchObject({
+      ok: true,
+      view: null,
+      pages: 30,
+      note: 'Even shortened data prints on 10 pages, so you see the cells only; the whole document prints on 30 pages.',
+    });
+    expect(long).not.toHaveProperty('shownPages');
+    expect(modelOutput(tools.write_excel_template, long)).toEqual({ type: 'json', value: long });
+  });
+
+  it('renders the preview with masked values when masking is on', async () => {
+    store.templates = excelTemplate(null, 'pageGroup');
+    const pageGroupDesign = { sheets: [{ name: 'Invoice', cells: [{ ref: 'A1', value: '{d.pg.invoiceNo}' }] }] };
+    await call(agent({ visual: true, masked: true }).write_excel_template, { design: pageGroupDesign });
+    const [xlsx, pdf] = fakeCarbone.mock.calls.slice(-2).map(([input]) => input);
+    expect(sentPageGroup(xlsx!)?.invoiceNo).toMatch(/^9+$/);
+    expect(sentPageGroup(pdf!)?.invoiceNo).toMatch(/^9+$/);
+  });
+
+  it('places uploaded images and refuses a design with problems, saving nothing', async () => {
+    const images = async () => new Map([['logo', { data: PNG_LOGO, type: 'png' as const, width: 40, height: 10 }]]);
+    const withLogo = { sheets: [{ ...design.sheets[0]!, images: [{ asset: 'logo', tl: 'F1' }] }] };
+    const result = await call<FileTemplateResult>(agent({ images }).write_excel_template, { design: withLogo, name: 'Rivit' });
+    if (!('file' in result)) throw new Error(result.error);
+    expect(result.file.name).toBe('Rivit.xlsx');
+    const bad = await call<FileTemplateResult>(agent({ images }).write_excel_template, {
+      design: { sheets: [{ name: 'Lines', images: [{ asset: 'missing', tl: 'A1' }], charts: [] }] },
+    });
+    expect(bad).toMatchObject({ ok: false, error: expect.stringMatching(/^The design has problems, nothing was saved:\nsheets\[0\]/) });
+    expect(store.files.size).toBe(1);
+  });
+
+  it("keeps the file it replaces as the new file's previous one, and its name", async () => {
+    store.templates = excelTemplate(null);
+    const first = await call<FileTemplateResult>(agent().write_excel_template, { design, name: 'sales.xlsx' });
+    const second = await call<FileTemplateResult>(agent().write_excel_template, { design });
+    if (!('file' in first) || !('file' in second)) throw new Error('not saved');
+    expect(second.file.name).toBe('sales.xlsx');
+    expect(store.files.get(second.file.id)!.previousId).toBe(first.file.id);
+    expect(store.templates[0]).toMatchObject({ kind: 'xlsx', fileId: second.file.id, scope: 'splf' });
+  });
+
+  it('switches only a starter template, and takes a scope only when it switches', async () => {
+    // A Word starter switches, with the scope given.
+    store.templates = [{ id: 'main', name: 'Document', kind: 'docx', fileId: null, formats: ['pdf'] }];
+    const perGroup = { sheets: [{ name: 'Invoice', cells: [{ ref: 'A1', value: '{d.pg.invoiceNo}' }] }] };
+    expect(await call(agent().write_excel_template, { design: perGroup, scope: 'pageGroup' })).toMatchObject({ ok: true, errors: [] });
+    expect(store.templates[0]).toMatchObject({ kind: 'xlsx', scope: 'pageGroup', formats: ['pdf'] });
+
+    // An Excel template keeps its scope: the same one is fine, another is the user's to change.
+    expect(await call(agent().write_excel_template, { design: perGroup, scope: 'pageGroup' })).toMatchObject({ ok: true });
+    expect(await call(agent().write_excel_template, { design, scope: 'splf' })).toEqual({
+      ok: false,
+      error:
+        'What each file of the Document template holds is the user\'s setting, and you cannot change it. Ask the user to change "Each file holds" in the template menu, or design for the scope it has (pageGroup).',
+    });
+    expect(store.templates[0]).toMatchObject({ kind: 'xlsx', scope: 'pageGroup' });
+    expect(store.files.size).toBe(2);
+
+    // A template with HTML or a Word file of its own does not switch.
+    store.templates = jobSpecSchema.parse({}).render.templates;
+    await call(tools().write_template, { html: template });
+    expect(await call(agent().write_excel_template, { design })).toEqual({
+      ok: false,
+      error:
+        'The Template 1 template has HTML of its own. To make it an Excel template, ask the user: they switch it in the app, or you add an Excel template with add_template (kind xlsx).',
+    });
+    store.templates = [{ id: 'main', name: 'Document', kind: 'docx', fileId: 'file-1', formats: ['pdf'] }];
+    expect(await call(agent().write_excel_template, { design })).toEqual({
+      ok: false,
+      error:
+        'The Document template is a Word template with a file of its own: change it with edit_word_template, or design a new one with write_word_template. To make it an Excel template, ask the user: they switch it in the app, or you add an Excel template with add_template (kind xlsx).',
+    });
+    expect(store.files.size).toBe(2);
+  });
+
+  it('keeps each kind to its own tools', async () => {
+    store.templates = excelTemplate('00000000-0000-4000-8000-000000000009');
+    expect(await call(tools().write_template, { html: '<p>{d.pg.invoiceNo}</p>' })).toEqual({
+      ok: false,
+      error: 'The Lines template is an Excel template. Change it with edit_excel_template, or design a new one with write_excel_template.',
+    });
+    expect(await call(agent().write_word_template, { design: { sections: [{ children: [] }] } })).toEqual({
+      ok: false,
+      error:
+        'The Lines template is an Excel template with a file of its own: change it with edit_excel_template, or design a new one with write_excel_template. To make it a Word template, ask the user: they switch it in the app, or you add a Word template with add_template (kind docx).',
+    });
+    expect(await call(agent().read_word_template, {})).toEqual({ ok: false, error: 'The Lines template is an Excel template. Read it with read_excel_template.' });
+    expect(await call(agent().edit_word_template, { edits: [{ part: 'word/document.xml', find: 'a', replace: 'b' }] })).toEqual({
+      ok: false,
+      error: 'The Lines template is an Excel template. Change it with edit_excel_template.',
+    });
+    store.templates = [{ id: 'main', name: 'Document', kind: 'docx', fileId: null, formats: ['pdf'] }];
+    expect(await call(agent().read_excel_template, {})).toEqual({ ok: false, error: 'The Document template is a Word template. Read it with read_word_template.' });
+    expect(await call(agent().edit_excel_template, { edits: [{ part: SHEET, find: 'a', replace: 'b' }] })).toEqual({
+      ok: false,
+      error: 'The Document template is a Word template. Change it with edit_word_template.',
+    });
+    store.templates = jobSpecSchema.parse({}).render.templates;
+    expect(await call(agent().read_excel_template, {})).toMatchObject({ ok: false, error: expect.stringMatching(/is an HTML template, which is in the instructions/) });
+    expect(store.files.size).toBe(0);
+  });
+
+  it('reads the parts of the file and one part, in pieces', async () => {
+    store.templates = excelTemplate(null);
+    const parts = await call<ReadFileTemplateResult>(agent().read_excel_template, {});
+    expect(parts).toMatchObject({ ok: true, template: 'Lines', file: null, parts: [{ name: SHEET, sheet: 'Lines' }, { name: 'xl/styles.xml' }, { name: 'xl/workbook.xml' }] });
+    const sheet = await call<ReadFileTemplateResult>(agent().read_excel_template, { part: SHEET });
+    if (!sheet.ok || !('xml' in sheet)) throw new Error('no part');
+    expect(sheet).toMatchObject({ sheet: 'Lines', from: 0, more: false });
+    expect(sheet.xml).toContain('<c r="A2" t="inlineStr"><is><t xml:space="preserve">{d.pgs[i].invoiceNo}</t></is></c>');
+    const rest = await call<ReadFileTemplateResult>(agent().read_excel_template, { part: SHEET, from: sheet.size - 10 });
+    expect(rest).toMatchObject({ from: sheet.size - 10, xml: sheet.xml.slice(-10), more: false });
+    const styles = await call<ReadFileTemplateResult>(agent().read_excel_template, { part: 'xl/styles.xml' });
+    expect(styles).toMatchObject({ ok: true, xml: expect.stringContaining('<!--s=3-->') });
+    expect(await call(agent().read_excel_template, { part: 'xl/sharedStrings.xml' })).toMatchObject({ ok: false, error: expect.stringMatching(/^There is no part "xl\/sharedStrings.xml"/) });
+  });
+
+  it("edits the starter template or the template's file and saves the result as a new file", async () => {
+    store.templates = excelTemplate(null);
+    const fromStarter = await call<FileTemplateResult>(agent().edit_excel_template, { edits: [{ part: SHEET, find: '>Invoice No<', replace: '>Invoice<' }] });
+    if (!('file' in fromStarter)) throw new Error(fromStarter.error);
+    expect(fromStarter.textPreview).toContain('Lines!A1: "Invoice"');
+    expect(store.files.get(fromStarter.file.id)).toMatchObject({ previousId: null, name: 'invoice.xlsx' });
+    const again = await call<FileTemplateResult>(agent().edit_excel_template, { edits: [{ part: SHEET, find: '>Invoice<', replace: '>Invoice number<' }] });
+    if (!('file' in again)) throw new Error(again.error);
+    expect(store.files.get(again.file.id)).toMatchObject({ previousId: fromStarter.file.id, name: 'invoice.xlsx' });
+    expect(again.textPreview).toContain('Lines!A1: "Invoice number"');
+    expect(store.templates[0]).toMatchObject({ kind: 'xlsx', fileId: again.file.id, scope: 'splf' });
+  });
+
+  it('refuses an edit it cannot make, and saves nothing', async () => {
+    store.templates = excelTemplate(null);
+    const missing = await call<FileTemplateResult>(agent().edit_excel_template, { edits: [{ part: SHEET, find: 'nowhere', replace: 'x' }] });
+    expect(missing).toMatchObject({ ok: false, error: expect.stringMatching(/^The text to find is not in xl\/worksheets\/sheet1.xml/) });
+    const broken = await call<FileTemplateResult>(agent().edit_excel_template, { edits: [{ part: SHEET, find: '>Invoice No<', replace: '>A & B<' }] });
+    expect(broken).toMatchObject({ ok: false, error: expect.stringMatching(/not well-formed XML/) });
+    expect(store.files.size).toBe(0);
+    expect(store.templates[0]).toMatchObject({ kind: 'xlsx', fileId: null });
+  });
+
+  it('runs a render the model calls next to an edit after the edit', async () => {
+    store.templates = excelTemplate(null);
+    const tools = agent();
+    const edit = call<FileTemplateResult>(tools.edit_excel_template, { edits: [{ part: SHEET, find: '>Invoice No<', replace: '>Invoice<' }] });
+    const render = call<RenderPreviewResult>(tools.render_preview, {});
+    const [edited, rendered] = await Promise.all([edit, render]);
+    expect(edited).toMatchObject({ ok: true });
+    expect(rendered).toMatchObject({ ok: true, content: 'saved' });
+    if (!rendered.ok) throw new Error(rendered.error);
+    expect(rendered.textPreview).toContain('Lines!A1: "Invoice"');
+  });
+
+  it('shows the model the Excel document in render_preview too, shortened when it is long', async () => {
+    store.templates = excelTemplate(null);
+    const tools = agent({ visual: true, renderer: pagedRenderer((input) => 5 * (input.data as { pgs: unknown[] }).pgs.length) });
+    const result = await call<RenderPreviewResult>(tools.render_preview, {});
+    expect(result).toMatchObject({ ok: true, content: 'starter', view: 'pdf', pages: 30, shownPages: 5, errorCells: 0, note: expect.stringMatching(/^The PDF shows the first of 6 page groups/) });
+    expect((modelOutput(tools.render_preview, result) as { type: string }).type).toBe('content');
   });
 });
 

@@ -250,18 +250,57 @@ describe('Excel templates in the instructions', () => {
     expect(problems).toContain('- Invoice!B3: {d.pg.invoiceNo} and 23 other cells read one page group, but this template gets every page group in one file');
   });
 
-  it('explains the Excel rules, says the user makes the file in Excel, and lets the agent read xlsx-tips', async () => {
+  it('explains the Excel rules and how the agent designs and edits a file, and lets it read xlsx-tips', async () => {
     const starter = await fileTemplates([excel({ fileId: null })], yaml, async () => null);
     const text = buildInstructions({ sample, definitionYaml: yaml, templates: lines, masked: false, fileTemplates: { lines: starter.lines! } });
     expect(text).toContain('No Excel template file yet: the Excel starter template generated from the definition is used. Each file holds the whole spooled file');
     expect(text).toContain('Lines!A2: {d.pgs[i].invoiceNo}');
-    expect(text).toContain('## Excel templates');
-    expect(text).toContain('You cannot write or edit Excel files yet.');
-    expect(text).toContain(':formatD(X):div(86400):add(25569):formatN');
-    expect(text).toContain('=SUM(INDIRECT("D5:D"&ROW()-1))');
+    const section = text.slice(text.indexOf('## Excel templates'), text.indexOf('## Which kind of template'));
+    expect(text).not.toContain('You cannot write or edit Excel files');
+    expect(section).toContain('- write_excel_template designs a whole workbook from a JSON tree.');
+    expect(section).toContain("- edit_excel_template changes the file there is, the user's own included");
+    expect(section).toContain('write_excel_template switches a template that still uses a starter to Excel.');
+    // The tree, with an example sheet of the whole spooled file.
+    expect(section).toContain('- Workbook: `{ sheets, defaultFont?, definedNames?, activeSheet? }`.');
+    expect(section).toContain('"value": "{d.pgs[i].lines[i].amount:formatN}", "style": { "numFmt": "#,##0.00" }');
+    expect(section).toContain('{ "ref": "A3", "value": "{d.pgs[i+1].lines[i+1]}" }');
+    expect(section).toContain('"autoFilter": "A:D"');
+    expect(section).toContain('"pageSetup": { "paperSize": "A4", "orientation": "portrait", "fitToWidth": 1, "fitToHeight": 0, "printTitlesRow": "1:1" }');
+    // The rules of Excel output, and what the spike found.
+    expect(section).toContain(':formatD(X):div(86400):add(25569):formatN');
+    expect(section).toContain('SUM(INDIRECT("D2:D"&ROW()-1))');
+    expect(section).toContain('No merged cells in or below a loop.');
+    expect(section).toContain('Tables and charts over a loop do not grow with it');
+    expect(section).toContain('A picture over the print-title rows prints on every page.');
+    expect(section).toContain('Notes print in the PDF as note icons');
+    expect(section).toContain('not icon sets, and a gradient fill prints as one colour');
+    expect(section).toContain('Avoid LET, FILTER, SORT, UNIQUE, SEQUENCE');
+    expect(section).toContain('A rich text cell cannot hold :formatN.');
+    // The scope is the user's setting.
+    expect(section).toContain('To change it for an Excel template, ask the user first: they change "Each file holds" in the template menu.');
+    // Editing, design and checking the result.
+    expect(section).toContain('`<!--s=7-->` for a cell format');
+    expect(section).toContain("`'Order lines'!B5`");
+    expect(section).toContain('Leave formulas as they are unless the user asks to change them.');
+    expect(section).toContain('One header row to filter and sort on');
+    expect(section).toContain('Percentages are stored as fractions');
+    expect(section).toContain('No formula errors in the computed cells.');
+    expect(section).toContain('Do exactly what the user asked');
+    expect(section).toContain('the computed cells of the XLSX as a run makes it, by sheet and cell, not a picture');
     expect(text).toContain('read_carbone_reference with xlsx-tips');
     expect(text).toMatch(/read_carbone_reference reads these of its reference files: [^.]*xlsx-tips/);
     const gone = await fileTemplates(lines, yaml, async () => null);
-    expect(gone.lines).toEqual({ error: 'The file is gone; the user uploads one again.' });
+    expect(gone.lines).toEqual({ error: 'The file is gone; write a new one with write_excel_template, or the user uploads one.' });
+  });
+
+  it('tells a model that takes files it sees the PDF, shortened when it is long, and names the Excel tools', () => {
+    const text = buildInstructions({ sample, definitionYaml: yaml, templates: lines, masked: false, visual: true });
+    expect(text).toContain('A PDF over 5 pages is made again from shortened data, the first page groups or the first lines, and the note says so.');
+    const tools = text.slice(text.indexOf('## Tools'), text.indexOf('## This sample'));
+    expect(tools).toContain('- write_excel_template: ');
+    expect(tools).toContain('- read_excel_template: ');
+    expect(tools).toContain('- edit_excel_template: ');
+    expect(text).toContain('or an Excel template with write_excel_template or edit_excel_template. Check it with render_preview.');
+    expect(text).toContain('write_word_template and write_excel_template switch a template that still uses a starter (HTML, Word or Excel) to their kind.');
   });
 });

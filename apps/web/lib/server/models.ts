@@ -57,7 +57,7 @@ export async function describeModel(): Promise<ModelInfo | null> {
 const FILE_VENDORS = ['anthropic', 'openai', 'google'] as const;
 
 /**
- * True when the model takes files (a PDF, a PNG) in tool results, so a Word render can
+ * True when the model takes files (a PDF, a PNG) in tool results, so a Word or Excel render can
  * show it the document. The Anthropic, OpenAI and Google providers do. Behind the
  * Gateway or OpenRouter, only those vendors' models (`anthropic/...`) are trusted to; a
  * model that cannot read a file would fail the whole answer. The local provider sends

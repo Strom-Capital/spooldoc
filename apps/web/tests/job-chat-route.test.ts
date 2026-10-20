@@ -141,15 +141,18 @@ describe('POST /api/jobs/[id]/chat', () => {
     expect(model.doStreamCalls[0]?.tools?.map((t) => t.name).sort()).toEqual([
       'add_template',
       'ask_user',
+      'edit_excel_template',
       'edit_word_template',
       'list_jobs',
       'read_carbone_reference',
+      'read_excel_template',
       'read_job_files',
       'read_sample_page',
       'read_word_template',
       'remove_template',
       'render_preview',
       'write_definition',
+      'write_excel_template',
       'write_template',
       'write_word_template',
     ]);
@@ -246,7 +249,54 @@ describe('POST /api/jobs/[id]/chat', () => {
     ]);
   });
 
-  it("shows the model an Excel template's cells, adds one and never writes over it", async () => {
+  it('designs and edits an Excel template as new files, and shows the model the PDF once', async () => {
+    await setDefinition(yaml);
+    setDocumentRenderer(fakeRenderer);
+    const design = {
+      sheets: [
+        {
+          name: 'Lines',
+          cells: [
+            { ref: 'A1', value: 'Invoice' },
+            { ref: 'A2', value: '{d.pgs[i].invoiceNo}' },
+            { ref: 'A3', value: '{d.pgs[i+1].lines[i+1]}' },
+          ],
+        },
+      ],
+    };
+    const model = scriptedModel(
+      toolStep('write_excel_template', { design, name: 'lines.xlsx' }),
+      toolStep('edit_excel_template', { edits: [{ part: 'xl/worksheets/sheet1.xml', find: '>Invoice<', replace: '>Invoice number<' }] }),
+      textStep('Done.'),
+    );
+    createModel.mockResolvedValue({ ...withKey(model), info: { provider: 'anthropic', id: 'claude-mock' } });
+    try {
+      await chunks(await chat());
+    } finally {
+      setDocumentRenderer(null);
+    }
+
+    const files = await db().select().from(templateFiles).orderBy(templateFiles.createdAt);
+    expect(files).toHaveLength(2);
+    const [first, second] = files;
+    const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    expect(first).toMatchObject({ name: 'lines.xlsx', contentType: XLSX, madeBy: 'assistant', previousId: null, createdBy: expect.any(String) });
+    expect(second).toMatchObject({ name: 'lines.xlsx', contentType: XLSX, madeBy: 'assistant', previousId: first!.id });
+    expect((await draft()).render.templates[0]).toMatchObject({ kind: 'xlsx', fileId: second!.id, scope: 'splf', formats: ['pdf'] });
+
+    // The step after each call has the PDF; the stored thread has the results' text only.
+    const toolResult = (call: number) =>
+      (model.doStreamCalls[call]!.prompt.at(-1) as { content: { output: { type: string; value: { type: string; mediaType?: string; text?: string }[] } }[] }).content[0]!.output;
+    expect(toolResult(1).value[1]).toMatchObject({ type: 'file', mediaType: 'application/pdf' });
+    expect(toolResult(2).value[1]).toMatchObject({ type: 'file', mediaType: 'application/pdf' });
+    expect(JSON.parse(toolResult(2).value[0]!.text!).textPreview).toContain('Lines!A1: "Invoice number"');
+    const thread = JSON.stringify(await storedThread());
+    expect(thread).toContain('"view":"pdf"');
+    expect(thread).toContain('"errorCells":0');
+    expect(thread).not.toContain(Buffer.from(PDF_BYTES).toString('base64'));
+  });
+
+  it("shows the model an Excel template's cells, adds one and keeps the Word tools off it", async () => {
     await setDefinition(yaml);
     setDocumentRenderer(fakeRenderer);
     const { parseDefinition, starterXlsx } = await import('@spooldoc/core');
@@ -264,7 +314,7 @@ describe('POST /api/jobs/[id]/chat', () => {
     try {
       const { parts } = await chunks(await chat());
       const outputs = parts.filter((p) => p.type === 'tool-output-available').map((p) => p.output as Record<string, unknown>);
-      expect(outputs[0]).toMatchObject({ ok: false, error: expect.stringMatching(/^The Lines template is an Excel template\. You cannot write or edit Excel files yet/) });
+      expect(outputs[0]).toMatchObject({ ok: false, error: expect.stringMatching(/^The Lines template is an Excel template with a file of its own: change it with edit_excel_template/) });
       expect(outputs[1]).toMatchObject({ ok: true, template: { name: 'Per invoice', kind: 'xlsx', scope: 'pageGroup', formats: ['xlsx'] } });
     } finally {
       setDocumentRenderer(null);

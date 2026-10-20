@@ -19,9 +19,9 @@ import { useWorkbench } from './workbench-provider';
 type FileInfo = { id: string; file: TemplateFileDetails } | { id: string; error: string };
 
 /**
- * The Word or Excel template shown: its `.docx` or `.xlsx`, uploaded or (Word) made by the
- * agent, or the starter template generated from the definition until there is one. The
- * user changes the file in Word or Excel; here they upload it, download it or the starter
+ * The Word or Excel template shown: its `.docx` or `.xlsx`, uploaded or made by the agent,
+ * or the starter template generated from the definition until there is one. The user
+ * changes the file in Word or Excel; here they upload it, download it or the starter
  * template, see what the tag check finds, by part or by sheet and cell, and put back the
  * file the agent replaced.
  */
@@ -150,7 +150,7 @@ export function FileTemplate({ kind }: { kind: FileTemplateContent['kind'] }) {
       {!fileId && (
         <EditorMessage tone="note">
           This template has no {app} file yet. The preview uses a starter template generated from the definition. Download it, change it in{' '}
-          {app} and upload it{kind === 'docx' ? ', or ask the agent to design one' : ''}.
+          {app} and upload it, or ask the agent to design one.
         </EditorMessage>
       )}
       {fileId && noPageSetup.length > 0 && (
