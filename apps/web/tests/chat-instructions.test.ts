@@ -254,7 +254,7 @@ describe('Excel templates in the instructions', () => {
     const starter = await fileTemplates([excel({ fileId: null })], yaml, async () => null);
     const text = buildInstructions({ sample, definitionYaml: yaml, templates: lines, masked: false, fileTemplates: { lines: starter.lines! } });
     expect(text).toContain('No Excel template file yet: the Excel starter template generated from the definition is used. Each file holds the whole spooled file');
-    expect(text).toContain('Lines!A3: {d.pgs[i].invoiceNo}');
+    expect(text).toContain('Lines!A2: {d.pgs[i].invoiceNo}');
     expect(text).toContain('## Excel templates');
     expect(text).toContain('You cannot write or edit Excel files yet.');
     expect(text).toContain(':formatD(X):div(86400):add(25569):formatN');

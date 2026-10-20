@@ -271,7 +271,7 @@ describe('POST /api/jobs/[id]/chat', () => {
     }
     const system = JSON.stringify(model.doStreamCalls[0]!.prompt[0]);
     expect(system).toContain('An Excel template file, `lines.xlsx`. Each file holds the whole spooled file');
-    expect(system).toContain('Lines!A3: {d.pgs[i].invoiceNo}');
+    expect(system).toContain('Lines!A2: {d.pgs[i].invoiceNo}');
     expect((await draft()).render.templates).toEqual([templates[0], { id: 'per-invoice', name: 'Per invoice', kind: 'xlsx', fileId: null, scope: 'pageGroup', formats: ['xlsx'] }]);
     expect(await db().select({ id: templateFiles.id }).from(templateFiles)).toHaveLength(1);
   });

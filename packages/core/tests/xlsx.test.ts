@@ -144,29 +144,31 @@ describe("starterXlsx", () => {
       expect(checkXlsx(read, def, scope)).toEqual([]);
       expect(sheetsWithoutPageSetup(read)).toEqual([]);
       expect(read.sheets.every((sheet) => sheet.merges.length === 0)).toBe(true);
+      // From :formatN: the flat starter has no formulas, the page group one has its totals.
       expect(xlsxHardRefresh(read)).toBe(true);
+      expect(read.sheets.some((sheet) => sheet.formulas > 0)).toBe(scope === "pageGroup");
     }
   });
 
-  it("lays out a whole spooled file as one flat sheet: totals, a header row, a row per line with the page group's fields", () => {
+  it("lays out a whole spooled file as one flat sheet: a header row, a row per line with the page group's fields, and no totals", () => {
     const bytes = starterXlsx(definition);
     const read = readXlsx(bytes);
     expect(read.sheets.map((sheet) => sheet.name)).toEqual(["Lines"]);
     const row = (n: number) => read.cells.filter((c) => c.row === n).map((c) => c.text);
-    expect(row(1)).toEqual(["Total"]);
-    expect(row(2).slice(0, 3)).toEqual(["Invoice No", "Invoice Date", "Due Date"]);
-    expect(row(2)).toContain("Amount");
-    expect(row(3).slice(0, 2)).toEqual(["{d.pgs[i].invoiceNo}", "{d.pgs[i].invoiceDate:formatD(X):div(86400):add(25569):formatN}"]);
-    expect(row(3)).toContain("{d.pgs[i].lines[i].amount:formatN}");
-    expect(row(4)).toEqual(["{d.pgs[i+1].lines[i+1]}"]);
+    expect(row(1).slice(0, 3)).toEqual(["Invoice No", "Invoice Date", "Due Date"]);
+    expect(row(1)).toContain("Amount");
+    expect(row(2).slice(0, 2)).toEqual(["{d.pgs[i].invoiceNo}", "{d.pgs[i].invoiceDate:formatD(X):div(86400):add(25569):formatN}"]);
+    expect(row(2)).toContain("{d.pgs[i].lines[i].amount:formatN}");
+    expect(row(3)).toEqual(["{d.pgs[i+1].lines[i+1]}"]);
+    expect(read.sheets[0]!.formulas).toBe(0);
     const files = unzipSync(bytes);
     const sheet = strFromU8(files["xl/worksheets/sheet1.xml"]!);
-    expect(sheet).toContain("<f>SUBTOTAL(9,W3:W1048576)</f>");
-    expect(sheet).toContain('<pane ySplit="2" topLeftCell="A3" activePane="bottomLeft" state="frozen"/>');
-    expect(sheet).toContain('<autoFilter ref="A2:W1048576"/>');
+    expect(sheet).not.toContain("<f>");
+    expect(sheet).toContain('<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>');
+    expect(sheet).toContain('<autoFilter ref="A1:W1048576"/>');
     expect(sheet).toContain('<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>');
     expect(sheet).toContain("Page &amp;P of &amp;N");
-    expect(strFromU8(files["xl/workbook.xml"]!)).toContain('<definedName name="_xlnm.Print_Titles" localSheetId="0">Lines!$2:$2</definedName>');
+    expect(strFromU8(files["xl/workbook.xml"]!)).toContain('<definedName name="_xlnm.Print_Titles" localSheetId="0">Lines!$1:$1</definedName>');
   });
 
   it("lays out one page group: the title, the fields and a table with its total under it", () => {

@@ -8,7 +8,7 @@ import { editDocx } from "../src/docx-edit.js";
 import { pdfPageCount, renderDocument } from "../src/render.js";
 import { checkTemplate } from "../src/tags.js";
 import { spooledFileData, starterTemplate, templateData } from "../src/template.js";
-import { checkXlsx, readXlsx, starterXlsx } from "../src/xlsx.js";
+import { checkXlsx, readXlsx, starterXlsx, xlsxHardRefresh } from "../src/xlsx.js";
 import { FIXTURES, loadFixture } from "./helpers/fixtures.js";
 import { invoiceDesign } from "./helpers/invoice-design.js";
 import { testPng } from "./helpers/png.js";
@@ -147,24 +147,33 @@ describe.skipIf(!url)("Carbone server", () => {
     }
   });
 
-  it("writes the Excel starter's numbers and dates as number cells, and its totals right", async () => {
+  it("writes the Excel starter's numbers and dates as number cells, and its page group totals right", async () => {
     const { sample, definition } = loadFixture("invoice");
     const { pageGroups } = extract(definition, sample);
     const lines = pageGroups.flatMap((g) => g.lines as { amount: number }[]);
-    const cells = sheetCells(await renderDocument(server, { kind: "xlsx", template: starterXlsx(definition), data: spooledFileData(pageGroups, sample), format: "xlsx" }));
-    // Row 1 the totals, row 2 the header, then a row per line.
-    expect(cells.get("A2")?.value).toBe("Invoice No");
-    expect(cells.get("W2")?.value).toBe("Amount");
-    expect(cells.get("A3")).toEqual({ type: "s", value: pageGroups[0]!.invoiceNo });
+    const flat = starterXlsx(definition);
+    // No formulas: hardRefresh comes from :formatN, and is still sent.
+    expect(readXlsx(flat).sheets[0]!.formulas).toBe(0);
+    expect(xlsxHardRefresh(readXlsx(flat))).toBe(true);
+    const cells = sheetCells(await renderDocument(server, { kind: "xlsx", template: flat, data: spooledFileData(pageGroups, sample), format: "xlsx" }));
+    // Row 1 the header, then a row per line, and nothing under them.
+    expect(cells.get("A1")?.value).toBe("Invoice No");
+    expect(cells.get("W1")?.value).toBe("Amount");
+    expect(cells.get("A2")).toEqual({ type: "s", value: pageGroups[0]!.invoiceNo });
     // 15.10.2026 as an Excel date serial.
-    expect(cells.get("B3")).toEqual({ type: "n", value: "46310" });
-    expect(cells.get("W3")).toEqual({ type: "n", value: String(lines[0]!.amount) });
-    expect(cells.get(`A${lines.length + 2}`)?.value).toBe(pageGroups.at(-1)!.invoiceNo);
-    expect(cells.has(`A${lines.length + 3}`)).toBe(false);
-    // hardRefresh: LibreOffice computed the total and stored it.
-    const total = cells.get("W1")!;
-    expect(total.formula).toBe("SUBTOTAL(9,W3:W1048576)");
-    expect(Number(total.value)).toBeCloseTo(lines.reduce((sum, line) => sum + line.amount, 0), 2);
+    expect(cells.get("B2")).toEqual({ type: "n", value: "46310" });
+    expect(cells.get("W2")).toEqual({ type: "n", value: String(lines[0]!.amount) });
+    expect(cells.get(`A${lines.length + 1}`)?.value).toBe(pageGroups.at(-1)!.invoiceNo);
+    expect(cells.has(`A${lines.length + 2}`)).toBe(false);
+    expect([...cells.values()].some((cell) => cell.formula)).toBe(false);
+
+    // The page group starter's total under its table: LibreOffice computed and stored it.
+    const first = pageGroups[0]!;
+    const one = sheetCells(
+      await renderDocument(server, { kind: "xlsx", template: starterXlsx(definition, "pageGroup"), data: templateData(readXlsx(starterXlsx(definition, "pageGroup")), first, pageGroups, sample), format: "xlsx" }),
+    );
+    const total = [...one.values()].find((cell) => cell.formula?.startsWith('SUM(INDIRECT(&quot;G'));
+    expect(Number(total?.value)).toBeCloseTo((first.lines as { amount: number }[]).reduce((sum, line) => sum + line.amount, 0), 2);
   });
 
   it("prints a long Excel starter on several A4 landscape pages", async () => {

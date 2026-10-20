@@ -168,8 +168,8 @@ describe('previewing an Excel template', () => {
     const id = await readyJob();
     await upload(id, badXlsx);
     const render = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, {}), params({ id }))).json();
-    expect(render.template.problems).toEqual([{ sheet: 'Lines', ref: 'A3', message: '{d.pgs[i].invoiceNumber} is not in the data. Did you mean {d.pgs[i].invoiceNo}?' }]);
-    expect(render.errors).toEqual(['Template Lines!A3: {d.pgs[i].invoiceNumber} is not in the data. Did you mean {d.pgs[i].invoiceNo}?']);
+    expect(render.template.problems).toEqual([{ sheet: 'Lines', ref: 'A2', message: '{d.pgs[i].invoiceNumber} is not in the data. Did you mean {d.pgs[i].invoiceNo}?' }]);
+    expect(render.errors).toEqual(['Template Lines!A2: {d.pgs[i].invoiceNumber} is not in the data. Did you mean {d.pgs[i].invoiceNo}?']);
     expect(render.pdf).toBeUndefined();
     expect(fakeCarbone).not.toHaveBeenCalled();
 
@@ -244,7 +244,7 @@ describe('runs with an Excel template', () => {
     await upload(id, badXlsx);
     const run = await runOnce(id);
     expect(run.status).toBe('failed');
-    expect(run.error).toBe('The "Lines" template has 1 problem. Lines!A3: {d.pgs[i].invoiceNumber} is not in the data. Did you mean {d.pgs[i].invoiceNo}?');
+    expect(run.error).toBe('The "Lines" template has 1 problem. Lines!A2: {d.pgs[i].invoiceNumber} is not in the data. Did you mean {d.pgs[i].invoiceNo}?');
     expect(fakeCarbone).not.toHaveBeenCalled();
   });
 });

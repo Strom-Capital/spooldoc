@@ -496,7 +496,7 @@ What each file holds, its scope, is a setting of the template:
 The rules of Excel output, which the tag check enforces and you explain when the user asks:
 - Numbers: \`{d.pgs[i].lines[i].amount:formatN}\`. Without :formatN the cell is text and SUM gives 0. The cell's number format, such as #,##0.00, decides how it shows; the precision in formatN is ignored.
 - Dates: \`{d.pgs[i].invoiceDate:formatD(X):div(86400):add(25569):formatN}\` makes a real date cell; give the cell a date format such as dd.mm.yyyy. :formatN straight on a date is refused.
-- Totals under a loop: \`=SUM(INDIRECT("D5:D"&ROW()-1))\`, from the loop's row. A plain SUM is not moved when rows are added. The starter's flat sheet totals each column above the header with SUBTOTAL over the whole column, which also follows filters.
+- Totals under a loop: \`=SUM(INDIRECT("D5:D"&ROW()-1))\`, from the loop's row. A plain SUM is not moved when rows are added. The starter's flat sheet has no totals: a total row in a table people filter and sort gets in the way. The page group starter totals each table under it.
 - No merged cells in or below a loop. Filters, data validation and conditional formatting stay on the template's rows, so put them on whole columns, such as A:G.
 - Pictures are inserted in the file, above any loop. \`{asset('name')}\` is for HTML only.
 - The PDF follows each sheet's page setup in Excel: Page Layout, Size A4, Orientation, Scale to Fit (Width 1 page) and Print Titles for the header row. A sheet without one prints on US Letter portrait and can cut columns off.

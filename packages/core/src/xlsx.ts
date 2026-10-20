@@ -503,28 +503,13 @@ function labels(columns: { column: StarterColumn; list?: string }[]): string[] {
 }
 
 /**
- * The flat sheet of a whole spooled file: a row per line of `block` (or per page group when
- * there is no block), with the page group's fields repeated on each row. Above the header
- * row, a total of each number column with SUBTOTAL over the whole column, so it stays right
- * when rows are added, sorted or filtered.
+ * The flat sheet of a whole spooled file: the header row, then a row per line of `block` (or
+ * per page group when there is no block), with the page group's fields repeated on each row.
+ * It has no total row: one inside a filtered, sortable table gets in the way.
  */
 function flatSheet(name: string, fields: StarterColumn[], block: StarterBlock | undefined): StarterSheet {
   const columns = [...fields.map((column) => ({ column, list: undefined as string | undefined })), ...(block?.columns ?? []).map((column) => ({ column, list: block!.name }))];
-  const totals = block ? block.columns : fields;
-  // The first column holds the label "Total", so it is not totalled.
-  const hasTotal = totals.some((c) => c.type === "number" && c !== columns[0]?.column);
-  const header = hasTotal ? 2 : 1;
-  const loop = header + 1;
   const rows: StarterCell[][] = [];
-  if (hasTotal) {
-    rows.push(
-      columns.map(({ column }, n) => {
-        const total = n > 0 && column.type === "number" && totals.includes(column);
-        if (total) return { formula: `SUBTOTAL(9,${columnName(n + 1)}${loop}:${columnName(n + 1)}${LAST_ROW})`, style: STYLE.total };
-        return n === 0 ? { text: "Total", style: STYLE.totalLabel } : { text: "", style: STYLE.totalLabel };
-      }),
-    );
-  }
   const names = labels(columns);
   rows.push(columns.map(({ column }, n) => ({ text: names[n]!, style: headerStyle(column.type) })));
   rows.push(
@@ -538,7 +523,7 @@ function flatSheet(name: string, fields: StarterColumn[], block: StarterBlock | 
     name,
     rows,
     widths: columns.map(({ column }, n) => columnWidth(column, names[n])),
-    header: { row: header, filter: true, printTitles: true },
+    header: { row: 1, filter: true, printTitles: true },
   };
 }
 
@@ -638,15 +623,14 @@ function sheetXml(sheet: StarterSheet, first: boolean, strings: Map<string, numb
 /**
  * An Excel starter template for a definition, built from `starterLayout`, that keeps every
  * rule of Carbone's Excel output: numbers with `:formatN` in number-formatted cells, dates as
- * Excel serials in date-formatted cells, totals that stay right when rows are added, no
+ * Excel serials in date-formatted cells, totals (per page group) that stay right when rows are added, no
  * merged cells, and a page setup on each sheet for the PDF: A4, landscape when the columns are
  * wider than portrait fits, one page wide, the header row on each page and "Page 1 of 2" in
  * the footer. The user opens it in Excel, styles it, and uploads it.
  *
  * - `splf` (the default): a flat sheet per table, record or group, with a row per line and
- *   the page group's fields repeated on each row, a frozen header row with a filter on the
- *   whole columns, and a total of each number column above the header. Without a table, a
- *   row per page group.
+ *   the page group's fields repeated on each row, and a frozen header row with a filter on
+ *   the whole columns. No totals. Without a table, a row per page group.
  * - `pageGroup`: the title and the fields, then a table for each table, record or group,
  *   each with its total under it.
  */

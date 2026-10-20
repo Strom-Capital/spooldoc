@@ -689,7 +689,7 @@ describe('Excel templates', () => {
     if (!result.ok) throw new Error(result.error);
     expect(result).toMatchObject({ content: 'starter', templateErrors: [] });
     // The fake Carbone sends the file back as it was: its cells are the text.
-    expect(result.textPreview).toContain('Lines!A3: {d.pgs[i].invoiceNo}');
+    expect(result.textPreview).toContain('Lines!A2: {d.pgs[i].invoiceNo}');
     const sent = fakeCarbone.mock.calls.at(-1)![0];
     expect(sent).toMatchObject({ kind: 'xlsx', format: 'xlsx' });
     expect(sentPageGroup(sent)).toBeUndefined();

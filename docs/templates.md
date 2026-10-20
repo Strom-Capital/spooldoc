@@ -254,10 +254,13 @@ per table, record or group:
 
 | Row | What it holds |
 |-----|---------------|
-| 1 | A total of each number column of the table, `=SUBTOTAL(9,W3:W1048576)`, which stays right when rows are added, sorted or filtered. |
-| 2 | The header row: frozen, filtered, and repeated on each printed page. |
-| 3 | `{d.pgs[i].invoiceNo}` ... `{d.pgs[i].lines[i].amount:formatN}`: the page group's fields, then the table's columns. |
-| 4 | `{d.pgs[i+1].lines[i+1]}`, the end of the loop. |
+| 1 | The header row: frozen, filtered, and repeated on each printed page. |
+| 2 | `{d.pgs[i].invoiceNo}` ... `{d.pgs[i].lines[i].amount:formatN}`: the page group's fields, then the table's columns. |
+| 3 | `{d.pgs[i+1].lines[i+1]}`, the end of the loop. |
+
+It has no total row: a total inside a table you filter and sort gets in
+the way. Excel's status bar shows the sum of the cells you select, also
+of a filtered column.
 
 For one page group, it has the title and the fields, then the first
 table with a total under each number column. Each other table is on a
@@ -386,7 +389,7 @@ first add the template's name: `invoice-260102-lines.pdf` or
 A template with problems fails the run, and the error names the template
 and the lines: `The "Lines" template has 1 problem. Line 12: ...`, or for
 a Word template the parts: `... has 1 problem. Body: ...`, and for an
-Excel template the sheet and cell: `... has 1 problem. Lines!A3: ...`. A
+Excel template the sheet and cell: `... has 1 problem. Lines!A2: ...`. A
 Word or Excel template whose file is gone fails the run and says to upload
 it again. An error from Carbone names the template and the page group, or
 the spooled file for a file of the whole spooled file.
