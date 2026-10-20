@@ -19,6 +19,7 @@ export const CHAT_TOOL_NAMES = [
   'list_jobs',
   'read_job_files',
   'read_carbone_reference',
+  'ask_user',
 ] as const;
 export type ChatToolName = (typeof CHAT_TOOL_NAMES)[number];
 
@@ -178,3 +179,20 @@ export type ReadJobFilesResult = { ok: true; id: string; name: string; definitio
 
 /** `read_carbone_reference`: one reference file of the Carbone Skill. */
 export type ReadCarboneReferenceResult = { ok: true; name: string; text: string } | ToolFailure;
+
+/** One answer `ask_user` offers: a short label, and a line on what it means. */
+export interface AskUserOption {
+  label: string;
+  description?: string;
+  /** The answer the agent recommends. Only the first may be. */
+  recommended?: boolean;
+}
+
+/** What `ask_user` takes: a question and 2 to 4 answers, shown as buttons. */
+export interface AskUserInput {
+  question: string;
+  options: AskUserOption[];
+}
+
+/** `ask_user`: the question is on screen, and the answer comes in the user's next message. */
+export type AskUserResult = { ok: true; asked: true } | ToolFailure;

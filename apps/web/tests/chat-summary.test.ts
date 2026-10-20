@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chatActivity, chatErrorText, savedFile, toolSummary } from '@/lib/client/chat';
+import { askedQuestion, chatActivity, chatErrorText, questionAnswer, savedFile, toolSummary } from '@/lib/client/chat';
 
 const done = (toolName: string, output: unknown, input: unknown = {}) => ({ toolName, state: 'output-available', input, output });
 
@@ -143,5 +143,46 @@ describe('chatActivity', () => {
     expect(chatActivity(assistant({ type: 'reasoning', state: 'streaming', text: 'Look at page 1' }), 'streaming')).toBeNull();
     expect(chatActivity(assistant({ type: 'reasoning', state: 'streaming', text: '' }), 'streaming')).toBe('Thinking');
     expect(chatActivity(assistant({ type: 'text', state: 'done', text: 'Saved.' }), 'streaming')).toBe('Thinking');
+  });
+});
+
+describe('ask_user in the chat', () => {
+  const input = {
+    question: 'Both make PDF. For this invoice I recommend HTML.',
+    options: [
+      { label: 'HTML', description: 'Edited here in Spooldoc', recommended: true },
+      { label: 'Word', description: 'Edited in Word' },
+    ],
+  };
+
+  it('summarizes the call in one line', () => {
+    expect(toolSummary({ toolName: 'ask_user', state: 'input-streaming', input: {} })).toEqual({ text: 'Asking a question', tone: 'running' });
+    expect(toolSummary(done('ask_user', { ok: true, asked: true }, input))).toEqual({ text: 'Asked a question', tone: 'ok' });
+    expect(toolSummary(done('ask_user', { ok: false, error: 'Two answers have the same label. Give each its own.' }, input))).toEqual({
+      text: 'Question not asked: Two answers have the same label. Give each its own.',
+      tone: 'warn',
+    });
+  });
+
+  it('shows a question once it is asked, never one that streams in or was turned down', () => {
+    expect(askedQuestion(done('ask_user', { ok: true, asked: true }, input))).toEqual(input);
+    expect(askedQuestion({ toolName: 'ask_user', state: 'input-available', input })).toBeNull();
+    expect(askedQuestion(done('ask_user', { ok: false, error: 'Only the first answer can be recommended.' }, input))).toBeNull();
+    expect(askedQuestion(done('write_template', { ok: true }, input))).toBeNull();
+  });
+
+  it('shows no button for an answer without a label, and none at all without answers', () => {
+    const odd = { question: 'Which page is the cover page?', options: [{ label: '  ' }, { label: 'Page 1' }, null] };
+    expect(askedQuestion(done('ask_user', { ok: true, asked: true }, odd))?.options).toEqual([{ label: 'Page 1' }]);
+    expect(askedQuestion(done('ask_user', { ok: true, asked: true }, { question: 'Which page?' }))).toEqual({ question: 'Which page?', options: [] });
+    expect(askedQuestion(done('ask_user', { ok: true, asked: true }, { question: ' ', options: input.options }))).toBeNull();
+  });
+
+  it("takes the user's next message as the answer, typed or clicked, and none before it", () => {
+    const asked = { role: 'assistant', parts: [{ type: 'tool-ask_user', state: 'output-available' }] };
+    const user = (text: string) => ({ role: 'user', parts: [{ type: 'text', text }] });
+    expect(questionAnswer([user('Propose a template'), asked], 1)).toBeNull();
+    expect(questionAnswer([user('Propose a template'), asked, user('Word')], 1)).toBe('Word');
+    expect(questionAnswer([asked, { role: 'assistant', parts: [] }, user(' Make it Word, please ')], 0)).toBe('Make it Word, please');
   });
 });

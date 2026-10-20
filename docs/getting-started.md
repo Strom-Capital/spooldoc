@@ -72,7 +72,8 @@ Rendering. See [Contributing](contributing.md) for the tools and the tests.
 6. **Let the agent propose.** With a model set under Settings, ask the
    agent for a definition. It reads the sample pages, writes a YAML
    definition, reads the extraction report and fixes missing fields, then
-   writes a template and renders it. The page view, the JSON and the
+   asks whether you want an HTML or a Word template, writes it and renders
+   it. The page view, the JSON and the
    preview update as it works. Without a model, write the definition by
    hand; the starter template renders every field and table. See
    [Definitions](definitions.md) and [Templates](templates.md).

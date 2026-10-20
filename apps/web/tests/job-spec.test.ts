@@ -8,6 +8,7 @@ import {
   jobSpecSchema,
   nameTaken,
   missingParts,
+  settledKind,
   newTemplate,
   templateFileName,
   templateSlug,
@@ -114,6 +115,16 @@ describe('Word templates', () => {
     expect(hasOwnContent({ kind: 'docx', fileId: null })).toBe(false);
     expect(hasOwnContent(html)).toBe(true);
     expect(formatList(['pdf', 'docx'])).toBe('PDF and DOCX');
+  });
+
+  it('settles the kind of a template with content of its own, a Word one, or formats only one kind makes', () => {
+    const starter: JobTemplate = { id: 'main', name: 'Document', kind: 'html', source: null, formats: ['pdf'] };
+    expect(settledKind(starter)).toBeNull();
+    expect(settledKind(html)).toEqual({ kind: 'html', reason: 'content' });
+    expect(settledKind({ ...starter, formats: ['pdf', 'html'] })).toEqual({ kind: 'html', reason: 'formats' });
+    expect(settledKind({ id: 'main', name: 'Document', kind: 'docx', fileId: null, formats: ['pdf'] })).toEqual({ kind: 'docx', reason: 'chosen' });
+    const file = '00000000-0000-4000-8000-000000000001';
+    expect(settledKind({ id: 'main', name: 'Document', kind: 'docx', fileId: file, formats: ['pdf', 'docx'] })).toEqual({ kind: 'docx', reason: 'content' });
   });
 
   it('says which files a switch to the other kind stops making', () => {

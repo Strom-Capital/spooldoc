@@ -1,6 +1,8 @@
 import { extract, parseDefinition, readDocx, starterDocx, type HtmlRender } from '@spooldoc/core';
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { z } from 'zod';
 import type {
+  AskUserResult,
   JobTemplateFiles,
   ListJobsResult,
   TemplateChangeResult,
@@ -13,7 +15,7 @@ import type {
   WriteTemplateResult,
 } from '@/lib/chat-types';
 import { jobSpecSchema, withContent, type JobTemplate } from '@/lib/job-spec';
-import { buildTools, visibleText, type DraftStore, type JobFiles, type JobFilesReader } from '@/lib/server/chat';
+import { ASK_USER_TOOL, buildTools, optionsProblem, visibleText, type DraftStore, type JobFiles, type JobFilesReader } from '@/lib/server/chat';
 import type { DocumentRenderer } from '@/lib/server/documents';
 import type { TemplateFileView } from '@/lib/types';
 import { fakeCarbone, fakeRenderer, PDF_BYTES, PNG_BYTES } from './helpers/carbone';
@@ -631,5 +633,44 @@ describe('Word templates by the agent', () => {
     expect(added).toMatchObject({ ok: true, template: { name: 'Letter', kind: 'docx', formats: ['docx'], content: 'starter' } });
     const wrong = await call<TemplateChangeResult>(tools().add_template, { name: 'Web', kind: 'docx', formats: ['html'] });
     expect(wrong).toEqual({ ok: false, error: 'A Word template makes PDF and DOCX files, not HTML.' });
+  });
+});
+
+describe('ask_user', () => {
+  const schema = () => tools().ask_user.inputSchema as z.ZodType;
+  const html = { label: 'HTML', description: 'Edited here in Spooldoc, and can also make an HTML page', recommended: true };
+  const word = { label: 'Word', description: 'Edited in Word, and can also make a DOCX' };
+  const question = 'Both make PDF. For this invoice I recommend HTML.';
+
+  it('takes a question and 2 to 4 short answers, each with an optional line', () => {
+    expect(ASK_USER_TOOL).toBe('ask_user');
+    expect(schema().safeParse({ question, options: [html, word] }).success).toBe(true);
+    expect(schema().safeParse({ question, options: [{ label: 'Yes' }, { label: 'No' }] }).success).toBe(true);
+    expect(schema().safeParse({ question, options: [html] }).success).toBe(false);
+    expect(schema().safeParse({ question, options: [] }).success).toBe(false);
+    expect(schema().safeParse({ question, options: ['A', 'B', 'C', 'D', 'E'].map((label) => ({ label })) }).success).toBe(false);
+    expect(schema().safeParse({ question: ' ', options: [html, word] }).success).toBe(false);
+    expect(schema().safeParse({ question, options: [{ label: '' }, word] }).success).toBe(false);
+    expect(schema().safeParse({ question, options: [{ label: 'x'.repeat(41) }, word] }).success).toBe(false);
+  });
+
+  it('asks, and writes nothing to the draft', async () => {
+    const before = structuredClone(store.templates);
+    expect(await call<AskUserResult>(tools().ask_user, { question, options: [html, word] })).toEqual({ ok: true, asked: true });
+    expect(store.templates).toEqual(before);
+    expect(store.yaml).toBe('');
+  });
+
+  it('turns down answers that are alike, or a recommendation that is not first', async () => {
+    expect(await call<AskUserResult>(tools().ask_user, { question, options: [word, { ...html, recommended: false }, { label: 'word' }] })).toEqual({
+      ok: false,
+      error: 'Two answers have the same label. Give each its own.',
+    });
+    expect(await call<AskUserResult>(tools().ask_user, { question, options: [word, html] })).toEqual({
+      ok: false,
+      error: 'Only the first answer can be recommended. Put the one you recommend first.',
+    });
+    expect(optionsProblem([html, word])).toBeNull();
+    expect(optionsProblem([word, { label: 'HTML' }])).toBeNull();
   });
 });

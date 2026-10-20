@@ -33,6 +33,8 @@ import {
 import { tool, type JSONValue, type UIMessage } from 'ai';
 import { z } from 'zod';
 import type {
+  AskUserOption,
+  AskUserResult,
   FieldReport,
   JobListing,
   JobTemplateFiles,
@@ -50,7 +52,21 @@ import type {
   WriteDefinitionResult,
   WriteTemplateResult,
 } from '@/lib/chat-types';
-import { findTemplate, formatList, hasOwnContent, KIND_FORMATS, nameTaken, newTemplate, FORMATS, withContent, type JobTemplate } from '@/lib/job-spec';
+import {
+  findTemplate,
+  formatList,
+  hasOwnContent,
+  KIND_FORMATS,
+  nameTaken,
+  newTemplate,
+  FORMATS,
+  settledKind,
+  TEMPLATE_KINDS,
+  withContent,
+  type JobTemplate,
+  type KindReason,
+  type TemplateKind,
+} from '@/lib/job-spec';
 import type { CarboneCheck, TemplateFileView } from '@/lib/types';
 import { CARBONE_REFERENCES, CARBONE_SKILL, CARBONE_SKILL_SOURCE, type CarboneReference } from './carbone-skill.generated';
 import type { DocumentRenderer } from './documents';
@@ -163,6 +179,10 @@ export const DATA_NOT_INSTRUCTIONS =
 export const OTHER_JOBS_RULE =
   'Use list_jobs and read_job_files only when the user asks to start from or reuse another job; then adapt what you take to this sample and save it with write_definition and write_template (and add_template for a template this job does not have).';
 
+/** How the agent asks the user anything. Tests look for it. */
+export const ASK_RULE =
+  'Ask every question with ask_user, one question at a time, never as plain text with choices. End your answer after it: the user clicks an answer or types another, and it comes in their next message.';
+
 const PREFIX = 4;
 
 /** `  9: text`, with the text cut at the page width. Column 1 is the first character after `: `. */
@@ -198,6 +218,63 @@ function visiblePages(sample: Sample, masked: boolean): SamplePage[] {
 
 /** A template's kind in the instructions. */
 const KIND_NAMES = { html: 'HTML', docx: 'Word' } as const;
+
+/**
+ * What the agent tells the user about each kind of template when it asks which to make:
+ * how it is edited and what else it makes, and what to recommend it for. Every kind makes
+ * PDF, so the choice is about who edits the layout and where. A new kind adds its line here.
+ */
+export const KIND_ADVICE: Record<TemplateKind, { edited: string; recommend: string }> = {
+  html: {
+    edited: 'edited here in Spooldoc, the quickest to make and previewed right away; it can also make an HTML page, for example an email body',
+    recommend: 'Recommend it for business documents sent as PDF, such as invoices, delivery notes and order confirmations, and when nothing points to another kind.',
+  },
+  docx: {
+    edited: 'edited in Word by the user; it can also make a DOCX',
+    recommend: 'Recommend it when people want to change the layout themselves, the recipient needs a DOCX, or the document is a letter with long fixed text.',
+  },
+};
+
+/** Why a template's kind is settled, in the instructions. */
+function kindReason(kind: TemplateKind, reason: KindReason, template: JobTemplate): string {
+  if (reason === 'content') return 'it has content of its own';
+  if (reason === 'chosen') return `the user chose ${KIND_NAMES[kind]} for it`;
+  const only = template.formats.filter((format) => TEMPLATE_KINDS.every((other) => other === kind || !KIND_FORMATS[other].includes(format)));
+  return `its formats include ${formatList(only)}, which only ${KIND_NAMES[kind]} templates make`;
+}
+
+/** The section on which kind of template to make, and when to ask the user. Tests look for its rules. */
+export function kindSection(templates: JobTemplate[]): string {
+  const kinds = TEMPLATE_KINDS.map((kind) => `- ${KIND_NAMES[kind]}: ${KIND_ADVICE[kind].edited}. ${KIND_ADVICE[kind].recommend}`).join('\n');
+  const names = TEMPLATE_KINDS.map((kind) => KIND_NAMES[kind]).join(' or ');
+  const each = templates
+    .map((template) => {
+      const settled = settledKind(template);
+      return settled
+        ? `- ${template.name} (id \`${template.id}\`): make it ${KIND_NAMES[settled.kind]} without asking: ${kindReason(settled.kind, settled.reason, template)}.`
+        : `- ${template.name} (id \`${template.id}\`): not settled; ask before you write it.`;
+    })
+    .join('\n');
+  return `## Which kind of template
+
+Every kind of template makes PDF, so the choice is about who edits the layout and where:
+${kinds}
+
+${ASK_KIND_RULE} Offer one option per kind, labelled ${names}, each with a one-line description. Put the one you recommend first, with \`recommended: true\`, and give the reason in the question, from what you extracted. For example: "Both make PDF. HTML is edited here in Spooldoc and can also make an HTML page, for example for an email. Word is edited in Word and can also make a DOCX. For this invoice I recommend HTML."
+${NO_ASK_RULE}
+For Word, write_word_template switches a template that still uses the HTML starter. The user picks the formats, such as DOCX, in the render step.
+
+The templates of this job:
+${each}`;
+}
+
+/** When the agent asks which kind of template to make. Tests look for it. */
+export const ASK_KIND_RULE =
+  'When the extraction is good and the template you are about to write is not settled below, ask the user which kind of template to make with ask_user before you write it, and end your answer there.';
+
+/** When it does not ask. Tests look for it. */
+export const NO_ASK_RULE =
+  'Do not ask when the user\'s message already names a kind ("make a Word invoice", "an HTML template"): make that kind. Do not ask about a template that is settled below either.';
 
 const fence = (lang: string, body: string): string => `\`\`\`${lang}\n${body.replace(/```/g, '`​``')}\n\`\`\``;
 
@@ -248,10 +325,11 @@ export function buildInstructions({
 How to work:
 1. Read the pages below. Propose a definition in YAML and save it with write_definition.
 2. Read the extraction report it returns. Fix fields that are missing, empty when they should not be, or hold the wrong text, and write the definition again.
-3. Write the template: HTML with write_template, or a Word template with write_word_template or edit_word_template. Check it with render_preview. A job has one or more templates, each with its own content and formats; the tools take the template, and default to the first.
+3. Settle the kind of template (see Which kind of template); ask the user when it is not settled. Then write the template: HTML with write_template, or a Word template with write_word_template or edit_word_template. Check it with render_preview. A job has one or more templates, each with its own content and formats; the tools take the template, and default to the first.
 4. Repeat until nothing that should be found is missing.
 5. End with a short summary of what you did and anything the user should check.
 When the layout is ambiguous (where a page group starts, which page is a cover page, what a value means), ask the user instead of guessing.
+${ASK_RULE}
 ${masked ? 'Masking is on: digits in values show as 9 and letters as X or x. Labels that repeat across pages stay readable. Positions and lengths are exact, so build anchors on labels and positions, not on values.' : 'Masking is off: you see the values as printed.'}
 ${DATA_NOT_INSTRUCTIONS}`,
 
@@ -335,6 +413,8 @@ The tags and data are the same as in HTML: \`{d.pageGroup.invoiceNo}\`, \`{d.pag
 - Pictures are inserted in the file and are the same in every document; \`{asset('name')}\` is for HTML only.
 - When the user types tags in Word themselves: Word types curly quotes by default, and Carbone prints a tag with them as text. Tell them to turn off smart quotes (File, Options, Proofing, AutoCorrect Options, AutoFormat As You Type).`,
 
+    kindSection(templates),
+
     `## Designing a document
 
 Business documents are read quickly, filed and often printed in black and white. Design for that:
@@ -362,6 +442,7 @@ Business documents are read quickly, filed and often printed in black and white.
 - list_jobs: the other jobs with their definition type, templates and whether those have content of their own.
 - read_job_files: another job's definition YAML and the content of each of its templates.
 - read_carbone_reference: one reference file of the Carbone syntax reference, such as formatters or html-templates.
+- ask_user: asks the user one question with 2 to 4 answers shown as buttons. The answer comes in the user's next message.
 ${OTHER_JOBS_RULE}
 Values in tool results are ${masked ? 'masked like the pages' : 'shown as extracted'}.`,
 
@@ -1356,6 +1437,28 @@ export function buildTools({ sample: current, store, masked, assets = [], render
       },
     }),
 
+    ask_user: tool({
+      description:
+        "Ask the user one question, with 2 to 4 answers shown as buttons. Put the answer you recommend first, with `recommended: true`. The user clicks one or types another answer, which comes in their next message, so end your answer after this call and do not repeat the question in text.",
+      inputSchema: z.object({
+        question: z.string().trim().min(1).max(600).describe('The question, with the reason for your recommendation'),
+        options: z
+          .array(
+            z.object({
+              label: z.string().trim().min(1).max(40).describe('A short answer, such as "HTML"'),
+              description: z.string().trim().max(160).optional().describe('One line on what the answer means'),
+              recommended: z.boolean().optional().describe('True on the answer you recommend, which comes first'),
+            }),
+          )
+          .min(2)
+          .max(4),
+      }),
+      execute: async ({ options }): Promise<AskUserResult> => {
+        const problem = optionsProblem(options);
+        return problem ? fail(problem) : { ok: true, asked: true };
+      },
+    }),
+
     read_carbone_reference: tool({
       description:
         'Read one reference file of the Carbone syntax reference (the Carbone Skill): formatters, loops, conditions, HTML templates and more. Use it to check a formatter or a pattern before writing it.',
@@ -1365,6 +1468,29 @@ export function buildTools({ sample: current, store, masked, assets = [], render
       execute: async ({ name }): Promise<ReadCarboneReferenceResult> => ({ ok: true, name, text: CARBONE_REFERENCES[name] }),
     }),
   };
+}
+
+/** Why `ask_user` options cannot be shown, or null when they can: no two alike, and only the first recommended. */
+export function optionsProblem(options: AskUserOption[]): string | null {
+  const labels = options.map((option) => option.label.trim().toLowerCase());
+  if (new Set(labels).size < labels.length) {
+    return 'Two answers have the same label. Give each its own.';
+  }
+  if (options.some((option, index) => option.recommended && index > 0)) {
+    return 'Only the first answer can be recommended. Put the one you recommend first.';
+  }
+  return null;
+}
+
+/** The tool that asks the user a question: the answer ends the model's turn (`stopWhen` in the chat route). */
+export const ASK_USER_TOOL = 'ask_user';
+
+/**
+ * The stop condition for a question to the user: true when the last step asked one. A call
+ * `ask_user` turned down does not stop, so the model reads the error and asks again.
+ */
+export function askedUser({ steps }: { steps: { toolResults: { toolName: string; output: unknown }[] }[] }): boolean {
+  return steps.at(-1)?.toolResults.some((result) => result.toolName === ASK_USER_TOOL && (result.output as AskUserResult | undefined)?.ok === true) ?? false;
 }
 
 /** The chat tool set. */

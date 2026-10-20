@@ -6,7 +6,9 @@ description: "The agent beside the job builder: which models it uses, what it ca
 The agent sits beside the workbench in the job builder. Ask it for a
 definition and it reads the sample pages, writes the YAML to the job's
 draft, reads the extraction report, fixes missing fields, then writes a
-template and renders it: HTML, or a Word template it designs or edits. The page view, the JSON and the preview update as
+template and renders it: HTML, or a Word template it designs or edits. When
+it is not clear which kind you want, it
+[asks you first](#which-kind-of-template). The page view, the JSON and the preview update as
 it works, and everything it writes can be edited by hand. Without a model
 set, the job builder works as before and the agent points to Settings.
 
@@ -35,9 +37,9 @@ request can read one back.
 
 ## What it can do
 
-The agent works through twelve tools: nine on the job's draft and its
-preview sample, two that read other jobs' files, and one that reads the
-Carbone syntax reference:
+The agent works through thirteen tools: nine on the job's draft and its
+preview sample, two that read other jobs' files, one that reads the
+Carbone syntax reference, and one that asks you a question:
 
 | Tool | What it does |
 |------|--------------|
@@ -53,6 +55,7 @@ Carbone syntax reference:
 | `list_jobs` | Lists the other jobs with their definition type, templates and whether those have content of their own. |
 | `read_job_files` | Reads another job's definition YAML and each of its templates, from its active version or else its draft, so a new job can start from them. |
 | `read_carbone_reference` | Reads one reference file of the Carbone syntax reference, such as the list of formatters. |
+| `ask_user` | Asks you one question with two to four answers, shown as buttons in the panel. Click one, or type another answer in the message box. The agent waits for your answer before it goes on. |
 
 The model adds or removes templates only when you ask for it. It uses the
 last two tools only when you ask it to start from or reuse another job ("start from the Invoices job's template"); it adapts what it
@@ -62,6 +65,41 @@ without a model is "Start from job" in the template editor's bar.
 No tool reaches the IBM i, the job log or any other spooled file, and
 nothing it writes is a version: save one yourself when the result is
 right.
+
+**Questions.** When something is unclear, such as where a page group
+starts or what a value means, the agent asks instead of guessing, one
+question at a time. Its answer ends there, and the question shows with
+its answers as buttons, the one it recommends first. Click an answer or
+type your own; once you answer, the buttons no longer send. If the answer
+cannot be sent, the panel shows the error; type the answer again to retry.
+
+## Which kind of template
+
+Both kinds of [template](templates.md) make PDF. The choice is about who
+edits the layout, and where:
+
+- **HTML** is edited here in Spooldoc. It is the quickest to make, the
+  preview shows it right away, and it can also make an HTML page, for
+  example an email body.
+- **Word** is edited in Word, by you. It can also make a DOCX.
+
+Once the definition reads the sample well, and before it writes the
+template, the agent asks which kind to make. It recommends one, with a
+reason from what it extracted: HTML for business documents sent as PDF,
+such as invoices, delivery notes and order confirmations; Word when
+people want to change the layout themselves, the recipient needs a DOCX,
+or the document is a letter with long fixed text. For example: "Both make
+PDF. HTML is edited here in Spooldoc and can also make an HTML page, for
+example for an email. Word is edited in Word and can also make a DOCX.
+For this invoice I recommend HTML."
+
+It does not ask when:
+
+- your message already names a kind ("make a Word invoice", "an HTML
+  template"),
+- the template already has content of its own,
+- the template is a Word template already, or its formats settle it: a
+  template that makes HTML is an HTML template.
 
 ## Word templates
 

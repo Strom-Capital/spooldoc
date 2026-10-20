@@ -1,7 +1,7 @@
 'use client';
 
 import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport, isToolUIPart, type UIMessage } from 'ai';
+import { DefaultChatTransport, getToolName, isToolUIPart, type UIMessage } from 'ai';
 import { MessageSquarePlusIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
@@ -21,7 +21,8 @@ import { useAppInfo } from '@/components/app-info';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { api, errorText, isAbort } from '@/lib/client/api';
-import { chatActivity, chatErrorText } from '@/lib/client/chat';
+import { askedQuestion, chatActivity, chatErrorText, questionAnswer } from '@/lib/client/chat';
+import { AgentQuestion } from './agent-question';
 import { ToolSummary } from './tool-summary';
 import { useWorkbenchSync } from './use-workbench-sync';
 import { useWorkbench } from './workbench-provider';
@@ -173,7 +174,7 @@ function ChatThread({
                 </div>
               </div>
             )}
-            {messages.map((message) => (
+            {messages.map((message, messageIndex) => (
               <Message key={message.id} from={message.role} className={message.role === 'assistant' ? 'max-w-full' : undefined}>
                 <MessageContent className={message.role === 'assistant' ? 'w-full' : undefined}>
                   {message.parts.map((part, index) => {
@@ -197,7 +198,12 @@ function ChatThread({
                       );
                     }
                     if (isToolUIPart(part)) {
-                      return <ToolSummary key={part.toolCallId} part={part} />;
+                      const question = askedQuestion({ toolName: getToolName(part), state: part.state, input: part.input, output: part.output });
+                      return question ? (
+                        <AgentQuestion key={part.toolCallId} question={question} answer={questionAnswer(messages, messageIndex)} busy={busy} onAnswer={send} />
+                      ) : (
+                        <ToolSummary key={part.toolCallId} part={part} />
+                      );
                     }
                     return null;
                   })}
