@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Page } from '@/components/page';
@@ -150,21 +149,23 @@ export function QueueFilesPage({
 
   return (
     <Page
-      back={{ href: `/queues?server=${serverId}`, label: 'Queues' }}
+      breadcrumbs={[
+        { label: 'Queues', href: '/queues' },
+        { label: serverName, href: `/queues?server=${serverId}` },
+        {
+          label: (
+            <span className="font-mono">
+              {library}/{queue}
+            </span>
+          ),
+        },
+      ]}
       title={
         <span className="font-mono">
           {library}/{queue}
         </span>
       }
-      description={
-        <>
-          Spooled files on{' '}
-          <Link href="/servers" className="hover:underline">
-            {serverName}
-          </Link>
-          , newest first.
-        </>
-      }
+      description="Spooled files, newest first."
       actions={
         <>
           {refreshButton('Refresh', 'Refreshing...')}

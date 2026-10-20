@@ -138,9 +138,15 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
   }
 
   const filtered = !!(job || status || from || to);
+  // The job filter's list already has the names; until it loads, the trail is Job log alone.
+  const jobName = job ? jobs.find((j) => j.id === job)?.name : undefined;
 
   return (
-    <Page className="max-w-7xl" title="Job log" description="Every run of every job: what was read, what was delivered and what failed.">
+    <Page
+      className="max-w-7xl"
+      title="Job log"
+      breadcrumbs={jobName ? [{ label: 'Job log', href: '/runs' }, { label: jobName }] : undefined}
+      description="Every run of every job: what was read, what was delivered and what failed.">
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
           <Label htmlFor="filter-job" className="text-xs">

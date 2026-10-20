@@ -34,9 +34,13 @@ names. See [Servers](servers.md).
 
 ## The files of a queue
 
-Open a queue to list its spooled files: name, number, job, user data, form
-type, status, pages and when it was created. Four filters narrow the list.
-The first three are a "contains" match:
+Open a queue to list its spooled files. The path above the title names
+the queue's place: Queues, the server and the queue. Queues opens the
+Queues page, and the server opens it on that server.
+
+The list shows each file's name, number, job, user data, form type,
+status, pages and when it was created. Four filters narrow the list. The
+first three are a "contains" match:
 
 | Filter | Matches |
 |--------|---------|

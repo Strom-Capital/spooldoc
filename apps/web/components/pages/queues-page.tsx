@@ -232,10 +232,11 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   return (
     <Page
       title="Queues"
+      breadcrumbs={server ? [{ label: 'Queues', href: '/queues' }, { label: server.name }] : undefined}
       description={
         server
-          ? // With one server there is no picker, so the description names it.
-            `Output queues${servers?.length === 1 ? ` of ${server.name}` : ''} in ${server.libraries.length > 0 ? server.libraries.join(', ') : 'every library'}. Hide the ones you don't need; jobs only offer visible queues.`
+          ? // The trail names the server, so the description only says where the queues are.
+            `Output queues in ${server.libraries.length > 0 ? server.libraries.join(', ') : 'every library'}. Hide the ones you don't need; jobs only offer visible queues.`
           : 'Output queues of a server.'
       }
     >

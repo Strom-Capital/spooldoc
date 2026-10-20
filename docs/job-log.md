@@ -7,6 +7,8 @@ The Job log lists every run of every job, newest first: the job and the
 version it used, the spooled file, what started it (Run now or the
 watcher), when it started, its status, and the files it delivered.
 Filter by job, status and date. Open a run to see its steps.
+Filtered to one job, the path at the top names the job, and Job log in
+the path opens the log without filters.
 
 <p align="center">
   <picture>

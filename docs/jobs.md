@@ -11,6 +11,9 @@ job builder shows the pipeline as six steps, and each step opens an
 inspector. Hide pipeline under the steps makes more room, and Show
 pipeline brings them back.
 
+The path at the top of the builder, Jobs and the job name, links back to
+the Jobs page. Click the name to rename the job.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/job-builder-dark.png">

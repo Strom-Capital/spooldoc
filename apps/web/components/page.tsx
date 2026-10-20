@@ -1,22 +1,30 @@
 import { cn } from 'cn';
-import { ArrowLeftIcon } from 'lucide-react';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
-import { Button } from '@/components/ui/button';
+import { Fragment, type ReactNode } from 'react';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
 
-/** A page with a title, a description and actions on the right; `back` links to the page above, left of the actions. */
+/** One step of a page's breadcrumb trail; without `href` it is the current page. */
+type Crumb = { label: ReactNode; href?: string };
+
+/**
+ * A page with a title, a description and actions on the right. A page that sits under
+ * another page passes `breadcrumbs`, its path from the section down: each item with an
+ * `href` links to a page above, and the last item, without one, names this page. The
+ * trail shows only with two or more items; top-level pages have none, as the sidebar
+ * covers them.
+ */
 export function Page({
   title,
   description,
   actions,
-  back,
+  breadcrumbs,
   children,
   className,
 }: {
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
-  back?: { href: string; label: string };
+  breadcrumbs?: Crumb[];
   children: ReactNode;
   className?: string;
 }) {
@@ -24,23 +32,30 @@ export function Page({
     <main className={cn('mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8', className)}>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
+          {breadcrumbs && breadcrumbs.length > 1 && (
+            <Breadcrumb className="mb-1.5">
+              <BreadcrumbList>
+                {breadcrumbs.map((crumb, i) => (
+                  <Fragment key={crumb.href ?? 'current'}>
+                    {i > 0 && <BreadcrumbSeparator />}
+                    <BreadcrumbItem className="min-w-0">
+                      {crumb.href ? (
+                        <BreadcrumbLink asChild>
+                          <Link href={crumb.href}>{crumb.label}</Link>
+                        </BreadcrumbLink>
+                      ) : (
+                        <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                      )}
+                    </BreadcrumbItem>
+                  </Fragment>
+                ))}
+              </BreadcrumbList>
+            </Breadcrumb>
+          )}
           <h1 className="font-semibold text-2xl tracking-tight">{title}</h1>
           {description && <p className="mt-1 text-muted-foreground text-sm">{description}</p>}
         </div>
-        {(actions || back) && (
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Beside the actions, not above the title, so the heading stays put between pages. */}
-            {back && (
-              <Button asChild variant="ghost">
-                <Link href={back.href}>
-                  <ArrowLeftIcon aria-hidden />
-                  {back.label}
-                </Link>
-              </Button>
-            )}
-            {actions}
-          </div>
-        )}
+        {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
       {children}
     </main>

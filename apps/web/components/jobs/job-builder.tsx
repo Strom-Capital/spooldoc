@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -128,19 +129,31 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
     <div className="shrink-0 border-b">
       <div className="flex min-h-12 flex-wrap items-center gap-2 px-3 py-1.5">
         <div className="min-w-0 flex-1">
-          {editing ? (
-            <form onSubmit={onRename} className="max-w-sm">
-              <Input name="name" defaultValue={job.name} autoFocus onBlur={(event) => event.currentTarget.form?.requestSubmit()} aria-label="Job name" className="h-7" />
-            </form>
-          ) : (
-            <button type="button" onClick={() => setEditing(true)} className="max-w-full truncate rounded px-1 text-left font-semibold hover:bg-muted" title="Rename">
-              {job.name}
-            </button>
-          )}
+          <Breadcrumb>
+            <BreadcrumbList className="gap-1">
+              <BreadcrumbItem className="px-1">
+                <BreadcrumbLink asChild>
+                  <Link href="/jobs">Jobs</Link>
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+              <BreadcrumbSeparator />
+              <BreadcrumbItem className="min-w-0">
+                {/* Not BreadcrumbPage: its role="link" would wrap the rename button and input. */}
+                <span aria-current="page" className="block min-w-0 max-w-full text-foreground">
+                  {editing ? (
+                    <form onSubmit={onRename} className="w-72 max-w-full">
+                      <Input name="name" defaultValue={job.name} autoFocus onBlur={(event) => event.currentTarget.form?.requestSubmit()} aria-label="Job name" className="h-7" />
+                    </form>
+                  ) : (
+                    <button type="button" onClick={() => setEditing(true)} className="block max-w-full truncate rounded px-1 text-left font-semibold hover:bg-muted" title="Rename">
+                      {job.name}
+                    </button>
+                  )}
+                </span>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
           <div className="flex flex-wrap items-center gap-1.5 px-1 text-muted-foreground text-xs">
-            <Link href="/jobs" className="hover:underline">
-              Jobs
-            </Link>
             {job.activeVersion !== null ? (
               <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
                 v{job.activeVersion} active
