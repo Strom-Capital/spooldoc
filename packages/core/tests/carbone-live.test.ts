@@ -1,3 +1,4 @@
+import { strFromU8, unzipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { carboneRender, carboneStatus, isCarboneError, probeEdition, type CarboneError } from "../src/carbone.js";
 import { extract } from "../src/extract.js";
@@ -6,7 +7,8 @@ import { buildDocx } from "../src/docx-design.js";
 import { editDocx } from "../src/docx-edit.js";
 import { pdfPageCount, renderDocument } from "../src/render.js";
 import { checkTemplate } from "../src/tags.js";
-import { starterTemplate, templateData } from "../src/template.js";
+import { spooledFileData, starterTemplate, templateData } from "../src/template.js";
+import { checkXlsx, readXlsx, starterXlsx } from "../src/xlsx.js";
 import { FIXTURES, loadFixture } from "./helpers/fixtures.js";
 import { invoiceDesign } from "./helpers/invoice-design.js";
 import { testPng } from "./helpers/png.js";
@@ -23,6 +25,22 @@ const server = { url: url ?? "" };
 function pageSizes(pdf: Uint8Array): [number, number][] {
   const text = Buffer.from(pdf).toString("latin1");
   return [...text.matchAll(/\/MediaBox\s*\[\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\]/g)].map((m) => [Number(m[3]) - Number(m[1]), Number(m[4]) - Number(m[2])]);
+}
+
+/** The cells of the first sheet of an XLSX Carbone made: each cell's type and value, by reference. */
+function sheetCells(xlsx: Uint8Array): Map<string, { type: string; value: string | undefined; formula?: string }> {
+  const files = unzipSync(xlsx);
+  const strings = [...strFromU8(files["xl/sharedStrings.xml"] ?? new Uint8Array()).matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) =>
+    [...m[1]!.matchAll(/<t[^>]*>([^<]*)<\/t>/g)].map((t) => t[1]).join(""),
+  );
+  const cells = new Map<string, { type: string; value: string | undefined; formula?: string }>();
+  for (const m of strFromU8(files["xl/worksheets/sheet1.xml"]!).matchAll(/<c r="([A-Z]+\d+)"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
+    const type = /t="(\w+)"/.exec(m[2]!)?.[1] ?? "n";
+    const value = /<v>([^<]*)<\/v>/.exec(m[3] ?? "")?.[1];
+    const formula = /<f[^>]*>([^<]*)<\/f>/.exec(m[3] ?? "")?.[1];
+    cells.set(m[1]!, { type, value: type === "s" && value !== undefined ? strings[Number(value)] : value, ...(formula ? { formula } : {}) });
+  }
+  return cells;
 }
 
 async function failure(promise: Promise<unknown>): Promise<CarboneError> {
@@ -112,6 +130,58 @@ describe.skipIf(!url)("Carbone server", () => {
     const read = readDocx(template);
     const out = readDocx(await renderDocument(server, { kind: "docx", template, data: templateData(read, pageGroups[0]!, pageGroups, sample), format: "docx" }));
     expect(out.paragraphs[0]!.text).toBe(`Invoice ${String(pageGroups[0]!.invoiceNo)}`);
+  });
+
+  it.each(FIXTURES)("renders the %s Excel starter templates to XLSX and PDF", async (name) => {
+    const { sample, definition } = loadFixture(name);
+    const { pageGroups } = extract(definition, sample);
+    for (const scope of ["splf", "pageGroup"] as const) {
+      const template = starterXlsx(definition, scope);
+      const read = readXlsx(template);
+      expect(checkXlsx(read, definition, scope)).toEqual([]);
+      const data = scope === "splf" ? spooledFileData(pageGroups, sample) : templateData(read, pageGroups[0]!, pageGroups, sample);
+      const xlsx = readXlsx(await renderDocument(server, { kind: "xlsx", template, data, format: "xlsx" }));
+      expect(xlsx.text).not.toMatch(/\{d\.|\[i/);
+      const pdf = await renderDocument(server, { kind: "xlsx", template, data, format: "pdf" });
+      expect(Buffer.from(pdf.subarray(0, 5)).toString()).toBe("%PDF-");
+    }
+  });
+
+  it("writes the Excel starter's numbers and dates as number cells, and its totals right", async () => {
+    const { sample, definition } = loadFixture("invoice");
+    const { pageGroups } = extract(definition, sample);
+    const lines = pageGroups.flatMap((g) => g.lines as { amount: number }[]);
+    const cells = sheetCells(await renderDocument(server, { kind: "xlsx", template: starterXlsx(definition), data: spooledFileData(pageGroups, sample), format: "xlsx" }));
+    // Row 1 the totals, row 2 the header, then a row per line.
+    expect(cells.get("A2")?.value).toBe("Invoice No");
+    expect(cells.get("W2")?.value).toBe("Amount");
+    expect(cells.get("A3")).toEqual({ type: "s", value: pageGroups[0]!.invoiceNo });
+    // 15.10.2026 as an Excel date serial.
+    expect(cells.get("B3")).toEqual({ type: "n", value: "46310" });
+    expect(cells.get("W3")).toEqual({ type: "n", value: String(lines[0]!.amount) });
+    expect(cells.get(`A${lines.length + 2}`)?.value).toBe(pageGroups.at(-1)!.invoiceNo);
+    expect(cells.has(`A${lines.length + 3}`)).toBe(false);
+    // hardRefresh: LibreOffice computed the total and stored it.
+    const total = cells.get("W1")!;
+    expect(total.formula).toBe("SUBTOTAL(9,W3:W1048576)");
+    expect(Number(total.value)).toBeCloseTo(lines.reduce((sum, line) => sum + line.amount, 0), 2);
+  });
+
+  it("prints a long Excel starter on several A4 landscape pages", async () => {
+    const { sample, definition } = loadFixture("order-report");
+    const { pageGroups } = extract(definition, sample);
+    // 400 lines, enough for several pages.
+    const many = Array.from({ length: 10 }, () => pageGroups).flat();
+    const pdf = await renderDocument(server, { kind: "xlsx", template: starterXlsx(definition), data: spooledFileData(many, sample), format: "pdf" });
+    const pages = pdfPageCount(pdf)!;
+    expect(pages).toBeGreaterThan(1);
+    const sizes = pageSizes(pdf);
+    expect(sizes).toHaveLength(pages);
+    // A4 landscape, since the columns are wider than portrait fits.
+    for (const [width, height] of sizes) {
+      expect(width).toBeCloseTo(842, 0);
+      expect(height).toBeCloseTo(595, 0);
+    }
   });
 
   it("keeps the paper-size rule: the template's @page wins, else landscape above 160 columns", async () => {

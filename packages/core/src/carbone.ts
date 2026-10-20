@@ -107,7 +107,7 @@ export function carboneError(status: number, code: string | undefined, error: st
     return new CarboneError("template", "A showBegin or hideBegin in the template has no showEnd or hideEnd. Add the end tag after the part to show or hide.", info);
   }
   if (code === "w118" || status === 415) {
-    return new CarboneError("file", "Carbone could not read the template. It is damaged, or not an HTML or Word document. Save it again.", info);
+    return new CarboneError("file", "Carbone could not read the template. It is damaged, or not an HTML, Word or Excel document. Save it again.", info);
   }
   if (status >= 500 && (/Document converter/i.test(text) || (/\bconverter\b/i.test(text) && /\bunavailable\b/i.test(text)))) {
     return new CarboneError("server", "Carbone could not convert the document. Check that the Carbone service has its converters (the full image).", info);
@@ -188,12 +188,13 @@ export async function carboneStatus(server: CarboneServer): Promise<{ version: s
 export interface CarboneRenderRequest {
   template: string | Uint8Array;
   data: unknown;
-  convertTo: "html" | "pdf" | "txt" | "docx" | "png";
-  /** `C` (Chromium) for HTML to PDF; `I` (ICE) or `L` (LibreOffice) for Word to PDF. */
+  convertTo: "html" | "pdf" | "txt" | "docx" | "xlsx" | "png";
+  /** `C` (Chromium) for HTML to PDF; `I` (ICE) or `L` (LibreOffice) for Word to PDF; `L` for Excel to PDF. */
   converter?: "C" | "L" | "O" | "I";
   /**
    * Word output: `false` returns the file as Carbone filled it. With `true`, Carbone
    * Enterprise passes a file with page-count fields through LibreOffice, which rewrites it.
+   * Excel output: `true` has LibreOffice compute the formulas and store their values.
    */
   hardRefresh?: boolean;
   /** Separators for `:formatN` and names in `:formatD`. Default `en-us`. */
