@@ -4,6 +4,8 @@ import { db } from './helpers/fixtures';
 import { sessionCookie, signUp } from './helpers/auth';
 import { appRequest } from './helpers/mocks';
 
+const { POST } = await import('@/app/api/auth/[...all]/route');
+
 const { currentUser, requireUser, userCount } = await import('@/lib/server/auth');
 
 describe('app login', () => {
@@ -41,4 +43,43 @@ describe('app login', () => {
     const response = await signUp('admin@example.com', 'short');
     expect(response.status).toBe(400);
   });
+
+  it('changes the name, and the session shows it', async () => {
+    const cookie = sessionCookie(await signUp());
+    const response = await POST(appRequest('/api/auth/update-user', { method: 'POST', headers: { cookie }, body: { name: 'Dev User' } }));
+    expect(response.status).toBe(200);
+    expect(await currentUser(appRequest('/api/jobs', { headers: { cookie } }))).toMatchObject({ name: 'Dev User', email: 'admin@example.com' });
+  });
+
+  it('refuses a wrong current password with the code the Profile page reads', async () => {
+    const cookie = sessionCookie(await signUp());
+    const response = await changePassword(cookie, 'wrong-password-123', 'another-long-password');
+    expect(response.status).toBe(400);
+    expect((await response.json()).code).toBe('INVALID_PASSWORD');
+  });
+
+  it('refuses a short new password with the code the Profile page reads', async () => {
+    const cookie = sessionCookie(await signUp());
+    const response = await changePassword(cookie, 'correct-horse-battery', 'short');
+    expect(response.status).toBe(400);
+    expect((await response.json()).code).toBe('PASSWORD_TOO_SHORT');
+  });
+
+  it('changes the password and signs out the other sessions', async () => {
+    const other = sessionCookie(await signUp());
+    const signIn = await POST(appRequest('/api/auth/sign-in/email', { method: 'POST', body: { email: 'admin@example.com', password: 'correct-horse-battery' } }));
+    const cookie = sessionCookie(signIn);
+
+    const response = await changePassword(cookie, 'correct-horse-battery', 'another-long-password');
+    expect(response.status).toBe(200);
+    const kept = sessionCookie(response) || cookie;
+    expect(await currentUser(appRequest('/api/jobs', { headers: { cookie: kept } }))).not.toBeNull();
+    expect(await currentUser(appRequest('/api/jobs', { headers: { cookie: other } }))).toBeNull();
+  });
 });
+
+function changePassword(cookie: string, currentPassword: string, newPassword: string): Promise<Response> {
+  return POST(
+    appRequest('/api/auth/change-password', { method: 'POST', headers: { cookie }, body: { currentPassword, newPassword, revokeOtherSessions: true } }),
+  );
+}
