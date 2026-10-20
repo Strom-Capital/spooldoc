@@ -1,4 +1,12 @@
-import type { OutputQueue, OutputQueueFilter, QueueRef, SpooledFileEntry, SpooledFileFilter } from "../connection.js";
+import type {
+  OutputQueue,
+  OutputQueueFilter,
+  QueueFileCount,
+  QueueFileCountFilter,
+  QueueRef,
+  SpooledFileEntry,
+  SpooledFileFilter,
+} from "../connection.js";
 import { ATTRIBUTE_DEFAULTS, positiveInt, splitJobName, sqlTimestamp, toNumber, toText } from "../attributes.js";
 
 /** An SQL statement with parameter marker values. */
@@ -98,6 +106,41 @@ export function spooledFilesQuery(queue: QueueRef, filter: SpooledFileFilter = {
     `FETCH FIRST ${limit} ROWS ONLY`,
   ].join("\n");
   return { sql, params };
+}
+
+/**
+ * Spooled files per queue and status, from the QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC view.
+ * The view reads every spooled file the user can see, so this is slower than the
+ * queue list and is asked for on its own.
+ */
+export function queueFileCountsQuery(filter: QueueFileCountFilter): SqlQuery {
+  const params: string[] = [];
+  const where: string[] = [];
+  const statuses = [...new Set(filter.status.map((s) => s.trim().toUpperCase()).filter(Boolean))];
+  where.push(statuses.length > 0 ? `STATUS IN (${statuses.map(() => "?").join(", ")})` : "1 = 0");
+  params.push(...statuses);
+  const libraries = [...new Set((filter.libraries ?? []).map((lib) => lib.trim().toUpperCase()).filter(Boolean))];
+  if (libraries.length > 0) {
+    where.push(`OUTPUT_QUEUE_LIBRARY_NAME IN (${libraries.map(() => "?").join(", ")})`);
+    params.push(...libraries);
+  }
+  const sql = [
+    "SELECT OUTPUT_QUEUE_LIBRARY_NAME, OUTPUT_QUEUE_NAME, STATUS, COUNT(*) AS FILES",
+    "FROM QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC",
+    `WHERE ${where.join(" AND ")}`,
+    "GROUP BY OUTPUT_QUEUE_LIBRARY_NAME, OUTPUT_QUEUE_NAME, STATUS",
+  ].join("\n");
+  return { sql, params };
+}
+
+/** Maps a `queueFileCountsQuery` row. */
+export function mapQueueFileCountRow(row: Row): QueueFileCount {
+  return {
+    library: toText(row.OUTPUT_QUEUE_LIBRARY_NAME),
+    name: toText(row.OUTPUT_QUEUE_NAME),
+    status: toText(row.STATUS),
+    files: toNumber(row.FILES) ?? 0,
+  };
 }
 
 /** Maps a QSYS2.OUTPUT_QUEUE_INFO row. */

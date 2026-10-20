@@ -25,19 +25,25 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SkeletonRows } from '@/components/skeleton-rows';
 import { EmptyState, TableEmpty } from '@/components/empty-state';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
-import type { QueueView, ServerView } from '@/lib/types';
+import type { QueueCountView, QueueView, ServerView } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { NewJobButton } from './new-job-button';
 
-type SortKey = 'library' | 'name' | 'files' | 'text';
-const COLUMNS: { key: SortKey; label: string; numeric?: boolean }[] = [
-  { key: 'library', label: 'Library' },
-  { key: 'name', label: 'Queue' },
-  { key: 'files', label: 'Files', numeric: true },
-  { key: 'text', label: 'Text' },
+type CountKey = 'ready' | 'held' | 'total';
+type SortKey = 'library' | 'name' | CountKey | 'text';
+/** The file counts, under one Files header. Ready and held are what a job can pick up. */
+const COUNT_COLUMNS: { key: CountKey; label: string; tip: string }[] = [
+  { key: 'ready', label: 'Ready', tip: 'Files every job on this queue picks up.' },
+  { key: 'held', label: 'Held', tip: 'Files a job picks up when it takes held files too.' },
+  {
+    key: 'total',
+    label: 'Total',
+    tip: 'Every spooled file on the queue, as WRKOUTQ counts them. Besides ready and held files, this includes saved and open files and files a printer is working on.',
+  },
 ];
 
 const queueKey = (q: { library: string; name: string }) => `${q.library}/${q.name}`;
@@ -54,6 +60,8 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   const [showHidden, setShowHidden] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'library', desc: false });
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Ready and held counts load after the list: counting reads every spooled file.
+  const [counted, setCounted] = useState<{ serverId: string; counts: Map<string, QueueCountView> | null; error: ShownError | null } | null>(null);
 
   useEffect(() => {
     api<{ servers: ServerView[] }>('/api/servers').then(
@@ -110,16 +118,50 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
     };
   }, [server, q]);
 
+  useEffect(() => {
+    if (!server) {
+      return;
+    }
+    const controller = new AbortController();
+    api<{ counts: QueueCountView[] }>(`/api/servers/${server.id}/queue-counts`, { signal: controller.signal }).then(
+      (data) => setCounted({ serverId: server.id, counts: new Map(data.counts.map((count) => [queueKey(count), count])), error: null }),
+      (err) => {
+        if (!isAbort(err)) {
+          setCounted({ serverId: server.id, counts: null, error: shownError(err) });
+        }
+      },
+    );
+    return () => controller.abort();
+  }, [server]);
+
+  const counts = counted && server && counted.serverId === server.id ? counted : null;
+  // A queue missing from the counts has no ready or held files; null while not counted.
+  const countOf = useCallback(
+    (queue: QueueView, key: CountKey): number | null => {
+      if (key === 'total') return queue.files;
+      if (!counts?.counts) return null;
+      return counts.counts.get(queueKey(queue))?.[key] ?? 0;
+    },
+    [counts],
+  );
+
   const shown = useMemo(() => {
     const rows = (queues ?? []).filter((queue) => showHidden || !queue.hidden);
     const dir = sort.desc ? -1 : 1;
     return rows.sort((a, b) => {
-      const order = sort.key === 'files' ? a.files - b.files : String(a[sort.key]).localeCompare(String(b[sort.key]));
+      const order =
+        sort.key === 'library' || sort.key === 'name' || sort.key === 'text'
+          ? a[sort.key].localeCompare(b[sort.key])
+          : (countOf(a, sort.key) ?? -1) - (countOf(b, sort.key) ?? -1);
       return dir * (order || queueKey(a).localeCompare(queueKey(b)));
     });
-  }, [queues, showHidden, sort]);
+  }, [queues, showHidden, sort, countOf]);
 
   const hiddenCount = queues?.filter((queue) => queue.hidden).length ?? 0;
+  // With one library every row has the same one, so there is no Library column to read or sort.
+  const oneLibrary = server?.libraries.length === 1;
+  const columns = oneLibrary ? 7 : 8;
+  const shownSort = oneLibrary && sort.key === 'library' ? { ...sort, key: 'name' as const } : sort;
 
   const setHidden = useCallback(
     (targets: QueueView[], hidden: boolean): Promise<void> => {
@@ -152,7 +194,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   const allSelected = shown.length > 0 && selectedRows.length === shown.length;
 
   function toggleSort(key: SortKey) {
-    setSort((current) => ({ key, desc: current.key === key ? !current.desc : false }));
+    setSort((current) => ({ key, desc: shownSort.key === key ? !current.desc : false }));
   }
 
   if (servers?.length === 0) {
@@ -172,24 +214,21 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
       title="Queues"
       description={
         server
-          ? server.libraries.length > 0
-            ? `Output queues in ${server.libraries.join(', ')}. Hide the ones you don't need; jobs only offer visible queues.`
-            : "Output queues in every library. Hide the ones you don't need; jobs only offer visible queues."
+          ? // With one server there is no picker, so the description names it.
+            `Output queues${servers?.length === 1 ? ` of ${server.name}` : ''} in ${server.libraries.length > 0 ? server.libraries.join(', ') : 'every library'}. Hide the ones you don't need; jobs only offer visible queues.`
           : 'Output queues of a server.'
-      }
-      actions={
-        servers && servers.length > 0 ? (
-          <ServerSelect servers={servers} value={server?.id ?? null} onChange={(id) => router.push(`/queues?server=${id}`)} />
-        ) : null
       }
     >
       <div className="mb-4 flex flex-wrap items-center gap-3">
+        {servers && servers.length > 1 && (
+          <ServerSelect servers={servers} value={server?.id ?? null} onChange={(id) => router.push(`/queues?server=${id}`)} />
+        )}
         <div className="relative w-full max-w-sm">
           <SearchIcon className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" aria-hidden />
           <Input
             value={q}
             onChange={(event) => setQ(event.target.value)}
-            placeholder="Library or queue, or LIB/QUEUE"
+            placeholder={oneLibrary ? 'Queue name' : 'Library or queue, or LIB/QUEUE'}
             aria-label="Search output queues"
             className="pl-8"
             spellCheck={false}
@@ -222,32 +261,43 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
           {error.message}
         </ErrorNote>
       )}
+      {!error && counts?.error && (
+        <ErrorNote className="mb-4" detail={counts.error.detail}>
+          Could not count the ready and held files. {counts.error.message}
+        </ErrorNote>
+      )}
       <div className="overflow-x-auto rounded-lg border">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-muted-foreground">
             <tr>
-              <th className="w-8 px-3 py-2">
+              <th rowSpan={2} className="w-8 px-3 py-2 align-bottom">
                 <Checkbox
                   checked={allSelected}
                   onCheckedChange={(checked) => setSelected(checked ? new Set(shown.map(queueKey)) : new Set())}
                   aria-label="Select all queues"
                 />
               </th>
-              {COLUMNS.map((column) => (
-                <th key={column.key} className={`px-3 py-2 font-medium ${column.numeric ? 'text-right' : ''}`} aria-sort={sort.key === column.key ? (sort.desc ? 'descending' : 'ascending') : 'none'}>
-                  <button type="button" onClick={() => toggleSort(column.key)} className="inline-flex items-center gap-1 hover:text-foreground">
-                    {column.label}
-                    {sort.key === column.key && (sort.desc ? <ArrowDownIcon className="size-3" /> : <ArrowUpIcon className="size-3" />)}
-                  </button>
-                </th>
-              ))}
-              <th className="px-3 py-2">
+              {!oneLibrary && <SortHeader column="library" label="Library" sort={shownSort} onSort={toggleSort} rowSpan={2} />}
+              <SortHeader column="name" label="Queue" sort={shownSort} onSort={toggleSort} rowSpan={2} />
+              {/* The line under Files spans the three counts, so they read as one group. */}
+              <th colSpan={3} scope="colgroup" className="px-3 pt-2 text-center font-medium">
+                <span className="block border-b pb-1">Files</span>
+              </th>
+              <SortHeader column="text" label="Text" sort={shownSort} onSort={toggleSort} rowSpan={2} />
+              <th rowSpan={2} className="px-3 py-2">
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
+            <tr>
+              {COUNT_COLUMNS.map((column) => (
+                <SortHeader key={column.key} column={column.key} label={column.label} tip={column.tip} sort={shownSort} onSort={toggleSort} numeric />
+              ))}
+            </tr>
           </thead>
           <tbody aria-busy={loading} className={cn(loading && queues && 'opacity-60 transition-opacity')}>
-            {!queues && !error && <SkeletonRows widths={['w-4', 'w-16', 'w-24', 'ml-auto w-6', 'w-48', 'ml-auto w-40']} />}
+            {!queues && !error && (
+              <SkeletonRows widths={['w-4', ...(oneLibrary ? [] : ['w-16']), 'w-24', 'ml-auto w-5', 'ml-auto w-5', 'ml-auto w-6', 'w-48', 'ml-auto w-40']} />
+            )}
             {server &&
               shown.map((queue) => (
                 <tr key={queueKey(queue)} className={`border-t hover:bg-muted/40 ${queue.hidden ? 'text-muted-foreground' : ''}`}>
@@ -265,7 +315,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
                       aria-label={`Select ${queueKey(queue)}`}
                     />
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs">{queue.library}</td>
+                  {!oneLibrary && <td className="px-3 py-2 font-mono text-xs">{queue.library}</td>}
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-1.5">
                       <Link
@@ -287,7 +337,9 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
                       {queue.hidden && <span className="rounded bg-muted px-1.5 text-[11px]">Hidden</span>}
                     </div>
                   </td>
-                  <td className="tabular px-3 py-2 text-right">{queue.files}</td>
+                  {COUNT_COLUMNS.map((column) => (
+                    <CountCell key={column.key} column={column.key} value={countOf(queue, column.key)} failed={!!counts?.error} />
+                  ))}
                   <td className="px-3 py-2 text-muted-foreground">{queue.text}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-end gap-1">
@@ -316,7 +368,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
               !loading &&
               (queues.length > 0 ? (
                 <TableEmpty
-                  colSpan={6}
+                  colSpan={columns}
                   icon={EyeOffIcon}
                   title="Every queue here is hidden"
                   description={q.trim() ? 'The queues that match the search are all hidden.' : 'You have hidden all the queues of this server.'}
@@ -327,7 +379,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
                   </Button>
                 </TableEmpty>
               ) : q.trim() ? (
-                <TableEmpty colSpan={6} icon={SearchXIcon} title="No output queues match" description={`Nothing matches "${q.trim()}". Search by library, queue name, or LIB/QUEUE.`}>
+                <TableEmpty colSpan={columns} icon={SearchXIcon} title="No output queues match" description={`Nothing matches "${q.trim()}". ${oneLibrary ? 'Search by queue name.' : 'Search by library, queue name, or LIB/QUEUE.'}`}>
                   <Button variant="outline" onClick={() => setQ('')}>
                     <XIcon />
                     Clear search
@@ -335,7 +387,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
                 </TableEmpty>
               ) : (
                 <TableEmpty
-                  colSpan={6}
+                  colSpan={columns}
                   icon={InboxIcon}
                   title="No output queues"
                   description={
@@ -356,5 +408,75 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
         </table>
       </div>
     </Page>
+  );
+}
+
+/** A sortable column header; numeric ones are right-aligned and may explain themselves in a tooltip. */
+function SortHeader({
+  column,
+  label,
+  tip,
+  sort,
+  onSort,
+  numeric = false,
+  rowSpan,
+}: {
+  column: SortKey;
+  label: string;
+  tip?: string;
+  sort: { key: SortKey; desc: boolean };
+  onSort: (key: SortKey) => void;
+  numeric?: boolean;
+  rowSpan?: number;
+}) {
+  const active = sort.key === column;
+  const button = (
+    <button type="button" onClick={() => onSort(column)} className="inline-flex items-center gap-1 hover:text-foreground">
+      {label}
+      {active && (sort.desc ? <ArrowDownIcon className="size-3" /> : <ArrowUpIcon className="size-3" />)}
+    </button>
+  );
+  return (
+    <th
+      rowSpan={rowSpan}
+      className={cn('px-3 py-2 align-bottom font-medium', numeric && 'text-right')}
+      aria-sort={active ? (sort.desc ? 'descending' : 'ascending') : 'none'}
+    >
+      {tip ? (
+        <Tooltip>
+          <TooltipTrigger asChild>{button}</TooltipTrigger>
+          <TooltipContent className="max-w-64">{tip}</TooltipContent>
+        </Tooltip>
+      ) : (
+        button
+      )}
+    </th>
+  );
+}
+
+/**
+ * One file count. Ready files are what a job takes next, so a queue with some stands
+ * out; zeros and the total stay quiet. A placeholder while counting, a dash when it failed.
+ */
+function CountCell({ column, value, failed }: { column: CountKey; value: number | null; failed: boolean }) {
+  return (
+    <td
+      className={cn(
+        'tabular px-3 py-2 text-right',
+        (column === 'total' || value === 0) && 'text-muted-foreground',
+        column === 'ready' && !!value && 'font-medium',
+      )}
+    >
+      {value !== null ? (
+        value
+      ) : failed ? (
+        <span className="text-muted-foreground">
+          <span aria-hidden>–</span>
+          <span className="sr-only">Not counted</span>
+        </span>
+      ) : (
+        <Skeleton className="ml-auto h-4 w-5" />
+      )}
+    </td>
   );
 }

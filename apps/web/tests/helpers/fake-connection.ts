@@ -5,6 +5,8 @@ import {
   type CommandResult,
   type Connection,
   type OutputQueue,
+  type QueueFileCount,
+  type QueueFileCountFilter,
   type QueueRef,
   type SpooledFileEntry,
   type SpooledFileFilter,
@@ -94,6 +96,22 @@ export class FakeConnection implements Connection {
       .map((s) => ({ ...s.splf, status: this.status.get(key(s)) ?? 'HELD', attributes: { ...s.attributes, chrid: null, jobCcsid: null } }))
       .filter((entry) => !filter.status?.length || filter.status.includes(entry.status))
       .slice(0, filter.limit ?? 200);
+  }
+
+  async countSpooledFiles(filter: QueueFileCountFilter): Promise<QueueFileCount[]> {
+    this.record('countSpooledFiles', filter);
+    const key = (s: Sample) => `${s.splf.name}/${s.splf.number}/${s.splf.jobNumber}/${s.splf.jobUser}/${s.splf.jobName}`;
+    const libraries = filter.libraries ?? [];
+    const counts = new Map<string, QueueFileCount>();
+    for (const s of this.samples) {
+      const { library, name } = s.attributes.queue;
+      const status = this.status.get(key(s)) ?? 'HELD';
+      if (!filter.status.includes(status) || (libraries.length > 0 && !libraries.includes(library))) continue;
+      const count = counts.get(`${library}/${name}/${status}`) ?? { library, name, status, files: 0 };
+      count.files++;
+      counts.set(`${library}/${name}/${status}`, count);
+    }
+    return [...counts.values()];
   }
 
   async readSpooledFile(id: SpooledFileId): Promise<{ bytes: Uint8Array; attributes: SpooledFileAttributes }> {

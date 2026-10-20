@@ -1,7 +1,15 @@
 import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 import * as root from "../src/index.js";
-import { containsPattern, mapQueueRow, mapSpooledFileRow, outputQueuesQuery, spooledFilesQuery } from "../src/index.js";
+import {
+  containsPattern,
+  mapQueueFileCountRow,
+  mapQueueRow,
+  mapSpooledFileRow,
+  outputQueuesQuery,
+  queueFileCountsQuery,
+  spooledFilesQuery,
+} from "../src/index.js";
 
 describe("outputQueuesQuery", () => {
   it("lists every queue without a filter, ordered by library and name", () => {
@@ -83,6 +91,37 @@ describe("spooledFilesQuery", () => {
     expect(spooledFilesQuery({ library: "L", name: "Q" }, { limit: -3 }).sql).toMatch(/FETCH FIRST 200 ROWS/);
     expect(spooledFilesQuery({ library: "L", name: "Q" }, { limit: 2.6 }).sql).toMatch(/FETCH FIRST 3 ROWS/);
     expect(spooledFilesQuery({ library: "L", name: "Q" }, { limit: 1e9 }).sql).toMatch(/FETCH FIRST 10000 ROWS/);
+  });
+});
+
+describe("queueFileCountsQuery", () => {
+  it("counts the files of each queue by status, upper-cased and without duplicates", () => {
+    const { sql, params } = queueFileCountsQuery({ status: ["ready", "HELD", "READY"] });
+    expect(sql).toContain("FROM QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC");
+    expect(sql).toContain("WHERE STATUS IN (?, ?)");
+    expect(sql).toMatch(/GROUP BY OUTPUT_QUEUE_LIBRARY_NAME, OUTPUT_QUEUE_NAME, STATUS$/);
+    expect(params).toEqual(["READY", "HELD"]);
+  });
+
+  it("limits to exact libraries", () => {
+    const { sql, params } = queueFileCountsQuery({ status: ["READY"], libraries: ["mylib", " ", "MYLIB"] });
+    expect(sql).toContain("WHERE STATUS IN (?) AND OUTPUT_QUEUE_LIBRARY_NAME IN (?)");
+    expect(params).toEqual(["READY", "MYLIB"]);
+  });
+
+  it("counts nothing without a status", () => {
+    const { sql, params } = queueFileCountsQuery({ status: [" "] });
+    expect(sql).toContain("WHERE 1 = 0");
+    expect(params).toEqual([]);
+  });
+
+  it("maps a row", () => {
+    expect(mapQueueFileCountRow({ OUTPUT_QUEUE_LIBRARY_NAME: "MYLIB ", OUTPUT_QUEUE_NAME: "MYOUTQ", STATUS: "READY", FILES: "12" })).toEqual({
+      library: "MYLIB",
+      name: "MYOUTQ",
+      status: "READY",
+      files: 12,
+    });
   });
 });
 

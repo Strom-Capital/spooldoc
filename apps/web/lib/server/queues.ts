@@ -2,7 +2,7 @@ import 'server-only';
 
 import type { Connection, OutputQueue } from '@spooldoc/ibmi';
 import { and, eq } from 'drizzle-orm';
-import type { QueueView } from '@/lib/types';
+import type { QueueCountView, QueueView } from '@/lib/types';
 import { getDb } from './db';
 import { queuePrefs } from './db/schema';
 import type { ServerRow } from './servers';
@@ -34,6 +34,23 @@ export async function listQueues(conn: Connection, server: ServerRow, q: string)
   }
   const hidden = await hiddenQueues(server.id);
   return queues.map((queue) => ({ ...queue, hidden: hidden.has(`${queue.library}/${queue.name}`) }));
+}
+
+/**
+ * Ready and held files of each output queue in the server's libraries. Queues with
+ * neither are left out.
+ */
+export async function countQueueFiles(conn: Connection, server: ServerRow): Promise<QueueCountView[]> {
+  const rows = await conn.countSpooledFiles({ status: ['READY', 'HELD'], libraries: server.libraries });
+  const counts = new Map<string, QueueCountView>();
+  for (const row of rows) {
+    const key = `${row.library}/${row.name}`;
+    const count = counts.get(key) ?? { library: row.library, name: row.name, ready: 0, held: 0 };
+    if (row.status === 'READY') count.ready += row.files;
+    else if (row.status === 'HELD') count.held += row.files;
+    counts.set(key, count);
+  }
+  return [...counts.values()];
 }
 
 /** `LIB/NAME` of every hidden queue of a server. */
