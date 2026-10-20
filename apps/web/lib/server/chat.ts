@@ -484,7 +484,7 @@ ${
 
     `## Carbone syntax reference
 
-The Carbone Skill ${CARBONE_SKILL_SOURCE.version} by Carbone (${CARBONE_SKILL_SOURCE.repository}, Apache-2.0). Its reference files are read with read_carbone_reference.
+The Carbone Skill ${CARBONE_SKILL_SOURCE.version} by Carbone (${CARBONE_SKILL_SOURCE.repository}, Apache-2.0). read_carbone_reference reads these of its reference files: ${Object.keys(CARBONE_REFERENCES).join(', ')}. The others it names are for template kinds Spooldoc does not have.
 
 ${CARBONE_SKILL}`,
   ].join('\n\n');
@@ -1461,7 +1461,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
     read_carbone_reference: tool({
       description:
-        'Read one reference file of the Carbone syntax reference (the Carbone Skill): formatters, loops, conditions, HTML templates and more. Use it to check a formatter or a pattern before writing it.',
+        'Read one reference file of the Carbone syntax reference (the Carbone Skill): formatters, loops, conditions, HTML templates, Word templates and more. Use it to check a formatter or a pattern before writing it.',
       inputSchema: z.object({
         name: z.enum(Object.keys(CARBONE_REFERENCES) as [CarboneReference, ...CarboneReference[]]).describe('The reference, as SKILL.md names it without references/ and .md'),
       }),

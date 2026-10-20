@@ -8,9 +8,11 @@ import { fileURLToPath } from "node:url";
 
 const REPO = "carboneio/carbone-skill";
 const COMMIT = process.argv[2] ?? "25207b3f52b97872312eab997ee5c62cc5c9542d";
-// SKILL.md, and the references that apply to HTML templates.
+// SKILL.md, and the references that apply to the template kinds Spooldoc has: HTML and
+// Word. A new kind adds its own: xlsx-tips for Excel, markdown-templates for Markdown.
 const REFERENCES = [
   "html-templates",
+  "docx-tips",
   "formatters",
   "loops-advanced",
   "aliases",
@@ -46,7 +48,7 @@ export const CARBONE_SKILL_SOURCE = ${JSON.stringify({ repository: `https://gith
 /** SKILL.md without its front matter. */
 export const CARBONE_SKILL = ${JSON.stringify(skill)};
 
-/** The reference files for HTML templates, by name (\`references/<name>.md\`). */
+/** The reference files for HTML and Word templates, by name (\`references/<name>.md\`). */
 export const CARBONE_REFERENCES = ${JSON.stringify(references, null, 2)} as const;
 
 export type CarboneReference = keyof typeof CARBONE_REFERENCES;
