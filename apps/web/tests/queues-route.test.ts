@@ -1,11 +1,13 @@
 import { ConnectionError } from '@spooldoc/ibmi';
+import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { samples, servers } from '@/lib/server/db/schema';
+import { emptySpec } from '@/lib/job-spec';
+import { jobs, samples, servers } from '@/lib/server/db/schema';
 import type { QueueCountView, QueueView, SpooledFileView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
 import { FakeConnection, GOOD_PASSWORD, loadSample } from './helpers/fake-connection';
-import { db, insertServer } from './helpers/fixtures';
+import { db, insertJob, insertServer } from './helpers/fixtures';
 import { appRequest, connections, fakeJt400, params } from './helpers/mocks';
 
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
@@ -58,6 +60,27 @@ describe('queues', () => {
       params({ id: serverId }),
     );
     expect((await list('?visible=1')).queues.some((q) => q.name === queue)).toBe(true);
+  });
+
+  it('lists the jobs that read from each queue', async () => {
+    const jobOn = async (onServer: string, jobName: string, lib = library, outq = queue) => {
+      const id = await insertJob(onServer, { source: { ...emptySpec().source, serverId: onServer, library: lib, queue: outq } });
+      await db().update(jobs).set({ name: jobName }).where(eq(jobs.id, id));
+      return id;
+    };
+    const statements = await jobOn(serverId, 'Statements');
+    // Lower case still names the same queue.
+    const invoices = await jobOn(serverId, 'Invoices', library.toLowerCase(), queue.toLowerCase());
+    const otherServer = await insertServer({ name: 'Other system', host: 'other.example.com', user: 'OTHERUSER' });
+    await jobOn(otherServer, 'Elsewhere');
+
+    const { queues } = await list();
+    const sampleQueue = queues.find((q) => q.library === library && q.name === queue);
+    expect(sampleQueue?.jobs).toEqual([
+      { id: invoices, name: 'Invoices', mode: 'manual', paused: false, activeVersion: null },
+      { id: statements, name: 'Statements', mode: 'manual', paused: false, activeVersion: null },
+    ]);
+    expect(queues.filter((q) => q !== sampleQueue).every((q) => q.jobs.length === 0)).toBe(true);
   });
 
   it("lists only the server's libraries", async () => {

@@ -22,6 +22,7 @@ import { ServerSelect } from '@/components/server-select';
 import { ServerErrorNote, ServerStatus } from '@/components/server-status';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SkeletonRows } from '@/components/skeleton-rows';
@@ -30,13 +31,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
+import { jobState } from '@/lib/client/jobs';
 import { withLatestCall, type LatestCall } from '@/lib/client/server-state';
 import type { QueueCountView, QueueView, ServerView } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { NewJobButton } from './new-job-button';
 
 type CountKey = 'ready' | 'held' | 'total';
-type SortKey = 'library' | 'name' | CountKey | 'text';
+type SortKey = 'library' | 'name' | CountKey | 'jobs' | 'text';
 /** The file counts, under one Files header. Ready and held are what a job can pick up. */
 const COUNT_COLUMNS: { key: CountKey; label: string; tip: string }[] = [
   { key: 'ready', label: 'Ready', tip: 'Files every job on this queue picks up.' },
@@ -172,7 +174,9 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
       const order =
         sort.key === 'library' || sort.key === 'name' || sort.key === 'text'
           ? a[sort.key].localeCompare(b[sort.key])
-          : (countOf(a, sort.key) ?? -1) - (countOf(b, sort.key) ?? -1);
+          : sort.key === 'jobs'
+            ? a.jobs.length - b.jobs.length
+            : (countOf(a, sort.key) ?? -1) - (countOf(b, sort.key) ?? -1);
       return dir * (order || queueKey(a).localeCompare(queueKey(b)));
     });
   }, [queues, showHidden, sort, countOf]);
@@ -180,7 +184,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   const hiddenCount = queues?.filter((queue) => queue.hidden).length ?? 0;
   // With one library every row has the same one, so there is no Library column to read or sort.
   const oneLibrary = server?.libraries.length === 1;
-  const columns = oneLibrary ? 7 : 8;
+  const columns = oneLibrary ? 8 : 9;
   const shownSort = oneLibrary && sort.key === 'library' ? { ...sort, key: 'name' as const } : sort;
 
   const setHidden = useCallback(
@@ -302,6 +306,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
               <th colSpan={3} scope="colgroup" className="px-3 pt-2 text-center font-medium">
                 <span className="block border-b pb-1">Files</span>
               </th>
+              <SortHeader column="jobs" label="Jobs" tip="Spooldoc jobs that read from this queue." sort={shownSort} onSort={toggleSort} numeric rowSpan={2} />
               <SortHeader column="text" label="Text" sort={shownSort} onSort={toggleSort} rowSpan={2} />
               <th rowSpan={2} className="px-3 py-2">
                 <span className="sr-only">Actions</span>
@@ -315,7 +320,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
           </thead>
           <tbody aria-busy={loading} className={cn(loading && queues && 'opacity-60 transition-opacity')}>
             {!queues && !error && (
-              <SkeletonRows widths={['w-4', ...(oneLibrary ? [] : ['w-16']), 'w-24', 'ml-auto w-5', 'ml-auto w-5', 'ml-auto w-6', 'w-48', 'ml-auto w-40']} />
+              <SkeletonRows widths={['w-4', ...(oneLibrary ? [] : ['w-16']), 'w-24', 'ml-auto w-5', 'ml-auto w-5', 'ml-auto w-6', 'ml-auto w-5', 'w-48', 'ml-auto w-40']} />
             )}
             {server &&
               shown.map((queue) => (
@@ -359,6 +364,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
                   {COUNT_COLUMNS.map((column) => (
                     <CountCell key={column.key} column={column.key} value={countOf(queue, column.key)} failed={!!counts?.error} />
                   ))}
+                  <JobsCell queue={queue} />
                   <td className="px-3 py-2 text-muted-foreground">{queue.text}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-end gap-1">
@@ -496,6 +502,51 @@ function CountCell({ column, value, failed }: { column: CountKey; value: number 
       ) : (
         <Skeleton className="ml-auto h-4 w-5" />
       )}
+    </td>
+  );
+}
+
+/**
+ * How many jobs read from a queue. Hovering, focusing or tapping the count lists them, each
+ * linked to its job with its state.
+ */
+function JobsCell({ queue }: { queue: QueueView }) {
+  const [open, setOpen] = useState(false);
+  const count = queue.jobs.length;
+  if (count === 0) {
+    return <td className="tabular px-3 py-2 text-right text-muted-foreground">0</td>;
+  }
+  const watching = queue.jobs.some((job) => job.mode === 'watch' && !job.paused && job.activeVersion !== null);
+  return (
+    <td className="tabular px-3 py-2 text-right">
+      <HoverCard open={open} onOpenChange={setOpen} openDelay={200} closeDelay={100}>
+        <HoverCardTrigger asChild>
+          {/* Touch has no hover, so a tap opens and closes the list. */}
+          <button
+            type="button"
+            onClick={() => setOpen((current) => !current)}
+            aria-label={`${count} ${count === 1 ? 'job reads' : 'jobs read'} from ${queueKey(queue)}`}
+            aria-expanded={open}
+            className="rounded-sm underline decoration-dotted underline-offset-4 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            {count}
+          </button>
+        </HoverCardTrigger>
+        <HoverCardContent align="end" className="w-72 text-left">
+          <div className="mb-1.5 font-medium text-muted-foreground text-xs">Jobs that read from this queue</div>
+          <ul className="space-y-1">
+            {queue.jobs.map((job) => (
+              <li key={job.id} className="flex items-baseline justify-between gap-3">
+                <Link href={`/jobs/${job.id}`} className="min-w-0 truncate text-primary hover:underline">
+                  {job.name}
+                </Link>
+                <span className="shrink-0 text-muted-foreground text-xs">{jobState(job)}</span>
+              </li>
+            ))}
+          </ul>
+          {queue.hidden && watching && <p className="mt-2 border-t pt-2 text-muted-foreground text-xs">{"Hidden. Its jobs still run; new jobs can't pick it."}</p>}
+        </HoverCardContent>
+      </HoverCard>
     </td>
   );
 }

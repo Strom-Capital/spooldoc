@@ -19,6 +19,12 @@ Ready and held are counted after the list loads, because counting reads
 every spooled file on the system. When counting fails, the page says why
 and the two columns show a dash; the rest of the page still works.
 
+The Jobs column counts the [jobs](jobs.md) that read from the queue: the
+source of each job's active version, or of its draft when it has none.
+Hover over or tap the count to list them, each with a link to the job and
+its state: Watching, Paused, On demand or Draft only. On a hidden queue,
+the list notes that its jobs still run.
+
 ## Finding a queue
 
 - **Search** matches the library and the queue name.
