@@ -34,9 +34,13 @@ names. See [Servers](servers.md).
 
 ## The files of a queue
 
-Open a queue to list its spooled files: name, number, job, user data, form
-type, status, pages and when it was created. Four filters narrow the list.
-The first three are a "contains" match:
+Open a queue to list its spooled files. The path above the title names
+the queue's place: Queues, the server and the queue. Queues opens the
+Queues page, and the server opens it on that server.
+
+The list shows each file's name, number, job, user data, form type,
+status, pages and when it was created. Four filters narrow the list. The
+first three are a "contains" match:
 
 | Filter | Matches |
 |--------|---------|
@@ -55,10 +59,6 @@ status as the IBM i spells it, such as `READY`.
 | Blue | Open, Writing, Pending, Printing, Sending | Still being written, or a printer or writer is working on it. |
 | Red | Message | Waits for a reply to a message. |
 | Gray | Saved, Deferred, Closed, Finished | Kept after printing, put off, or done. A status Spooldoc does not know also shows gray, with its IBM i name. |
-
-The path above the title names the queue's place: Queues, the server and
-the queue. Queues opens the Queues page, and the server opens it on that
-server.
 
 The list shows the newest 200 files. When the queue has more, or more
 match the filters, the page says so under the list, and Load more lists

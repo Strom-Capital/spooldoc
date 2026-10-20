@@ -26,7 +26,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -138,7 +138,8 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
               </BreadcrumbItem>
               <BreadcrumbSeparator />
               <BreadcrumbItem className="min-w-0">
-                <BreadcrumbPage className="min-w-0 max-w-full">
+                {/* Not BreadcrumbPage: its role="link" would wrap the rename button and input. */}
+                <span aria-current="page" className="block min-w-0 max-w-full text-foreground">
                   {editing ? (
                     <form onSubmit={onRename} className="w-72 max-w-full">
                       <Input name="name" defaultValue={job.name} autoFocus onBlur={(event) => event.currentTarget.form?.requestSubmit()} aria-label="Job name" className="h-7" />
@@ -148,7 +149,7 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
                       {job.name}
                     </button>
                   )}
-                </BreadcrumbPage>
+                </span>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
