@@ -45,32 +45,19 @@ import { useAppInfo } from './app-info';
 import { Logo } from './logo';
 import { ThemeMenuItems } from './theme-menu';
 
-/**
- * The daily pages in the order the work goes: spooled files, the jobs that read them,
- * the runs. Then the pages set up once. Settings and the account follow them.
- */
-const GROUPS = [
-  {
-    label: null,
-    pages: [
-      { href: '/', label: 'Home', icon: HomeIcon },
-      { href: '/queues', label: 'Queues', icon: InboxIcon },
-      { href: '/jobs', label: 'Jobs', icon: WorkflowIcon },
-      { href: '/runs', label: 'Job log', icon: ScrollTextIcon },
-    ],
-  },
-  {
-    label: 'Setup',
-    pages: [
-      { href: '/servers', label: 'Servers', icon: ServerIcon },
-      { href: '/destinations', label: 'Destinations', icon: SendIcon },
-      { href: '/assets', label: 'Assets', icon: ImageIcon },
-    ],
-  },
+/** The daily pages in the order the work goes, then the pages set up once. */
+const PAGES = [
+  { href: '/', label: 'Home', icon: HomeIcon },
+  { href: '/queues', label: 'Queues', icon: InboxIcon },
+  { href: '/jobs', label: 'Jobs', icon: WorkflowIcon },
+  { href: '/runs', label: 'Job log', icon: ScrollTextIcon },
+  { href: '/servers', label: 'Servers', icon: ServerIcon },
+  { href: '/destinations', label: 'Destinations', icon: SendIcon },
+  { href: '/assets', label: 'Assets', icon: ImageIcon },
 ];
 
 /**
- * Wordmark, navigation, settings and the account menu (with the theme). On desktop it
+ * Wordmark, the pages, settings and the account menu (with the theme). On desktop it
  * collapses to an icon rail (Cmd/Ctrl+B or the toggle by the logo) so the job builder
  * gets the width. On phones it opens from the menu button at the top right.
  */
@@ -107,18 +94,15 @@ export function AppSidebar() {
         )}
       </SidebarHeader>
       <SidebarContent>
-        {GROUPS.map((group) => (
-          <SidebarGroup key={group.label ?? 'main'}>
-            {group.label && <SidebarGroupLabel>{group.label}</SidebarGroupLabel>}
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.pages.map((page) => (
-                  <PageLink key={page.href} {...page} active={page.href === '/' ? pathname === '/' : pathname.startsWith(page.href)} onClick={close} />
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {PAGES.map((page) => (
+                <PageLink key={page.href} {...page} active={page.href === '/' ? pathname === '/' : pathname.startsWith(page.href)} onClick={close} />
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
         <SidebarGroup>
           <SidebarGroupLabel>Settings</SidebarGroupLabel>
           <SidebarGroupContent>
