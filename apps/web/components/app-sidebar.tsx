@@ -18,16 +18,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -41,29 +34,29 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { authClient } from '@/lib/client/auth';
 import { shortcut } from '@/lib/client/keys';
-import { useAppInfo } from './app-info';
 import { Logo } from './logo';
-import { ThemeMenuItems } from './theme-menu';
 
-/** The daily pages in the order the work goes, then the pages set up once. */
+/**
+ * The pages in the order a spooled file goes: the server and its queues, the job and the
+ * assets its template uses, where the documents go, and the runs.
+ */
 const PAGES = [
   { href: '/', label: 'Home', icon: HomeIcon },
+  { href: '/servers', label: 'Servers', icon: ServerIcon },
   { href: '/queues', label: 'Queues', icon: InboxIcon },
   { href: '/jobs', label: 'Jobs', icon: WorkflowIcon },
-  { href: '/runs', label: 'Job log', icon: ScrollTextIcon },
-  { href: '/servers', label: 'Servers', icon: ServerIcon },
-  { href: '/destinations', label: 'Destinations', icon: SendIcon },
   { href: '/assets', label: 'Assets', icon: ImageIcon },
+  { href: '/destinations', label: 'Destinations', icon: SendIcon },
+  { href: '/runs', label: 'Job log', icon: ScrollTextIcon },
 ];
 
 /**
- * Wordmark, the pages, settings and the account menu (with the theme). On desktop it
+ * Wordmark, the pages, Settings and Profile, and Sign out at the bottom. On desktop it
  * collapses to an icon rail (Cmd/Ctrl+B or the toggle by the logo) so the job builder
  * gets the width. On phones it opens from the menu button at the top right.
  */
 export function AppSidebar() {
   const pathname = usePathname();
-  const { user } = useAppInfo();
   const { setOpenMobile, state, isMobile, toggleSidebar } = useSidebar();
   const collapsed = state === 'collapsed' && !isMobile;
   const close = () => setOpenMobile(false);
@@ -108,38 +101,21 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               <PageLink href="/settings" label="Settings" icon={SettingsIcon} active={pathname.startsWith('/settings')} onClick={close} />
-              <SidebarMenuItem>
-                <DropdownMenu>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
-                        <SidebarMenuButton aria-label={`Account: ${user.email}`}>
-                          <UserIcon />
-                          <span className="truncate">{user.email}</span>
-                        </SidebarMenuButton>
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    {collapsed && <TooltipContent side="right">{user.email}</TooltipContent>}
-                  </Tooltip>
-                  <DropdownMenuContent align="start" side={collapsed ? 'right' : 'bottom'} className="w-56">
-                    <DropdownMenuLabel className="font-normal">
-                      <span className="block truncate font-medium">{user.name}</span>
-                      <span className="block truncate text-muted-foreground text-xs">{user.email}</span>
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <ThemeMenuItems />
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onSelect={onSignOut}>
-                      <LogOutIcon />
-                      Sign out
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </SidebarMenuItem>
+              <PageLink href="/profile" label="Profile" icon={UserIcon} active={pathname.startsWith('/profile')} onClick={close} />
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton tooltip="Sign out" onClick={() => void onSignOut()}>
+              <LogOutIcon />
+              <span>Sign out</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   );

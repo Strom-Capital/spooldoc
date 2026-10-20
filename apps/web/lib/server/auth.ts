@@ -6,6 +6,7 @@ import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { nextCookies } from 'better-auth/next-js';
 import { count } from 'drizzle-orm';
 import { headers } from 'next/headers';
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@/lib/account';
 import { getConfig } from './config';
 import { getDb } from './db';
 import * as schema from './db/schema';
@@ -22,7 +23,7 @@ function createAuth() {
       provider: 'pg',
       schema: { user: schema.user, session: schema.session, account: schema.account, verification: schema.verification },
     }),
-    emailAndPassword: { enabled: true, minPasswordLength: 10, autoSignIn: true },
+    emailAndPassword: { enabled: true, minPasswordLength: MIN_PASSWORD_LENGTH, maxPasswordLength: MAX_PASSWORD_LENGTH, autoSignIn: true },
     session: { expiresIn: 60 * 60 * 24 * 7, updateAge: 60 * 60 * 24 },
     telemetry: { enabled: false },
     // Better Auth's warnings and errors go to the server log, as JSON lines like the rest.

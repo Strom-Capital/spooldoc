@@ -16,6 +16,7 @@ overview and the architecture diagram, see the [project README](../README.md).
 | [Agent](agent.md) | Models, tools, masking |
 | [Destinations](destinations.md) | Where documents go |
 | [Job log](job-log.md) | Runs, statuses, retry, retention |
+| [Profile](profile.md) | Your name, password and theme |
 | [Configuration](configuration.md) | Environment variables and settings |
 | [Deployment](deployment.md) | Docker, Compose, ports, backups, upgrades |
 | [Security](security.md) | What the model sees, what is stored, how |
