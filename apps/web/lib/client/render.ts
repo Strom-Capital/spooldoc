@@ -58,9 +58,12 @@ export function groupOfPage(ranges: PageRange[], page: number, current: number):
   return fits(ranges[current]) ? current : ranges.findIndex(fits);
 }
 
-/** `pageGroups[0].invoiceNo = 260101` */
+/**
+ * A field hit as the tag a template writes, with its page group, since a page can hold
+ * more than one: `Page group 1: d.pg.invoiceNo = 260101`.
+ */
 export function hitLabel(hit: FieldHit): string {
-  return `pageGroups[${hit.pageGroup}].${hit.name} = ${hit.value || (hit.status === 'missing' ? '(missing)' : '(empty)')}`;
+  return `Page group ${hit.pageGroup + 1}: d.pg.${hit.name} = ${hit.value || (hit.status === 'missing' ? '(missing)' : '(empty)')}`;
 }
 
 /** The `type:` value of definition YAML, read with a regular expression (no YAML parser in the browser). */
