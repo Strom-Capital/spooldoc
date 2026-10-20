@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, errorText } from '@/lib/client/api';
-import type { TemplateContent } from '@/lib/job-spec';
+import { perSpooledFile, type TemplateContent, type XlsxScope } from '@/lib/job-spec';
 import { groupOfPage, type FieldHit, type RenderResult } from '@/lib/client/render';
 
 /** Editor tabs: the Extract step shows the definition and the JSON, Render the template and the JSON. */
@@ -15,10 +15,10 @@ export interface WorkbenchState {
   /** The definition and the template's content shown and rendered. */
   yaml: string;
   content: TemplateContent;
-  /** The HTML template's text; null for the starter template and for a Word template. */
+  /** The HTML template's text; null for the starter template and for a Word or Excel template. */
   html: string | null;
-  /** The template as render and file requests send it: HTML text, or the Word template's file. */
-  templateRequest: { html: string | null } | { docx: { fileId: string | null } };
+  /** The template as render and file requests send it: HTML text, or the Word or Excel template's file. */
+  templateRequest: { html: string | null } | { docx: { fileId: string | null } } | { xlsx: { fileId: string | null; scope: XlsxScope } };
   /** The job template whose content this is, and picking another. */
   templateId: string;
   setTemplateId(id: string): void;
@@ -26,7 +26,7 @@ export interface WorkbenchState {
   setYaml(yaml: string): void;
   /** Change the HTML template; null goes back to the starter template. */
   setHtml(html: string | null): void;
-  /** Use other content: switch kinds, or point at another Word file. */
+  /** Use other content: switch kinds, or point at another Word or Excel file. */
   setContent(content: TemplateContent): void;
   render: RenderResult | null;
   /** A failed render request (the render result's own errors are in `render.errors`). */
@@ -114,13 +114,19 @@ export function WorkbenchProvider({
   }
 
   const html = content.kind === 'html' ? content.source : null;
-  const fileId = content.kind === 'docx' ? content.fileId : null;
-  const templateRequest = useMemo(() => (content.kind === 'html' ? { html } : { docx: { fileId } }), [content.kind, html, fileId]);
+  const fileId = content.kind === 'html' ? null : content.fileId;
+  const scope = content.kind === 'xlsx' ? content.scope : null;
+  const templateRequest = useMemo(
+    () => (content.kind === 'html' ? { html } : content.kind === 'xlsx' ? { xlsx: { fileId, scope: scope ?? 'splf' } } : { docx: { fileId } }),
+    [content.kind, html, fileId, scope],
+  );
   const setHtml = useCallback((source: string | null) => setContent({ kind: 'html', source }), [setContent]);
+  // An Excel template of the whole spooled file renders every page group, whichever is shown.
+  const renderedGroup = perSpooledFile(content) ? 0 : pageGroupIndex;
 
-  // Text changes render after a pause; a new file, page group, template, kind or Word file, or a reload, at once.
-  const text = useDebounced(JSON.stringify({ yaml, ...templateRequest, templateId }), RENDER_DELAY_MS, `${templateId}:${content.kind}:${fileId}`);
-  const requestKey = JSON.stringify([jobId, sampleId, pageGroupIndex, nonce, text]);
+  // Text changes render after a pause; a new file, page group, template, kind, file or scope, or a reload, at once.
+  const text = useDebounced(JSON.stringify({ yaml, ...templateRequest, templateId }), RENDER_DELAY_MS, `${templateId}:${content.kind}:${fileId}:${scope}`);
+  const requestKey = JSON.stringify([jobId, sampleId, renderedGroup, nonce, text]);
 
   useEffect(() => {
     if (!sampleId) {
@@ -128,14 +134,14 @@ export function WorkbenchProvider({
     }
     let cancelled = false;
     const body = JSON.parse(text) as Record<string, unknown>;
-    api<RenderResult>(`/api/jobs/${jobId}/render`, { method: 'POST', body: { sampleId, ...body, pageGroup: pageGroupIndex } }).then(
+    api<RenderResult>(`/api/jobs/${jobId}/render`, { method: 'POST', body: { sampleId, ...body, pageGroup: renderedGroup } }).then(
       (render) => !cancelled && setResult({ key: requestKey, render, error: null }),
       (err: unknown) => !cancelled && setResult((prev) => ({ key: requestKey, render: prev?.render ?? null, error: errorText(err) })),
     );
     return () => {
       cancelled = true;
     };
-  }, [requestKey, jobId, sampleId, pageGroupIndex, text]);
+  }, [requestKey, jobId, sampleId, renderedGroup, text]);
 
   const render = sampleId ? (result?.render ?? null) : null;
   const error = sampleId ? (result?.error ?? null) : null;

@@ -19,7 +19,7 @@ const renderSchema = z.object({
   sampleId: z.string().uuid().optional(),
 });
 
-/** Render the preview sample with the draft (or unsaved editor text) with Carbone: HTML from an HTML template, a PDF from a Word template. */
+/** Render the preview sample with the draft (or unsaved editor text) with Carbone: HTML from an HTML template, a PDF from a Word or Excel template. */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const auth = await guard(request);
   if ('response' in auth) {

@@ -79,6 +79,9 @@ export function draftStore(jobId: string, userId: string | null = null): DraftSt
         if (!template) {
           throw new Error('The template is gone.');
         }
+        if (template.kind === 'xlsx') {
+          throw new Error(`The ${template.name} template is an Excel template. The agent can't write Excel files yet: the user changes it in Excel and uploads it.`);
+        }
         if (template.kind === 'html' && template.source !== null) {
           throw new Error(
             `The ${template.name} template has HTML of its own. Ask the user to switch it to a Word template in the app first, or to add a Word template (add_template with kind docx).`,

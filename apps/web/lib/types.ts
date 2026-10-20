@@ -84,7 +84,7 @@ export interface AssetView {
   jobs: { id: string; name: string }[];
 }
 
-/** A Word template file, uploaded or made by the agent, without its bytes. */
+/** A Word or Excel template file, uploaded or made by the agent, without its bytes. */
 export interface TemplateFileView {
   id: string;
   /** The file's name. */
@@ -97,7 +97,7 @@ export interface TemplateFileView {
   previousId: string | null;
 }
 
-/** A Word template file with the file it replaced, when that is still kept. */
+/** A Word or Excel template file with the file it replaced, when that is still kept. */
 export interface TemplateFileDetails extends TemplateFileView {
   previous: TemplateFileView | null;
 }

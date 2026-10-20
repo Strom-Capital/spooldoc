@@ -4,7 +4,7 @@ import { getTemplateFile } from '@/lib/server/template-files';
 
 export const dynamic = 'force-dynamic';
 
-/** An uploaded Word template's bytes, as the file that was uploaded. */
+/** An uploaded Word or Excel template's bytes, as the file that was uploaded. */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const auth = await guard(request);
   if ('response' in auth) {

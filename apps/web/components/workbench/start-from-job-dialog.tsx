@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Spinner } from '@/components/ui/spinner';
 import type { JobTemplateFiles } from '@/lib/chat-types';
 import { api, errorText, isAbort } from '@/lib/client/api';
+import { contentLabel, kindName } from '@/lib/job-spec';
 import type { JobSummary } from '@/lib/types';
 import { useWorkbench } from './workbench-provider';
 
@@ -26,8 +27,7 @@ interface JobFilesView {
 
 /** What a template of the other job has as its content. */
 function contentName(template: JobTemplateFiles): string {
-  if (template.kind === 'docx') return template.fileId === null ? 'Starter Word template' : 'Word template';
-  return template.html === null ? 'Starter template' : 'Custom template';
+  return contentLabel(template.kind, template.kind === 'html' ? template.html !== null : template.fileId !== null);
 }
 
 /** The `type:` of a definition YAML, read without parsing it. */
@@ -76,7 +76,7 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
   const type = files ? typeOf(files.definitionYaml) : null;
   const hasDefinition = !!files?.definitionYaml.trim();
   const source = files ? (files.templates.find((t) => t.id === sourceId) ?? files.templates[0]) : undefined;
-  const hasTemplate = !!source && (source.kind === 'docx' ? source.fileId !== null : source.html !== null);
+  const hasTemplate = !!source && (source.kind === 'html' ? source.html !== null : source.fileId !== null);
   const copies = files ? [hasTemplate && 'template', withDefinition && hasDefinition && 'definition'].filter(Boolean) : [];
 
   function copy() {
@@ -84,7 +84,13 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
       return;
     }
     if (hasTemplate) {
-      setContent(source.kind === 'docx' ? { kind: 'docx', fileId: source.fileId } : { kind: 'html', source: source.html });
+      setContent(
+        source.kind === 'html'
+          ? { kind: 'html', source: source.html }
+          : source.kind === 'xlsx'
+            ? { kind: 'xlsx', fileId: source.fileId, scope: source.scope ?? 'splf' }
+            : { kind: 'docx', fileId: source.fileId },
+      );
     }
     if (withDefinition && hasDefinition) {
       setYaml(files.definitionYaml);
@@ -161,7 +167,7 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
           {files && (
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm" aria-label="Files of the chosen job">
               <dt className="text-muted-foreground">Template</dt>
-              <dd>{hasTemplate ? (source.kind === 'docx' ? 'A Word template' : 'An HTML template') : 'None, it uses the starter template'}</dd>
+              <dd>{hasTemplate ? kindName(source.kind) : 'None, it uses the starter template'}</dd>
               <dt className="text-muted-foreground">Definition</dt>
               <dd>{hasDefinition ? (type ?? 'Yes') : 'None yet'}</dd>
             </dl>

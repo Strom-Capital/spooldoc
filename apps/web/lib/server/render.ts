@@ -3,6 +3,14 @@ import 'server-only';
 import {
   checkDocx,
   checkTemplate,
+  checkXlsx,
+  readXlsx,
+  sheetsWithoutPageSetup,
+  spooledFileData,
+  starterXlsx,
+  xlsxProblemText,
+  type XlsxProblem,
+  type XlsxTemplate,
   docxConverter,
   documentName,
   readDocx,
@@ -25,6 +33,7 @@ import {
   type Sample,
   type TemplateProblem,
 } from '@spooldoc/core';
+import type { XlsxScope } from '@/lib/job-spec';
 import type { TemplateFileView } from '@/lib/types';
 import { getConfig } from './config';
 import type { DocumentRenderer } from './documents';
@@ -62,11 +71,29 @@ export interface DocxTemplateResult {
   generated?: boolean;
 }
 
+/**
+ * The Excel template: the uploaded file (null for the starter template, `generated`), its
+ * scope, the sheets without a page setup of their own (their PDF is US Letter portrait),
+ * and what is wrong with it: `problems` from the tag check, by sheet and cell, or `error`
+ * from Carbone.
+ */
+export interface XlsxTemplateResult {
+  kind: 'xlsx';
+  file: TemplateFileView | null;
+  scope: XlsxScope;
+  /** The sheets that have no page setup; only known once the file is read. */
+  noPageSetup?: string[];
+  error?: string;
+  detail?: string;
+  problems?: XlsxProblem[];
+  generated?: boolean;
+}
+
 /** What the workbench shows for a sample: definition, template, extracted JSON and the rendered document. */
 export interface RenderResult {
   sample: SampleView;
   definition?: { type: string; yaml: string; error?: string };
-  template?: HtmlTemplateResult | DocxTemplateResult;
+  template?: HtmlTemplateResult | DocxTemplateResult | XlsxTemplateResult;
   /** Carbone is not connected or did not answer, so nothing was rendered. */
   carbone?: { error: string; detail?: string };
   extract?: ExtractResult;
@@ -74,17 +101,20 @@ export interface RenderResult {
   names?: string[];
   /** The rendered HTML of page group `pageGroup`'s document, from an HTML template. */
   html?: string;
-  /** Page group `pageGroup`'s document as a PDF in base64, from a Word template. */
+  /** Page group `pageGroup`'s document as a PDF in base64, from a Word or Excel template; for an Excel template of the whole spooled file, that file's PDF. */
   pdf?: string;
-  /** 0-based index of the rendered page group. */
+  /** 0-based index of the rendered page group. An Excel template of the whole spooled file renders every page group. */
   pageGroup: number;
   /** Why the definition's `match` rules do not accept this file (runs skip such files). */
   mismatch?: string[];
   errors: string[];
 }
 
-/** A template's content for `renderSample`: HTML (null for the starter template) or a Word file (null for the starter). */
-export type SampleTemplate = { kind: 'html'; source: string | null } | { kind: 'docx'; file: TemplateFileRow | null };
+/** A template's content for `renderSample`: HTML (null for the starter template), or a Word or Excel file (null for the starter). */
+export type SampleTemplate =
+  | { kind: 'html'; source: string | null }
+  | { kind: 'docx'; file: TemplateFileRow | null }
+  | { kind: 'xlsx'; file: TemplateFileRow | null; scope: XlsxScope };
 
 /** The definition, the template and the page group to render. */
 export interface RenderInput {
@@ -119,8 +149,11 @@ export function sampleView(sample: Sample): SampleView {
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
-/** A template ready to check and render: the HTML text, or the Word file's bytes as read. */
-type Prepared = { kind: 'html'; html: string } | { kind: 'docx'; bytes: Uint8Array; read: DocxTemplate };
+/** A template ready to check and render: the HTML text, or the Word or Excel file's bytes as read. */
+type Prepared =
+  | { kind: 'html'; html: string }
+  | { kind: 'docx'; bytes: Uint8Array; read: DocxTemplate }
+  | { kind: 'xlsx'; bytes: Uint8Array; read: XlsxTemplate; scope: XlsxScope };
 
 /** Carbone's error on the part it belongs to: the server, or the template. */
 function renderError(result: RenderResult, error: unknown): string {
@@ -137,7 +170,8 @@ function renderError(result: RenderResult, error: unknown): string {
 
 /**
  * Render a sample with a definition and a template with Carbone: an HTML template to
- * HTML, a Word template to a PDF. Without a template of its own the starter template for
+ * HTML, a Word or Excel template to a PDF. An Excel template of the whole spooled file
+ * renders every page group into one PDF. Without a template of its own the starter template for
  * the definition is used (flagged `generated`). The template is checked before it is rendered. Every problem is reported in
  * `errors` and on the part it belongs to; nothing is thrown.
  *
@@ -165,9 +199,12 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
   if (input.template.kind === 'html') {
     html = input.template.source === null ? (def ? starterTemplate(def) : undefined) : input.template.source;
     if (html !== undefined) result.template = { kind: 'html', html, ...(input.template.source === null ? { generated: true } : {}) };
-  } else {
+  } else if (input.template.kind === 'docx') {
     const file = input.template.file;
     result.template = { kind: 'docx', file: file ? templateFileView(file) : null, ...(file ? {} : { generated: true }) };
+  } else {
+    const file = input.template.file;
+    result.template = { kind: 'xlsx', file: file ? templateFileView(file) : null, scope: input.template.scope, ...(file ? {} : { generated: true }) };
   }
   if (!def) {
     return result;
@@ -218,6 +255,24 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
       errors.push(...problems.map((p) => `Template ${p.part}: ${p.message}`));
       return result;
     }
+  } else if (input.template.kind === 'xlsx' && result.template.kind === 'xlsx') {
+    const scope = input.template.scope;
+    try {
+      const bytes = input.template.file?.content ?? starterXlsx(def, scope);
+      prepared = { kind: 'xlsx', bytes, read: readXlsx(bytes), scope };
+    } catch (error) {
+      result.template.error = message(error);
+      errors.push(message(error));
+      return result;
+    }
+    result.template.noPageSetup = sheetsWithoutPageSetup(prepared.read);
+    const problems = checkXlsx(prepared.read, def, scope);
+    if (problems.length > 0) {
+      result.template.problems = problems;
+      result.template.error = xlsxProblemText(problems);
+      errors.push(...xlsxProblemText(problems).split('\n').map((line) => `Template ${line}`));
+      return result;
+    }
   } else {
     return result;
   }
@@ -230,9 +285,13 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
     if (prepared.kind === 'html') {
       const out = await input.renderer({ template: prepared.html, data: templateData(prepared.html, group, pageGroups, sample), format: 'html', asset: input.asset });
       result.html = Buffer.from(out).toString('utf8');
-    } else {
+    } else if (prepared.kind === 'docx') {
       const data = templateData(prepared.read, group, pageGroups, sample);
       const out = await input.renderer({ kind: 'docx', template: prepared.bytes, data, format: 'pdf', converter: docxConverter(prepared.read) });
+      result.pdf = Buffer.from(out).toString('base64');
+    } else {
+      const data = prepared.scope === 'splf' ? spooledFileData(pageGroups, sample) : templateData(prepared.read, group, pageGroups, sample);
+      const out = await input.renderer({ kind: 'xlsx', template: prepared.bytes, data, format: 'pdf' });
       result.pdf = Buffer.from(out).toString('base64');
     }
   } catch (error) {

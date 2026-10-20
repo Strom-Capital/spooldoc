@@ -6,13 +6,13 @@ import { Button } from '@/components/ui/button';
 import { CodeEditor } from './code-editor';
 import { EditorBar, EditorMessage } from './editor-bar';
 import { StartFromJobDialog } from './start-from-job-dialog';
-import { WordTemplate } from './word-template';
+import { FileTemplate } from './file-template';
 import { useWorkbench } from './workbench-provider';
 
-/** The template shown: the HTML editor, or the Word template's file and problems. */
+/** The template shown: the HTML editor, or the Word or Excel template's file and problems. */
 export function TemplateEditor() {
   const { content } = useWorkbench();
-  return content.kind === 'docx' ? <WordTemplate /> : <HtmlTemplateEditor />;
+  return content.kind === 'html' ? <HtmlTemplateEditor /> : <FileTemplate kind={content.kind} />;
 }
 
 /**

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { jobs, templateFiles, user } from '@/lib/server/db/schema';
 import type { JobDetail, RunView, TemplateFileDetails, TemplateFileView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
-import { fakeCarbone, fakeRenderer, PDF_BYTES } from './helpers/carbone';
+import { fakeCarbone, fakeRenderer, PDF_BYTES, sentPageGroup } from './helpers/carbone';
 import { resetTables } from './helpers/db';
 import { fixtureText, loadSample } from './helpers/fake-connection';
 import { db, insertServer, insertUser } from './helpers/fixtures';
@@ -18,7 +18,7 @@ const previewSample = await import('@/app/api/jobs/[id]/preview-sample/route');
 const renderRoute = await import('@/app/api/jobs/[id]/render/route');
 const previewFile = await import('@/app/api/jobs/[id]/preview-file/route');
 const uploadRoute = await import('@/app/api/jobs/[id]/template-files/route');
-const starterRoute = await import('@/app/api/jobs/[id]/starter-docx/route');
+const starterRoute = await import('@/app/api/jobs/[id]/starter/route');
 const fileInfo = await import('@/app/api/template-files/[id]/route');
 const fileBytes = await import('@/app/api/template-files/[id]/file/route');
 const versions = await import('@/app/api/jobs/[id]/versions/route');
@@ -138,7 +138,7 @@ describe('previewing a Word template', () => {
     expect(render.pdf).toBe(Buffer.from(PDF_BYTES).toString('base64'));
     expect(render.html).toBeUndefined();
     expect(fakeCarbone.mock.calls[0]![0]).toMatchObject({ kind: 'docx', format: 'pdf', converter: 'I' });
-    expect(fakeCarbone.mock.calls[0]![0].data.pg.invoiceNo).toBe('260101');
+    expect(sentPageGroup(fakeCarbone.mock.calls[0]![0])?.invoiceNo).toBe('260101');
 
     const docx = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { pageGroup: 1, format: 'docx' }), params({ id }));
     expect(docx.status).toBe(200);
@@ -176,7 +176,7 @@ describe('previewing a Word template', () => {
     await db().delete(templateFiles).where(eq(templateFiles.id, saved.id));
     const response = await renderRoute.POST(post(`/api/jobs/${id}/render`, {}), params({ id }));
     expect(response.status).toBe(404);
-    expect((await response.json()).error).toBe('The Word template file is gone. Upload the template again.');
+    expect((await response.json()).error).toBe('The template file is gone. Upload the template again.');
     const save = await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
     expect(save.status).toBe(422);
     expect(JSON.stringify(await save.json())).toContain('Render: the Word file of the Document template is gone. Upload it again.');
@@ -184,11 +184,11 @@ describe('previewing a Word template', () => {
 
   it('downloads the Word starter template for the definition, or says to write one first', async () => {
     const id = await readyJob();
-    const response = await starterRoute.POST(post(`/api/jobs/${id}/starter-docx`, {}), params({ id }));
+    const response = await starterRoute.POST(post(`/api/jobs/${id}/starter`, {}), params({ id }));
     expect(response.headers.get('content-type')).toBe(DOCX);
     expect(response.headers.get('content-disposition')).toBe('attachment; filename="invoice-template.docx"');
     expect(readDocx(new Uint8Array(await response.arrayBuffer())).text).toContain('{d.pg.lines[i+1]}');
-    const empty = await starterRoute.POST(post(`/api/jobs/${id}/starter-docx`, { yaml: '' }), params({ id }));
+    const empty = await starterRoute.POST(post(`/api/jobs/${id}/starter`, { yaml: '' }), params({ id }));
     expect(empty.status).toBe(400);
     expect((await empty.json()).error).toBe('Write a definition first: the starter template is made from it.');
   });

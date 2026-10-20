@@ -1,17 +1,27 @@
 import 'server-only';
 
-import { DOCX_CONTENT_TYPE, MAX_DOCX_BYTES, docxProblem } from '@spooldoc/core';
+import { DOCX_CONTENT_TYPE, MAX_TEMPLATE_FILE_BYTES, XLSX_CONTENT_TYPE, docxProblem, xlsxProblem } from '@spooldoc/core';
 import { eq } from 'drizzle-orm';
+import { FORMAT_FILES, kindName } from '@/lib/job-spec';
 import type { TemplateFileDetails, TemplateFileView } from '@/lib/types';
 import { getDb, type Db, type Tx } from './db';
 import { templateFiles } from './db/schema';
 import { UUID } from './servers';
 
-/** A Word template file, with its bytes. */
+/** A Word or Excel template file, with its bytes. */
 export type TemplateFileRow = typeof templateFiles.$inferSelect;
 
-/** Why a Word template a job points at can't be used: the file is not there. */
-export const TEMPLATE_FILE_GONE = 'The Word template file is gone. Upload the template again.';
+/** The kinds of template whose content is a file. */
+export type FileKind = 'docx' | 'xlsx';
+
+/** Each file kind's content type, and the check of its bytes. */
+const FILE_KINDS: Record<FileKind, { contentType: string; problem: (bytes: Uint8Array) => string | null }> = {
+  docx: { contentType: DOCX_CONTENT_TYPE, problem: docxProblem },
+  xlsx: { contentType: XLSX_CONTENT_TYPE, problem: xlsxProblem },
+};
+
+/** Why a Word or Excel template a job points at can't be used: the file is not there. */
+export const TEMPLATE_FILE_GONE = 'The template file is gone. Upload the template again.';
 
 type ViewColumns = Pick<TemplateFileRow, 'id' | 'name' | 'size' | 'createdAt' | 'madeBy' | 'previousId'>;
 
@@ -45,22 +55,27 @@ export async function getTemplateFileView(id: string): Promise<TemplateFileDetai
   return { ...templateFileView(row), previous: previous ? templateFileView(previous) : null };
 }
 
-/** A file name without folders and control characters; `template.docx` when nothing is left. */
-function cleanName(name: string): string {
+/** A file name without folders and control characters; `template.docx` or `template.xlsx` when nothing is left. */
+function cleanName(name: string, kind: FileKind): string {
   const base = name.split(/[\\/]/).pop() ?? '';
   const clean = base.replace(/[\u0000-\u001f\u007f"]/g, '').trim().slice(0, 200);
-  return clean || 'template.docx';
+  return clean || `template.${kind}`;
 }
 
 /**
- * The `file` field of a multipart upload, checked as a Word template: at most
- * `MAX_DOCX_BYTES`, and a `.docx` by its bytes, with `word/document.xml` in it.
+ * The `file` field of a multipart upload, checked as a Word or Excel template by its
+ * bytes: at most `MAX_TEMPLATE_FILE_BYTES`, and a `.docx` with `word/document.xml` in it or
+ * a `.xlsx` with `xl/workbook.xml`. `kind` is the kind to check it as, or a function that
+ * finds it from the form's other fields, such as the template the file is for.
  *
  * @returns The bytes, the file's name and the form, or the problem to show
  */
-export async function readTemplateUpload(request: Request): Promise<{ content: Buffer; name: string; form: FormData } | { error: string; status: number }> {
-  const tooLarge = `The file is too large: Word templates can be at most ${MAX_DOCX_BYTES / 1024 / 1024} MB.`;
-  if (Number(request.headers.get('content-length') ?? 0) > MAX_DOCX_BYTES + 64 * 1024) {
+export async function readTemplateUpload(
+  request: Request,
+  kind: FileKind | ((form: FormData) => Promise<FileKind | { error: string; status: number }>),
+): Promise<{ content: Buffer; name: string; form: FormData; kind: FileKind } | { error: string; status: number }> {
+  const tooLarge = `The file is too large: Word and Excel templates can be at most ${MAX_TEMPLATE_FILE_BYTES / 1024 / 1024} MB.`;
+  if (Number(request.headers.get('content-length') ?? 0) > MAX_TEMPLATE_FILE_BYTES + 64 * 1024) {
     return { error: tooLarge, status: 413 };
   }
   let form: FormData;
@@ -69,25 +84,29 @@ export async function readTemplateUpload(request: Request): Promise<{ content: B
   } catch {
     return { error: 'Send the file as multipart/form-data.', status: 400 };
   }
+  const fileKind = typeof kind === 'function' ? await kind(form) : kind;
+  if (typeof fileKind !== 'string') return fileKind;
   const file = form.get('file');
   if (!(file instanceof Blob) || file.size === 0) {
-    return { error: 'file: Choose a Word template (.docx).', status: 400 };
+    return { error: `file: Choose ${kindName(fileKind, true)} (.${FORMAT_FILES[fileKind].extension}).`, status: 400 };
   }
-  if (file.size > MAX_DOCX_BYTES) {
+  if (file.size > MAX_TEMPLATE_FILE_BYTES) {
     return { error: tooLarge, status: 413 };
   }
   const content = Buffer.from(await file.arrayBuffer());
-  const problem = docxProblem(content);
+  const problem = FILE_KINDS[fileKind].problem(content);
   if (problem) {
     return { error: `file: ${problem}`, status: 400 };
   }
-  return { content, name: cleanName(file instanceof File ? file.name : ''), form };
+  return { content, name: cleanName(file instanceof File ? file.name : '', fileKind), form, kind: fileKind };
 }
 
 /** What `storeTemplateFile` stores. */
 export interface NewTemplateFile {
   name: string;
   content: Uint8Array;
+  /** Default `docx`. */
+  kind?: FileKind;
   userId: string | null;
   /** Default `upload`. */
   madeBy?: TemplateFileRow['madeBy'];
@@ -95,14 +114,15 @@ export interface NewTemplateFile {
   previousId?: string | null;
 }
 
-/** Stores a Word template as a new row. */
+/** Stores a Word or Excel template as a new row. */
 export async function storeTemplateFile(db: Db | Tx, input: NewTemplateFile): Promise<TemplateFileRow> {
   const content = Buffer.from(input.content);
+  const kind = input.kind ?? 'docx';
   const [row] = await db
     .insert(templateFiles)
     .values({
-      name: cleanName(input.name),
-      contentType: DOCX_CONTENT_TYPE,
+      name: cleanName(input.name, kind),
+      contentType: FILE_KINDS[kind].contentType,
       size: content.length,
       content,
       madeBy: input.madeBy ?? 'upload',
