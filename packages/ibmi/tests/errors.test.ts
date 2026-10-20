@@ -226,6 +226,43 @@ describe("helpers", () => {
   });
 });
 
+describe("long error texts", () => {
+  /** Runs `fn` and expects it to take less than 100 ms. */
+  const fast = (fn: () => unknown): void => {
+    const started = performance.now();
+    fn();
+    expect(performance.now() - started).toBeLessThan(100);
+  };
+  const N = 50_000;
+
+  it("reads an exception line with many spaces after the colon in linear time", () => {
+    fast(() => summarize(`a.AError:${" ".repeat(N)}`));
+    expect(summarize("java.io.IOException:   inner text")).toBe("inner text");
+  });
+
+  it("looks for an object name in linear time", () => {
+    fast(() => guidance("notfound", "#".repeat(N)));
+    fast(() => guidance("authority", "#".repeat(N)));
+    expect(guidance("notfound", "CPF2105 Object MYOUTQ in MYLIB type *OUTQ not found.", undefined, {})).toMatch(/^Output queue MYLIB\/MYOUTQ does not exist/);
+  });
+
+  it("looks for a disabled profile in linear time", () => {
+    const text = "profile ".repeat(N);
+    fast(() => classifyError(text));
+    fast(() => classifyError(text, "IFS /home/docs/out"));
+    fast(() => guidance("auth", text));
+    expect(classifyError("User profile DEMOUSER is disabled.")).toBe("auth");
+    expect(guidance("auth", "The profile DEMOUSER is disabled.", undefined, { user: "demouser" })).toMatch(/^The user profile DEMOUSER is disabled/);
+  });
+
+  it("looks for an unknown user profile in linear time", () => {
+    fast(() => guidance("auth", "user profile ".repeat(N)));
+    expect(guidance("auth", "User profile DEMOUSER not found.", undefined, { user: "demouser", host: "ibmi.example.com" })).toBe(
+      "There is no user profile DEMOUSER on ibmi.example.com. Check the user on the Servers page.",
+    );
+  });
+});
+
 describe("IFS errors", () => {
   const target = { host: "ibmi.example.com", user: "demouser" };
 

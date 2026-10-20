@@ -14,7 +14,7 @@ export function isConnectionLost(text: string): boolean {
 const RULES: [ConnectionErrorCode, RegExp][] = [
   [
     "auth",
-    /AS400SecurityException|password (is )?(not correct|incorrect|expired|not set)|user (id|profile) (is )?(not known|disabled|does not exist)|profile .*disabled|CPF22E[2-5]|CPF2204|SQL30082|\b08004\b/i,
+    /AS400SecurityException|password (is )?(not correct|incorrect|expired|not set)|user (id|profile) (is )?(not known|disabled|does not exist)|profile [^\n]{0,200}disabled|CPF22E[2-5]|CPF2204|SQL30082|\b08004\b/i,
   ],
   [
     "host",
@@ -34,7 +34,7 @@ const RULES: [ConnectionErrorCode, RegExp][] = [
 const IFS_RULES: [ConnectionErrorCode, RegExp][] = [
   [
     "auth",
-    /password (is )?(not correct|incorrect|expired|not set)|user (id|profile) (is )?(not known|disabled|does not exist)|profile .*disabled|CPF22E[2-5]|CPF2204/i,
+    /password (is )?(not correct|incorrect|expired|not set)|user (id|profile) (is )?(not known|disabled|does not exist)|profile [^\n]{0,200}disabled|CPF22E[2-5]|CPF2204/i,
   ],
   ...RULES.filter(([code]) => code === "host"),
   ["authority", /AS400SecurityException|access (to (the )?request )?(was |is )?denied|not authorized|permission denied|CPFA0B1|CPFA09C|CPF3401/i],
@@ -136,7 +136,7 @@ export function summarize(text: string): string {
     .filter((l) => l && !l.startsWith("at ") && !/^\.\.\. \d+ more$/.test(l));
   let best = "";
   for (const line of lines) {
-    const m = /^(?:Caused by: )?(?:[a-z][\w$]*\.)+[A-Z][\w$]*(?:Exception|Error):\s*(.+)$/.exec(line);
+    const m = /^(?:Caused by: )?(?:[a-z][\w$]*\.)+[A-Z][\w$]*(?:Exception|Error):\s*(\S.*)$/.exec(line);
     if (m?.[1]) best = m[1];
   }
   const out = best || lines[0] || "Unknown error";
@@ -156,7 +156,7 @@ export interface ErrorTarget {
 
 /** An object named in a CPF or SQL message: "X in LIB type *OUTQ". */
 function objectOf(text: string): { name: string; library: string; type: string } | undefined {
-  const m = /(?:object\s+)?([A-Z0-9_$#@.]+) in (?:library\s+)?([A-Z0-9_$#@]+) type (\*[A-Z]+)/i.exec(text);
+  const m = /(?:object\s+)?([A-Z0-9_$#@.]{1,30}) in (?:library\s+)?([A-Z0-9_$#@]{1,10}) type (\*[A-Z]{1,10})/i.exec(text);
   return m ? { name: m[1]!.toUpperCase(), library: m[2]!.toUpperCase(), type: m[3]!.toUpperCase() } : undefined;
 }
 
@@ -195,7 +195,7 @@ export function guidance(code: ConnectionErrorCode, text: string, context?: stri
 
   switch (code) {
     case "auth":
-      if (/CPF22E3|profile (is )?disabled|profile .*disabled/i.test(text)) {
+      if (/CPF22E3|profile (is )?disabled|profile [^\n]{0,200}disabled/i.test(text)) {
         return `${user ? `The user profile ${user} is` : "The user profile is"} disabled on ${system}. A security officer can enable it with CHGUSRPRF USRPRF(${user ?? "name"}) STATUS(*ENABLED).`;
       }
       if (/CPF22E4|password (has )?expired/i.test(text)) {
@@ -204,7 +204,7 @@ export function guidance(code: ConnectionErrorCode, text: string, context?: stri
       if (/CPF22E5|no password associated|password (is )?not set/i.test(text)) {
         return `${Profile} has no password (PASSWORD(*NONE)), so it cannot sign on. Use a user profile with a password.`;
       }
-      if (/CPF2204|user (id|profile) (is )?(not known|does not exist)|user profile .* not found/i.test(text)) {
+      if (/CPF2204|user (id|profile) (is )?(not known|does not exist)|user profile [^\n]{0,200} not found/i.test(text)) {
         return `There is no user profile ${user ?? "with that name"} on ${system}. Check the user on the Servers page.`;
       }
       if (/CPF22E2|password (is )?(not correct|incorrect)/i.test(text)) {
