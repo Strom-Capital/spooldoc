@@ -282,7 +282,7 @@ describe('POST /api/jobs/[id]/chat', () => {
     const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     expect(first).toMatchObject({ name: 'lines.xlsx', contentType: XLSX, madeBy: 'assistant', previousId: null, createdBy: expect.any(String) });
     expect(second).toMatchObject({ name: 'lines.xlsx', contentType: XLSX, madeBy: 'assistant', previousId: first!.id });
-    expect((await draft()).render.templates[0]).toMatchObject({ kind: 'xlsx', fileId: second!.id, scope: 'splf', formats: ['pdf'] });
+    expect((await draft()).render.templates[0]).toMatchObject({ kind: 'xlsx', fileId: second!.id, scope: 'splf', formats: ['xlsx'] });
 
     // The step after each call has the PDF; the stored thread has the results' text only.
     const toolResult = (call: number) =>

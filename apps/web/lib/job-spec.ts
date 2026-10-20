@@ -176,18 +176,18 @@ export function starterContent(kind: TemplateKind): TemplateContent {
 }
 
 /**
- * The template with other content, and the formats that kind makes: the ones it kept,
- * or the kind's default (`kindDefaultFormats`) when none is left.
+ * The template with other content. Content of the same kind keeps the formats; another
+ * kind makes that kind's default (`kindDefaultFormats`), as a new template of it would,
+ * so an HTML template that makes PDF makes XLSX as an Excel template.
  */
 export function withContent(template: JobTemplate, content: TemplateContent): JobTemplate {
-  const allowed = KIND_FORMATS[content.kind];
-  const formats = template.formats.filter((format) => allowed.includes(format));
-  return { id: template.id, name: template.name, ...templateContent(content), formats: formats.length > 0 ? formats : kindDefaultFormats(content.kind) };
+  const formats = content.kind === template.kind ? template.formats : kindDefaultFormats(content.kind);
+  return { id: template.id, name: template.name, ...templateContent(content), formats };
 }
 
 /**
- * What switching a template to another kind does to the files it makes, or null when it
- * makes the same files: "It makes PDF files, not HTML. A Word template makes PDF and DOCX."
+ * Which files a template stops making when it switches to another kind, or null when it
+ * stops making none: "It makes XLSX files, not PDF. An Excel template makes XLSX and PDF."
  */
 export function kindSwitchNote(template: JobTemplate, kind: TemplateKind): string | null {
   const kept = withContent(template, starterContent(kind)).formats;

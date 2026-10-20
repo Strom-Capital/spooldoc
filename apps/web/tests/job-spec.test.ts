@@ -114,9 +114,10 @@ describe('Word templates', () => {
     );
   });
 
-  it('switches content, keeping the formats the new kind makes, else PDF', () => {
+  it('switches content: the same kind keeps its formats, another kind makes its default', () => {
     expect(withContent(html, { kind: 'docx', fileId: null })).toEqual({ id: 'main', name: 'Document', kind: 'docx', fileId: null, formats: ['pdf'] });
     expect(withContent({ ...html, formats: ['html'] }, { kind: 'docx', fileId: null }).formats).toEqual(['pdf']);
+    expect(withContent({ ...html, formats: ['pdf', 'html'] }, { kind: 'html', source: '<p>y</p>' }).formats).toEqual(['pdf', 'html']);
     expect(hasOwnContent({ kind: 'docx', fileId: null })).toBe(false);
     expect(hasOwnContent(html)).toBe(true);
     expect(formatList(['pdf', 'docx'])).toBe('PDF and DOCX');
@@ -158,15 +159,17 @@ describe('Excel templates', () => {
     expect(jobSpecSchema.safeParse({ render: { templates: [{ ...excel, scope: 'page' }] } }).success).toBe(false);
   });
 
-  it('switches to and from Excel, keeping the formats the new kind makes, else its own', () => {
+  it('switches to Excel making XLSX, and from Excel making PDF', () => {
     const html: JobTemplate = { id: 'lines', name: 'Lines', kind: 'html', source: '<p>x</p>', formats: ['pdf', 'html'] };
-    expect(withContent(html, starterContent('xlsx'))).toEqual({ ...excel, formats: ['pdf'] });
-    expect(withContent({ ...html, formats: ['html'] }, starterContent('xlsx')).formats).toEqual(['xlsx']);
+    expect(withContent(html, starterContent('xlsx'))).toEqual(excel);
+    expect(withContent({ ...html, formats: ['pdf'] }, { kind: 'xlsx', fileId: file, scope: 'splf' }).formats).toEqual(['xlsx']);
+    expect(withContent({ ...excel, formats: ['xlsx', 'pdf'] }, { kind: 'xlsx', fileId: file, scope: 'splf' }).formats).toEqual(['xlsx', 'pdf']);
     expect(withContent(excel, starterContent('docx')).formats).toEqual(['pdf']);
-    expect(kindSwitchNote(html, 'xlsx')).toBe('It makes PDF files, not HTML. An Excel template makes XLSX and PDF.');
+    expect(kindSwitchNote(html, 'xlsx')).toBe('It makes XLSX files, not PDF and HTML. An Excel template makes XLSX and PDF.');
+    expect(kindSwitchNote({ ...html, formats: ['pdf'] }, 'xlsx')).toBe('It makes XLSX files, not PDF. An Excel template makes XLSX and PDF.');
     expect(kindSwitchNote(excel, 'html')).toBe('It makes PDF files, not XLSX. An HTML template makes PDF and HTML.');
     expect(kindSwitchNote({ ...excel, formats: ['pdf', 'xlsx'] }, 'docx')).toBe('It makes PDF files, not XLSX. A Word template makes PDF and DOCX.');
-    expect(kindSwitchNote({ ...html, formats: ['pdf'] }, 'xlsx')).toBeNull();
+    expect(kindSwitchNote({ ...excel, formats: ['pdf'] }, 'html')).toBeNull();
   });
 
   it('settles the kind of an Excel template, and names each kind the same way everywhere', () => {

@@ -219,8 +219,9 @@ saved. The tags, loops and optional lines are the ones in
 A template can be an Excel workbook instead, for documents people want to
 sort, filter and sum: you lay it out in Excel, with Excel's own formats,
 formulas and page setup, and type the tags into its cells. It makes XLSX
-files, PDFs or both; a new Excel template makes XLSX only. Pick Make it
-an Excel template in the template's menu on the render step.
+files, PDFs or both; a new Excel template makes XLSX only, and so does a
+template that turns into one. Pick Make it an Excel template in the
+template's menu on the render step, or ask the agent for one.
 
 Until you upload one, the preview uses an Excel starter template made
 from the definition. To make your own:
