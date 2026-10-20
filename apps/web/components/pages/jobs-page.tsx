@@ -1,23 +1,27 @@
 'use client';
 
-import { CircleAlertIcon, PauseIcon, PlayIcon, RadioIcon, Trash2Icon, WorkflowIcon } from 'lucide-react';
+import { CircleAlertIcon, PauseIcon, PlayIcon, RadioIcon, ScrollTextIcon, Trash2Icon, WorkflowIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { EmptyState, Loading } from '@/components/empty-state';
+import { DeleteJobDialog } from '@/components/jobs/delete-job-dialog';
 import { ErrorNote, Page } from '@/components/page';
+import { ActionsCell, ActionsHead, RowAction, RowMenu, useRowOpen } from '@/components/row-actions';
 import { RunStatusBadge } from '@/components/run-status';
-import { Button } from '@/components/ui/button';
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { api, errorText } from '@/lib/client/api';
 import { pollWhileVisible } from '@/lib/client/poll';
 import { ago } from '@/lib/client/format';
 import type { JobSummary } from '@/lib/types';
 import { NewJobButton } from './new-job-button';
 
-/** The job list: source, mode, active version and last run, with pause and resume. */
+/** The job list: source, mode, active version and last run, with pause, resume and delete. */
 export function JobsPage() {
   const [jobs, setJobs] = useState<JobSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<JobSummary | null>(null);
+  const rowOpen = useRowOpen();
 
   const load = useCallback(async () => {
     try {
@@ -78,14 +82,12 @@ export function JobsPage() {
                 <th className="px-3 py-2 font-medium">Mode</th>
                 <th className="px-3 py-2 font-medium">Version</th>
                 <th className="px-3 py-2 font-medium">Last run</th>
-                <th className="px-3 py-2">
-                  <span className="sr-only">Actions</span>
-                </th>
+                <ActionsHead />
               </tr>
             </thead>
             <tbody>
               {jobs.map((job) => (
-                <tr key={job.id} className="border-t align-top hover:bg-muted/40">
+                <tr key={job.id} {...rowOpen(`/jobs/${job.id}`, 'border-t align-top')}>
                   <td className="px-3 py-2.5">
                     <Link href={`/jobs/${job.id}`} className="font-medium text-primary hover:underline">
                       {job.name}
@@ -149,25 +151,46 @@ export function JobsPage() {
                       <span className="text-muted-foreground">Never</span>
                     )}
                   </td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex justify-end gap-1">
+                  <ActionsCell>
+                    {job.mode === 'watch' && (
+                      <RowAction onClick={() => setPaused(job, !job.paused)}>
+                        {job.paused ? <PlayIcon /> : <PauseIcon />}
+                        {job.paused ? 'Resume' : 'Pause'}
+                      </RowAction>
+                    )}
+                    <RowAction asChild>
+                      <Link href={`/runs?job=${job.id}`}>
+                        <ScrollTextIcon />
+                        Job log
+                      </Link>
+                    </RowAction>
+                    <RowMenu label={job.name}>
                       {job.mode === 'watch' && (
-                        <Button variant="ghost" size="sm" onClick={() => setPaused(job, !job.paused)}>
+                        <DropdownMenuItem onSelect={() => setPaused(job, !job.paused)}>
                           {job.paused ? <PlayIcon /> : <PauseIcon />}
                           {job.paused ? 'Resume' : 'Pause'}
-                        </Button>
+                        </DropdownMenuItem>
                       )}
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/jobs/${job.id}`}>Open</Link>
-                      </Button>
-                    </div>
-                  </td>
+                      <DropdownMenuItem asChild>
+                        <Link href={`/runs?job=${job.id}`}>
+                          <ScrollTextIcon />
+                          Job log
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(job)}>
+                        <Trash2Icon />
+                        Delete job
+                      </DropdownMenuItem>
+                    </RowMenu>
+                  </ActionsCell>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      <DeleteJobDialog job={deleting} onClose={() => setDeleting(null)} onDeleted={load} />
     </Page>
   );
 }

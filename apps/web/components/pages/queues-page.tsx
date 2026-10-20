@@ -5,8 +5,8 @@ import {
   ArrowUpIcon,
   EyeIcon,
   EyeOffIcon,
-  FileStackIcon,
   InboxIcon,
+  PlusIcon,
   RadioIcon,
   SearchIcon,
   SearchXIcon,
@@ -18,16 +18,19 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { toast } from 'sonner';
 import { ErrorNote, Page } from '@/components/page';
+import { ActionsCell, ActionsHead, RowAction, RowMenu, useRowOpen } from '@/components/row-actions';
 import { ServerSelect } from '@/components/server-select';
 import { ServerErrorNote, ServerStatus } from '@/components/server-status';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SkeletonRows } from '@/components/skeleton-rows';
 import { EmptyState, TableEmpty } from '@/components/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
@@ -35,7 +38,7 @@ import { jobState } from '@/lib/client/jobs';
 import { withLatestCall, type LatestCall } from '@/lib/client/server-state';
 import type { QueueCountView, QueueView, ServerView } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { NewJobButton } from './new-job-button';
+import { useNewJob, type NewJobSource } from './new-job-button';
 
 type CountKey = 'ready' | 'held' | 'total';
 type SortKey = 'library' | 'name' | CountKey | 'jobs' | 'text';
@@ -214,6 +217,14 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
     [server, setQueues],
   );
 
+  const rowOpen = useRowOpen();
+  const { create, creating } = useNewJob();
+  // A menu item has no room for the error, so both ways of starting a job say it in a toast.
+  async function newJob(source: NewJobSource) {
+    const failed = await create(source);
+    if (failed) toast.error('Could not create the job', { description: failed });
+  }
+
   const selectedRows = shown.filter((queue) => selected.has(queueKey(queue)));
   const allSelected = shown.length > 0 && selectedRows.length === shown.length;
 
@@ -308,9 +319,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
               </th>
               <SortHeader column="jobs" label="Jobs" tip="Spooldoc jobs that read from this queue." sort={shownSort} onSort={toggleSort} numeric rowSpan={2} />
               <SortHeader column="text" label="Text" sort={shownSort} onSort={toggleSort} rowSpan={2} />
-              <th rowSpan={2} className="px-3 py-2">
-                <span className="sr-only">Actions</span>
-              </th>
+              <ActionsHead rowSpan={2} />
             </tr>
             <tr>
               {COUNT_COLUMNS.map((column) => (
@@ -320,74 +329,76 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
           </thead>
           <tbody aria-busy={loading} className={cn(loading && queues && 'opacity-60 transition-opacity')}>
             {!queues && !error && (
-              <SkeletonRows widths={['w-4', ...(oneLibrary ? [] : ['w-16']), 'w-24', 'ml-auto w-5', 'ml-auto w-5', 'ml-auto w-6', 'ml-auto w-5', 'w-48', 'ml-auto w-40']} />
+              <SkeletonRows widths={['w-4', ...(oneLibrary ? [] : ['w-16']), 'w-24', 'ml-auto w-5', 'ml-auto w-5', 'ml-auto w-6', 'ml-auto w-5', 'w-48', 'ml-auto w-44']} />
             )}
             {server &&
-              shown.map((queue) => (
-                <tr key={queueKey(queue)} className={`border-t hover:bg-muted/40 ${queue.hidden ? 'text-muted-foreground' : ''}`}>
-                  <td className="px-3 py-2">
-                    <Checkbox
-                      checked={selected.has(queueKey(queue))}
-                      onCheckedChange={(checked) =>
-                        setSelected((current) => {
-                          const next = new Set(current);
-                          if (checked) next.add(queueKey(queue));
-                          else next.delete(queueKey(queue));
-                          return next;
-                        })
-                      }
-                      aria-label={`Select ${queueKey(queue)}`}
-                    />
-                  </td>
-                  {!oneLibrary && <td className="px-3 py-2 font-mono text-xs">{queue.library}</td>}
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-1.5">
-                      <Link
-                        href={`/queues/${server.id}/${encodeURIComponent(queue.library)}/${encodeURIComponent(queue.name)}`}
-                        className="font-medium font-mono text-primary text-xs hover:underline"
-                      >
-                        {queue.name}
-                      </Link>
-                      {queue.dataQueue && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <RadioIcon className="size-3.5 text-muted-foreground" aria-label="Sends to a data queue" />
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            Sends an entry to {queue.dataQueue.library}/{queue.dataQueue.name} when a file is ready
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                      {queue.hidden && <span className="rounded bg-muted px-1.5 text-[11px]">Hidden</span>}
-                    </div>
-                  </td>
-                  {COUNT_COLUMNS.map((column) => (
-                    <CountCell key={column.key} column={column.key} value={countOf(queue, column.key)} failed={!!counts?.error} />
-                  ))}
-                  <JobsCell queue={queue} />
-                  <td className="px-3 py-2 text-muted-foreground">{queue.text}</td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button asChild variant="ghost" size="sm">
-                        <Link href={`/queues/${server.id}/${encodeURIComponent(queue.library)}/${encodeURIComponent(queue.name)}`}>
-                          <FileStackIcon />
-                          Files
+              shown.map((queue) => {
+                const href = `/queues/${server.id}/${encodeURIComponent(queue.library)}/${encodeURIComponent(queue.name)}`;
+                const source = { serverId: server.id, library: queue.library, queue: queue.name };
+                const starting = creating?.library === queue.library && creating.queue === queue.name;
+                return (
+                  <tr key={queueKey(queue)} {...rowOpen(href, cn('border-t', queue.hidden && 'text-muted-foreground'))}>
+                    <td className="px-3 py-2">
+                      <Checkbox
+                        checked={selected.has(queueKey(queue))}
+                        onCheckedChange={(checked) =>
+                          setSelected((current) => {
+                            const next = new Set(current);
+                            if (checked) next.add(queueKey(queue));
+                            else next.delete(queueKey(queue));
+                            return next;
+                          })
+                        }
+                        aria-label={`Select ${queueKey(queue)}`}
+                      />
+                    </td>
+                    {!oneLibrary && <td className="px-3 py-2 font-mono text-xs">{queue.library}</td>}
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1.5">
+                        <Link href={href} className="font-medium font-mono text-primary text-xs hover:underline">
+                          {queue.name}
                         </Link>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setHidden([queue], !queue.hidden)}
-                        aria-label={queue.hidden ? `Unhide ${queueKey(queue)}` : `Hide ${queueKey(queue)}`}
-                        title={queue.hidden ? 'Unhide' : 'Hide'}
-                      >
+                        {queue.dataQueue && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <RadioIcon className="size-3.5 text-muted-foreground" aria-label="Sends to a data queue" />
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              Sends an entry to {queue.dataQueue.library}/{queue.dataQueue.name} when a file is ready
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        {queue.hidden && <span className="rounded bg-muted px-1.5 text-[11px]">Hidden</span>}
+                      </div>
+                    </td>
+                    {COUNT_COLUMNS.map((column) => (
+                      <CountCell key={column.key} column={column.key} value={countOf(queue, column.key)} failed={!!counts?.error} />
+                    ))}
+                    <JobsCell queue={queue} />
+                    <td className="px-3 py-2 text-muted-foreground">{queue.text}</td>
+                    <ActionsCell>
+                      <RowAction onClick={() => void newJob(source)} disabled={creating !== null}>
+                        {starting ? <Spinner /> : <PlusIcon />}
+                        New job
+                      </RowAction>
+                      <RowAction onClick={() => void setHidden([queue], !queue.hidden)}>
                         {queue.hidden ? <EyeIcon /> : <EyeOffIcon />}
-                      </Button>
-                      <NewJobButton source={{ serverId: server.id, library: queue.library, queue: queue.name }} variant="outline" size="sm" />
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                        {queue.hidden ? 'Unhide' : 'Hide'}
+                      </RowAction>
+                      <RowMenu label={queueKey(queue)}>
+                        <DropdownMenuItem onSelect={() => void newJob(source)} disabled={creating !== null}>
+                          <PlusIcon />
+                          New job
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => void setHidden([queue], !queue.hidden)}>
+                          {queue.hidden ? <EyeIcon /> : <EyeOffIcon />}
+                          {queue.hidden ? 'Unhide' : 'Hide'}
+                        </DropdownMenuItem>
+                      </RowMenu>
+                    </ActionsCell>
+                  </tr>
+                );
+              })}
             {queues &&
               shown.length === 0 &&
               !loading &&

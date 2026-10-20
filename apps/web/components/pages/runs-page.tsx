@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
+import { RowOpenButton, useRowOpen } from '@/components/row-actions';
 import { RunStatusBadge } from '@/components/run-status';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,6 +48,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [open, setOpen] = useState<RunView | null>(null);
+  const rowOpen = useRowOpen();
 
   const query = useCallback(
     (before?: number) => {
@@ -228,24 +230,15 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
             </thead>
             <tbody>
               {runs.map((run) => (
-                <tr key={run.id} className="cursor-pointer border-t align-top hover:bg-muted/40" onClick={() => setOpen(run)}>
+                <tr key={run.id} {...rowOpen(() => setOpen(run), 'border-t align-top')}>
                   <td className="whitespace-nowrap px-3 py-2">
-                    {/* The row opens on a click; the button makes it reachable from the keyboard. */}
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setOpen(run);
-                      }}
-                      aria-label={`Open run #${run.seq}`}
-                      className="rounded-sm font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
+                    <RowOpenButton onClick={() => setOpen(run)} aria-label={`Open run #${run.seq}`}>
                       #{run.seq}
-                    </button>
+                    </RowOpenButton>
                     <div className="text-muted-foreground text-xs">{dateTime(run.startedAt)}</div>
                   </td>
                   <td className="px-3 py-2">
-                    <Link href={`/jobs/${run.jobId}`} onClick={(event) => event.stopPropagation()} className="text-primary hover:underline">
+                    <Link href={`/jobs/${run.jobId}`} className="text-primary hover:underline">
                       {run.jobName}
                     </Link>
                     <div className="text-muted-foreground text-xs">
@@ -274,7 +267,6 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                         <a
                           key={file.id}
                           href={`/api/runs/${run.id}/files/${file.id}`}
-                          onClick={(event) => event.stopPropagation()}
                           className="inline-flex items-center gap-1 text-primary text-xs hover:underline"
                         >
                           <DownloadIcon className="size-3" />

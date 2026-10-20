@@ -114,6 +114,13 @@ In practice:
   confirmations. Look in `components/ui`, `components/page.tsx` and
   `components/empty-state.tsx` before adding one. A list loads with
   `Loading`; a table already on screen keeps its shape with `SkeletonRows`.
+- A table row works the same in every table. A click on the row, or on
+  its name, opens it. At most two actions show on the row, the ones people
+  come to that table for: quiet ghost buttons with an icon and a label.
+  An action only some rows have goes first, so the ones every row has
+  line up. The ⋯ menu at the end of the row holds every row action, those
+  included and in the same order, with destructive ones last after a
+  separator.
 - One word for each state and action. A paused job is "paused" in the
   list, the builder and the toast.
 - Errors read "Could not ..." and say what to do. Success toasts say
