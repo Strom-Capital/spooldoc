@@ -1485,5 +1485,13 @@ export function optionsProblem(options: AskUserOption[]): string | null {
 /** The tool that asks the user a question: the answer ends the model's turn (`stopWhen` in the chat route). */
 export const ASK_USER_TOOL = 'ask_user';
 
+/**
+ * The stop condition for a question to the user: true when the last step asked one. A call
+ * `ask_user` turned down does not stop, so the model reads the error and asks again.
+ */
+export function askedUser({ steps }: { steps: { toolResults: { toolName: string; output: unknown }[] }[] }): boolean {
+  return steps.at(-1)?.toolResults.some((result) => result.toolName === ASK_USER_TOOL && (result.output as AskUserResult | undefined)?.ok === true) ?? false;
+}
+
 /** The chat tool set. */
 export type ChatTools = ReturnType<typeof buildTools>;

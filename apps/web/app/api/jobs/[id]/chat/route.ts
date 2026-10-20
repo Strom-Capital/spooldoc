@@ -1,8 +1,8 @@
-import { convertToModelMessages, generateId, hasToolCall, isStepCount, streamText, type UIMessage } from 'ai';
+import { convertToModelMessages, generateId, isStepCount, streamText, type UIMessage } from 'ai';
 import { z } from 'zod';
 import { assetNames, imageAssets } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
-import { ASK_USER_TOOL, buildInstructions, buildTools, hasContent, trimHistory, wordTemplates } from '@/lib/server/chat';
+import { askedUser, buildInstructions, buildTools, hasContent, trimHistory, wordTemplates } from '@/lib/server/chat';
 import { previewRenderer } from '@/lib/server/documents';
 import { draftStore } from '@/lib/server/draft-store';
 import { errorResponse, json, readJson, redact } from '@/lib/server/http';
@@ -117,7 +117,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
         visual: takesFiles(info),
       }),
       // A question to the user ends the turn: the answer comes in the user's next message.
-      stopWhen: [isStepCount(MAX_STEPS), hasToolCall(ASK_USER_TOOL)],
+      stopWhen: [isStepCount(MAX_STEPS), askedUser],
       abortSignal: request.signal,
       // The client gets the error from the stream; the server log gets it here, redacted.
       onError: ({ error }) => log.warn('The agent chat failed', { jobId: job.id, error: safe(error) }),
