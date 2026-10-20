@@ -2,7 +2,8 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { extract } from "../src/extract.js";
 import { templateData } from "../src/template.js";
-import { checkXlsx, columnName, readXlsx, sheetsWithoutPageSetup, starterXlsx, xlsxHardRefresh, xlsxProblem, xlsxProblemText, xlsxValueTag } from "../src/xlsx.js";
+import { checkXlsx, columnName, withoutTags, readXlsx, sheetsWithoutPageSetup, starterXlsx, xlsxHardRefresh, xlsxProblem, xlsxProblemText, xlsxValueTag } from "../src/xlsx.js";
+import { xmlAttribute } from "../src/xml.js";
 import { FIXTURES, loadFixture } from "./helpers/fixtures.js";
 
 const NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
@@ -185,5 +186,28 @@ describe("starterXlsx", () => {
     expect(read.cells.map((c) => c.text)).toContain("{d.pgs[i].totalAmount:formatN}");
     expect(read.cells.map((c) => c.text)).toContain("{d.pgs[i+1]}");
     expect(checkXlsx(read, def)).toEqual([]);
+  });
+});
+
+describe("withoutTags", () => {
+  it("drops tags in one pass, and keeps a brace that is never closed", () => {
+    expect(withoutTags("Invoice {d.pg.invoiceNo}: copy {d.pg.x}")).toBe("Invoice : copy ");
+    expect(withoutTags("a {b")).toBe("a {b");
+    const many = "{".repeat(100_000);
+    const started = performance.now();
+    expect(withoutTags(many)).toBe(many);
+    expect(performance.now() - started).toBeLessThan(200);
+  });
+});
+
+describe("xmlAttribute", () => {
+  it("matches the name as text, after whitespace, never part of another name", () => {
+    const tag = '<c xr:r="X1" ref="A1:B2"\n r="B5" t="s" a.b+c="1">';
+    expect(xmlAttribute(tag, "r")).toBe("B5");
+    expect(xmlAttribute(tag, "ref")).toBe("A1:B2");
+    expect(xmlAttribute(tag, "xr:r")).toBe("X1");
+    expect(xmlAttribute(tag, "a.b+c")).toBe("1");
+    expect(xmlAttribute(tag, ".*")).toBeUndefined();
+    expect(xmlAttribute(tag, "\\")).toBeUndefined();
   });
 });

@@ -14,6 +14,7 @@ import {
   sheetsWithoutPageSetup,
   spooledFileData,
   starterXlsx,
+  xlsxHardRefresh,
   type XlsxCell,
   type XlsxProblem,
   readDocxPart,
@@ -1004,7 +1005,7 @@ async function renderExcel(
   const data = scope === 'splf' ? spooledFileData(shown, sample) : templateData(template, group, shown, sample);
   let textPreview: string;
   try {
-    const out = readXlsx(await renderer({ kind: 'xlsx', template: bytes, data, format: 'xlsx' }));
+    const out = readXlsx(await renderer({ kind: 'xlsx', template: bytes, data, format: 'xlsx', hardRefresh: xlsxHardRefresh(template) }));
     textPreview = truncate(out.cells.map((cell) => `${cellRef(cell.sheet, cell.ref)}: ${cell.text}`).join('\n'), 1500);
   } catch (error) {
     return none([carboneMessage(error)]);

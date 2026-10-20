@@ -223,6 +223,8 @@ describe('runs with an Excel template', () => {
     expect(run.steps.find((s) => s.step === 'render')?.note).toBe('7 PDFs and 1 XLSX file');
     const excel = fakeCarbone.mock.calls.map((call) => call[0]).filter((c) => c.kind === 'xlsx');
     expect(excel.map((c) => c.format)).toEqual(['pdf', 'xlsx']);
+    // Worked out once from the template: the starter has formulas.
+    expect(excel.find((c) => c.format === 'xlsx')).toMatchObject({ hardRefresh: true });
     expect((excel[0]!.data as { pgs: unknown[] }).pgs).toHaveLength(6);
     const rows = await db().select({ name: runFiles.name, pageGroupIndex: runFiles.pageGroupIndex }).from(runFiles).where(eq(runFiles.runId, run.id));
     expect(rows.find((row) => row.name === `${name}-lines.xlsx`)?.pageGroupIndex).toBeNull();

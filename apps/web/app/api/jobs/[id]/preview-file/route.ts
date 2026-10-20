@@ -1,4 +1,4 @@
-import { isCarboneError, readDocx, readXlsx, spooledFileData, starterDocx, starterXlsx, templateData } from '@spooldoc/core';
+import { isCarboneError, readDocx, readXlsx, spooledFileData, starterDocx, starterXlsx, templateData, xlsxHardRefresh } from '@spooldoc/core';
 import { z } from 'zod';
 import { FORMAT_FILES, KIND_FORMATS, formatList, kindName, spooledFileName, templateFileName } from '@/lib/job-spec';
 import { assetNames, assetResolver } from '@/lib/server/assets';
@@ -118,8 +118,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       if (!bytes) {
         return json({ error: 'Nothing to render.', templateErrors: result.errors }, { status: 422 });
       }
-      const data = wholeFile ? spooledFileData(pageGroups, sample) : templateData(readXlsx(bytes), group, pageGroups, sample);
-      return send(await renderer({ kind: 'xlsx', template: bytes, data, format: 'xlsx' }));
+      const read = readXlsx(bytes);
+      const data = wholeFile ? spooledFileData(pageGroups, sample) : templateData(read, group, pageGroups, sample);
+      return send(await renderer({ kind: 'xlsx', template: bytes, data, format: 'xlsx', hardRefresh: xlsxHardRefresh(read) }));
     }
     const bytes = content.kind === 'docx' && content.file ? content.file.content : def ? await starterDocx(def) : null;
     if (!bytes) {

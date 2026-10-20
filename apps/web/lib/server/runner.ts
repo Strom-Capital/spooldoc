@@ -7,6 +7,7 @@ import {
   readXlsx,
   spooledFileData,
   starterXlsx,
+  xlsxHardRefresh,
   xlsxProblemText,
   type DocumentData,
   type XlsxTemplate,
@@ -314,7 +315,9 @@ async function prepareTemplate(template: JobTemplate, def: Definition, assets: s
     }
     const found = checkXlsx(read, def, template.scope);
     if (found.length > 0) throw problems(found.length, xlsxProblemText(found.slice(0, 3)));
-    return { data: read, input: (data, format) => ({ kind: 'xlsx', template: bytes, data, format: format === 'xlsx' ? 'xlsx' : 'pdf' }) };
+    // Worked out once, so a render per page group does not unzip the file again.
+    const hardRefresh = xlsxHardRefresh(read);
+    return { data: read, input: (data, format) => ({ kind: 'xlsx', template: bytes, data, format: format === 'xlsx' ? 'xlsx' : 'pdf', hardRefresh }) };
   }
   let read: DocxTemplate;
   try {

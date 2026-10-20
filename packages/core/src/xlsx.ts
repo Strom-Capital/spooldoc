@@ -3,6 +3,7 @@ import type { Definition, ValueType } from "./definition.js";
 import { short, tagParts, tagProblems, templatePaths, templateTags } from "./tags.js";
 import { fieldLabel, MAX_TEMPLATE_FILE_BYTES, starterLayout, type StarterBlock, type StarterColumn } from "./template.js";
 import { decodeXml, escapeXml, isOle, isZip, xmlAttribute } from "./xml.js";
+import type { XlsxScope } from "./xlsx-scope.js";
 
 /**
  * Excel templates: a `.xlsx` made in Excel with Carbone tags in its cells. Spooldoc reads
@@ -13,12 +14,7 @@ import { decodeXml, escapeXml, isOle, isZip, xmlAttribute } from "./xml.js";
 /** The content type of an Excel workbook. */
 export const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-/**
- * What one file of an Excel template holds: the whole spooled file (`splf`, the default),
- * with `d` = `{ pgs, splf }`, or one page group (`pageGroup`), with `d` = `{ pg, pgs?, splf }`
- * as for HTML and Word templates.
- */
-export type XlsxScope = "splf" | "pageGroup";
+export { XLSX_SCOPES, type XlsxScope } from "./xlsx-scope.js";
 
 /** The most one part of the file (a sheet, the shared strings) may unzip to. */
 const MAX_PART_BYTES = 32 * 1024 * 1024;
@@ -473,6 +469,19 @@ function columnWidth(column: StarterColumn, label = fieldLabel(column.name)): nu
 const cellStyle = (type?: ValueType): number => (type === "number" ? STYLE.number : type === "date" ? STYLE.date : STYLE.text);
 const headerStyle = (type?: ValueType): number => (type === "number" ? STYLE.headerNumber : STYLE.header);
 
+/** A text without its tags, such as a title `Invoice {d.pg.invoiceNo}`: `Invoice `. One pass with `indexOf`. */
+export function withoutTags(text: string): string {
+  let out = "";
+  let from = 0;
+  for (let open = text.indexOf("{"); open !== -1; open = text.indexOf("{", from)) {
+    const close = text.indexOf("}", open + 1);
+    if (close === -1) break;
+    out += text.slice(from, open);
+    from = close + 1;
+  }
+  return out + text.slice(from);
+}
+
 /** A sheet name Excel takes: at most 31 characters, none of `[]:*?/\`, and not one already used. */
 function sheetName(wanted: string, used: Set<string>): string {
   const base = wanted.replace(/[[\]:*?/\\{}]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 31).trim() || "Sheet";
@@ -570,7 +579,7 @@ function pageGroupSheets(title: string, fields: StarterColumn[], blocks: Starter
     rows.push(...blockRows(first, rows.length + 1));
     first.columns.forEach((c, n) => (widths[n] = Math.max(widths[n] ?? 0, columnWidth(c))));
   }
-  const name = sheetName(title.replace(/\{[^}]*\}/g, ""), used);
+  const name = sheetName(withoutTags(title), used);
   const sheets: StarterSheet[] = [{ name, rows, widths }];
   for (const block of rest) {
     sheets.push({ name: sheetName(fieldLabel(block.name), used), rows: blockRows(block, 1), widths: block.columns.map((c) => columnWidth(c)), header: { row: 1, filter: false, printTitles: true } });
@@ -649,7 +658,7 @@ export function starterXlsx(def: Definition, scope: XlsxScope = "splf"): Uint8Ar
     scope === "pageGroup"
       ? pageGroupSheets(title, fields, usable, used)
       : usable.length === 0
-        ? [flatSheet(sheetName(title.replace(/\{[^}]*\}/g, ""), used), fields, undefined)]
+        ? [flatSheet(sheetName(withoutTags(title), used), fields, undefined)]
         : usable.map((block) => flatSheet(sheetName(fieldLabel(block.name), used), fields, block));
   const strings = new Map<string, number>();
   const sheetFilesXml = sheets.map((sheet, n) => sheetXml(sheet, n === 0, strings));

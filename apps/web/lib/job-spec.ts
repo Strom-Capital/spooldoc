@@ -1,3 +1,4 @@
+import { XLSX_SCOPES, type XlsxScope } from '@spooldoc/core/xlsx-scope';
 import { z } from 'zod';
 
 /** An IBM i object name: 1 to 10 characters, upper-cased. */
@@ -111,8 +112,7 @@ const docxContent = z.object({ kind: z.literal('docx'), fileId: z.string().uuid(
  * What one file of an Excel template holds: the whole spooled file (`splf`, the default),
  * a row per line, or one page group (`pageGroup`), as HTML and Word templates do.
  */
-export const XLSX_SCOPES = ['splf', 'pageGroup'] as const;
-export type XlsxScope = (typeof XLSX_SCOPES)[number];
+export { XLSX_SCOPES, type XlsxScope };
 const xlsxContent = z.object({ kind: z.literal('xlsx'), fileId: z.string().uuid().nullable().default(null), scope: z.enum(XLSX_SCOPES).default('splf') });
 
 /**

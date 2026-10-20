@@ -37,6 +37,8 @@ export interface XlsxRender {
   template: Uint8Array;
   data: DocumentData;
   format: "xlsx" | "pdf";
+  /** Pass the XLSX through LibreOffice; `xlsxHardRefresh` works it out from the template when not given. */
+  hardRefresh?: boolean;
 }
 
 /** One document to render with Carbone. */
@@ -57,7 +59,8 @@ export type DocumentRender = HtmlRender | DocxRender | XlsxRender;
 export async function renderDocument(server: CarboneServer, input: DocumentRender): Promise<Uint8Array> {
   if (input.kind === "xlsx") {
     if (input.format === "xlsx") {
-      return carboneRender(server, { template: input.template, data: input.data, convertTo: "xlsx", hardRefresh: xlsxHardRefresh(readXlsx(input.template)) });
+      const hardRefresh = input.hardRefresh ?? xlsxHardRefresh(readXlsx(input.template));
+      return carboneRender(server, { template: input.template, data: input.data, convertTo: "xlsx", hardRefresh });
     }
     return carboneRender(server, { template: input.template, data: input.data, convertTo: "pdf", converter: "L" });
   }

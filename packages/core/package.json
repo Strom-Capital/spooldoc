@@ -20,6 +20,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./xlsx-scope": {
+      "types": "./dist/xlsx-scope.d.ts",
+      "import": "./dist/xlsx-scope.js"
     }
   },
   "files": [
