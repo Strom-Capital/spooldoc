@@ -71,7 +71,10 @@ export function RowMenu({ label, busy = false, children }: { label: string; busy
           {busy ? <Spinner /> : <MoreHorizontalIcon />}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">{children}</DropdownMenuContent>
+      {/* As wide as its longest item, not the trigger, so no item wraps. */}
+      <DropdownMenuContent align="end" className="w-auto min-w-36">
+        {children}
+      </DropdownMenuContent>
     </DropdownMenu>
   );
 }
