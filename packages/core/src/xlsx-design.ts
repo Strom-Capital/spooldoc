@@ -947,8 +947,8 @@ function finish(bytes: Uint8Array, pictures: OneCellPicture[], filters: boolean)
   const text = (name: string): string => (files[name] ? strFromU8(files[name]) : "");
   if (filters) {
     const workbook = text("xl/workbook.xml");
+    if (!workbook.includes(`<definedName name="${FILTER_NAME}"`)) throw new Error(`hucre wrote no ${FILTER_NAME} name for the filters.`);
     const hidden = workbook.replace(/<definedName name="_xlnm\._FilterDatabase"(?![^>]*\bhidden=)/g, '$& hidden="1"');
-    if (hidden === workbook) throw new Error(`hucre wrote no ${FILTER_NAME} name for the filters.`);
     files["xl/workbook.xml"] = strToU8(hidden);
   }
   const sheets = sheetFiles(text("xl/workbook.xml"), text("xl/_rels/workbook.xml.rels"));
