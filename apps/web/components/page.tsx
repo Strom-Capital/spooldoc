@@ -7,10 +7,11 @@ import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbP
 type Crumb = { label: ReactNode; href?: string };
 
 /**
- * A page with a breadcrumb trail, a title, a description and actions on the right. The
- * trail starts at the section, with no Home in front: each item with an `href` links to a
- * page above, and the last item, without one, names this page. Without `breadcrumbs` the
- * trail is the title alone, so the title sits in the same place on every page.
+ * A page with a title, a description and actions on the right. A page that sits under
+ * another page passes `breadcrumbs`, its path from the section down: each item with an
+ * `href` links to a page above, and the last item, without one, names this page. The
+ * trail shows only with two or more items; top-level pages have none, as the sidebar
+ * covers them.
  */
 export function Page({
   title,
@@ -27,29 +28,30 @@ export function Page({
   children: ReactNode;
   className?: string;
 }) {
-  const trail: Crumb[] = breadcrumbs && breadcrumbs.length > 0 ? breadcrumbs : [{ label: title }];
   return (
     <main className={cn('mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8', className)}>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
-          <Breadcrumb className="mb-1.5">
-            <BreadcrumbList>
-              {trail.map((crumb, i) => (
-                <Fragment key={crumb.href ?? 'current'}>
-                  {i > 0 && <BreadcrumbSeparator />}
-                  <BreadcrumbItem className="min-w-0">
-                    {crumb.href ? (
-                      <BreadcrumbLink asChild>
-                        <Link href={crumb.href}>{crumb.label}</Link>
-                      </BreadcrumbLink>
-                    ) : (
-                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                    )}
-                  </BreadcrumbItem>
-                </Fragment>
-              ))}
-            </BreadcrumbList>
-          </Breadcrumb>
+          {breadcrumbs && breadcrumbs.length > 1 && (
+            <Breadcrumb className="mb-1.5">
+              <BreadcrumbList>
+                {breadcrumbs.map((crumb, i) => (
+                  <Fragment key={crumb.href ?? 'current'}>
+                    {i > 0 && <BreadcrumbSeparator />}
+                    <BreadcrumbItem className="min-w-0">
+                      {crumb.href ? (
+                        <BreadcrumbLink asChild>
+                          <Link href={crumb.href}>{crumb.label}</Link>
+                        </BreadcrumbLink>
+                      ) : (
+                        <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                      )}
+                    </BreadcrumbItem>
+                  </Fragment>
+                ))}
+              </BreadcrumbList>
+            </Breadcrumb>
+          )}
           <h1 className="font-semibold text-2xl tracking-tight">{title}</h1>
           {description && <p className="mt-1 text-muted-foreground text-sm">{description}</p>}
         </div>
