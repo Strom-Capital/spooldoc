@@ -3,7 +3,7 @@ import 'server-only';
 import { and, eq, inArray, isNotNull, isNull, lt, notExists, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { getDb, getLocks } from './db';
-import { jobs, jobVersions, runs, samples, templateFiles } from './db/schema';
+import { agentUsage, jobs, jobVersions, runs, samples, templateFiles } from './db/schema';
 import { log } from './log';
 
 /** Rows deleted per statement, so no single delete holds its locks for long. */
@@ -24,6 +24,8 @@ export interface CleanupResult {
   samples: number;
   /** Word and Excel template files no job draft or version uses any more. */
   templateFiles: number;
+  /** Rows of the agent's token usage. */
+  agentUsage: number;
 }
 
 /** True when a job spec (a draft or a version) has a template with this Word or Excel file. */
@@ -53,7 +55,8 @@ export async function failStaleRuns(now: Date = new Date()): Promise<number> {
  * captured before the cutoff that no job draft points at, and Word and Excel template
  * files made before the cutoff that no job draft or version uses. A file the agent
  * replaced is kept while the file a draft uses names it as its previous one, so the
- * template's panel can offer it back. Runs still running are kept,
+ * template's panel can offer it back. The agent's usage rows recorded before the cutoff
+ * go too. Runs still running are kept,
  * and so are the `watch_seen` rows, which stop a spooled file from being processed again.
  * Runs a stopped process cut off are marked failed first (`failStaleRuns`), and kept for
  * the retention from then.
@@ -68,7 +71,7 @@ export async function cleanUp(retentionDays: number, now: Date = new Date()): Pr
   try {
     const db = getDb();
     const cutoff = new Date(now.getTime() - retentionDays * DAY_MS);
-    const result: CleanupResult = { runs: 0, samples: 0, templateFiles: 0 };
+    const result: CleanupResult = { runs: 0, samples: 0, templateFiles: 0, agentUsage: 0 };
 
     await failStaleRuns(now);
 
@@ -112,6 +115,13 @@ export async function cleanUp(retentionDays: number, now: Date = new Date()): Pr
       const unused = db.select({ id: templateFiles.id }).from(templateFiles).where(unusedFile).limit(BATCH);
       const deleted = await db.delete(templateFiles).where(inArray(templateFiles.id, unused)).returning({ id: templateFiles.id });
       result.templateFiles += deleted.length;
+      if (deleted.length < BATCH) break;
+    }
+
+    for (;;) {
+      const old = db.select({ id: agentUsage.id }).from(agentUsage).where(lt(agentUsage.createdAt, cutoff)).limit(BATCH);
+      const deleted = await db.delete(agentUsage).where(inArray(agentUsage.id, old)).returning({ id: agentUsage.id });
+      result.agentUsage += deleted.length;
       if (deleted.length < BATCH) break;
     }
     return result;

@@ -1,12 +1,13 @@
 import { convertToModelMessages, generateId, isStepCount, streamText, type UIMessage } from 'ai';
 import { z } from 'zod';
+import { recordUsage, stepUsage } from '@/lib/server/agent-usage';
 import { assetNames, imageAssets } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
 import { askedUser, buildInstructions, buildTools, fileTemplates, hasContent, trimHistory } from '@/lib/server/chat';
 import { previewRenderer } from '@/lib/server/documents';
 import { draftStore } from '@/lib/server/draft-store';
 import { errorResponse, json, readJson, redact } from '@/lib/server/http';
-import { clearChat, readChat, saveChat } from '@/lib/server/job-chat';
+import { clearChat, readChat, saveChat, startChat } from '@/lib/server/job-chat';
 import { jobFilesReader } from '@/lib/server/job-files';
 import { draftAndSample } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
@@ -89,6 +90,9 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   const templateFile = getTemplateFile;
   const words = await fileTemplates(draft.render.templates, draft.extract.definition, getTemplateFile);
   const safe = (error: unknown): string => redact(error, secrets).replace(KEY_PATTERN, '***');
+  // The thread's start marks where this chat's usage begins. Without it the chat still
+  // works; only the panel's total for this chat is missing.
+  await startChat(job.id).catch((error: unknown) => log.warn('Could not start the agent chat', { jobId: job.id, error: safe(error) }));
 
   try {
     const result = streamText({
@@ -119,6 +123,21 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
       // A question to the user ends the turn: the answer comes in the user's next message.
       stopWhen: [isStepCount(MAX_STEPS), askedUser],
       abortSignal: request.signal,
+      // Each finished step is counted, so a turn that stops part way keeps what it used.
+      // A count that cannot be stored is logged and the answer goes on.
+      onStepEnd: async (step) => {
+        try {
+          await recordUsage({
+            jobId: job.id,
+            userId: auth.user.id,
+            provider: info.provider,
+            model: info.id,
+            ...stepUsage(info.provider, step.usage, step.providerMetadata),
+          });
+        } catch (error) {
+          log.warn('Could not record the agent usage', { jobId: job.id, error: safe(error) });
+        }
+      },
       // The client gets the error from the stream; the server log gets it here, redacted.
       onError: ({ error }) => log.warn('The agent chat failed', { jobId: job.id, error: safe(error) }),
     });

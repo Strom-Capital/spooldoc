@@ -214,6 +214,42 @@ export interface RenderingView {
   check: CarboneCheck | null;
 }
 
+/** The agent's tokens over some model steps, and their cost when every step's provider reported one. */
+export interface UsageTotals {
+  /** Model steps counted: each tool call and answer is one. */
+  steps: number;
+  inputTokens: number;
+  outputTokens: number;
+  /** Input tokens read from the provider's cache, part of `inputTokens`. */
+  cachedInputTokens: number;
+  /** Output tokens the model spent reasoning, part of `outputTokens`. */
+  reasoningTokens: number;
+  /** In US dollars. Null unless every step reported a cost: an unknown cost is not 0. */
+  costUsd: number | null;
+  /** Some steps reported a cost and some did not, so no total is shown. */
+  costPartial: boolean;
+}
+
+/** The agent's usage of one provider and model in a month. */
+export interface UsageLine extends UsageTotals {
+  /** An `AiProviderId`, or the id of a provider Spooldoc no longer offers. */
+  provider: string;
+  model: string;
+}
+
+/** The agent's usage in a calendar month of the viewer's time zone. */
+export interface UsageMonth {
+  /** `YYYY-MM`. */
+  month: string;
+  lines: UsageLine[];
+}
+
+/** The agent's usage this month and last month, for Settings. */
+export interface AgentUsageView {
+  thisMonth: UsageMonth;
+  lastMonth: UsageMonth;
+}
+
 /** App-wide watcher settings. */
 export interface SettingsView {
   pollSeconds: number;
@@ -221,7 +257,7 @@ export interface SettingsView {
   retentionDays: number;
   watching: { realtime: number; polled: number };
   /** The last cleanup of old runs by this server process, if it did one. */
-  cleanup: { at: string; runs: number; samples: number; templateFiles: number; error?: string } | null;
+  cleanup: { at: string; runs: number; samples: number; templateFiles: number; agentUsage: number; error?: string } | null;
   ai: AiSettingsView;
   rendering: RenderingView;
 }

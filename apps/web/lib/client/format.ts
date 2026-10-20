@@ -37,3 +37,38 @@ export function bytes(size: number): string {
 export function splfLabel(splf: { name: string; number: number; jobNumber: string; jobUser: string; jobName: string }): string {
   return `${splf.name} #${splf.number}, job ${splf.jobNumber}/${splf.jobUser}/${splf.jobName}`;
 }
+
+const COMPACT = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
+
+/** A token count, short: "840", "84K", "1.2M". */
+export function tokenCount(n: number): string {
+  return COMPACT.format(n);
+}
+
+/** US dollars: "$0.42", or "$0.0031" below a cent so a small cost does not read as nothing. */
+export function usd(amount: number): string {
+  const digits = amount > 0 && amount < 0.01 ? 4 : 2;
+  return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: digits }).format(amount);
+}
+
+/** What `usageText` reads: the agent's `UsageTotals`. */
+export interface UsageLike {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+  reasoningTokens: number;
+  costUsd: number | null;
+  costPartial: boolean;
+}
+
+/**
+ * Tokens and cost in a line, such as "1.2M tokens in (800K cached), 84K out, $0.42".
+ * Cached and reasoning tokens show only when there are some. The cost shows only when
+ * every step reported one; when only some did, the line says so instead of a total.
+ */
+export function usageText(usage: UsageLike): string {
+  const input = `${tokenCount(usage.inputTokens)} tokens in${usage.cachedInputTokens > 0 ? ` (${tokenCount(usage.cachedInputTokens)} cached)` : ''}`;
+  const output = `${tokenCount(usage.outputTokens)} out${usage.reasoningTokens > 0 ? ` (${tokenCount(usage.reasoningTokens)} reasoning)` : ''}`;
+  const cost = usage.costUsd !== null ? `, ${usd(usage.costUsd)}` : usage.costPartial ? ', cost not reported for every step' : '';
+  return `${input}, ${output}${cost}`;
+}

@@ -12,6 +12,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -433,4 +434,29 @@ export const watchSeen = pgTable(
     seenAt: timestamp('seen_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.jobId, t.splfKey] })],
+);
+
+/**
+ * The tokens of one model step of the agent, and its cost when the provider reported
+ * one. A token count is null when the provider did not report it, and the cost is null
+ * when the provider reports none: only OpenRouter and the Vercel AI Gateway do. Kept
+ * when the job or the user is deleted, and deleted with the retention, like runs.
+ */
+export const agentUsage = pgTable(
+  'agent_usage',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    jobId: uuid('job_id').references(() => jobs.id, { onDelete: 'set null' }),
+    userId: text('user_id').references(() => user.id, { onDelete: 'set null' }),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    inputTokens: integer('input_tokens'),
+    outputTokens: integer('output_tokens'),
+    cachedInputTokens: integer('cached_input_tokens'),
+    reasoningTokens: integer('reasoning_tokens'),
+    /** US dollars, as the provider reported it. */
+    costUsd: numeric('cost_usd', { precision: 18, scale: 10, mode: 'number' }),
+  },
+  (t) => [index('agent_usage_created_idx').on(t.createdAt), index('agent_usage_job_created_idx').on(t.jobId, t.createdAt)],
 );
