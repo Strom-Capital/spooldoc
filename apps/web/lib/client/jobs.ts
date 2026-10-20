@@ -34,3 +34,10 @@ export function sameQueueJobs(
     onDemand: others.filter((other) => other.mode === 'manual'),
   };
 }
+
+/** How a job runs, in the Jobs page's words: Watching, Paused, On demand or Draft only. */
+export function jobState(job: Pick<JobSummary, 'mode' | 'paused' | 'activeVersion'>): string {
+  if (job.activeVersion === null) return 'Draft only';
+  if (job.mode === 'watch') return job.paused ? 'Paused' : 'Watching';
+  return 'On demand';
+}

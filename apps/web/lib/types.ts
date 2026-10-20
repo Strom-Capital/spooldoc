@@ -42,6 +42,8 @@ export interface QueueView {
   hidden: boolean;
   /** The data queue the output queue sends entries to, when it has one. */
   dataQueue: { library: string; name: string } | null;
+  /** Jobs that read from this queue (the source of the active version, else the draft), in name order. */
+  jobs: Pick<JobSummary, 'id' | 'name' | 'mode' | 'paused' | 'activeVersion'>[];
 }
 
 /** The files a job can pick up from an output queue: ready ones, and held ones when it takes them. */
