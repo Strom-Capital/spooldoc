@@ -5,7 +5,6 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { CodeEditor } from './code-editor';
 import { EditorBar, EditorMessage } from './editor-bar';
-import { SaveStatus } from './save-status';
 import { StartFromJobDialog } from './start-from-job-dialog';
 import { WordTemplate } from './word-template';
 import { useWorkbench } from './workbench-provider';
@@ -31,7 +30,7 @@ function HtmlTemplateEditor() {
   const problems = shown?.problems ?? [];
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <EditorBar status={<SaveStatus />}>
+      <EditorBar>
         {!readOnly && html === null && starter && (
           <Button size="sm" variant="ghost" onClick={() => setHtml(starter)}>
             <WandSparklesIcon />

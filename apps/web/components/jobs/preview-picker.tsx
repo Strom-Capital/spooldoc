@@ -8,6 +8,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Spinner } from '@/components/ui/spinner';
 import { api, errorText } from '@/lib/client/api';
+import { dateTime } from '@/lib/client/format';
 import { filterParams, splfKey } from '@/lib/job-spec';
 import type { SampleView } from '@/lib/client/render';
 import type { SpooledFileView } from '@/lib/types';
@@ -17,8 +18,9 @@ const idOf = (f: SpooledFileView) => ({ name: f.name, number: f.number, jobName:
 
 /**
  * The spooled file the definition and template are tried on: a searchable list of the
- * source queue's files. Picking one reads it from the IBM i; it is never held, moved
- * or deleted. Once the queue is set, the newest file is picked when none is.
+ * source queue's files. Picking one reads it from the IBM i and saves a copy, which the
+ * workbench shows from then on, also after the file leaves the queue. The file is never
+ * held, moved or deleted. Once the queue is set, the newest file is picked when none is.
  */
 export function PreviewPicker({ sample }: { sample: SampleView | null }) {
   const { job, spec, refresh } = useJob();
@@ -95,21 +97,42 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
         }}
       >
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" role="combobox" aria-expanded={open} disabled={!ready || busy} className="min-w-0 max-w-72 justify-between font-normal">
+          <Button
+            variant="outline"
+            size="sm"
+            role="combobox"
+            aria-expanded={open}
+            disabled={!ready || busy}
+            title={
+              sample
+                ? `Saved copy from ${dateTime(sample.capturedAt)}: ${sample.pages.length} ${sample.pages.length === 1 ? 'page' : 'pages'}, ${sample.attributes.pageWidth}x${sample.attributes.pageLength}, CCSID ${sample.codePage}`
+                : undefined
+            }
+            className="min-w-0 max-w-72 justify-between font-normal"
+          >
             {busy ? <Spinner /> : <FileTextIcon />}
             <span className="truncate">{current ?? (ready ? 'Pick a spooled file' : 'Set the source first')}</span>
+            {sample && <span className="shrink-0 text-muted-foreground">saved copy</span>}
             <ChevronsUpDownIcon className="opacity-50" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[26rem] max-w-[calc(100vw-2rem)] p-0" align="start">
+          {sample && (
+            <p className="border-b px-3 py-2 text-muted-foreground text-xs">
+              A copy of {current} saved {dateTime(sample.capturedAt)}. It stays when the file leaves the queue. Pick a file to
+              save a new copy.
+            </p>
+          )}
           <Command>
             <CommandInput placeholder="Search by name, job or user data" />
             <CommandList>
               {files === null && !error && (
                 <Loading className="p-3">Loading spooled files...</Loading>
               )}
-              <CommandEmpty>No spooled file matches.</CommandEmpty>
-              <CommandGroup heading={`${library}/${queue}, newest first`}>
+              {files !== null && (
+                <CommandEmpty>{files.length === 0 ? `${library}/${queue} has no spooled files.` : 'No spooled file matches.'}</CommandEmpty>
+              )}
+              <CommandGroup heading={files?.length ? `${library}/${queue}, newest first` : undefined}>
                 {files?.map((file) => (
                   <CommandItem
                     key={splfKey(file)}
@@ -132,11 +155,6 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
           </Command>
         </PopoverContent>
       </Popover>
-      {sample && (
-        <span className="hidden truncate text-muted-foreground text-xs lg:inline">
-          {sample.pages.length} {sample.pages.length === 1 ? 'page' : 'pages'}, {sample.attributes.pageWidth}x{sample.attributes.pageLength}, CCSID {sample.codePage}
-        </span>
-      )}
       {error && (
         <span role="alert" className="truncate text-destructive text-xs" title={error}>
           {error}

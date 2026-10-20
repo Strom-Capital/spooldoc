@@ -12,7 +12,6 @@ import { bytes, dateTime } from '@/lib/client/format';
 import { FORMAT_FILES } from '@/lib/job-spec';
 import type { TemplateFileDetails, TemplateFileView } from '@/lib/types';
 import { EditorBar, EditorMessage } from './editor-bar';
-import { SaveStatus } from './save-status';
 import { StartFromJobDialog } from './start-from-job-dialog';
 import { useWorkbench } from './workbench-provider';
 
@@ -93,7 +92,7 @@ export function WordTemplate() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <EditorBar status={<SaveStatus />}>
+      <EditorBar>
         {!readOnly && (
           <>
             <input

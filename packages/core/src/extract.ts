@@ -19,9 +19,17 @@ export interface FieldHit {
   status: "found" | "missing" | "empty";
 }
 
+/** The sample pages one page group is printed on, 1-based and inclusive. */
+export interface PageRange {
+  first: number;
+  last: number;
+}
+
 /** Result of `extract`. */
 export interface ExtractResult {
   pageGroups: Record<string, unknown>[];
+  /** The pages of each page group, in the order of `pageGroups`. XML page groups can share a page. */
+  pageRanges: PageRange[];
   hits: FieldHit[];
   warnings: string[];
 }
@@ -206,10 +214,11 @@ function extractRecords(c: Collector, group: number, pages: SamplePage[], text: 
 export function extract(def: Definition, sample: Sample): ExtractResult {
   if (def.source === "xml") return extractXml(def, sample);
   const text = def.text;
-  if (!text) return { pageGroups: [], hits: [], warnings: ["definition has no text section"] };
+  if (!text) return { pageGroups: [], pageRanges: [], hits: [], warnings: ["definition has no text section"] };
   const c = new Collector();
   const pages = text.skipFirstPage ? sample.pages.slice(1) : sample.pages;
-  const pageGroups = splitPageGroups(pages, text).map((groupPages, group) => {
+  const groups = splitPageGroups(pages, text);
+  const pageGroups = groups.map((groupPages, group) => {
     const out: Record<string, unknown> = {};
     for (const field of text.fields ?? []) out[field.name] = extractField(c, group, groupPages, field);
     extractTables(c, group, groupPages, text, out);
@@ -217,7 +226,8 @@ export function extract(def: Definition, sample: Sample): ExtractResult {
     return out;
   });
   if (pageGroups.length === 0) c.warnings.push("no pages to extract from");
-  return { pageGroups, hits: c.hits, warnings: c.warnings };
+  const pageRanges = groups.map((groupPages) => ({ first: groupPages[0]!.no, last: groupPages.at(-1)!.no }));
+  return { pageGroups, pageRanges, hits: c.hits, warnings: c.warnings };
 }
 
 /**

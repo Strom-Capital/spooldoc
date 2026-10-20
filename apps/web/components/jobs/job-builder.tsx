@@ -68,10 +68,11 @@ function Builder() {
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="relative shrink-0 border-b bg-muted/20">
             {stripOpen && <PipelineStrip />}
+            {/* Centered, so React Flow's attribution in the corner stays visible. */}
             <Button
               variant="ghost"
               size="xs"
-              className={stripOpen ? 'absolute right-1 bottom-1' : 'm-1'}
+              className={stripOpen ? 'absolute bottom-1 left-1/2 -translate-x-1/2' : 'mx-auto my-1 flex'}
               onClick={() => setStripOpen(!stripOpen)}
               aria-expanded={stripOpen}
             >

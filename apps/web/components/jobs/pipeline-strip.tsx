@@ -107,6 +107,8 @@ const subscribeNothing = () => () => undefined;
 /** Smallest zoom at which the step text is still readable. */
 const MIN_ZOOM = 0.45;
 const PAD = 12;
+/** Room kept under the steps for Hide pipeline, which the job builder centers there. */
+const BUTTON_BAND = 26;
 const STEPS = 6;
 const TOTAL_WIDTH = STEPS * NODE_WIDTH + (STEPS - 1) * GAP;
 
@@ -122,11 +124,12 @@ function FitOnResize() {
     if (width <= 0 || height <= 0) {
       return;
     }
-    const zoom = Math.min(1, (width - 2 * PAD) / TOTAL_WIDTH, (height - 2 * PAD) / NODE_HEIGHT);
+    const room = height - BUTTON_BAND;
+    const zoom = Math.min(1, (width - 2 * PAD) / TOTAL_WIDTH, room / NODE_HEIGHT);
     if (zoom >= MIN_ZOOM) {
-      void setViewport({ x: (width - TOTAL_WIDTH * zoom) / 2, y: (height - NODE_HEIGHT * zoom) / 2, zoom });
+      void setViewport({ x: (width - TOTAL_WIDTH * zoom) / 2, y: (room - NODE_HEIGHT * zoom) / 2, zoom });
     } else {
-      void setViewport({ x: PAD, y: (height - NODE_HEIGHT * MIN_ZOOM) / 2, zoom: MIN_ZOOM });
+      void setViewport({ x: PAD, y: (room - NODE_HEIGHT * MIN_ZOOM) / 2, zoom: MIN_ZOOM });
     }
   }, [width, height, setViewport]);
   return null;

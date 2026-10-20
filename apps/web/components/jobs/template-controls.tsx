@@ -1,6 +1,6 @@
 'use client';
 
-import { MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { FileCodeIcon, FileTypeIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import {
@@ -14,12 +14,19 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
+import { ButtonGroup } from '@/components/ui/button-group';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   FORMAT_FILES,
   hasOwnContent,
@@ -34,12 +41,12 @@ import {
 } from '@/lib/job-spec';
 import { useJob } from './job-provider';
 
-const KIND_LABEL: Record<TemplateKind, string> = { html: 'HTML template', docx: 'Word template' };
+const KIND_NAME: Record<TemplateKind, string> = { html: 'an HTML template', docx: 'a Word template' };
 
 /**
- * The render step's template controls: which template the editor and preview show, its
- * kind (HTML or Word), the formats it makes (at least one), Add template, and a menu to
- * rename or remove it.
+ * The render step's end of the path: which template the editor and preview show, and a
+ * menu with the files it makes (at least one), its kind (HTML or Word), Rename, Remove
+ * and Add template.
  */
 export function TemplateControls({ template, onPick }: { template: JobTemplate; onPick(id: string): void }) {
   const { spec, readOnly, updateDraft } = useJob();
@@ -66,10 +73,9 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
     toast.success(`${template.name} is ${next === 'docx' ? 'a Word' : 'an HTML'} template`);
   };
 
-  const pickKind = (next: string) => {
-    if (next === kind) return;
-    if (hasOwnContent(template)) setSwitching(next as TemplateKind);
-    else switchKind(next as TemplateKind);
+  const pickKind = (next: TemplateKind) => {
+    if (hasOwnContent(template)) setSwitching(next);
+    else switchKind(next);
   };
 
   const add = () => {
@@ -87,61 +93,51 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
     toast.success(`Removed ${template.name}`);
   };
 
+  const other: TemplateKind = kind === 'html' ? 'docx' : 'html';
+
   return (
-    <div className="flex flex-wrap items-center gap-3 text-sm">
-      <Select value={template.id} onValueChange={onPick}>
-        <SelectTrigger size="sm" className="max-w-48" aria-label="Template">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
+    <>
+      <ButtonGroup className="min-w-0">
+        <select
+          value={template.id}
+          onChange={(event) => onPick(event.target.value)}
+          aria-label="Template"
+          className="h-7 min-w-0 max-w-56 truncate rounded-md border bg-background px-2 text-[0.8rem] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        >
           {templates.map((t) => (
-            <SelectItem key={t.id} value={t.id}>
+            <option key={t.id} value={t.id}>
               {t.name}
-            </SelectItem>
+            </option>
           ))}
-        </SelectContent>
-      </Select>
-      <Select value={kind} onValueChange={pickKind} disabled={readOnly}>
-        <SelectTrigger size="sm" aria-label={`Kind of ${template.name}`}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {(Object.keys(KIND_LABEL) as TemplateKind[]).map((k) => (
-            <SelectItem key={k} value={k}>
-              {KIND_LABEL[k]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <div role="group" aria-label={`Formats of ${template.name}`} className="flex items-center gap-3">
-        {KIND_FORMATS[kind].map((format) => {
-          const checked = template.formats.includes(format);
-          return (
-            <label key={format} className="flex items-center gap-1.5">
-              <Checkbox
-                checked={checked}
-                disabled={readOnly || (checked && template.formats.length === 1)}
-                onCheckedChange={(on) => toggle(format, on === true)}
-                aria-label={`Make ${FORMAT_FILES[format].label} files with ${template.name}`}
-              />
-              {FORMAT_FILES[format].label}
-            </label>
-          );
-        })}
-      </div>
-      {!readOnly && (
-        <>
-          <Button size="sm" variant="ghost" onClick={add}>
-            <PlusIcon />
-            Add template
-          </Button>
+        </select>
+        {!readOnly && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label={`More actions for ${template.name}`}>
+              <Button variant="outline" size="icon-sm" aria-label={`Settings of ${template.name}`}>
                 <MoreHorizontalIcon />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuLabel className="text-muted-foreground text-xs">Files it makes</DropdownMenuLabel>
+              {KIND_FORMATS[kind].map((format) => {
+                const checked = template.formats.includes(format);
+                return (
+                  <DropdownMenuCheckboxItem
+                    key={format}
+                    checked={checked}
+                    disabled={checked && template.formats.length === 1}
+                    onCheckedChange={(on) => toggle(format, on === true)}
+                    onSelect={(event) => event.preventDefault()}
+                  >
+                    {FORMAT_FILES[format].label}
+                  </DropdownMenuCheckboxItem>
+                );
+              })}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => pickKind(other)}>
+                {other === 'docx' ? <FileTypeIcon /> : <FileCodeIcon />}
+                Make it {KIND_NAME[other]}
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setRenaming(true)}>
                 <PencilIcon />
                 Rename
@@ -152,10 +148,15 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
                   Remove
                 </DropdownMenuItem>
               )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={add}>
+                <PlusIcon />
+                Add template
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </>
-      )}
+        )}
+      </ButtonGroup>
       {renaming && (
         <RenameTemplateDialog
           template={template}
@@ -193,7 +194,7 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   );
 }
 

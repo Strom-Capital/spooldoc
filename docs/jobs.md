@@ -8,7 +8,8 @@ lists them with their server, queue, trigger and last run. A job whose
 active version or draft no longer matches the job format, after an upgrade
 for example, is listed with the reason instead of breaking the page. The
 job builder shows the pipeline as six steps, and each step opens an
-inspector.
+inspector. Hide pipeline under the steps makes more room, and Show
+pipeline brings them back.
 
 <p align="center">
   <picture>
@@ -32,9 +33,20 @@ The extract and render steps open the workbench: the sample's pages with
 the field hits highlighted, the definition, the extracted JSON, the
 template and the rendered document of one page group: the HTML of an
 HTML template, or the PDF of a Word template. Pick a spooled file on
-the queue as the preview sample; Spooldoc captures it into the database.
-Only drafts have a preview sample, and samples no job uses are deleted
+the queue as the preview sample; Spooldoc saves a copy in the database,
+and the workbench shows that copy, marked "saved copy", also after the
+file leaves the queue. Pick another file to save a new copy. Only drafts have a preview sample, and samples no job uses are deleted
 with the old runs.
+
+The bar above the workbench shows what you are looking at as a path:
+the spooled file, then its page group, such as "Page group 2 of 6", then
+on the extract step the page, such as "Page 3 of 8". Each has previous
+and next buttons and a list to jump to any one. The page and the page
+group follow each other: picking a page group shows its first page, and
+paging into another page group picks it. Fit width and 100% in the
+corner of the page fit it to the pane or show its actual size. Hover the
+spooled file for when the copy was saved, its page count, page size and
+CCSID.
 
 The [AI assistant](ai-assistant.md) sits beside the workbench. It writes
 the definition and the template to the draft, reads the extraction report
@@ -49,9 +61,10 @@ template of the job. A new job has one template, Template 1, that makes
 a PDF. Add another when the same data needs a second document, for
 example an invoice as a PDF and its lines as a separate HTML page.
 
-The render step's header picks the template that the editor and the
-preview show, and holds its kind, its format switches, Add template and
-a menu to rename or remove it. An HTML template makes PDF and HTML
+On the render step the path ends at the template that the editor and
+the preview show, such as "Document". The menu next to it has the files
+the template makes, Make it a Word template (or an HTML template),
+Rename, Remove and Add template. An HTML template makes PDF and HTML
 files; a [Word template](templates.md#word-templates) makes PDF and DOCX
 files. Switching the kind starts the template from the other kind's
 starter, and asks first when it has HTML or a Word file of its own;

@@ -8,6 +8,7 @@ import { useWorkbench } from './workbench-provider';
 /**
  * One page of the sample as a monospace grid, with a highlight for every field hit on
  * it: found (accent), empty (yellow) and missing (red outline where the anchor is known).
+ * The page, the page group and the spooled file are picked in the bar above.
  */
 export function PageView() {
   const { render, page, setPage, selectedHit, setSelectedHit, setTab, pageGroupIndex, setPageGroupIndex } = useWorkbench();
@@ -26,7 +27,7 @@ export function PageView() {
   // Show the page of a hit selected elsewhere, then scroll it into view.
   useEffect(() => {
     if (selectedHit && selectedHit.page !== page && pages.some((p) => p.no === selectedHit.page)) {
-      setPage(selectedHit.page);
+      setPage(selectedHit.page, selectedHit.pageGroup);
     }
   }, [selectedHit, page, pages, setPage]);
   useEffect(() => {
@@ -41,9 +42,9 @@ export function PageView() {
       width={render?.sample.attributes.pageWidth ?? 132}
       page={page}
       onPage={setPage}
+      paging={false}
       scrollerRef={scroller}
       empty={render ? 'This sample has no pages.' : 'Loading...'}
-      toolbar={`${hits.length} ${hits.length === 1 ? 'field' : 'fields'}`}
       overlay={() =>
         hits.map((hit) => {
           const key = hitKey(hit);
@@ -76,3 +77,4 @@ export function PageView() {
     />
   );
 }
+

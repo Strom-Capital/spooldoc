@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { hitKey } from '@/lib/client/render';
 import { CodeEditor } from './code-editor';
-import { PageGroupSelect } from './page-group-select';
 import { useWorkbench } from './workbench-provider';
 
 const STATUS_CLASS = {
@@ -43,12 +42,6 @@ export function JsonView() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-10 shrink-0 items-center gap-2 border-b px-2 text-sm">
-        <PageGroupSelect />
-        <span className="ml-auto text-muted-foreground text-xs">
-          {extract.pageGroups.length} {extract.pageGroups.length === 1 ? 'page group' : 'page groups'}
-        </span>
-      </div>
       <div className="min-h-0 flex-1 overflow-auto p-2">
         {extract.warnings.length > 0 && (
           <ul className="mb-2 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-sm">
