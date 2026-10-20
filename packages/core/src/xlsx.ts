@@ -340,6 +340,8 @@ export function checkXlsx(template: XlsxTemplate, def?: Definition | null, scope
     problems.push({ sheet, ref, message });
   };
   const firstLoopRow = new Map<string, number>();
+  /** In spooled file scope, the cells that read `d.pg`: one problem names the first and counts the rest. */
+  const pageGroupCells: { cell: XlsxCell; tag: string; path: string }[] = [];
   for (const cell of template.cells) {
     if (!cell.text.includes("{")) continue;
     const tags = templateTags(cell.text);
@@ -353,9 +355,7 @@ export function checkXlsx(template: XlsxTemplate, def?: Definition | null, scope
       if (path === undefined) continue;
       if (scope === "splf" && (path === "pg" || path.startsWith("pg.") || path.startsWith("pg["))) {
         pageGroupTags.add(tag.index);
-        const near = path.startsWith("pg.") ? `pgs[].${path.slice(3)}` : undefined;
-        const example = near && known?.has(near) ? `, such as {d.${near.replace(/\[\]/g, "[i]")}}` : "";
-        add(cell.sheet, cell.ref, `${short(tag.text)} reads one page group, but this template gets every page group in one file: use d.pgs[i]${example}, or make one file per page group.`);
+        if (!pageGroupCells.some((c) => c.cell === cell)) pageGroupCells.push({ cell, tag: tag.text, path });
         continue;
       }
       const type = types.get(path);
@@ -377,6 +377,17 @@ export function checkXlsx(template: XlsxTemplate, def?: Definition | null, scope
     if (asset) {
       add(cell.sheet, cell.ref, `${short(cell.text.slice(asset.index, asset.index + 40))} is for HTML templates. In Excel, insert the picture itself, above any loop.`);
     }
+  }
+  const [first, ...others] = pageGroupCells;
+  if (first) {
+    const near = first.path.startsWith("pg.") ? `pgs[].${first.path.slice(3)}` : undefined;
+    const example = near && known?.has(near) ? `, such as {d.${near.replace(/\[\]/g, "[i]")}}` : "";
+    const more = others.length === 0 ? "" : ` and ${others.length === 1 ? "1 other cell" : `${others.length} other cells`}`;
+    add(
+      first.cell.sheet,
+      first.cell.ref,
+      `${short(first.tag)}${more} read one page group, but this template gets every page group in one file: use d.pgs[i]${example}, or make one file per page group.`,
+    );
   }
   for (const sheet of template.sheets) {
     const loop = firstLoopRow.get(sheet.name);

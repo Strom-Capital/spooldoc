@@ -99,10 +99,15 @@ describe("checkXlsx", () => {
 
   it("refuses d.pg when the file holds the whole spooled file, and takes it per page group", () => {
     const read = readXlsx(sheetOf("{d.pg.invoiceNo}", "{d.pg.lines[i].item}"));
+    // One problem for every cell that reads d.pg, at the first.
     expect(checkXlsx(read, definition, "splf")).toEqual([
-      { sheet: "Lines", ref: "A1", message: "{d.pg.invoiceNo} reads one page group, but this template gets every page group in one file: use d.pgs[i], such as {d.pgs[i].invoiceNo}, or make one file per page group." },
-      { sheet: "Lines", ref: "B1", message: expect.stringContaining("such as {d.pgs[i].lines[i].item}") },
+      {
+        sheet: "Lines",
+        ref: "A1",
+        message: "{d.pg.invoiceNo} and 1 other cell read one page group, but this template gets every page group in one file: use d.pgs[i], such as {d.pgs[i].invoiceNo}, or make one file per page group.",
+      },
     ]);
+    expect(checkXlsx(readXlsx(sheetOf("{d.pg.lines[i].item}")), definition, "splf")[0]?.message).toContain("read one page group, but this template gets every page group in one file: use d.pgs[i], such as {d.pgs[i].lines[i].item}");
     expect(checkXlsx(read, definition, "pageGroup")).toEqual([]);
   });
 
