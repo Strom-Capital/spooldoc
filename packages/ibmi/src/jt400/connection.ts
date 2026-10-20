@@ -13,11 +13,12 @@ import {
   type CommandResult,
   type Connection,
   type Credentials,
+  type IfsEntry,
   type QueueRef,
   type SystemInfo,
 } from "../connection.js";
 import { toConnectionError } from "../errors.js";
-import { javaBytes, LOGIN_TIMEOUT_SECONDS, loadJava, openJdbc, plain, readAllSync, type JavaObject, type Jt400Db } from "./bridge.js";
+import { javaBytes, LOGIN_TIMEOUT_SECONDS, loadJava, openJdbc, plain, readAllSync, writeAllAsync, type JavaObject, type Jt400Db } from "./bridge.js";
 import {
   mapQueueFileCountRow,
   mapQueueRow,
@@ -71,6 +72,8 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
     OutputQueue: JavaObject;
     DataQueue: JavaObject;
     CommandCall: JavaObject;
+    IFSFile: JavaObject;
+    IFSFileOutputStream: JavaObject;
   };
   try {
     db = await openJdbc(creds.host, creds.user, creds.password);
@@ -92,6 +95,8 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
       OutputQueue: java.import("com.ibm.as400.access.OutputQueue"),
       DataQueue: java.import("com.ibm.as400.access.DataQueue"),
       CommandCall: java.import("com.ibm.as400.access.CommandCall"),
+      IFSFile: java.import("com.ibm.as400.access.IFSFile"),
+      IFSFileOutputStream: java.import("com.ibm.as400.access.IFSFileOutputStream"),
     };
   } catch (err) {
     await db.close().catch(() => undefined);
@@ -194,6 +199,51 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
     }
   };
 
+  const ifsStat = async (path: string): Promise<IfsEntry | null> => {
+    try {
+      const file = new classes.IFSFile(system, path);
+      if (!(await file.exists())) return null;
+      return (await file.isDirectory()) ? "directory" : "file";
+    } catch (err) {
+      throw fail(err, `IFS ${path}`);
+    }
+  };
+
+  const writeIfsFile = async (path: string, bytes: Uint8Array, { ccsid }: { ccsid: number }): Promise<{ replaced: boolean }> => {
+    const java = loadJava();
+    const { IFSFile, IFSFileOutputStream } = classes;
+    const partPath = `${path}.part`;
+    const part = new IFSFile(system, partPath);
+    let written = false;
+    try {
+      // A part file left by an earlier failure keeps its old CCSID, so it goes first.
+      if (await part.exists()) await part.delete();
+      const stream = new IFSFileOutputStream(system, partPath, IFSFileOutputStream.SHARE_NONE, false, ccsid);
+      try {
+        await writeAllAsync(java, stream, bytes);
+      } finally {
+        await stream.close();
+      }
+      const target = new IFSFile(system, path);
+      const replaced = Boolean(await target.exists());
+      if (replaced && !(await target.delete())) {
+        throw new Error(`The file ${path} could not be deleted to replace it. Check that no job has it open and that the user can delete it.`);
+      }
+      if (!(await part.renameTo(target))) {
+        throw new Error(`The file ${partPath} could not be renamed to ${path}.`);
+      }
+      written = true;
+      return { replaced };
+    } catch (err) {
+      throw fail(err, `IFS file ${path}`);
+    } finally {
+      if (!written) {
+        // Best effort: the error above says what went wrong, and a part file is never read.
+        await Promise.resolve(part.delete()).catch(() => undefined);
+      }
+    }
+  };
+
   let closed = false;
   return {
     describe,
@@ -224,6 +274,8 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
     deleteSpooledFile: (id) => onSpooledFile(id, (splf) => splf.delete()),
     readDataQueue,
     runCommand,
+    ifsStat,
+    writeIfsFile,
     async close() {
       if (closed) return;
       closed = true;

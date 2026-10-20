@@ -2,6 +2,7 @@
 
 import type { SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
 import type { AiProviderId, Effort } from './ai-providers';
+import type { IfsConfig } from './destination-config';
 import type { JobSpec } from './job-spec';
 
 /**
@@ -67,13 +68,13 @@ export interface SpooledFileView extends SpooledFileId {
 }
 
 /** A destination. */
-export interface DestinationView {
+export type DestinationView = {
   id: string;
-  kind: 'spooldoc';
   name: string;
   builtin: boolean;
-  jobs: { id: string; name: string }[];
-}
+  /** The jobs whose draft or any version delivers here. */
+  jobs: QueueView['jobs'];
+} & ({ kind: 'spooldoc'; config: Record<string, never> } | { kind: 'ifs'; config: IfsConfig });
 
 /** An uploaded image or font, without its bytes. */
 export interface AssetView {

@@ -132,9 +132,9 @@ To run from source instead, see [Contributing](docs/contributing.md).
 
 Spooldoc is young. The web app, the *SCS parser, text and XML extraction,
 HTML, PDF, DOCX and XLSX output and the Spooldoc download destination
-work and are tested against demo spooled files captured from PUB400.
-Next: SFTP, S3, IFS, email and webhook destinations, and more users and
-roles.
+work and are tested against demo spooled files captured from PUB400. Jobs
+can also write their files to a folder in the IFS. Next: SFTP, S3, email
+and webhook destinations, and more users and roles.
 
 Until 1.0, a minor release (0.1 to 0.2) can include breaking changes. Read
 the [release notes](https://github.com/Strom-Capital/spooldoc/releases)

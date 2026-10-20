@@ -80,6 +80,30 @@ export function readAllSync(java: JavaModule, stream: JavaObject, chunk = 32768)
   return out;
 }
 
+/** How many bytes `writeAllAsync` hands to Java at a time. */
+const WRITE_CHUNK = 1024 * 1024;
+
+/**
+ * Writes bytes to a `java.io.OutputStream` and flushes it; the caller closes the stream.
+ *
+ * node-java does not turn a Buffer or a typed array into a `byte[]`, and
+ * `newArray("byte", ...)` takes about 3 seconds for 5 MB. A Latin-1 string keeps each byte
+ * as one character, and `Charset.encode` makes it a `ByteBuffer` on the Java side, which
+ * takes about 20 ms for 5 MB. The channel writes 8 KiB at a time, so a 64 KiB buffer keeps
+ * each of those from being a round trip to the IBM i. The writes run on a worker thread.
+ */
+export async function writeAllAsync(java: JavaModule, stream: JavaObject, bytes: Uint8Array): Promise<void> {
+  const latin1 = java.callStaticMethodSync("java.nio.charset.Charset", "forName", "ISO-8859-1") as JavaObject;
+  const buffered = new (java.import("java.io.BufferedOutputStream"))(stream, 65536);
+  const channel = java.callStaticMethodSync("java.nio.channels.Channels", "newChannel", buffered) as JavaObject;
+  const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let at = 0; at < buffer.length; at += WRITE_CHUNK) {
+    const chunk = latin1.encodeSync(buffer.toString("latin1", at, Math.min(buffer.length, at + WRITE_CHUNK)));
+    while (chunk.hasRemainingSync()) await channel.write(chunk);
+  }
+  await buffered.flush();
+}
+
 /** A Java number or string attribute value as a plain JS value, or null. */
 export function plain(value: unknown): string | number | null {
   if (value === null || value === undefined) return null;

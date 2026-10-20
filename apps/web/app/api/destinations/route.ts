@@ -1,30 +1,35 @@
 import { asc } from 'drizzle-orm';
-import { jobSpecSchema } from '@/lib/job-spec';
+import { createDestinationSchema } from '@/lib/destination-config';
 import { guard } from '@/lib/server/auth';
 import { getDb } from '@/lib/server/db';
-import { destinations, jobs } from '@/lib/server/db/schema';
-import { json } from '@/lib/server/http';
-import type { DestinationView } from '@/lib/types';
+import { destinations } from '@/lib/server/db/schema';
+import { destinationView } from '@/lib/server/destinations';
+import { json, readJson } from '@/lib/server/http';
+import { destinationJobs } from '@/lib/server/jobs-using';
 
 export const dynamic = 'force-dynamic';
 
-/** Destinations, each with the jobs whose draft delivers to it. */
+/** Destinations, by name, each with the jobs whose draft or any version delivers to it. */
 export async function GET(request: Request): Promise<Response> {
   const auth = await guard(request);
   if ('response' in auth) {
     return auth.response;
   }
-  const db = getDb();
-  const rows = await db.select().from(destinations).orderBy(asc(destinations.name));
-  const jobRows = await db.select({ id: jobs.id, name: jobs.name, draft: jobs.draft }).from(jobs).orderBy(asc(jobs.name));
-  const views: DestinationView[] = rows.map((row) => ({
-    id: row.id,
-    kind: row.kind as DestinationView['kind'],
-    name: row.name,
-    builtin: row.builtin,
-    jobs: jobRows
-      .filter((job) => jobSpecSchema.parse(job.draft).destination.destinationId === row.id)
-      .map((job) => ({ id: job.id, name: job.name })),
-  }));
-  return json({ destinations: views });
+  const [rows, jobs] = await Promise.all([getDb().select().from(destinations).orderBy(asc(destinations.name)), destinationJobs()]);
+  return json({ destinations: rows.map((row) => destinationView(row, jobs.get(row.id) ?? [])) });
+}
+
+/** Add a destination. Only an IFS folder can be added; nothing is checked on the IBM i yet. */
+export async function POST(request: Request): Promise<Response> {
+  const auth = await guard(request);
+  if ('response' in auth) {
+    return auth.response;
+  }
+  const body = await readJson(request, createDestinationSchema);
+  if ('response' in body) {
+    return body.response;
+  }
+  const { kind, name, config } = body.data;
+  const [row] = await getDb().insert(destinations).values({ kind, name, config }).returning();
+  return json(destinationView(row!, []), { status: 201 });
 }

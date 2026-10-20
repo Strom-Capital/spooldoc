@@ -156,6 +156,8 @@ function recorded(conn: Connection, server: ServerRow, password: string): Connec
     deleteSpooledFile: (id) => note(conn.deleteSpooledFile(id)),
     readDataQueue: (dtaq, wait) => note(conn.readDataQueue(dtaq, wait)),
     runCommand: (command) => note(conn.runCommand(command)),
+    ifsStat: (path) => note(conn.ifsStat(path)),
+    writeIfsFile: (path, bytes, options) => note(conn.writeIfsFile(path, bytes, options)),
     close: () => conn.close(),
   };
 }
