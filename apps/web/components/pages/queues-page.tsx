@@ -232,6 +232,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   return (
     <Page
       title="Queues"
+      breadcrumbs={server ? [{ label: 'Queues', href: '/queues' }, { label: server.name }] : undefined}
       description={
         server
           ? // With one server there is no picker, so the description names it.

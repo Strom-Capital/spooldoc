@@ -44,6 +44,10 @@ each a "contains" match:
 | Job contains | The job as `number/user/name` |
 | User data contains | The `USRDTA` attribute |
 
+The path above the title names the queue's place: Queues, the server and
+the queue. Queues opens the Queues page, and the server opens it on that
+server.
+
 The list shows the newest 200 files. When the queue has more, or more
 match the filters, the page says so under the list, and Load more lists
 200 more, up to 5000. Past that, narrow the filters to find older files.
