@@ -116,6 +116,11 @@ export interface InstructionsInput {
   fileTemplates?: Record<string, FileTemplateNote>;
   /** The model is shown Word and Excel renders as files (`ToolsInput.visual`). */
   visual?: boolean;
+  /**
+   * The design guidance of the Excel templates section, in place of
+   * `EXCEL_DESIGN_GUIDANCE`. Only the eval script's baseline passes another.
+   */
+  excelDesign?: string;
   config?: InstructionsConfig;
 }
 
@@ -355,6 +360,23 @@ export const ASK_KIND_RULE =
 export const NO_ASK_RULE =
   'Do not ask when the user\'s message already names a kind ("make a Word invoice", "an HTML template"): make that kind. Do not ask about a template that is settled below either.';
 
+/**
+ * How the agent designs a workbook and checks it before it finishes: the last part of the
+ * Excel templates section. The Carbone rules above it stay whatever this says.
+ */
+export const EXCEL_DESIGN_GUIDANCE = `Design a workbook people work in:
+- One header row to filter and sort on, then one row per line, with no blank rows or columns inside the data and no merged cells in it.
+- Numbers and dates are real number and date cells. Amounts are right-aligned with a fixed number of decimals, and negatives and zeros read clearly, such as \`#,##0.00;-#,##0.00;0.00\`. Units go in the header ("Amount (EUR)"), not in the cells. Percentages are stored as fractions with a % format. Years and codes are text, so they do not sum or show as 2,026.
+- One professional font, such as Arial or Calibri, in one or two sizes. A restrained palette: dark text, one accent colour at most, a light fill for the header row, and nothing that needs colour to be understood in black and white.
+- Freeze the header rows. Make the columns wide enough for their data.
+- Totals the reader sees without breaking the filter: the sheet of the whole spooled file has no total row in its table. Put totals above the header row or on a summary sheet, with SUBTOTAL(9, ...) when they should follow the filter.
+- A page setup that prints every column on the page: one page wide, landscape for many columns, the header row as print titles, and the sheet name and page number in the footer.
+
+Check the result before you finish:
+- No formula errors in the computed cells. Check a few values: a total equals its lines, a date is the date printed on the page.
+- Formulas, not typed-in results, for anything computed.
+- Do exactly what the user asked: their sheet names, headers, order and formulas as written.`;
+
 const fence = (lang: string, body: string): string => `\`\`\`${lang}\n${body.replace(/```/g, '`​``')}\n\`\`\``;
 
 /**
@@ -374,6 +396,7 @@ export function buildInstructions({
   carbone = null,
   fileTemplates: words = {},
   visual = false,
+  excelDesign = EXCEL_DESIGN_GUIDANCE,
   config = {},
 }: InstructionsInput): string {
   const width = sample.attributes.pageWidth;
@@ -566,18 +589,7 @@ Editing a file:
 - A cell's \`s\` is its cell format in \`cellXfs\`. For a new look, add an \`<xf>\` at the end of \`cellXfs\` (and a font, fill or border at the end of its list) and use its index; never change an entry other cells use unless they should all change. The counts are fixed for you.
 - Follow the file's own fonts, colours, number formats and widths. Leave formulas as they are unless the user asks to change them.
 
-Design a workbook people work in:
-- One header row to filter and sort on, then one row per line, with no blank rows or columns inside the data and no merged cells in it.
-- Numbers and dates are real number and date cells. Amounts are right-aligned with a fixed number of decimals, and negatives and zeros read clearly, such as \`#,##0.00;-#,##0.00;0.00\`. Units go in the header ("Amount (EUR)"), not in the cells. Percentages are stored as fractions with a % format. Years and codes are text, so they do not sum or show as 2,026.
-- One professional font, such as Arial or Calibri, in one or two sizes. A restrained palette: dark text, one accent colour at most, a light fill for the header row, and nothing that needs colour to be understood in black and white.
-- Freeze the header rows. Make the columns wide enough for their data.
-- Totals the reader sees without breaking the filter: the sheet of the whole spooled file has no total row in its table. Put totals above the header row or on a summary sheet, with SUBTOTAL(9, ...) when they should follow the filter.
-- A page setup that prints every column on the page: one page wide, landscape for many columns, the header row as print titles, and the sheet name and page number in the footer.
-
-Check the result before you finish:
-- No formula errors in the computed cells. Check a few values: a total equals its lines, a date is the date printed on the page.
-- Formulas, not typed-in results, for anything computed.
-- Do exactly what the user asked: their sheet names, headers, order and formulas as written.`,
+${excelDesign}`,
 
     kindSection(templates),
 

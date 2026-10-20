@@ -77,6 +77,32 @@ function openRouterReasoning(effort: Effort) {
   return { effort: effort === 'max' ? 'xhigh' : effort } as const;
 }
 
+/** What `languageModel` needs: the provider, the model id, its key and settings. */
+export interface ModelSettings extends ModelInfo {
+  apiKey?: string;
+  effort: Effort;
+  /** The local provider's base URL. */
+  baseUrl?: string | null;
+}
+
+/** A model of a provider, from its id and key. `createModel` makes the one chosen in Settings with it. */
+export function languageModel({ provider, id, apiKey, effort, baseUrl }: ModelSettings): LanguageModel {
+  switch (provider) {
+    case 'anthropic':
+      return createAnthropic({ apiKey })(id);
+    case 'google':
+      return createGoogleGenerativeAI({ apiKey })(id);
+    case 'openai':
+      return createOpenAI({ apiKey })(id);
+    case 'openrouter':
+      return createOpenRouter({ apiKey })(id, { reasoning: openRouterReasoning(effort) });
+    case 'gateway':
+      return createGateway({ apiKey })(id);
+    case 'local':
+      return createOpenAICompatible({ name: 'local', baseURL: baseUrl ?? '', ...(apiKey ? { apiKey } : {}) })(id);
+  }
+}
+
 /**
  * Build the model chosen in Settings.
  *
@@ -90,21 +116,6 @@ export async function createModel(): Promise<ChatModel | null> {
   }
   const apiKey = resolved.apiKeyEnc ? decryptSecret(resolved.apiKeyEnc, 'API key') : undefined;
   const { id, effort } = resolved;
-  const model = ((): LanguageModel => {
-    switch (resolved.provider) {
-      case 'anthropic':
-        return createAnthropic({ apiKey })(id);
-      case 'google':
-        return createGoogleGenerativeAI({ apiKey })(id);
-      case 'openai':
-        return createOpenAI({ apiKey })(id);
-      case 'openrouter':
-        return createOpenRouter({ apiKey })(id, { reasoning: openRouterReasoning(effort) });
-      case 'gateway':
-        return createGateway({ apiKey })(id);
-      case 'local':
-        return createOpenAICompatible({ name: 'local', baseURL: resolved.baseUrl ?? '', ...(apiKey ? { apiKey } : {}) })(id);
-    }
-  })();
+  const model = languageModel({ provider: resolved.provider, id, apiKey, effort, baseUrl: resolved.baseUrl });
   return { model, info: { provider: resolved.provider, id }, reasoning: effort, secrets: apiKey ? [apiKey] : [] };
 }

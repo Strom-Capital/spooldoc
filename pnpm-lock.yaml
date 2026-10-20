@@ -284,12 +284,18 @@ importers:
       eslint-config-next:
         specifier: ^16.4.1
         version: 16.4.2(@typescript-eslint/parser@8.71.2(eslint@10.13.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.13.0(jiti@2.7.0))(typescript@6.0.3)
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       shadcn:
         specifier: ^4.21.5
         version: 4.21.5
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0

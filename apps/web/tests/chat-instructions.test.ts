@@ -1,7 +1,7 @@
 import { definitionJsonSchema, parseDefinition, starterDocx, starterXlsx } from '@spooldoc/core';
 import { describe, expect, it } from 'vitest';
 import { jobSpecSchema, type JobTemplate } from '@/lib/job-spec';
-import { ASK_KIND_RULE, ASK_RULE, buildInstructions, DATA_NOT_INSTRUCTIONS, EXCEL_OFFER_RULE, KIND_ADVICE, NO_ASK_RULE, OTHER_JOBS_RULE, fileTemplates } from '@/lib/server/chat';
+import { ASK_KIND_RULE, ASK_RULE, buildInstructions, DATA_NOT_INSTRUCTIONS, EXCEL_DESIGN_GUIDANCE, EXCEL_OFFER_RULE, KIND_ADVICE, NO_ASK_RULE, OTHER_JOBS_RULE, fileTemplates } from '@/lib/server/chat';
 import { CARBONE_REFERENCES } from '@/lib/server/carbone-skill.generated';
 import { fixtureText, loadSample } from './helpers/fake-connection';
 
@@ -291,6 +291,18 @@ describe('Excel templates in the instructions', () => {
     expect(text).toMatch(/read_carbone_reference reads these of its reference files: [^.]*xlsx-tips/);
     const gone = await fileTemplates(lines, yaml, async () => null);
     expect(gone.lines).toEqual({ error: 'The file is gone; write a new one with write_excel_template, or the user uploads one.' });
+  });
+
+  it('ends the Excel section with its design guidance, which only the eval baseline swaps', () => {
+    const input = { sample, definitionYaml: yaml, templates: lines, masked: false };
+    const text = buildInstructions(input);
+    const section = text.slice(text.indexOf('## Excel templates'), text.indexOf('## Which kind of template'));
+    expect(section.trimEnd().endsWith(EXCEL_DESIGN_GUIDANCE)).toBe(true);
+    expect(EXCEL_DESIGN_GUIDANCE).toMatch(/^Design a workbook people work in:\n/);
+    expect(buildInstructions({ ...input, excelDesign: EXCEL_DESIGN_GUIDANCE })).toBe(text);
+    const swapped = buildInstructions({ ...input, excelDesign: 'Other guidance.' });
+    expect(swapped).toBe(text.replace(EXCEL_DESIGN_GUIDANCE, 'Other guidance.'));
+    expect(swapped).toContain('No merged cells in or below a loop.');
   });
 
   it('tells a model that takes files it sees the PDF, shortened when it is long, and names the Excel tools', () => {
