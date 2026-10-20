@@ -57,13 +57,13 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
   with your logos, images and fonts, rendered to PDF, HTML, DOCX or XLSX by
   a Carbone server of your own or Carbone Cloud. A Word template is made in
   Word and uploaded, or designed by the agent. An Excel template is made in
-  Excel and uploaded, and by default makes one sheet of the whole spooled
-  file, a row per line, to sort, filter and sum. Spooldoc checks every tag against the
+  Excel and uploaded, or designed by the agent, and by default makes one
+  sheet of the whole spooled file, a row per line, to sort, filter and sum. Spooldoc checks every tag against the
   definition first.
 - **Agent**: Anthropic, Google, OpenAI, OpenRouter, Vercel AI
   Gateway or a local model writes the first definition and template, reads
   the extraction report and fixes what is missing. It designs and edits Word
-  templates too, looking at every page it renders. Use a local model, or
+  and Excel templates too, looking at every page it renders. Use a local model, or
   turn on masking, to keep values on your network.
 - **Job log**: every run with its steps, errors and files; retention you set.
 - **One Compose file**: the web app with its Java runtime, Postgres and

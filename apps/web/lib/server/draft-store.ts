@@ -2,7 +2,7 @@ import 'server-only';
 
 import { eq } from 'drizzle-orm';
 import { jobSpecSchema, withContent, type JobTemplate, type JobSpec } from '@/lib/job-spec';
-import type { DraftStore } from './chat';
+import { switchProblem, type DraftStore } from './chat';
 import { getDb, type Tx } from './db';
 import { jobs } from './db/schema';
 import { getJobRow, type JobRow } from './jobs';
@@ -36,7 +36,7 @@ export async function updateDraft(jobId: string, change: (draft: JobSpec) => Job
 /**
  * The chat tools' view of a job's draft: its definition and its templates.
  *
- * @param userId - Who is chatting, recorded on the Word template files the agent makes
+ * @param userId - Who is chatting, recorded on the Word and Excel template files the agent makes
  */
 export function draftStore(jobId: string, userId: string | null = null): DraftStore {
   const read = async (): Promise<JobSpec> => {
@@ -68,7 +68,7 @@ export function draftStore(jobId: string, userId: string | null = null): DraftSt
       });
     },
     changeTemplates,
-    writeWordTemplate: (templateId, file) =>
+    writeTemplateFile: (templateId, kind, file, scope) =>
       getDb().transaction(async (tx) => {
         const row = await lockJobRow(tx, jobId);
         if (!row) {
@@ -79,16 +79,13 @@ export function draftStore(jobId: string, userId: string | null = null): DraftSt
         if (!template) {
           throw new Error('The template is gone.');
         }
-        if (template.kind === 'xlsx') {
-          throw new Error(`The ${template.name} template is an Excel template. The agent can't write Excel files yet: the user changes it in Excel and uploads it.`);
+        const problem = switchProblem(template, kind);
+        if (problem) {
+          throw new Error(problem);
         }
-        if (template.kind === 'html' && template.source !== null) {
-          throw new Error(
-            `The ${template.name} template has HTML of its own. Ask the user to switch it to a Word template in the app first, or to add a Word template (add_template with kind docx).`,
-          );
-        }
-        const saved = await storeTemplateFile(tx, { ...file, userId, madeBy: 'assistant' });
-        const templates = draft.render.templates.map((t) => (t.id === templateId ? withContent(t, { kind: 'docx', fileId: saved.id }) : t));
+        const saved = await storeTemplateFile(tx, { ...file, kind, userId, madeBy: 'assistant' });
+        const content = kind === 'xlsx' ? { kind, fileId: saved.id, scope: template.kind === 'xlsx' ? template.scope : (scope ?? 'splf') } : { kind, fileId: saved.id };
+        const templates = draft.render.templates.map((t) => (t.id === templateId ? withContent(t, content) : t));
         await tx.update(jobs).set({ draft: { ...draft, render: { templates } } }).where(eq(jobs.id, jobId));
         return templateFileView(saved);
       }),

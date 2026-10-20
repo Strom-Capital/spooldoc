@@ -29,15 +29,17 @@ export function escapeXml(text: string): string {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
-/** The value of an attribute in an XML tag's text, or undefined. Found with `indexOf`: `name` is matched as text. */
+/** The value of an attribute in an XML tag's text, in double or single quotes, or undefined. Found with `indexOf`: `name` is matched as text. */
 export function xmlAttribute(tag: string, name: string): string | undefined {
-  const wanted = `${name}="`;
-  for (let at = tag.indexOf(wanted); at !== -1; at = tag.indexOf(wanted, at + 1)) {
-    // The name starts after whitespace, so `r` does not match `ref="` or `xr:r="`.
-    if (at === 0 || !" \t\r\n".includes(tag[at - 1] as string)) continue;
-    const start = at + wanted.length;
-    const end = tag.indexOf('"', start);
-    return end === -1 ? undefined : decodeXml(tag.slice(start, end));
+  for (const quote of ['"', "'"]) {
+    const wanted = `${name}=${quote}`;
+    for (let at = tag.indexOf(wanted); at !== -1; at = tag.indexOf(wanted, at + 1)) {
+      // The name starts after whitespace, so `r` does not match `ref="` or `xr:r="`.
+      if (at === 0 || !" \t\r\n".includes(tag[at - 1] as string)) continue;
+      const start = at + wanted.length;
+      const end = tag.indexOf(quote, start);
+      return end === -1 ? undefined : decodeXml(tag.slice(start, end));
+    }
   }
   return undefined;
 }

@@ -2,7 +2,7 @@ import { parseDefinition, readXlsx, starterXlsx } from '@spooldoc/core';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { runFiles, templateFiles } from '@/lib/server/db/schema';
-import type { JobDetail, RunView, TemplateFileView } from '@/lib/types';
+import type { JobDetail, RunView, TemplateFileDetails, TemplateFileView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { fakeCarbone, fakeRenderer, PDF_BYTES, sentPageGroup } from './helpers/carbone';
 import { resetTables } from './helpers/db';
@@ -19,6 +19,7 @@ const renderRoute = await import('@/app/api/jobs/[id]/render/route');
 const previewFile = await import('@/app/api/jobs/[id]/preview-file/route');
 const uploadRoute = await import('@/app/api/jobs/[id]/template-files/route');
 const starterRoute = await import('@/app/api/jobs/[id]/starter/route');
+const fileInfo = await import('@/app/api/template-files/[id]/route');
 const fileBytes = await import('@/app/api/template-files/[id]/file/route');
 const versions = await import('@/app/api/jobs/[id]/versions/route');
 const runsRoute = await import('@/app/api/jobs/[id]/runs/route');
@@ -130,6 +131,21 @@ describe('uploading an Excel template', () => {
     expect(word.status).toBe(400);
     expect((await word.json()).error).toMatch(/^file: The file is a zip file, but not a Word document/);
     expect((await upload(id, flatXlsx, { templateId: 'letter', kind: 'pptx' })).status).toBe(400);
+  });
+
+  it('says a file the agent made is its own, and names the file it replaced', async () => {
+    const id = await readyJob();
+    const uploaded = (await (await upload(id, flatXlsx)).json()) as TemplateFileView;
+    const [made] = await db()
+      .insert(templateFiles)
+      .values({ name: 'lines.xlsx', contentType: XLSX, size: flatXlsx.length, content: flatXlsx, madeBy: 'assistant', previousId: uploaded.id })
+      .returning();
+    await jobRoute.PATCH(
+      patch(`/api/jobs/${id}`, { draft: { render: { templates: [{ id: 'main', name: 'Lines', kind: 'xlsx', fileId: made!.id, scope: 'splf', formats: ['xlsx'] }] } } }),
+      params({ id }),
+    );
+    const details = (await (await fileInfo.GET(get(`/api/template-files/${made!.id}`), params({ id: made!.id }))).json()) as TemplateFileDetails;
+    expect(details).toMatchObject({ id: made!.id, madeBy: 'assistant', previousId: uploaded.id, previous: { id: uploaded.id, name: 'lines.xlsx', madeBy: 'upload' } });
   });
 });
 

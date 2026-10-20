@@ -2,21 +2,27 @@ import 'server-only';
 
 import {
   buildDocx,
+  buildXlsx,
   checkDocx,
   checkTemplate,
   DesignError,
   docxParts,
   editDocx,
+  editXlsx,
   checkXlsx,
   MAX_TEMPLATE_FILE_BYTES,
   pdfPageCount,
   readXlsx,
+  xlsxPart,
+  readXlsxValues,
   sheetsWithoutPageSetup,
   spooledFileData,
   starterXlsx,
-  xlsxHardRefresh,
+  xlsxParts,
   type XlsxCell,
   type XlsxProblem,
+  type XlsxTemplate,
+  type XlsxValue,
   readDocxPart,
   definitionJsonSchema,
   extract,
@@ -50,13 +56,13 @@ import type {
   ReadJobFilesResult,
   ReadCarboneReferenceResult,
   ReadPageResult,
-  ReadWordTemplateResult,
+  DocumentView,
+  FileTemplateResult,
+  ReadFileTemplateResult,
   RenderPreviewResult,
   TemplateChangeResult,
   TemplateListing,
   ToolFailure,
-  WordTemplateResult,
-  WordView,
   WriteDefinitionResult,
   WriteTemplateResult,
 } from '@/lib/chat-types';
@@ -75,6 +81,7 @@ import {
   settledKind,
   TEMPLATE_KINDS,
   withContent,
+  type FileTemplateContent,
   type JobTemplate,
   type KindReason,
   type TemplateKind,
@@ -107,8 +114,13 @@ export interface InstructionsInput {
   carbone?: CarboneCheck | null;
   /** What Spooldoc read from each Word and Excel template, by template id (`fileTemplates`). */
   fileTemplates?: Record<string, FileTemplateNote>;
-  /** The model is shown Word renders as files (`ToolsInput.visual`). */
+  /** The model is shown Word and Excel renders as files (`ToolsInput.visual`). */
   visual?: boolean;
+  /**
+   * The design guidance of the Excel templates section, in place of
+   * `EXCEL_DESIGN_GUIDANCE`. Only the eval script's baseline passes another.
+   */
+  excelDesign?: string;
   config?: InstructionsConfig;
 }
 
@@ -157,7 +169,7 @@ export async function fileTemplates(
       const file = template.fileId === null ? null : await read(template.fileId);
       if (template.fileId !== null && !file) {
         notes[template.id] = {
-          error: template.kind === 'docx' ? 'The file is gone; write a new one with write_word_template, or the user uploads one.' : 'The file is gone; the user uploads one again.',
+          error: `The file is gone; write a new one with ${FILE_TOOLS[template.kind].write}, or the user uploads one.`,
         };
         continue;
       }
@@ -299,7 +311,7 @@ export const KIND_ADVICE: Record<TemplateKind, { edited: string; recommend: stri
     recommend: 'Recommend it when people want to change the layout themselves, the recipient needs a DOCX, or the document is a letter with long fixed text.',
   },
   xlsx: {
-    edited: 'edited in Excel by the user, from the starter template; it makes an XLSX, by default one per spooled file with a row per line, and can also make a PDF of it',
+    edited: 'edited in Excel by the user; it makes an XLSX, by default one per spooled file with a row per line, and can also make a PDF of it',
     recommend: 'Recommend it when people want to sort, filter or sum the lines, or the recipient asks for a spreadsheet.',
   },
 };
@@ -334,7 +346,7 @@ ${kinds}
 
 ${ASK_KIND_RULE} Offer one option per kind, labelled with its name (HTML, Word, Excel), each with a one-line description. ${EXCEL_OFFER_RULE} Put the one you recommend first, with \`recommended: true\`, and give the reason in the question, from what you extracted. For example: "Both make PDF. HTML is edited here in Spooldoc and can also make an HTML page, for example for an email. Word is edited in Word and can also make a DOCX. For this invoice I recommend HTML."
 ${NO_ASK_RULE}
-For Word, write_word_template switches a template that still uses the HTML starter. For Excel, add an Excel template with add_template (kind xlsx), or the user switches the template in the app. The user picks the formats, such as DOCX or PDF, in the render step.
+write_word_template and write_excel_template switch a template that still uses a starter (HTML, Word or Excel) to their kind. A template with content of its own keeps its kind: ask the user, who switches it in the app, or add a template of the other kind with add_template. The user picks the formats, such as DOCX or PDF, in the render step.
 
 The templates of this job:
 ${each}`;
@@ -347,6 +359,23 @@ export const ASK_KIND_RULE =
 /** When it does not ask. Tests look for it. */
 export const NO_ASK_RULE =
   'Do not ask when the user\'s message already names a kind ("make a Word invoice", "an HTML template"): make that kind. Do not ask about a template that is settled below either.';
+
+/**
+ * How the agent designs a workbook and checks it before it finishes: the last part of the
+ * Excel templates section. The Carbone rules above it stay whatever this says.
+ */
+export const EXCEL_DESIGN_GUIDANCE = `Design a workbook people work in:
+- One header row to filter and sort on, then one row per line, with no blank rows or columns inside the data and no merged cells in it.
+- Numbers and dates are real number and date cells. Amounts are right-aligned with a fixed number of decimals, and negatives and zeros read clearly, such as \`#,##0.00;-#,##0.00;0.00\`. Units go in the header ("Amount (EUR)"), not in the cells. Percentages are stored as fractions with a % format. Years and codes are text, so they do not sum or show as 2,026.
+- One professional font, such as Arial or Calibri, in one or two sizes. A restrained palette: dark text, one accent colour at most, a light fill for the header row, and nothing that needs colour to be understood in black and white.
+- Freeze the header rows. Make the columns wide enough for their data.
+- Totals the reader sees without breaking the filter: the sheet of the whole spooled file has no total row in its table. Put totals above the header row or on a summary sheet, with SUBTOTAL(9, ...) when they should follow the filter.
+- A page setup that prints every column on the page: one page wide, landscape for many columns, the header row as print titles, and the sheet name and page number in the footer.
+
+Check the result before you finish:
+- No formula errors in the computed cells. Check a few values: a total equals its lines, a date is the date printed on the page.
+- Formulas, not typed-in results, for anything computed.
+- Do exactly what the user asked: their sheet names, headers, order and formulas as written.`;
 
 const fence = (lang: string, body: string): string => `\`\`\`${lang}\n${body.replace(/```/g, '`​``')}\n\`\`\``;
 
@@ -367,6 +396,7 @@ export function buildInstructions({
   carbone = null,
   fileTemplates: words = {},
   visual = false,
+  excelDesign = EXCEL_DESIGN_GUIDANCE,
   config = {},
 }: InstructionsInput): string {
   const width = sample.attributes.pageWidth;
@@ -397,7 +427,7 @@ export function buildInstructions({
 How to work:
 1. Read the pages below. Propose a definition in YAML and save it with write_definition.
 2. Read the extraction report it returns. Fix fields that are missing, empty when they should not be, or hold the wrong text, and write the definition again.
-3. Settle the kind of template (see Which kind of template); ask the user when it is not settled. Then write the template: HTML with write_template, or a Word template with write_word_template or edit_word_template. An Excel template the user makes in Excel (see Excel templates). Check it with render_preview. A job has one or more templates, each with its own content and formats; the tools take the template, and default to the first.
+3. Settle the kind of template (see Which kind of template); ask the user when it is not settled. Then write the template: HTML with write_template, a Word template with write_word_template or edit_word_template, or an Excel template with write_excel_template or edit_excel_template. Check it with render_preview. A job has one or more templates, each with its own content and formats; the tools take the template, and default to the first.
 4. Repeat until nothing that should be found is missing.
 5. End with a short summary of what you did and anything the user should check.
 When the layout is ambiguous (where a page group starts, which page is a cover page, what a value means), ask the user instead of guessing.
@@ -455,7 +485,7 @@ A template can be a Word template instead: a .docx, which makes PDF and DOCX fil
 You make one in two ways. Each saves a new file the template uses; the file before it is kept, and the user can put it back.
 - write_word_template designs a whole template from a JSON tree. Use it for a new design, or to start over.
 - edit_word_template changes the file there is, the user's own included, by replacing text in its XML. Use it for changes to a file the user made in Word, so the rest of it stays as they made it. Read the XML first with read_word_template.
-write_word_template switches a template that still uses the HTML starter to Word. For a template with HTML of its own, ask the user: they switch it in the app, or you add a Word template with add_template.
+write_word_template switches a template that still uses a starter to Word. For a template with content of its own, ask the user: they switch it in the app, or you add a Word template with add_template.
 
 ${
   visual
@@ -487,20 +517,79 @@ The tags and data are the same as in HTML: \`{d.pg.invoiceNo}\`, \`{d.pg.invoice
 
     `## Excel templates
 
-A template can be an Excel template: a .xlsx made in Excel with tags in its cells, which makes XLSX and PDF files. You cannot write or edit Excel files yet. Add one with add_template (kind xlsx), check it with render_preview, and tell the user to download the starter template from the template's panel, change it in Excel and upload it. Its text is in Current templates, a cell per line, such as \`Lines!B3\`.
+A template can be an Excel template: a .xlsx with tags in its cells, which makes XLSX and PDF files. People open the XLSX to sort, filter and sum, so make a workbook they can work in: real number and date cells, a header row, formulas they can follow. Its text is in Current templates, a cell per line, such as \`Lines!B3\`.
+
+You make one in two ways. Each saves a new file the template uses; the file before it is kept, and the user can put it back.
+- write_excel_template designs a whole workbook from a JSON tree. Use it for a new design, or to start over.
+- edit_excel_template changes the file there is, the user's own included, by replacing text in its XML. Use it for changes to a file the user made in Excel, so the rest of it stays as they made it. Read the XML first with read_excel_template.
+write_excel_template switches a template that still uses a starter to Excel. For a template with content of its own, ask the user: they switch it in the app, or you add an Excel template with add_template (kind xlsx).
+
+${
+  visual
+    ? `After each write or edit you get the XLSX as a run makes it: its computed cells by sheet and cell (formulas computed, error cells counted, long sheets cut to their first and last rows) and its PDF. A PDF over ${PREVIEW_PAGES} pages is made again from shortened data, the first page groups or the first lines, and the note says so. Look at every page and at the cells.`
+    : 'After each write or edit you get the computed cells of the XLSX as a run makes it, by sheet and cell, not a picture: check the values, the types and the formulas.'
+}
 
 What each file holds, its scope, is a setting of the template:
 - The whole spooled file (\`splf\`, the default): one file per spooled file, named after it. \`d\` is \`{ pgs, splf }\`, with no \`pg\`. A flat sheet has a row with \`{d.pgs[i].invoiceNo}\` and \`{d.pgs[i].lines[i].item}\`, and right under it a row with \`{d.pgs[i+1].lines[i+1]}\`: a row per line, with its page group's fields. A page group without lines has no row.
 - One page group (\`pageGroup\`): one file per page group, with \`d\` = \`{ pg, pgs, splf }\` as in HTML.
+The scope is the user's setting. write_excel_template takes \`scope\` only when it switches a template that is not Excel yet. To change it for an Excel template, ask the user first: they change "Each file holds" in the template menu. Never design for another scope than the template has.
 
-The rules of Excel output, which the tag check enforces and you explain when the user asks:
-- Numbers: \`{d.pgs[i].lines[i].amount:formatN}\`. Without :formatN the cell is text and SUM gives 0. The cell's number format, such as #,##0.00, decides how it shows; the precision in formatN is ignored.
+The tree. Its keys follow exceljs where they can, but this list is the whole format: use these keys only. Colours are six hex digits. Formulas have no \`=\`.
+- Workbook: \`{ sheets, defaultFont?, definedNames?, activeSheet? }\`. \`defaultFont\`: \`{ name, size, color }\`, Arial 10 when not given. \`definedNames\`: \`[{ name, ref, sheet? }]\`, such as \`{ "name": "Rates", "ref": "Rates!$A$2:$B$20" }\`.
+- Sheet: \`name\` (at most 31 characters, none of \`[]:*?/\\\`), \`tabColor\`, \`views: { frozen: { rows, columns }, zoom, showGridLines, rightToLeft }\`, \`columns: [{ ref: "B" or "B:D", width (characters), hidden, outlineLevel, style }]\`, \`rows: [{ row, height (points), hidden, outlineLevel }]\`, \`cells\`, \`merges: ["A1:D1"]\`, \`autoFilter\`, \`conditionalFormatting\`, \`dataValidations\`, \`images\`, \`pageSetup\`, \`headerFooter\`.
+- Cell: \`{ ref: "B5", value?, style?, hyperlink?, note? }\`. \`value\` is text (tags allowed), a number, a boolean, \`{ "date": "2026-10-15" }\`, \`{ "richText": [{ text, font }] }\` or \`{ "formula": "SUM(D2:D9)" }\`. \`hyperlink\` is a URL or \`#'Order lines'!A1\`.
+- Style (on a cell or a column): \`numFmt\` such as \`#,##0.00\`; \`font: { name, size (points), color, bold, italic, underline, strike, vertAlign }\`; \`fill: { type: "pattern", pattern: "solid", fgColor }\` or \`{ type: "gradient", degree, stops: [{ position, color }] }\`; \`border: { top, right, bottom, left }\`, each \`{ style: "thin", color }\`; \`alignment: { horizontal, vertical, wrapText, indent, textRotation, shrinkToFit }\`.
+- \`conditionalFormatting: [{ ref, rules }]\`. Rules: \`cellIs\` (\`operator\`, \`formulae\`), \`expression\` (\`formulae\`, true for the first cell of the range), \`containsText\`, \`beginsWith\` and \`endsWith\` (\`text\`), \`duplicateValues\`, \`top10\` and \`aboveAverage\`, each with the \`style\` the cells take; \`colorScale\` (\`cfvo\`, a colour for each) and \`dataBar\` (two \`cfvo\`, one \`color\`); \`iconSet\` (\`iconSet\`, \`cfvo\`).
+- \`dataValidations: [{ ref, type, operator?, formulae, allowBlank?, promptTitle?, prompt?, errorTitle?, error?, errorStyle? }]\`, type \`list\` (\`formulae: ["\\"Open,Closed\\""]\` or a range), \`whole\`, \`decimal\`, \`date\`, \`textLength\` or \`custom\`.
+- \`images: [{ asset, tl: "A1", ext: { width, height } }]\` (pixels; one is enough) or \`[{ asset, range: "A1:B3" }]\`, an uploaded PNG or JPEG by name.
+- \`pageSetup\`: \`paperSize\` (\`"A4"\`, \`"A3"\`, \`"A5"\`, \`"Letter"\`, \`"Legal"\`), \`orientation\`, \`fitToWidth\` and \`fitToHeight\` (pages; 0 for as many as needed) or \`scale\`, \`margins\` (\`top\`, \`right\`, \`bottom\`, \`left\`, \`header\`, \`footer\`, in inches or \`"15mm"\`), \`horizontalCentered\`, \`printGridLines\`, \`printArea\`, \`printTitlesRow\` (\`"1:1"\`), \`printTitlesColumn\`. A sheet without one prints A4 portrait, one page wide.
+- \`headerFooter\`: \`oddHeader\`, \`oddFooter\`, and \`firstHeader\`, \`firstFooter\` with \`differentFirst\`, \`evenHeader\`, \`evenFooter\` with \`differentOddEven\`. Codes: \`&L\`, \`&C\` and \`&R\` start the left, centre and right part; \`&P\` page, \`&N\` pages, \`&D\` date, \`&A\` sheet name.
+- Tables, charts, sparklines, protection and macros are not part of a design.
+
+A sheet of the whole spooled file, with a row per line:
+${fence(
+  'json',
+  `{ "sheets": [{
+  "name": "Lines",
+  "views": { "frozen": { "rows": 1 } },
+  "columns": [{ "ref": "A", "width": 12 }, { "ref": "B", "width": 12 }, { "ref": "C", "width": 36 }, { "ref": "D", "width": 14 }],
+  "cells": [
+    { "ref": "A1", "value": "Invoice", "style": { "font": { "bold": true }, "border": { "bottom": { "style": "thin" } } } },
+    { "ref": "B1", "value": "Date", "style": { "font": { "bold": true }, "border": { "bottom": { "style": "thin" } } } },
+    { "ref": "C1", "value": "Item", "style": { "font": { "bold": true }, "border": { "bottom": { "style": "thin" } } } },
+    { "ref": "D1", "value": "Amount (EUR)", "style": { "font": { "bold": true }, "border": { "bottom": { "style": "thin" } }, "alignment": { "horizontal": "right" } } },
+    { "ref": "A2", "value": "{d.pgs[i].invoiceNo}" },
+    { "ref": "B2", "value": "{d.pgs[i].invoiceDate:formatD(X):div(86400):add(25569):formatN}", "style": { "numFmt": "dd.mm.yyyy" } },
+    { "ref": "C2", "value": "{d.pgs[i].lines[i].item}" },
+    { "ref": "D2", "value": "{d.pgs[i].lines[i].amount:formatN}", "style": { "numFmt": "#,##0.00" } },
+    { "ref": "A3", "value": "{d.pgs[i+1].lines[i+1]}" }
+  ],
+  "autoFilter": "A:D",
+  "pageSetup": { "paperSize": "A4", "orientation": "portrait", "fitToWidth": 1, "fitToHeight": 0, "printTitlesRow": "1:1" },
+  "headerFooter": { "oddFooter": "&L&A&RPage &P of &N" }
+}] }`,
+)}
+
+The rules of Excel output. The tag check enforces most of them; explain them when the user asks:
+- Numbers: \`{d.pgs[i].lines[i].amount:formatN}\`. Without :formatN the cell is text and SUM gives 0. The cell's number format, such as #,##0.00, decides how it shows; the precision in formatN is ignored. A rich text cell cannot hold :formatN.
 - Dates: \`{d.pgs[i].invoiceDate:formatD(X):div(86400):add(25569):formatN}\` makes a real date cell; give the cell a date format such as dd.mm.yyyy. :formatN straight on a date is refused.
-- Totals under a loop: \`=SUM(INDIRECT("D5:D"&ROW()-1))\`, from the loop's row. A plain SUM is not moved when rows are added. The starter's flat sheet has no totals: a total row in a table people filter and sort gets in the way. The page group starter totals each table under it.
-- No merged cells in or below a loop. Filters, data validation and conditional formatting stay on the template's rows, so put them on whole columns, such as A:G.
-- Pictures are inserted in the file, above any loop. \`{asset('name')}\` is for HTML only.
-- The PDF follows each sheet's page setup in Excel: Page Layout, Size A4, Orientation, Scale to Fit (Width 1 page) and Print Titles for the header row. A sheet without one prints on US Letter portrait and can cut columns off.
-read_carbone_reference with xlsx-tips has Carbone's own tips.`,
+- Totals under a loop: \`SUM(INDIRECT("D2:D"&ROW()-1))\`, from the loop's row. A plain SUM is not moved when rows are added. The starter's flat sheet has no totals: a total row in a table people filter and sort gets in the way. The page group starter totals each table under it.
+- No merged cells in or below a loop. Carbone moves no range when it adds rows: a filter, data validation or conditional formatting stays on the template's rows, so put it on whole columns (\`A:G\`) or down to a far row (\`D2:D5000\`). Tables and charts over a loop do not grow with it, which is why a design has none.
+- Every sheet needs a page setup: A4, one page wide and as many tall as needed, with \`printTitlesRow\` for the header row. write_excel_template gives a sheet without one A4 portrait, one page wide; a file made in Excel may have none, and then its PDF prints on US Letter and can cut columns off.
+- Pictures go above the header row; they are the same in every file. A picture over the print-title rows prints on every page. \`{asset('name')}\` is for HTML only.
+- Notes print in the PDF as note icons and do not move with the rows. Use them only above a loop, and only when the XLSX matters more than the PDF.
+- The PDF prints data bars and colour scales, but not icon sets, and a gradient fill prints as one colour.
+- Formulas are computed by LibreOffice. It computes the long-standing functions and XLOOKUP, XMATCH, IFS, SWITCH, TEXTJOIN, CONCAT, MAXIFS, MINIFS and IFNA. write_excel_template adds the prefixes these need in the file; in an edit, write them yourself: \`_xlfn.XLOOKUP(...)\`. Avoid LET, FILTER, SORT, UNIQUE, SEQUENCE and the other functions that spill into more cells.
+- In a reference, quote a sheet name with spaces or other signs: \`'Order lines'!B5\`. A merged range keeps its value in its top-left cell.
+read_carbone_reference with xlsx-tips has Carbone's own tips.
+
+Editing a file:
+- read_excel_template lists the parts: each sheet (\`xl/worksheets/sheet1.xml\` with its name), \`xl/styles.xml\` and \`xl/workbook.xml\`. A sheet reads with its text in its cells, as \`<c r="A1" s="3" t="inlineStr"><is><t>Amount</t></is></c>\`; write new text the same way, and Spooldoc stores it as Excel does. \`styles.xml\` reads with each entry's index in a comment before it: \`<!--s=7-->\` for a cell format, \`<!--fontId=3-->\`, \`<!--fillId=2-->\`, \`<!--borderId=1-->\`, \`<!--dxfId=0-->\`.
+- A cell's \`s\` is its cell format in \`cellXfs\`. For a new look, add an \`<xf>\` at the end of \`cellXfs\` (and a font, fill or border at the end of its list) and use its index; never change an entry other cells use unless they should all change. The counts are fixed for you.
+- Follow the file's own fonts, colours, number formats and widths. Leave formulas as they are unless the user asks to change them.
+
+${excelDesign}`,
 
     kindSection(templates),
 
@@ -525,7 +614,10 @@ Business documents are read quickly, filed and often printed in black and white.
 - write_word_template: designs a Word template from a JSON tree and saves it as a new file the template uses.
 - read_word_template: lists a Word template's parts, or returns one part's XML as edit_word_template matches it.
 - edit_word_template: replaces text in a Word template's XML and saves the result as a new file the template uses.
-- render_preview: renders the document of any page group with the job's definition and one template, HTML, Word or Excel, and returns the counts, the tag check's problems and its visible text${visual ? ', and for Word and Excel, the document as it prints' : ''}. An Excel template of the whole spooled file renders every page group.
+- write_excel_template: designs an Excel template from a JSON tree and saves it as a new file the template uses.
+- read_excel_template: lists an Excel template's sheets and parts, or returns one part's XML as edit_excel_template matches it.
+- edit_excel_template: replaces text in an Excel template's XML and saves the result as a new file the template uses.
+- render_preview: renders the document of any page group with the job's definition and one template, HTML, Word or Excel, and returns the counts, the tag check's problems and its visible text (for Excel, the computed cells)${visual ? ', and for Word and Excel, the document as it prints' : ''}. An Excel template of the whole spooled file renders every page group.
 - add_template: adds a template, HTML, Word or Excel, with a name and formats, using the starter until you write it or the user uploads a file. Only when the user asks for another set of documents, such as the lines of an invoice as a separate document.
 - remove_template: removes a template. Only when the user asks; the last template cannot be removed.
 - list_jobs: the other jobs with their definition type, templates and whether those have content of their own.
@@ -665,11 +757,18 @@ export interface DraftStore {
    */
   changeTemplates(change: (templates: JobTemplate[]) => JobTemplate[]): Promise<JobTemplate[]>;
   /**
-   * Store a Word template the agent made as a new file and point the template at it.
-   * An HTML template becomes a Word one only while it has no HTML of its own.
-   * Throws an Error with a message for the model when the template is gone or has HTML.
+   * Store a Word or Excel template the agent made as a new file and point the template at
+   * it. A template of another kind switches only while it uses a starter (`switchProblem`);
+   * `scope` is what each file of an Excel template holds when it switches, `splf` when not
+   * given, and an Excel template keeps its own. Throws an Error with a message for the
+   * model when the template is gone or cannot switch.
    */
-  writeWordTemplate(templateId: string, file: { name: string; content: Uint8Array; previousId: string | null }): Promise<TemplateFileView>;
+  writeTemplateFile(
+    templateId: string,
+    kind: FileKind,
+    file: { name: string; content: Uint8Array; previousId: string | null },
+    scope?: XlsxScope,
+  ): Promise<TemplateFileView>;
 }
 
 /** The definition and templates of a job: its active version's when it has one, else its draft's. */
@@ -709,19 +808,22 @@ export interface ToolsInput {
   /** The uploaded PNG and JPEG assets a Word design can place, by name. Read when a design needs them. */
   images?: () => Promise<Map<string, DesignImage>>;
   /**
-   * The model takes files in tool results: Word renders then show it the document as a
-   * PDF (or page 1 as a PNG). Without it, the model gets the text only.
+   * The model takes files in tool results: Word and Excel renders then show it the document
+   * as a PDF (or a Word document's page 1 as a PNG). Without it, the model gets the text only.
    */
   visual?: boolean;
 }
 
-/** Most pages of a Word render the model gets as a PDF. A longer document gets page 1 as a PNG. */
+/**
+ * Most pages of a render the model gets as a PDF. A longer Word document gets page 1 as a
+ * PNG; a longer Excel one is rendered again from shortened data.
+ */
 export const PREVIEW_PAGES = 5;
 
-/** Most characters of a Word part `read_word_template` returns at once. */
+/** Most characters of a part `read_word_template` and `read_excel_template` return at once. */
 const PART_READ_MAX = 40_000;
 
-/** A rendered Word document for the model: every page as a PDF, or page 1 as a PNG. */
+/** A rendered document for the model: every page as a PDF, or page 1 as a PNG. */
 interface Visual {
   mediaType: 'application/pdf' | 'image/png';
   data: Uint8Array;
@@ -890,13 +992,18 @@ async function renderDocument(
   }
 }
 
-/** A rendered Word document: errors, the text, and what the model is shown of it. */
-interface WordRender {
+/** A rendered Word or Excel document: errors, the text, and what the model is shown of it. */
+interface FileRender {
   errors: string[];
   textPreview: string;
-  view: WordView;
+  view: DocumentView;
   visual?: Visual;
+  /** Pages of the whole document, when it was rendered to PDF. */
   pages: number | null;
+  /** Pages of the PDF the model was shown, when it is a shortened one. */
+  shownPages?: number;
+  /** Excel: the cells that computed a formula error. */
+  errorCells?: number;
   note?: string;
 }
 
@@ -916,8 +1023,8 @@ async function renderWord(
   masked: boolean,
   renderer: DocumentRenderer | null,
   visual: boolean,
-): Promise<WordRender> {
-  const none = (errors: string[]): WordRender => ({ errors, textPreview: '', view: null, pages: null });
+): Promise<FileRender> {
+  const none = (errors: string[]): FileRender => ({ errors, textPreview: '', view: null, pages: null });
   let template: DocxTemplate;
   try {
     template = readDocx(bytes);
@@ -966,11 +1073,124 @@ async function renderWord(
   }
 }
 
+/** Most characters of the computed cells a render returns. */
+const CELLS_TEXT_MAX = 12_000;
+/** Rows of a long sheet the computed cells show from its top. */
+const HEAD_ROWS = 40;
+/** Rows of a long sheet the computed cells show from its end. */
+const TAIL_ROWS = 5;
+/** Formula error cells named by reference. */
+const ERROR_REFS = 5;
+
+/** A computed cell in one line: `Lines!D2: 1234.5 (format #,##0.00)`, text in quotes, with its date, format and formula. */
+function valueLine(cell: XlsxValue): string {
+  const { value } = cell;
+  const shown =
+    value === null
+      ? '(no value)'
+      : cell.type === 'e'
+        ? `${String(value)} error`
+        : typeof value === 'boolean'
+          ? (value ? 'TRUE' : 'FALSE')
+          : typeof value === 'number'
+            ? String(value)
+            : JSON.stringify(value);
+  const more = [
+    cell.display !== undefined ? `shows ${cell.display}` : '',
+    cell.format !== undefined ? `format ${cell.format}` : '',
+    cell.formula !== undefined ? `formula =${cell.formula}` : '',
+  ].filter(Boolean);
+  return `${cellRef(cell.sheet, cell.ref)}: ${shown}${more.length > 0 ? ` (${more.join(', ')})` : ''}`;
+}
+
+const rowOf = (ref: string): number => Number(/\d+$/.exec(ref)?.[0] ?? 0);
+
 /**
- * Check an Excel template, render it to XLSX (one page group's document, or the whole
- * spooled file's) and return the problems and the text of its cells, by sheet and cell.
- * With `visual`, also render it to PDF for the model, as a run makes it, when it has at most
- * `PREVIEW_PAGES` pages. Without Carbone only the check runs.
+ * The computed cells of a rendered XLSX for the model: first the formula errors, counted
+ * over every cell, then each sheet's cells, a line each. A sheet of more than 45 rows
+ * shows its first 40 and last 5, with a line for the rows left out.
+ */
+function computedCells(values: XlsxValue[]): { text: string; errorCells: number } {
+  const errors = values.filter((cell) => cell.type === 'e');
+  const lines = [
+    errors.length === 0
+      ? 'No cell holds a formula error.'
+      : `${errors.length === 1 ? '1 cell holds' : `${errors.length} cells hold`} a formula error: ${errors
+          .slice(0, ERROR_REFS)
+          .map((cell) => `${cellRef(cell.sheet, cell.ref)} ${String(cell.value)}`)
+          .join(', ')}${errors.length > ERROR_REFS ? `, and ${errors.length - ERROR_REFS} more` : ''}.`,
+  ];
+  const sheets = new Map<string, XlsxValue[]>();
+  for (const cell of values) {
+    const list = sheets.get(cell.sheet);
+    if (list) list.push(cell);
+    else sheets.set(cell.sheet, [cell]);
+  }
+  for (const [sheet, cells] of sheets) {
+    const rows = [...new Set(cells.map((cell) => rowOf(cell.ref)))];
+    if (rows.length <= HEAD_ROWS + TAIL_ROWS) {
+      lines.push(...cells.map(valueLine));
+      continue;
+    }
+    const lastHead = rows[HEAD_ROWS - 1]!;
+    const firstTail = rows[rows.length - TAIL_ROWS]!;
+    const left = rows.length - HEAD_ROWS - TAIL_ROWS;
+    lines.push(...cells.filter((cell) => rowOf(cell.ref) <= lastHead).map(valueLine));
+    lines.push(`(${sheet}: ${left} rows left out, rows ${rows[HEAD_ROWS]} to ${rows[rows.length - TAIL_ROWS - 1]})`);
+    lines.push(...cells.filter((cell) => rowOf(cell.ref) >= firstTail).map(valueLine));
+  }
+  let text = lines.join('\n');
+  if (text.length > CELLS_TEXT_MAX) {
+    text = `${text.slice(0, CELLS_TEXT_MAX)}\n(cut after ${CELLS_TEXT_MAX} characters)`;
+  }
+  return { text, errorCells: errors.length };
+}
+
+/**
+ * Shorter data for a PDF of at most `PREVIEW_PAGES` pages, from one that prints on `pages`:
+ * the first page groups of a whole spooled file, else the first rows of each list of the
+ * page group. Null when there is nothing to cut.
+ */
+function shortenedData(
+  groups: Record<string, unknown>[],
+  index: number,
+  scope: XlsxScope,
+  pages: number | null,
+): { groups: Record<string, unknown>[]; index: number; shows: string } | null {
+  const ratio = pages === null ? 0 : (PREVIEW_PAGES - 1) / pages;
+  if (scope === 'splf' && groups.length > 1) {
+    const keep = Math.max(1, Math.floor(groups.length * ratio));
+    return {
+      groups: groups.slice(0, keep),
+      index: 0,
+      shows: `The PDF shows the first ${keep === 1 ? '' : `${keep} `}of ${groups.length} page groups`,
+    };
+  }
+  const at = scope === 'splf' ? 0 : index;
+  const cut: string[] = [];
+  const group = Object.fromEntries(
+    Object.entries(groups[at]!).map(([key, value]) => {
+      if (!Array.isArray(value)) return [key, value];
+      const keep = Math.max(1, Math.floor(value.length * ratio));
+      if (keep >= value.length) return [key, value];
+      cut.push(`${key}: ${keep} of ${value.length}`);
+      return [key, value.slice(0, keep)];
+    }),
+  );
+  if (cut.length === 0) return null;
+  return {
+    groups: groups.map((g, i) => (i === at ? group : g)),
+    index: at,
+    shows: `The PDF shows page group ${at + 1} with its lists cut to their first rows (${cut.join(', ')})`,
+  };
+}
+
+/**
+ * Check an Excel template, render it to XLSX as a run makes it (one page group's document,
+ * or the whole spooled file's), with formulas computed, and return the problems and the
+ * computed cells by sheet and cell, with the formula errors counted. With `visual`, also
+ * render it to PDF for the model: one over `PREVIEW_PAGES` pages is rendered again from
+ * shortened data, and the note says so. Without Carbone only the check runs.
  */
 async function renderExcel(
   bytes: Uint8Array,
@@ -982,9 +1202,9 @@ async function renderExcel(
   masked: boolean,
   renderer: DocumentRenderer | null,
   visual: boolean,
-): Promise<WordRender> {
-  const none = (errors: string[]): WordRender => ({ errors, textPreview: '', view: null, pages: null });
-  let template;
+): Promise<FileRender> {
+  const none = (errors: string[]): FileRender => ({ errors, textPreview: '', view: null, pages: null });
+  let template: XlsxTemplate;
   try {
     template = readXlsx(bytes);
   } catch (error) {
@@ -995,36 +1215,53 @@ async function renderExcel(
     return none(problems.map((p) => `${cellRef(p.sheet, p.ref)}: ${p.message}`));
   }
   const shown = masked ? (pageGroups.map(maskPageGroup) as Record<string, unknown>[]) : pageGroups;
-  const group = shown[index];
-  if (!group) {
+  if (!shown[index]) {
     return none(['The definition finds no page groups, so there is nothing to render.']);
   }
   if (!renderer) {
     return none(['Carbone is not connected, so the template was checked but not rendered. The user sets it up in Settings, under Rendering.']);
   }
-  const data = scope === 'splf' ? spooledFileData(shown, sample) : templateData(template, group, shown, sample);
-  let textPreview: string;
+  const dataOf = (groups: Record<string, unknown>[], at: number) => (scope === 'splf' ? spooledFileData(groups, sample) : templateData(template, groups[at]!, groups, sample));
+  const data = dataOf(shown, index);
+  let cells: { text: string; errorCells: number };
   try {
-    const out = readXlsx(await renderer({ kind: 'xlsx', template: bytes, data, format: 'xlsx', hardRefresh: xlsxHardRefresh(template) }));
-    textPreview = truncate(out.cells.map((cell) => `${cellRef(cell.sheet, cell.ref)}: ${cell.text}`).join('\n'), 1500);
+    cells = computedCells(readXlsxValues(await renderer({ kind: 'xlsx', template: bytes, data, format: 'xlsx' })));
   } catch (error) {
     return none([carboneMessage(error)]);
   }
   const noPageSetup = sheetsWithoutPageSetup(template);
-  const setupNote = noPageSetup.length > 0 ? `Without a page setup, so the PDF prints on US Letter portrait: ${noPageSetup.join(', ')}.` : undefined;
+  const setupNote = noPageSetup.length > 0 ? `Without a page setup, so the PDF prints on US Letter portrait: ${noPageSetup.join(', ')}.` : '';
+  const result = (rest: Omit<FileRender, 'errors' | 'textPreview' | 'errorCells' | 'note'>, note = ''): FileRender => {
+    const notes = [note, setupNote].filter(Boolean).join(' ');
+    return { errors: [], textPreview: cells.text, errorCells: cells.errorCells, ...rest, ...(notes ? { note: notes } : {}) };
+  };
   if (!visual) {
-    return { errors: [], textPreview, view: null, pages: null, ...(setupNote ? { note: setupNote } : {}) };
+    return result({ view: null, pages: null });
   }
+  let pages: number | null;
   try {
     const pdf = await renderer({ kind: 'xlsx', template: bytes, data, format: 'pdf' });
-    const pages = pdfPageCount(pdf);
+    pages = pdfPageCount(pdf);
     if (pages !== null && pages <= PREVIEW_PAGES) {
-      return { errors: [], textPreview, view: 'pdf', visual: { mediaType: 'application/pdf', data: pdf }, pages, ...(setupNote ? { note: setupNote } : {}) };
+      return result({ view: 'pdf', visual: { mediaType: 'application/pdf', data: pdf }, pages });
     }
-    const long = `The PDF has ${pages ?? `more than ${PREVIEW_PAGES}`} pages, so you see the cells' text only.`;
-    return { errors: [], textPreview, view: null, pages, note: setupNote ? `${long} ${setupNote}` : long };
   } catch (error) {
-    return { errors: [], textPreview, view: null, pages: null, note: `The document could not be rendered to PDF, so you see its text only: ${carboneMessage(error)}` };
+    return result({ view: null, pages: null }, `The document could not be rendered to PDF, so you see its cells only: ${carboneMessage(error)}`);
+  }
+  const whole = `the whole ${scope === 'splf' ? 'file' : 'document'} prints on ${pages ?? `more than ${PREVIEW_PAGES}`} pages`;
+  const short = shortenedData(shown, index, scope, pages);
+  if (!short) {
+    return result({ view: null, pages }, `${whole[0]!.toUpperCase()}${whole.slice(1)}, so you see its cells only.`);
+  }
+  try {
+    const pdf = await renderer({ kind: 'xlsx', template: bytes, data: dataOf(short.groups, short.index), format: 'pdf' });
+    const shownPages = pdfPageCount(pdf);
+    if (shownPages !== null && shownPages <= PREVIEW_PAGES) {
+      return result({ view: 'pdf', visual: { mediaType: 'application/pdf', data: pdf }, pages, shownPages }, `${short.shows}; ${whole}.`);
+    }
+    return result({ view: null, pages }, `Even shortened data prints on ${shownPages ?? `more than ${PREVIEW_PAGES}`} pages, so you see the cells only; ${whole}.`);
+  } catch (error) {
+    return result({ view: null, pages }, `The PDF from shortened data could not be rendered, so you see the cells only; ${whole}: ${carboneMessage(error)}`);
   }
 }
 
@@ -1076,11 +1313,43 @@ function templateListing(template: JobTemplate): TemplateListing {
   };
 }
 
-/** Why the agent cannot write or edit an Excel template, and what the user does instead. */
-const excelByUser = (template: JobTemplate): ToolFailure =>
-  fail(
-    `The ${template.name} template is an Excel template. You cannot write or edit Excel files yet: the user downloads the starter template from the template's panel, changes it in Excel and uploads it. Check it with render_preview.`,
-  );
+/** A kind of template that is a file: Word or Excel. */
+type FileKind = FileTemplateContent['kind'];
+
+/** The tools that write, read and edit each kind of template file. */
+const FILE_TOOLS: Record<FileKind, { write: string; read: string; edit: string }> = {
+  docx: { write: 'write_word_template', read: 'read_word_template', edit: 'edit_word_template' },
+  xlsx: { write: 'write_excel_template', read: 'read_excel_template', edit: 'edit_excel_template' },
+};
+
+/**
+ * Why the agent cannot save a file of `kind` for a template, or null when it can: a
+ * template of another kind switches only while it uses a starter. The message tells the
+ * model what to do instead.
+ */
+export function switchProblem(template: JobTemplate, kind: FileKind): string | null {
+  if (template.kind === kind || !hasOwnContent(template)) {
+    return null;
+  }
+  const own =
+    template.kind === 'html'
+      ? `The ${template.name} template has HTML of its own.`
+      : `The ${template.name} template is ${kindName(template.kind, true)} with a file of its own: change it with ${FILE_TOOLS[template.kind].edit}, or design a new one with ${FILE_TOOLS[template.kind].write}.`;
+  return `${own} To make it ${kindName(kind, true)}, ask the user: they switch it in the app, or you add ${kindName(kind, true)} with add_template (kind ${kind}).`;
+}
+
+/** Why a read or edit tool of `kind` does not take this template, which is of another kind. */
+function otherKind(template: JobTemplate, kind: FileKind, use: 'read' | 'edit'): ToolFailure {
+  if (template.kind === 'html') {
+    return fail(
+      use === 'read'
+        ? `The ${template.name} template is an HTML template, which is in the instructions. Design ${kindName(kind, true)} with ${FILE_TOOLS[kind].write}.`
+        : `The ${template.name} template is an HTML template. Change it with write_template, or design ${kindName(kind, true)} with ${FILE_TOOLS[kind].write}.`,
+    );
+  }
+  const tool = FILE_TOOLS[template.kind as FileKind][use];
+  return fail(`The ${template.name} template is ${kindName(template.kind, true)}. ${use === 'read' ? 'Read' : 'Change'} it with ${tool}.`);
+}
 
 /** Why there is no template `key`, with the templates there are. */
 function noTemplate(key: string, templates: JobTemplate[]): ToolFailure {
@@ -1089,8 +1358,11 @@ function noTemplate(key: string, templates: JobTemplate[]): ToolFailure {
 
 const templateParam = z.string().min(1).max(40).optional().describe("The template's id or name (default: the first template)");
 
-/** A file name that ends in `.docx`. */
-function docxName(name: string): string {
+/** A file name that ends in `.docx` or `.xlsx`. */
+function fileName(name: string, kind: FileKind): string {
+  if (kind === 'xlsx') {
+    return /\.xlsx$/i.test(name) ? name : `${name.replace(/\.(xlsx?|xltx|xlsm)$/i, '')}.xlsx`;
+  }
   return /\.docx$/i.test(name) ? name : `${name.replace(/\.(docx?|dotx)$/i, '')}.docx`;
 }
 
@@ -1123,7 +1395,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
   }
 
   /**
-   * What each Word render of this request showed, by tool call. Only the step after the
+   * What each Word or Excel render of this request showed, by tool call. Only the step after the
    * call gets it: the stored thread and later requests carry the result's text only.
    */
   const visuals = new Map<string, Visual>();
@@ -1143,8 +1415,11 @@ export function buildTools({ sample: current, store, masked, assets = [], render
     };
   };
 
-  /** Render a Word template for a tool result, keeping what the model is shown for its next step. */
-  async function showWord(toolCallId: string, bytes: Uint8Array, def: Definition, sample: Sample, index: number): Promise<WordRender & { pageGroups: number }> {
+  /** A Word file, or an Excel file and what each of its files holds. */
+  type Target = { kind: 'docx' } | { kind: 'xlsx'; scope: XlsxScope };
+
+  /** Render a Word or Excel template for a tool result, keeping what the model is shown for its next step. */
+  async function showFile(toolCallId: string, target: Target, bytes: Uint8Array, def: Definition, sample: Sample, index: number): Promise<FileRender & { pageGroups: number }> {
     let pageGroups: Record<string, unknown>[];
     try {
       pageGroups = extract(def, sample).pageGroups;
@@ -1152,46 +1427,67 @@ export function buildTools({ sample: current, store, masked, assets = [], render
       return { errors: [`Extraction failed: ${message(error)}`], textPreview: '', view: null, pages: null, pageGroups: 0 };
     }
     const at = Math.min(index, Math.max(0, pageGroups.length - 1));
-    const rendered = await renderWord(bytes, def, pageGroups, at, sample, masked, renderer, visual);
+    const rendered =
+      target.kind === 'xlsx'
+        ? await renderExcel(bytes, def, target.scope, pageGroups, at, sample, masked, renderer, visual)
+        : await renderWord(bytes, def, pageGroups, at, sample, masked, renderer, visual);
     if (rendered.visual) {
       visuals.set(toolCallId, rendered.visual);
     }
     return { ...rendered, pageGroups: pageGroups.length };
   }
 
-  /** The Word file a template uses now: its own, or the starter made from the definition. */
-  async function currentWord(template: JobTemplate, def: Definition): Promise<{ bytes: Uint8Array; name: string; fileId: string | null } | ToolFailure> {
-    if (template.kind === 'docx' && template.fileId !== null) {
+  /** What a render reports in a tool result, besides its errors. */
+  const renderFields = (rendered: FileRender) => ({
+    textPreview: rendered.textPreview,
+    view: rendered.view,
+    pages: rendered.pages,
+    ...(rendered.shownPages !== undefined ? { shownPages: rendered.shownPages } : {}),
+    ...(rendered.errorCells !== undefined ? { errorCells: rendered.errorCells } : {}),
+    ...(rendered.note ? { note: rendered.note } : {}),
+  });
+
+  /** The Word or Excel file a template uses now: its own, or the starter made from the definition. */
+  async function currentFile(
+    template: Extract<JobTemplate, { kind: FileKind }>,
+    def: Definition,
+  ): Promise<{ bytes: Uint8Array; name: string; fileId: string | null } | ToolFailure> {
+    if (template.fileId !== null) {
       const file = await templateFile?.(template.fileId).catch(() => null);
       return file
         ? { bytes: file.content, name: file.name, fileId: template.fileId }
-        : fail(`The Word file of the ${template.name} template is gone. Write a new one with write_word_template, or the user uploads one.`);
+        : fail(`The ${KIND_NAMES[template.kind].app} file of the ${template.name} template is gone. Write a new one with ${FILE_TOOLS[template.kind].write}, or the user uploads one.`);
     }
-    return { bytes: await starterDocx(def), name: `${def.type}.docx`, fileId: null };
+    const bytes = template.kind === 'xlsx' ? starterXlsx(def, template.scope) : await starterDocx(def);
+    return { bytes, name: `${def.type}.${template.kind}`, fileId: null };
   }
 
-  /** Save a Word template the agent made, render the first document and report both. */
-  async function saveWord(toolCallId: string, template: JobTemplate, file: { name: string; content: Uint8Array; previousId: string | null }, def: Definition, sample: Sample): Promise<WordTemplateResult> {
+  /** Save a Word or Excel template the agent made, render the first document and report both. */
+  async function saveFile(
+    toolCallId: string,
+    template: JobTemplate,
+    target: Target,
+    file: { name: string; content: Uint8Array; previousId: string | null },
+    def: Definition,
+    sample: Sample,
+  ): Promise<FileTemplateResult> {
     if (file.content.length > MAX_TEMPLATE_FILE_BYTES) {
       return fail(`The file is larger than ${MAX_TEMPLATE_FILE_BYTES / 1024 / 1024} MB, the most Spooldoc takes. Use smaller pictures.`);
     }
     let saved: TemplateFileView;
     try {
-      saved = await store.writeWordTemplate(template.id, file);
+      saved = await store.writeTemplateFile(template.id, target.kind, file, target.kind === 'xlsx' ? target.scope : undefined);
     } catch (error) {
-      return fail(`Could not save the Word template: ${message(error)}`);
+      return fail(`Could not save the ${KIND_NAMES[target.kind].app} template: ${message(error)}`);
     }
-    const rendered = await showWord(toolCallId, file.content, def, sample, 0);
+    const rendered = await showFile(toolCallId, target, file.content, def, sample, 0);
     return {
       ok: rendered.errors.length === 0,
       template: template.name,
       templateId: template.id,
       file: { id: saved.id, name: saved.name, size: saved.size },
       errors: rendered.errors,
-      textPreview: rendered.textPreview,
-      view: rendered.view,
-      pages: rendered.pages,
-      ...(rendered.note ? { note: rendered.note } : {}),
+      ...renderFields(rendered),
     };
   }
 
@@ -1297,11 +1593,8 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         if ('ok' in template) {
           return template;
         }
-        if (template.kind === 'docx') {
-          return fail(`The ${template.name} template is a Word template. Change it with edit_word_template, or design a new one with write_word_template.`);
-        }
-        if (template.kind === 'xlsx') {
-          return excelByUser(template);
+        if (template.kind !== 'html') {
+          return fail(`The ${template.name} template is ${kindName(template.kind, true)}. Change it with ${FILE_TOOLS[template.kind].edit}, or design a new one with ${FILE_TOOLS[template.kind].write}.`);
         }
         try {
           await store.writeHtml(template.id, html);
@@ -1325,7 +1618,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
 
     render_preview: tool({
       description:
-        "Render the document of one page group with the job's definition and one of its templates (the first unless `template` names another) and return the page group count, hit counts (found, missing, empty), missing fields, template errors and the visible text of the document.",
+        "Render the document of one page group with the job's definition and one of its templates (the first unless `template` names another) and return the page group count, hit counts (found, missing, empty), missing fields, template errors and the visible text of the document (for Excel, its computed cells) and, when you can see files, a Word or Excel document as it prints.",
       inputSchema: z.object({
         pageGroup: z.number().int().min(0).optional().describe('0-based page group index (default 0)'),
         template: templateParam,
@@ -1350,31 +1643,18 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           return template;
         }
         const index = Math.min(pageGroup ?? 0, Math.max(0, result.pageGroups.length - 1));
-        let rendered: { errors: string[]; textPreview: string; view?: WordView; pages?: number | null; note?: string };
-        if (template.kind === 'docx') {
-          const word = await currentWord(template, current.def);
-          if ('ok' in word) {
-            return word;
-          }
-          const { errors, textPreview, view, pages, note } = await showWord(toolCallId, word.bytes, current.def, sample, index);
-          rendered = { errors, textPreview, view, pages, ...(note ? { note } : {}) };
-        } else if (template.kind === 'xlsx') {
-          let bytes = starterXlsx(current.def, template.scope);
-          if (template.fileId !== null) {
-            const file = await templateFile?.(template.fileId).catch(() => null);
-            if (!file) {
-              return fail(`The Excel file of the ${template.name} template is gone. The user uploads it again.`);
-            }
-            bytes = file.content;
-          }
-          const excel = await renderExcel(bytes, current.def, template.scope, result.pageGroups, index, sample, masked, renderer, visual);
-          if (excel.visual) {
-            visuals.set(toolCallId, excel.visual);
-          }
-          rendered = { errors: excel.errors, textPreview: excel.textPreview, view: excel.view, pages: excel.pages, ...(excel.note ? { note: excel.note } : {}) };
-        } else {
+        let rendered: { errors: string[]; textPreview: string } & Partial<ReturnType<typeof renderFields>>;
+        if (template.kind === 'html') {
           const html = template.source ?? starterTemplate(current.def);
           rendered = await renderDocument(html, current.def, result.pageGroups, index, sample, masked, assets, renderer);
+        } else {
+          const file = await currentFile(template, current.def);
+          if ('ok' in file) {
+            return file;
+          }
+          const target: Target = template.kind === 'xlsx' ? { kind: 'xlsx', scope: template.scope } : { kind: 'docx' };
+          const shown = await showFile(toolCallId, target, file.bytes, current.def, sample, index);
+          rendered = { errors: shown.errors, ...renderFields(shown) };
         }
         const hits = { found: 0, missing: 0, empty: 0 };
         for (const hit of result.hits) {
@@ -1392,6 +1672,8 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           templateErrors: rendered.errors,
           textPreview: rendered.textPreview,
           ...(rendered.view !== undefined ? { view: rendered.view, pages: rendered.pages ?? null } : {}),
+          ...(rendered.shownPages !== undefined ? { shownPages: rendered.shownPages } : {}),
+          ...(rendered.errorCells !== undefined ? { errorCells: rendered.errorCells } : {}),
           ...(rendered.note ? { note: rendered.note } : {}),
         };
       }),
@@ -1406,7 +1688,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         name: z.string().trim().min(1).max(120).optional().describe("The file's name, such as invoice.docx (default: the current file's name, or the definition type)"),
         template: templateParam,
       }),
-      execute: inTurn(async ({ design, name, template: key }, { toolCallId }): Promise<WordTemplateResult> => {
+      execute: inTurn(async ({ design, name, template: key }, { toolCallId }): Promise<FileTemplateResult> => {
         const sample = await readSample();
         if ('ok' in sample) {
           return sample;
@@ -1419,8 +1701,9 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         if ('ok' in template) {
           return template;
         }
-        if (template.kind === 'xlsx') {
-          return excelByUser(template);
+        const problem = switchProblem(template, 'docx');
+        if (problem) {
+          return fail(problem);
         }
         let content: Uint8Array;
         try {
@@ -1430,8 +1713,8 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           return fail(error instanceof DesignError ? `The design has problems, nothing was saved:\n${error.problems.join('\n')}` : `Could not build the Word file: ${message(error)}`);
         }
         const previousId = template.kind === 'docx' ? template.fileId : null;
-        const word = template.kind === 'docx' && previousId !== null ? await templateFile?.(previousId).catch(() => null) : null;
-        return saveWord(toolCallId, template, { name: docxName(name ?? word?.name ?? `${current.def.type}.docx`), content, previousId }, current.def, sample);
+        const word = previousId !== null ? await templateFile?.(previousId).catch(() => null) : null;
+        return saveFile(toolCallId, template, { kind: 'docx' }, { name: fileName(name ?? word?.name ?? `${current.def.type}.docx`, 'docx'), content, previousId }, current.def, sample);
       }),
       toModelOutput: withVisual,
     }),
@@ -1444,7 +1727,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         from: z.number().int().min(0).optional().describe('The character to start at (default 0)'),
         template: templateParam,
       }),
-      execute: inTurn(async ({ part, from = 0, template: key }): Promise<ReadWordTemplateResult> => {
+      execute: inTurn(async ({ part, from = 0, template: key }): Promise<ReadFileTemplateResult> => {
         const current = await linked();
         if ('ok' in current) {
           return current;
@@ -1453,13 +1736,10 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         if ('ok' in template) {
           return template;
         }
-        if (template.kind === 'xlsx') {
-          return excelByUser(template);
-        }
         if (template.kind !== 'docx') {
-          return fail(`The ${template.name} template is an HTML template, which is in the instructions. Design a Word template with write_word_template.`);
+          return otherKind(template, 'docx', 'read');
         }
-        const word = await currentWord(template, current.def);
+        const word = await currentFile(template, current.def);
         if ('ok' in word) {
           return word;
         }
@@ -1493,7 +1773,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           .max(50),
         template: templateParam,
       }),
-      execute: inTurn(async ({ edits, template: key }, { toolCallId }): Promise<WordTemplateResult> => {
+      execute: inTurn(async ({ edits, template: key }, { toolCallId }): Promise<FileTemplateResult> => {
         const sample = await readSample();
         if ('ok' in sample) {
           return sample;
@@ -1506,13 +1786,10 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         if ('ok' in template) {
           return template;
         }
-        if (template.kind === 'xlsx') {
-          return excelByUser(template);
-        }
         if (template.kind !== 'docx') {
-          return fail(`The ${template.name} template is an HTML template. Change it with write_template, or design a Word template with write_word_template.`);
+          return otherKind(template, 'docx', 'edit');
         }
-        const word = await currentWord(template, current.def);
+        const word = await currentFile(template, current.def);
         if ('ok' in word) {
           return word;
         }
@@ -1522,14 +1799,148 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         } catch (error) {
           return fail(message(error));
         }
-        return saveWord(toolCallId, template, { name: word.name, content, previousId: word.fileId }, current.def, sample);
+        return saveFile(toolCallId, template, { kind: 'docx' }, { name: word.name, content, previousId: word.fileId }, current.def, sample);
+      }),
+      toModelOutput: withVisual,
+    }),
+
+    write_excel_template: tool({
+      description:
+        "Design one of the job's templates as an Excel template (the first unless `template` names another) and save it as a new file the template uses: `design` is a JSON tree of sheets, cells, styles and page setup (see Excel templates in the instructions). Returns the tag check's and Carbone's errors, the computed cells of the first document and, when you can see files, its PDF. The user's earlier file is kept and can be put back.",
+      inputSchema: z.object({
+        design: z.record(z.string(), z.unknown()).describe('The workbook: { defaultFont?, sheets: [{ name, columns?, cells, pageSetup?, ... }] }'),
+        name: z.string().trim().min(1).max(120).optional().describe("The file's name, such as lines.xlsx (default: the current file's name, or the definition type)"),
+        template: templateParam,
+        scope: z
+          .enum(['splf', 'pageGroup'])
+          .optional()
+          .describe('Only when the template is not Excel yet: splf (default) for one file of the whole spooled file, pageGroup for one file per page group'),
+      }),
+      execute: inTurn(async ({ design, name, template: key, scope }, { toolCallId }): Promise<FileTemplateResult> => {
+        const sample = await readSample();
+        if ('ok' in sample) {
+          return sample;
+        }
+        const current = await linked();
+        if ('ok' in current) {
+          return current;
+        }
+        const template = await pickTemplate(key);
+        if ('ok' in template) {
+          return template;
+        }
+        const problem = switchProblem(template, 'xlsx');
+        if (problem) {
+          return fail(problem);
+        }
+        if (template.kind === 'xlsx' && scope !== undefined && scope !== template.scope) {
+          return fail(
+            `What each file of the ${template.name} template holds is the user's setting, and you cannot change it. Ask the user to change "Each file holds" in the template menu, or design for the scope it has (${template.scope}).`,
+          );
+        }
+        let content: Uint8Array;
+        try {
+          const pictures = images ? await images() : new Map<string, DesignImage>();
+          content = await buildXlsx(design, (asset) => pictures.get(asset));
+        } catch (error) {
+          return fail(error instanceof DesignError ? `The design has problems, nothing was saved:\n${error.problems.join('\n')}` : `Could not build the Excel file: ${message(error)}`);
+        }
+        const previousId = template.kind === 'xlsx' ? template.fileId : null;
+        const old = previousId !== null ? await templateFile?.(previousId).catch(() => null) : null;
+        const target: Target = { kind: 'xlsx', scope: template.kind === 'xlsx' ? template.scope : (scope ?? 'splf') };
+        return saveFile(toolCallId, template, target, { name: fileName(name ?? old?.name ?? `${current.def.type}.xlsx`, 'xlsx'), content, previousId }, current.def, sample);
+      }),
+      toModelOutput: withVisual,
+    }),
+
+    read_excel_template: tool({
+      description:
+        "Read one of the job's Excel templates (the first unless `template` names another): without `part`, its parts (each sheet with its name, xl/styles.xml and xl/workbook.xml) with their sizes; with `part`, that part's XML as edit_excel_template matches it, with the text in its cells and the index of each style. Long parts come in pieces: read on with `from`.",
+      inputSchema: z.object({
+        part: z.string().min(1).max(60).optional().describe('A part, such as xl/worksheets/sheet1.xml or xl/styles.xml'),
+        from: z.number().int().min(0).optional().describe('The character to start at (default 0)'),
+        template: templateParam,
+      }),
+      execute: inTurn(async ({ part, from = 0, template: key }): Promise<ReadFileTemplateResult> => {
+        const current = await linked();
+        if ('ok' in current) {
+          return current;
+        }
+        const template = await pickTemplate(key);
+        if ('ok' in template) {
+          return template;
+        }
+        if (template.kind !== 'xlsx') {
+          return otherKind(template, 'xlsx', 'read');
+        }
+        const excel = await currentFile(template, current.def);
+        if ('ok' in excel) {
+          return excel;
+        }
+        const file = excel.fileId === null ? null : excel.name;
+        try {
+          if (part === undefined) {
+            return { ok: true, template: template.name, file, parts: xlsxParts(excel.bytes) };
+          }
+          const { xml, sheet } = xlsxPart(excel.bytes, part);
+          const piece = xml.slice(from, from + PART_READ_MAX);
+          return { ok: true, template: template.name, file, part, ...(sheet !== undefined ? { sheet } : {}), size: xml.length, from, xml: piece, more: from + piece.length < xml.length };
+        } catch (error) {
+          return fail(message(error));
+        }
+      }),
+    }),
+
+    edit_excel_template: tool({
+      description:
+        "Change one of the job's Excel templates (the first unless `template` names another), the user's own file or the starter, and save the result as a new file the template uses. Each edit replaces `find`, which must occur exactly once in the part's XML as read_excel_template shows it, with `replace`. The edits apply in order, all or none, and every reference must still add up. Returns what write_excel_template returns.",
+      inputSchema: z.object({
+        edits: z
+          .array(
+            z.object({
+              part: z.string().min(1).max(60).describe('The part, such as xl/worksheets/sheet1.xml or xl/styles.xml'),
+              find: z.string().min(1).max(100_000).describe('XML text that occurs exactly once in the part'),
+              replace: z.string().max(200_000).describe('What it becomes'),
+            }),
+          )
+          .min(1)
+          .max(50),
+        template: templateParam,
+      }),
+      execute: inTurn(async ({ edits, template: key }, { toolCallId }): Promise<FileTemplateResult> => {
+        const sample = await readSample();
+        if ('ok' in sample) {
+          return sample;
+        }
+        const current = await linked();
+        if ('ok' in current) {
+          return current;
+        }
+        const template = await pickTemplate(key);
+        if ('ok' in template) {
+          return template;
+        }
+        if (template.kind !== 'xlsx') {
+          return otherKind(template, 'xlsx', 'edit');
+        }
+        const excel = await currentFile(template, current.def);
+        if ('ok' in excel) {
+          return excel;
+        }
+        let content: Uint8Array;
+        try {
+          content = editXlsx(excel.bytes, edits);
+        } catch (error) {
+          return fail(message(error));
+        }
+        return saveFile(toolCallId, template, { kind: 'xlsx', scope: template.scope }, { name: excel.name, content, previousId: excel.fileId }, current.def, sample);
       }),
       toModelOutput: withVisual,
     }),
 
     add_template: tool({
       description:
-        "Add a template to the job: another document made from each page group (or, for an Excel template, by default one of the whole spooled file), with its own content and formats. It uses the starter until write_template or write_word_template writes it, or the user uploads an Excel file. Only when the user asks for another template.",
+        "Add a template to the job: another document made from each page group (or, for an Excel template, by default one of the whole spooled file), with its own content and formats. It uses the starter until write_template, write_word_template or write_excel_template writes it, or the user uploads a file. Only when the user asks for another template.",
       inputSchema: z.object({
         name: z.string().trim().min(1).max(40).describe('A short name, such as "Lines". The files of every template but the first add it to their names.'),
         kind: z

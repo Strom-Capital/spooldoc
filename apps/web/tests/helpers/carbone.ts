@@ -36,6 +36,20 @@ export const fakeCarbone = vi.fn<(input: DocumentRender) => Promise<Uint8Array>>
   return new TextEncoder().encode(html);
 });
 
+/** A PDF with this many pages, as `pdfPageCount` reads it. */
+export const pdfWithPages = (pages: number): Uint8Array => new TextEncoder().encode(`%PDF-1.7 << /Type /Pages /Count ${pages} >> fixed`);
+
+/**
+ * The fake, with PDFs of as many pages as `pages` works out from what was sent, such as
+ * five pages for each page group. The calls still go through `fakeCarbone`.
+ */
+export function pagedRenderer(pages: (input: DocumentRender) => number): DocumentRenderer {
+  return async (input) => {
+    const out = await fakeCarbone(input);
+    return input.format === 'pdf' ? pdfWithPages(pages(input)) : out;
+  };
+}
+
 /** The page group a render was sent, or undefined for the data of a whole spooled file. */
 export function sentPageGroup(input: DocumentRender): Record<string, unknown> | undefined {
   return 'pg' in input.data ? input.data.pg : undefined;

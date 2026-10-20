@@ -73,6 +73,10 @@ describe('savedFile', () => {
     expect(savedFile(done('write_word_template', { ok: false, template: 'Document', file: { id: 'f', name: 'a.docx', size: 1 }, errors: ['x'] }))).toBe('templates');
     expect(savedFile(done('edit_word_template', { ok: false, error: 'x' }))).toBeNull();
     expect(savedFile(done('read_word_template', { ok: true, parts: [] }))).toBeNull();
+    expect(savedFile(done('write_excel_template', { ok: true, template: 'Lines', file: { id: 'f', name: 'a.xlsx', size: 1 }, errors: [] }))).toBe('templates');
+    expect(savedFile(done('edit_excel_template', { ok: true, template: 'Lines', file: { id: 'f', name: 'a.xlsx', size: 1 }, errors: [] }))).toBe('templates');
+    expect(savedFile(done('edit_excel_template', { ok: false, error: 'x' }))).toBeNull();
+    expect(savedFile(done('read_excel_template', { ok: true, parts: [] }))).toBeNull();
   });
 });
 
@@ -105,6 +109,45 @@ describe('toolSummary for Word templates', () => {
     expect(toolSummary(done('read_word_template', { ok: true, template: 'Document', file: null, parts: [] })).text).toBe('Read the parts of the starter template');
     expect(toolSummary(done('read_word_template', { ok: true, template: 'Document', file: 'mine.docx', part: 'word/header1.xml', size: 1, from: 0, xml: '', more: false })).text).toBe(
       'Read word/header1.xml of mine.docx',
+    );
+  });
+});
+
+describe('toolSummary for Excel templates', () => {
+  const excel = (fields: Record<string, unknown>) => ({
+    ok: true,
+    template: 'Lines',
+    templateId: 'lines',
+    file: { id: 'f', name: 'lines.xlsx', size: 9000 },
+    errors: [],
+    textPreview: '',
+    view: null,
+    pages: null,
+    errorCells: 0,
+    ...fields,
+  });
+
+  it('says what was saved, what the agent looked at and the formula errors', () => {
+    expect(toolSummary({ toolName: 'write_excel_template', state: 'input-available' })).toEqual({ text: 'Designing an Excel template', tone: 'running' });
+    expect(toolSummary({ toolName: 'edit_excel_template', state: 'input-streaming' })).toEqual({ text: 'Editing the Excel template', tone: 'running' });
+    expect(toolSummary(done('write_excel_template', excel({ view: 'pdf', pages: 2 })))).toEqual({ text: 'Designed lines.xlsx for Lines, looked at 2 pages', tone: 'ok' });
+    expect(toolSummary(done('edit_excel_template', excel({ view: 'pdf', pages: 31, shownPages: 4 })))).toEqual({ text: 'Edited lines.xlsx for Lines, looked at 4 pages', tone: 'ok' });
+    expect(toolSummary(done('edit_excel_template', excel({ errorCells: 3 })))).toEqual({ text: 'Edited lines.xlsx for Lines, 3 formula errors', tone: 'warn' });
+    expect(toolSummary(done('write_excel_template', excel({ ok: false, errors: ['a'] })))).toEqual({ text: 'Designed lines.xlsx for Lines: 1 error', tone: 'warn' });
+    expect(toolSummary(done('write_excel_template', { ok: false, error: 'The design has problems, nothing was saved:\nsheets[0]: x' }))).toEqual({
+      text: 'Excel template not saved: The design has problems, nothing was saved:',
+      tone: 'warn',
+    });
+  });
+
+  it('says which sheet or part was read', () => {
+    expect(toolSummary({ toolName: 'read_excel_template', state: 'input-available' })).toEqual({ text: 'Reading the Excel template', tone: 'running' });
+    expect(toolSummary(done('read_excel_template', { ok: true, template: 'Lines', file: 'lines.xlsx', parts: [] })).text).toBe('Read the parts of lines.xlsx');
+    expect(
+      toolSummary(done('read_excel_template', { ok: true, template: 'Lines', file: 'lines.xlsx', part: 'xl/worksheets/sheet1.xml', sheet: 'Lines', size: 1, from: 0, xml: '', more: false })).text,
+    ).toBe('Read Lines (xl/worksheets/sheet1.xml) of lines.xlsx');
+    expect(toolSummary(done('read_excel_template', { ok: true, template: 'Lines', file: null, part: 'xl/styles.xml', size: 1, from: 0, xml: '', more: false })).text).toBe(
+      'Read xl/styles.xml of the starter template',
     );
   });
 });

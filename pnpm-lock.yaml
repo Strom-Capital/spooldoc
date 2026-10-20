@@ -284,12 +284,18 @@ importers:
       eslint-config-next:
         specifier: ^16.4.1
         version: 16.4.2(@typescript-eslint/parser@8.71.2(eslint@10.13.0(jiti@2.7.0))(typescript@6.0.3))(eslint@10.13.0(jiti@2.7.0))(typescript@6.0.3)
+      fflate:
+        specifier: ^0.8.3
+        version: 0.8.3
       shadcn:
         specifier: ^4.21.5
         version: 4.21.5
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
       tw-animate-css:
         specifier: ^1.4.0
         version: 1.4.0
@@ -311,6 +317,9 @@ importers:
       fflate:
         specifier: ^0.8.3
         version: 0.8.3
+      hucre:
+        specifier: 1.2.0
+        version: 1.2.0
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
@@ -4377,6 +4386,11 @@ packages:
   https-proxy-agent@7.0.6:
     resolution: {integrity: sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw==}
     engines: {node: '>= 14'}
+
+  hucre@1.2.0:
+    resolution: {integrity: sha512-7PU0o0ZEpBmNbS2FZb9I8lD0F40TVxX3qqq/u3tvQ557xs0GPjsxNtR01YHT4nvni3C0FD+scnFErHEhM/x+oQ==}
+    engines: {node: '>=24'}
+    hasBin: true
 
   human-signals@2.1.0:
     resolution: {integrity: sha512-B4FFZ6q/T2jhhksgkbEW3HBvWIfDW85snkQgawt07S7J5QXTk6BkNV+0yAeZrM5QpMAdYlocGoljn0sJ/WQkFw==}
@@ -10781,6 +10795,8 @@ snapshots:
       debug: 4.4.3
     transitivePeerDependencies:
       - supports-color
+
+  hucre@1.2.0: {}
 
   human-signals@2.1.0: {}
 

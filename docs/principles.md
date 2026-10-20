@@ -70,8 +70,8 @@ In practice:
 ## The page is the truth, and a person decides
 
 The user checks every extracted value next to the page it came from. The
-agent proposes; it does not decide. What it writes is plain YAML,
-HTML, and Word files that a person can read, edit and keep without it.
+agent proposes; it does not decide. What it writes is plain YAML, HTML,
+and Word and Excel files that a person can read, edit and keep without it.
 
 In practice:
 
@@ -79,9 +79,11 @@ In practice:
   requirement.
 - A Word template the agent makes is an ordinary `.docx` the user
   opens and changes in Word, made of Word's own paragraphs, tables and
-  styles. The agent designs it as data that Spooldoc builds; no code
+  styles. An Excel template is an ordinary `.xlsx` of Excel's own cells,
+  styles and formulas, which the user opens and keeps working on in
+  Excel. The agent designs both as data that Spooldoc builds; no code
   the model writes runs on the server.
-- The agent never overwrites what the user made. A Word file it
+- The agent never overwrites what the user made. A Word or Excel file it
   writes or edits is a new file, and the earlier one stays to go back to.
 - Where values go is the user's choice, made in Settings and shown in
   the agent panel: as printed, so the model can read them, or masked

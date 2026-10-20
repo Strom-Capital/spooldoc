@@ -13,6 +13,9 @@ export const CHAT_TOOL_NAMES = [
   'write_word_template',
   'read_word_template',
   'edit_word_template',
+  'write_excel_template',
+  'read_excel_template',
+  'edit_excel_template',
   'render_preview',
   'add_template',
   'remove_template',
@@ -29,6 +32,8 @@ export const SYNC_TOOLS: readonly ChatToolName[] = [
   'write_template',
   'write_word_template',
   'edit_word_template',
+  'write_excel_template',
+  'edit_excel_template',
   'render_preview',
   'add_template',
   'remove_template',
@@ -84,43 +89,56 @@ export type WriteTemplateResult =
   | ToolFailure;
 
 /**
- * What the model was shown of a rendered Word template, besides its text: a PDF of every
- * page, a PNG of page 1 when the document has more pages than a preview takes, or nothing
+ * What the model was shown of a rendered Word or Excel template, besides its text: a PDF,
+ * a PNG of page 1 when a Word document has more pages than a preview takes, or nothing
  * when the model takes no files or the render failed.
  */
-export type WordView = 'pdf' | 'png' | null;
+export type DocumentView = 'pdf' | 'png' | null;
 
-/** A Word template file the agent made, as tool results report it. */
-export interface WordFileListing {
+/** A Word or Excel template file the agent made, as tool results report it. */
+export interface TemplateFileListing {
   id: string;
   name: string;
   size: number;
 }
 
 /**
- * `write_word_template` and `edit_word_template`: the file saved, the tag check's and
- * Carbone's errors, the text of the first document and what the model was shown of it.
+ * `write_word_template`, `edit_word_template`, `write_excel_template` and
+ * `edit_excel_template`: the file saved, the tag check's and Carbone's errors, the text of
+ * the first document and what the model was shown of it. For Excel, the text is the
+ * computed cells by sheet and cell.
  */
-export type WordTemplateResult =
+export type FileTemplateResult =
   | {
       ok: boolean;
       template: string;
       templateId: string;
-      file: WordFileListing;
+      file: TemplateFileListing;
       errors: string[];
       textPreview: string;
-      view: WordView;
+      view: DocumentView;
       /** Pages of the first document, when it was rendered to PDF. */
       pages: number | null;
+      /** Excel: pages of the PDF the model was shown, when it was made from shortened data. */
+      shownPages?: number;
+      /** Excel: the cells that computed a formula error, such as `#NAME?`. */
+      errorCells?: number;
       /** Why the model sees less than every page, when it does. */
       note?: string;
     }
   | ToolFailure;
 
-/** `read_word_template`: the parts of the file, or one part's XML from `from`. */
-export type ReadWordTemplateResult =
-  | { ok: true; template: string; file: string | null; parts: { name: string; size: number }[] }
-  | { ok: true; template: string; file: string | null; part: string; size: number; from: number; xml: string; more: boolean }
+/** One part of a Word or Excel file that can be read and edited; a sheet has its name. */
+export interface FilePartListing {
+  name: string;
+  sheet?: string;
+  size: number;
+}
+
+/** `read_word_template` and `read_excel_template`: the parts of the file, or one part's XML from `from`. */
+export type ReadFileTemplateResult =
+  | { ok: true; template: string; file: string | null; parts: FilePartListing[] }
+  | { ok: true; template: string; file: string | null; part: string; sheet?: string; size: number; from: number; xml: string; more: boolean }
   | ToolFailure;
 
 /** `add_template` and `remove_template`: the template added or removed, and the job's templates after. */
@@ -141,9 +159,13 @@ export type RenderPreviewResult =
       missing: string[];
       templateErrors: string[];
       textPreview: string;
-      /** For a Word template: what the model was shown of the document, its pages and why it sees less. */
-      view?: WordView;
+      /** For a Word or Excel template: what the model was shown of the document, its pages and why it sees less. */
+      view?: DocumentView;
       pages?: number | null;
+      /** Excel: pages of the PDF the model was shown, when it was made from shortened data. */
+      shownPages?: number;
+      /** Excel: the cells that computed a formula error. */
+      errorCells?: number;
       note?: string;
     }
   | ToolFailure;

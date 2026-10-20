@@ -8,7 +8,10 @@ import { editDocx } from "../src/docx-edit.js";
 import { pdfPageCount, renderDocument } from "../src/render.js";
 import { checkTemplate } from "../src/tags.js";
 import { spooledFileData, starterTemplate, templateData } from "../src/template.js";
-import { checkXlsx, readXlsx, starterXlsx, xlsxHardRefresh } from "../src/xlsx.js";
+import { imageInfo } from "../src/design.js";
+import { checkXlsx, readXlsx, readXlsxValues, starterXlsx, xlsxHardRefresh, type XlsxValue } from "../src/xlsx.js";
+import { buildXlsx } from "../src/xlsx-design.js";
+import { editXlsx } from "../src/xlsx-edit.js";
 import { FIXTURES, loadFixture } from "./helpers/fixtures.js";
 import { invoiceDesign } from "./helpers/invoice-design.js";
 import { testPng } from "./helpers/png.js";
@@ -174,6 +177,84 @@ describe.skipIf(!url)("Carbone server", () => {
     );
     const total = [...one.values()].find((cell) => cell.formula?.startsWith('SUM(INDIRECT(&quot;G'));
     expect(Number(total?.value)).toBeCloseTo((first.lines as { amount: number }[]).reduce((sum, line) => sum + line.amount, 0), 2);
+  });
+
+  it("renders a designed Excel template to XLSX with numbers, dates and a total LibreOffice computed, and to an A4 PDF", async () => {
+    const { sample, definition } = loadFixture("invoice");
+    const { pageGroups } = extract(definition, sample);
+    const logo = testPng(120, 40);
+    const head = { font: { bold: true }, fill: { type: "pattern", pattern: "solid", fgColor: "E8E8E8" }, border: { bottom: { style: "thin", color: "333333" } } };
+    const template = await buildXlsx(
+      {
+        sheets: [
+          {
+            name: "Invoice lines",
+            columns: [{ ref: "A:B", width: 12 }, { ref: "C", width: 30 }, { ref: "D", width: 12 }, { ref: "E", width: 14 }],
+            rows: [{ row: 1, height: 34 }],
+            cells: [
+              { ref: "C1", value: "Invoices {d.splf.name}", style: { font: { bold: true, size: 14 } }, note: "The spooled file's name" },
+              { ref: "A4", value: "Invoice", style: head },
+              { ref: "B4", value: "Date", style: head },
+              { ref: "C4", value: "Customer", style: head },
+              { ref: "D4", value: "Item", style: head },
+              { ref: "E4", value: "Amount", style: { ...head, alignment: { horizontal: "right" } } },
+              { ref: "A5", value: "{d.pgs[i].invoiceNo}" },
+              { ref: "B5", value: "{d.pgs[i].invoiceDate:formatD(X):div(86400):add(25569):formatN}", style: { numFmt: "dd.mm.yyyy", alignment: { horizontal: "left" } } },
+              { ref: "C5", value: "{d.pgs[i].customerName}" },
+              { ref: "D5", value: "{d.pgs[i].lines[i].item}" },
+              { ref: "E5", value: "{d.pgs[i].lines[i].amount:formatN}", style: { numFmt: "#,##0.00" } },
+              { ref: "A6", value: "{d.pgs[i+1].lines[i+1]}" },
+              { ref: "A7", value: "Total", style: { font: { bold: true } } },
+              { ref: "E7", value: { formula: 'SUM(INDIRECT("E5:E"&ROW()-1))' }, style: { numFmt: "#,##0.00", font: { bold: true }, border: { top: { style: "thin" } } } },
+            ],
+            merges: ["C1:E1"],
+            conditionalFormatting: [{ ref: "E:E", rules: [{ type: "cellIs", operator: "greaterThan", formulae: ["100"], style: { font: { color: "1F3A5F", bold: true } } }] }],
+            images: [{ asset: "logo", tl: "A1" }],
+            views: { frozen: { rows: 4 } },
+            pageSetup: { orientation: "landscape", printTitlesRow: "4:4" },
+            headerFooter: { oddFooter: "&RPage &P of &N" },
+          },
+        ],
+      },
+      (name) => (name === "logo" ? { data: logo, ...imageInfo(logo)! } : undefined),
+    );
+    const read = readXlsx(template);
+    expect(checkXlsx(read, definition)).toEqual([]);
+    const data = spooledFileData(pageGroups, sample);
+    const values = readXlsxValues(await renderDocument(server, { kind: "xlsx", template, data, format: "xlsx", hardRefresh: true }));
+    const at = (ref: string): XlsxValue | undefined => values.find((v) => v.ref === ref);
+    const lines = pageGroups.flatMap((g) => g.lines as { amount: number }[]);
+    expect(at("B5")).toMatchObject({ type: "n", value: 46310, display: "2026-10-15" });
+    expect(at("E5")).toMatchObject({ type: "n", value: lines[0]!.amount, format: "#,##0.00" });
+    const total = values.find((v) => v.formula?.startsWith("SUM(INDIRECT"));
+    expect(total?.ref).toBe(`E${lines.length + 5}`);
+    expect(total?.value).toBeCloseTo(lines.reduce((sum, line) => sum + line.amount, 0), 2);
+    expect(values.filter((v) => v.type === "e")).toEqual([]);
+    expect(values.filter((v) => /^[BE]\d+$/.test(v.ref) && Number(v.ref.slice(1)) >= 5 && Number(v.ref.slice(1)) < lines.length + 5).every((v) => v.type === "n")).toBe(true);
+    const pdf = await renderDocument(server, { kind: "xlsx", template, data, format: "pdf" });
+    const sizes = pageSizes(pdf);
+    expect(sizes.length).toBeGreaterThan(0);
+    for (const [width, height] of sizes) {
+      expect(width).toBeCloseTo(842, 0);
+      expect(height).toBeCloseTo(595, 0);
+    }
+  });
+
+  it("renders the Excel starter after an edit, its numbers still number cells", async () => {
+    const { sample, definition } = loadFixture("invoice");
+    const { pageGroups } = extract(definition, sample);
+    const template = editXlsx(starterXlsx(definition), [
+      { part: "xl/worksheets/sheet1.xml", find: '<t xml:space="preserve">Invoice No</t>', replace: "<t>Invoice</t>" },
+      { part: "xl/styles.xml", find: "<!--s=8-->", replace: '<xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><!--s=8-->' },
+    ]);
+    const read = readXlsx(template);
+    expect(checkXlsx(read, definition)).toEqual([]);
+    const values = readXlsxValues(await renderDocument(server, { kind: "xlsx", template, data: spooledFileData(pageGroups, sample), format: "xlsx" }));
+    const at = (ref: string): XlsxValue | undefined => values.find((v) => v.ref === ref);
+    expect(at("A1")).toMatchObject({ type: "s", value: "Invoice" });
+    expect(at("B2")).toMatchObject({ type: "n", value: 46310 });
+    expect(at("W2")).toMatchObject({ type: "n", value: (pageGroups[0]!.lines as { amount: number }[])[0]!.amount });
+    expect(values.filter((v) => v.type === "e")).toEqual([]);
   });
 
   it("prints a long Excel starter on several A4 landscape pages", async () => {

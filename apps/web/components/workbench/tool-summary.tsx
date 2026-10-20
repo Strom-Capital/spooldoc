@@ -16,7 +16,7 @@ const ICONS = {
   error: <XIcon className="size-3.5 text-destructive" />,
 };
 
-/** The input of a write tool as code (YAML, HTML, a Word design as JSON), any other input as JSON. */
+/** The input of a write tool as code (YAML, HTML, a Word or Excel design as JSON), any other input as JSON. */
 function ToolCallInput({ input }: { input: unknown }) {
   const value = (input ?? {}) as { yaml?: unknown; html?: unknown; design?: unknown };
   if (typeof value.yaml === 'string') {
