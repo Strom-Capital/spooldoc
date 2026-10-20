@@ -51,6 +51,8 @@ it starts.
 | `pnpm --filter @spooldoc/web db:migrate` | Apply the migrations by hand. |
 
 CI runs build, typecheck, lint and test on every push and pull request.
+CodeRabbit reviews every pull request against `AGENTS.md` and the
+[principles](principles.md); its settings are in `.coderabbit.yaml`.
 
 ## Tests
 
