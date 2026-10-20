@@ -22,6 +22,8 @@ import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
 import { api, errorText, isAbort } from '@/lib/client/api';
 import { askedQuestion, chatActivity, chatErrorText, questionAnswer } from '@/lib/client/chat';
+import { usageText } from '@/lib/client/format';
+import type { UsageTotals } from '@/lib/types';
 import { AgentQuestion } from './agent-question';
 import { ToolSummary } from './tool-summary';
 import { useWorkbenchSync } from './use-workbench-sync';
@@ -99,6 +101,32 @@ function ChatConversation({ header }: { header?: ReactNode }) {
   return <ChatThread jobId={jobId} header={header} initial={stored.messages} initialNotice={stored.notice} />;
 }
 
+/**
+ * This chat's usage as a line, such as "This chat: 84K tokens in, 2.1K out, $0.12". It
+ * loads with the panel and again after each answer. New chat calls `reset`, so the
+ * last chat's total does not show while the first answer of the next one runs.
+ *
+ * @param busy - An answer is running; the usage loads again when it ends
+ * @param empty - The thread has no messages (a new chat), so there is nothing to count
+ */
+function useChatUsage(jobId: string, busy: boolean, empty: boolean): { text: string | null; reset(): void } {
+  const [usage, setUsage] = useState<{ text: string | null } | null>(null);
+
+  useEffect(() => {
+    if (busy || empty) return;
+    const controller = new AbortController();
+    api<UsageTotals>(`/api/jobs/${jobId}/chat/usage`, { signal: controller.signal }).then(
+      (totals) => setUsage({ text: totals.steps > 0 ? `This chat: ${usageText(totals)}` : null }),
+      (error: unknown) => {
+        if (!isAbort(error)) setUsage({ text: `Could not load this chat's usage: ${errorText(error)}` });
+      },
+    );
+    return () => controller.abort();
+  }, [jobId, busy, empty]);
+
+  return { text: empty ? null : (usage?.text ?? null), reset: () => setUsage(null) };
+}
+
 /** The conversation, starting from the stored thread. */
 function ChatThread({
   jobId,
@@ -119,6 +147,7 @@ function ChatThread({
   const busy = status === 'submitted' || status === 'streaming';
   const activity = chatActivity(messages, status);
   useWorkbenchSync(messages, status);
+  const usage = useChatUsage(jobId, busy, messages.length === 0);
 
   function send(text: string) {
     const question = text.trim();
@@ -135,6 +164,7 @@ function ChatThread({
     try {
       await api(`/api/jobs/${jobId}/chat`, { method: 'DELETE' });
       setMessages([]);
+      usage.reset();
       clearError();
       setNotice(null);
     } catch (error) {
@@ -249,6 +279,7 @@ function ChatThread({
               <PromptInputSubmit status={status} onStop={() => void stop()} disabled={!busy && !draft.trim()} />
             </PromptInputFooter>
           </PromptInput>
+          {usage.text && <p className="px-1 pt-1.5 text-muted-foreground text-xs tabular-nums">{usage.text}</p>}
         </div>
       </div>
     </>

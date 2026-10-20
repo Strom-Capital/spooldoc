@@ -68,7 +68,7 @@ Under Settings, for the whole app:
 | Poll interval | 30 seconds | How often the watcher lists a polled queue. |
 | Safety check | 5 minutes | How often a real-time queue is listed anyway, in case a data queue entry was missed. |
 | Keep runs for | 90 days | How long runs are kept, 1 to 3650 days. See [Retention](job-log.md#retention). |
-| Agent | None | The provider, key, model and effort of the agent. See [Agent](agent.md#choosing-a-model). |
+| Agent | None | The provider, key, model and effort of the agent. See [Agent](agent.md#choosing-a-model). The section also shows the agent's [usage](agent.md#usage) this month and last month. |
 
 ## Per server and per job
 

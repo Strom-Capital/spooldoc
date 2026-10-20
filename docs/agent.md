@@ -262,6 +262,32 @@ sample pages, so nothing it needs is lost. The stored messages hold what
 the model saw, except the rendered Word and Excel documents: with masking on, the
 tool results are masked too.
 
+## Usage
+
+Spooldoc counts the tokens the agent uses: one record for each model
+step, that is each tool call and each answer. A turn you stop, or one that
+fails part way, keeps the steps that finished. A step stopped before the
+provider reported its tokens is not counted.
+
+- **Settings, Agent, Usage** shows this month and last month, in calendar
+  months of your time zone, with a line per provider and model: tokens in
+  (and how many were read from the provider's cache), tokens out (and how
+  many went to reasoning), and the cost.
+- **The agent panel** shows a line under the message box with this chat's
+  total so far. It updates after each answer and starts again at New chat.
+
+A cost shows only where the provider reports one with the answer:
+**OpenRouter** and the **Vercel AI Gateway**, in US dollars. Spooldoc has
+no price list, so for Anthropic, Google, OpenAI and a local model only the
+tokens show; an unknown cost is never shown as 0. When only some steps of a
+line reported a cost, no total is shown and the line says so. OpenRouter's
+cost is what OpenRouter charged; with your own provider key there (BYOK),
+the provider bills you on top. The provider's own console stays the place
+for the bill.
+
+Usage records are kept when their job is deleted, and are deleted with the
+[retention](job-log.md#retention), like runs.
+
 ## Masking
 
 The model works best with the values as printed: it reads the pages,

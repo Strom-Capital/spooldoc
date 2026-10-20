@@ -69,6 +69,7 @@ export interface CleanupStatus {
   runs: number;
   samples: number;
   templateFiles: number;
+  agentUsage: number;
   error?: string;
 }
 
@@ -288,7 +289,7 @@ export class Watcher {
       const deleted = await cleanUp(retentionDays, new Date(now));
       if (deleted) this.cleanup = { at: new Date(now).toISOString(), ...deleted };
     } catch (error) {
-      this.cleanup = { at: new Date(now).toISOString(), runs: 0, samples: 0, templateFiles: 0, error: redact(error) };
+      this.cleanup = { at: new Date(now).toISOString(), runs: 0, samples: 0, templateFiles: 0, agentUsage: 0, error: redact(error) };
       log.error('Cleanup of old runs failed', { error: this.cleanup.error });
     }
   }

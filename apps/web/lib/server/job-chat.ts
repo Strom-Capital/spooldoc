@@ -17,6 +17,14 @@ export async function readChat(jobId: string): Promise<UIMessage[]> {
   return row?.messages ?? [];
 }
 
+/**
+ * Start the job's thread, empty, unless it has one. Its `created_at` marks when the chat
+ * began, so the panel can count this chat's usage (see `chatUsage`).
+ */
+export async function startChat(jobId: string): Promise<void> {
+  await getDb().insert(jobChats).values({ jobId, messages: [] }).onConflictDoNothing({ target: jobChats.jobId });
+}
+
 /** Replace the job's thread. */
 export async function saveChat(jobId: string, messages: UIMessage[]): Promise<void> {
   await getDb()
