@@ -46,7 +46,7 @@ export function stepStatuses({ spec, job, serverError, hasDestination, render, r
             : 'ok',
     render: !rendering || render?.carbone ? 'warn' : render?.template?.error ? 'error' : render?.html || render?.pdf ? 'ok' : 'unset',
     destination: hasDestination ? 'ok' : 'unset',
-    finish: finish.action === 'move' && !finish.queue ? 'unset' : finish.action === 'delete' ? 'warn' : 'ok',
+    finish: finish.action === 'move' && !finish.queue ? 'unset' : 'ok',
   };
 }
 

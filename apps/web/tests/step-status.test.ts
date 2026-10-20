@@ -81,10 +81,10 @@ describe('stepStatuses', () => {
     expect(stepStatuses(input({ render: rendered({ html: undefined, pdf: 'JVBERi0=' }) })).render).toBe('ok');
   });
 
-  it('marks finish unset for a move without a queue, and warns about delete', () => {
+  it('marks finish unset for a move without a queue, and ready for delete', () => {
     const spec = readySpec();
     expect(stepStatuses(input({ spec: { ...spec, finish: { action: 'move', queue: null } } })).finish).toBe('unset');
-    expect(stepStatuses(input({ spec: { ...spec, finish: { action: 'delete', queue: null } } })).finish).toBe('warn');
+    expect(stepStatuses(input({ spec: { ...spec, finish: { action: 'delete', queue: null } } })).finish).toBe('ok');
   });
 });
 
