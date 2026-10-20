@@ -76,7 +76,7 @@ describe('buildInstructions', () => {
       masked: true,
     });
     expect(withFiles).toContain(yaml);
-    expect(withFiles).toContain('<title>Invoice {d.pageGroup.invoiceNo}</title>');
+    expect(withFiles).toContain('<title>Invoice {d.pg.invoiceNo}</title>');
     expect(withFiles).toContain('### 2. Lines (id `lines`): HTML, PDF and HTML\n\nNo HTML yet');
   });
 
@@ -96,8 +96,8 @@ describe('buildInstructions', () => {
 
   it('teaches Carbone tags with the Carbone Skill as the reference, with credit', () => {
     const template = clear.slice(clear.indexOf('## Template'), clear.indexOf('## Tools'));
-    expect(template).toContain('{d.pageGroup.invoiceNo}');
-    expect(template).toContain('{d.pageGroup.lines[i+1]}');
+    expect(template).toContain('{d.pg.invoiceNo}');
+    expect(template).toContain('{d.pg.lines[i+1]}');
     expect(template).toContain('Never write Nunjucks');
     expect(clear).toContain('- read_carbone_reference: ');
     const reference = clear.slice(clear.indexOf('## Carbone syntax reference'));
@@ -181,9 +181,9 @@ describe('Word templates in the instructions', () => {
     const text = buildInstructions({ sample, definitionYaml: yaml, templates: word, masked: false, wordTemplates: notes });
     expect(text).toContain('### 1. Letter (id `letter`): Word, PDF and DOCX');
     expect(text).toContain('A Word template file, `letter.docx`.');
-    expect(text).toContain('body: Invoice Number\t{d.pageGroup.invoiceNumber}');
+    expect(text).toContain('body: Invoice Number\t{d.pg.invoiceNumber}');
     expect(text).toContain('footer: Page  of ');
-    expect(text).toContain('- body: {d.pageGroup.invoiceNumber} is not in the data. Did you mean {d.pageGroup.invoiceNo}?');
+    expect(text).toContain('- body: {d.pg.invoiceNumber} is not in the data. Did you mean {d.pg.invoiceNo}?');
     expect(text).toContain('edit_word_template changes the file there is, the user\'s own included');
     expect(text).toContain('You get the text of the first document after each write or edit, not a picture');
     expect(text).not.toContain('a PDF of every page');

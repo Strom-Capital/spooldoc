@@ -21,24 +21,24 @@
 <body>
   <h1>Pick list</h1>
   <dl>
-    <dt>Picklist No</dt><dd>{d.pageGroup.picklistNo}</dd>
-    <dt>Order No</dt><dd>{d.pageGroup.orderNo}</dd>
-    <dt>Customer No</dt><dd>{d.pageGroup.customerNo}</dd>
-    <dt>Route</dt><dd>{d.pageGroup.route}</dd>
-    <dt>Ship Date</dt><dd>{d.pageGroup.shipDate}</dd>
-    <dt>Warehouse</dt><dd>{d.pageGroup.warehouse}</dd>
-    <dt>Deliver Name</dt><dd>{d.pageGroup.deliverName}</dd>
-    <dt>Deliver Address1</dt><dd>{d.pageGroup.deliverAddress1}</dd>
-    <dt>Deliver Address2</dt><dd>{d.pageGroup.deliverAddress2}</dd>
-    <dt>Deliver Address3</dt><dd>{d.pageGroup.deliverAddress3}</dd>
-    <dt>Line Count</dt><dd>{d.pageGroup.lineCount}</dd>
+    <dt>Picklist No</dt><dd>{d.pg.picklistNo}</dd>
+    <dt>Order No</dt><dd>{d.pg.orderNo}</dd>
+    <dt>Customer No</dt><dd>{d.pg.customerNo}</dd>
+    <dt>Route</dt><dd>{d.pg.route}</dd>
+    <dt>Ship Date</dt><dd>{d.pg.shipDate}</dd>
+    <dt>Warehouse</dt><dd>{d.pg.warehouse}</dd>
+    <dt>Deliver Name</dt><dd>{d.pg.deliverName}</dd>
+    <dt>Deliver Address1</dt><dd>{d.pg.deliverAddress1}</dd>
+    <dt>Deliver Address2</dt><dd>{d.pg.deliverAddress2}</dd>
+    <dt>Deliver Address3</dt><dd>{d.pg.deliverAddress3}</dd>
+    <dt>Line Count</dt><dd>{d.pg.lineCount}</dd>
   </dl>
   <h2>Lines</h2>
   <table>
     <thead><tr><th>Line</th><th>Item</th><th>Description</th><th>Bin</th><th>Lot</th><th>Quantity</th><th>Unit</th></tr></thead>
     <tbody>
-      <tr><td>{d.pageGroup.lines[i].line}</td><td>{d.pageGroup.lines[i].item}</td><td>{d.pageGroup.lines[i].description}</td><td>{d.pageGroup.lines[i].bin}</td><td>{d.pageGroup.lines[i].lot}</td><td>{d.pageGroup.lines[i].quantity}</td><td>{d.pageGroup.lines[i].unit}</td></tr>
-      <tr><td>{d.pageGroup.lines[i+1]}</td></tr>
+      <tr><td>{d.pg.lines[i].line}</td><td>{d.pg.lines[i].item}</td><td>{d.pg.lines[i].description}</td><td>{d.pg.lines[i].bin}</td><td>{d.pg.lines[i].lot}</td><td>{d.pg.lines[i].quantity}</td><td>{d.pg.lines[i].unit}</td></tr>
+      <tr><td>{d.pg.lines[i+1]}</td></tr>
     </tbody>
   </table>
 </body>

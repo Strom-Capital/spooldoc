@@ -190,12 +190,12 @@ export function WordTemplate() {
             tag with curly quotes as text.
           </li>
           <li>
-            Fields are the same tags as in HTML, such as <code className="font-mono text-foreground">{'{d.pageGroup.invoiceNo}'}</code>. The JSON tab
+            Fields are the same tags as in HTML, such as <code className="font-mono text-foreground">{'{d.pg.invoiceNo}'}</code>. The JSON tab
             has the names.
           </li>
           <li>
             Repeat a table row with a row of <code className="font-mono text-foreground">[i]</code> tags and, below it, a row with{' '}
-            <code className="font-mono text-foreground">{'{d.pageGroup.lines[i+1]}'}</code>. Keep a loop inside the body, a header or a footer.
+            <code className="font-mono text-foreground">{'{d.pg.lines[i+1]}'}</code>. Keep a loop inside the body, a header or a footer.
           </li>
           <li>Insert a logo as a picture, set to In line with text. It is the same in every document.</li>
           <li>Page numbers are Word&apos;s own fields: Insert, Page Number.</li>

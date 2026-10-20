@@ -355,14 +355,14 @@ Rules:
 - \`split.field\`: for a run that prints many documents back to back, a new page group starts on each page where this field's value changes. The field must be in \`fields\`.
 - \`skipFirstPage: true\` drops a parameter or banner page.
 - \`match\` (splf, queue, userData, page1 regex) says which spooled files the definition is for.
-- \`output.name\` is the file name of each document, with plain tags for its fields and no formatters, such as \`invoice-{d.pageGroup.invoiceNo}\`.
+- \`output.name\` is the file name of each document, with plain tags for its fields and no formatters, such as \`invoice-{d.pg.invoiceNo}\`.
 - Field names: letters, digits and underscores, starting with a letter; camelCase.`,
 
     `## Template
 
-- One complete HTML page in Carbone's template language. The data is \`d\` = \`{ pageGroup, pageGroups, splf }\`: \`{d.pageGroup.invoiceNo}\` prints a field of the current page group, \`d.pageGroups\` holds every page group of the spooled file, and \`d.splf\` holds the spooled file's \`name\`, \`number\`, \`jobName\`, \`jobUser\` and \`jobNumber\`.
-- Repeat a table row with a row of \`[i]\` tags and, right after it, an end row with \`[i+1]\`, which Carbone removes: \`<tr><td>{d.pageGroup.lines[i].item}</td></tr>\` then \`<tr><td>{d.pageGroup.lines[i+1]}</td></tr>\`.
-- Show a block only when a field has a value: \`{d.pageGroup.address2:ifNEM:showBegin}{d.pageGroup.address2}<br>{d.pageGroup.address2:showEnd}\`.
+- One complete HTML page in Carbone's template language. The data is \`d\` = \`{ pg, pgs, splf }\`: \`d.pg\` is the page group being made, so \`{d.pg.invoiceNo}\` prints one of its fields; \`d.pgs\` holds every page group of the spooled file, and \`d.splf\` holds the spooled file's \`name\`, \`number\`, \`jobName\`, \`jobUser\` and \`jobNumber\`.
+- Repeat a table row with a row of \`[i]\` tags and, right after it, an end row with \`[i+1]\`, which Carbone removes: \`<tr><td>{d.pg.lines[i].item}</td></tr>\` then \`<tr><td>{d.pg.lines[i+1]}</td></tr>\`.
+- Show a block only when a field has a value: \`{d.pg.address2:ifNEM:showBegin}{d.pg.address2}<br>{d.pg.address2:showEnd}\`.
 - Format dates with \`:formatD('DD.MM.YYYY')\` and amounts with \`:formatN(2)\` (\`1,234.50\`). Pad with \`:padl(6)\` or \`:padr(6, '0')\`.
 - Inside tags use straight single quotes only, never double or curly quotes. Never write Nunjucks or Jinja (\`{{ }}\`, \`{% %}\`).
 - Use only the fields the definition extracts. Spooldoc checks every tag against the definition before it renders, and a tag it does not know is an error with its line.
@@ -406,9 +406,9 @@ The tree has the shape of the docx library's options, with a \`type\` on each no
     }
 - \`Table\`: \`rows\`, \`width: { size, type: "dxa" }\`, \`columnWidths\` (they should add up to the width; the text width of A4 with 20 mm margins is 9638 twips), \`layout: "fixed"\`, \`alignment\`, \`borders: { top, bottom, left, right, insideHorizontal, insideVertical }\`, \`margins\` (cell padding). \`TableRow\`: \`children\`, \`tableHeader\` (repeats on each page), \`cantSplit\`, \`height: { value, rule }\`. \`TableCell\`: \`children\`, \`width\`, \`columnSpan\`, \`rowSpan\`, \`shading: { fill }\`, \`borders\`, \`margins\`, \`verticalAlign\`. Use borderless tables to place blocks side by side.
 
-The tags and data are the same as in HTML: \`{d.pageGroup.invoiceNo}\`, \`{d.pageGroup.invoiceDate:formatD('DD.MM.YYYY')}\`.
-- A loop is a table row with \`[i]\` tags and, right after it, a row with \`{d.pageGroup.lines[i+1]}\` in its first cell. A loop stays in one part: the body, a header or a footer.
-- An optional line: \`{d.pageGroup.address1}{d.pageGroup.address2:ifEM:hideBegin}\`, then a run with \`break: 1\` and \`{d.pageGroup.address2}{d.pageGroup.address2:hideEnd}\`. In Word that is a line break (Shift+Enter).
+The tags and data are the same as in HTML: \`{d.pg.invoiceNo}\`, \`{d.pg.invoiceDate:formatD('DD.MM.YYYY')}\`.
+- A loop is a table row with \`[i]\` tags and, right after it, a row with \`{d.pg.lines[i+1]}\` in its first cell. A loop stays in one part: the body, a header or a footer.
+- An optional line: \`{d.pg.address1}{d.pg.address2:ifEM:hideBegin}\`, then a run with \`break: 1\` and \`{d.pg.address2}{d.pg.address2:hideEnd}\`. In Word that is a line break (Shift+Enter).
 - Page numbers are PageNumber nodes, which are Word's own fields. Never write them as tags.
 - Pictures are inserted in the file and are the same in every document; \`{asset('name')}\` is for HTML only.
 - When the user types tags in Word themselves: Word types curly quotes by default, and Carbone prints a tag with them as text. Tell them to turn off smart quotes (File, Options, Proofing, AutoCorrect Options, AutoFormat As You Type).`,

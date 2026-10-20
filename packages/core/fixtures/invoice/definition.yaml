@@ -47,5 +47,5 @@ text:
         - { name: unitPrice, column: 71, length: 12, type: number }
         - { name: amount, column: 91, length: 20, type: number }
 output:
-  name: "invoice-{d.pageGroup.invoiceNo}"
+  name: "invoice-{d.pg.invoiceNo}"
   title: Invoice

@@ -196,7 +196,7 @@ describe('POST /api/jobs/[id]/chat', () => {
   it('designs and edits a Word template as new files, and shows the model the PDF once', async () => {
     await setDefinition(yaml);
     setDocumentRenderer(fakeRenderer);
-    const design = { sections: [{ children: [{ type: 'Paragraph', text: 'Invoice {d.pageGroup.invoiceNo}' }] }] };
+    const design = { sections: [{ children: [{ type: 'Paragraph', text: 'Invoice {d.pg.invoiceNo}' }] }] };
     const model = scriptedModel(
       toolStep('write_word_template', { design, name: 'invoice.docx' }),
       toolStep('edit_word_template', { edits: [{ part: 'word/document.xml', find: '>Invoice ', replace: '>Sales invoice ' }] }),
@@ -233,7 +233,7 @@ describe('POST /api/jobs/[id]/chat', () => {
       withKey(
         scriptedModel(
           toolStep('add_template', { name: 'Lines', formats: ['html'] }),
-          toolStep('write_template', { html: '<p>{d.pageGroup.invoiceNo}</p>', template: 'Lines' }),
+          toolStep('write_template', { html: '<p>{d.pg.invoiceNo}</p>', template: 'Lines' }),
           toolStep('remove_template', { template: 'Template 1' }),
           textStep('Done.'),
         ),
@@ -242,7 +242,7 @@ describe('POST /api/jobs/[id]/chat', () => {
     await chunks(await chat());
 
     expect((await draft()).render.templates).toEqual([
-      { id: 'lines', name: 'Lines', kind: 'html', source: '<p>{d.pageGroup.invoiceNo}</p>', formats: ['html'] },
+      { id: 'lines', name: 'Lines', kind: 'html', source: '<p>{d.pg.invoiceNo}</p>', formats: ['html'] },
     ]);
   });
 
