@@ -206,3 +206,30 @@ describe("editXlsx", () => {
     expect(refusal(() => xlsxParts(zipSync(many)))).toBe("The file is too large to edit: at most 2000 files and 64 MB unzipped.");
   });
 });
+
+describe("editXlsx and the text it reads", () => {
+  /** The workbook with the shared string "Item" written as text with dollar signs. */
+  const dollars = (): Uint8Array => {
+    const files = unzipSync(workbook());
+    files["xl/sharedStrings.xml"] = strToU8(text(workbook(), "xl/sharedStrings.xml").replace("<t>Item</t>", () => "<t>Fee $&amp; tax in US$$</t>"));
+    return zipSync(files);
+  };
+
+  it("keeps $& and $$ in a cell's text as they are, read and edited", () => {
+    const bytes = dollars();
+    expect(readXlsxPart(bytes, SHEET1)).toContain('<c r="A1" s="1" t="inlineStr"><is><t>Fee $&amp; tax in US$$</t></is></c>');
+    const out = editXlsx(bytes, [{ part: SHEET1, find: "<t>Amount</t>", replace: "<t>Amount (EUR)</t>" }]);
+    expect(text(out, "xl/sharedStrings.xml")).toContain("<si><t>Fee $&amp; tax in US$$</t></si>");
+    expect(readXlsx(out).cells.find((c) => c.ref === "A1")?.text).toBe("Fee $& tax in US$$");
+  });
+
+  it("checks a style index written in single quotes", () => {
+    expect(refusal(() => editXlsx(workbook(), [{ part: SHEET1, find: '<c r="A3" t="inlineStr">', replace: "<c r=\"A3\" s='99' t=\"inlineStr\">" }]))).toMatch(/style 99/);
+  });
+
+  it("refuses a workbook written with a namespace prefix", () => {
+    const files = unzipSync(workbook());
+    files["xl/workbook.xml"] = strToU8(text(workbook(), "xl/workbook.xml").replace(/<(\/?)workbook\b/g, "<$1x:workbook").replace(`xmlns="`, `xmlns:x="`));
+    expect(refusal(() => readXlsxPart(zipSync(files), SHEET1))).toMatch(/namespace prefix/);
+  });
+});

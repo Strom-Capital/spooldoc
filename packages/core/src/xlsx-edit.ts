@@ -127,7 +127,8 @@ function inlineStrings(xml: string, items: string[]): string {
     const v = /<v>\s*(\d+)\s*<\/v>/.exec(inner);
     const item = v ? items[Number(v[1])] : undefined;
     if (item === undefined) return whole;
-    return `<c${attributes.replace(/\st="s"/, ' t="inlineStr"')}>${inner.replace(v![0], `<is>${item}</is>`)}</c>`;
+    // Replacer functions, so a `$&` or `$$` in the text is kept as it is.
+    return `<c${attributes.replace(/\st="s"/, () => ' t="inlineStr"')}>${inner.replace(v![0], () => `<is>${item}</is>`)}</c>`;
   });
 }
 
@@ -137,7 +138,7 @@ function sharedStrings(xml: string, index: (item: string) => number): string {
     if (inner === undefined || !/\st="inlineStr"/.test(attributes)) return whole;
     const is = /<is>([\s\S]*?)<\/is>|<is\/>/.exec(inner);
     if (!is) return whole;
-    return `<c${attributes.replace(/\st="inlineStr"/, ' t="s"')}>${inner.replace(is[0], `<v>${index(is[1] ?? "")}</v>`)}</c>`;
+    return `<c${attributes.replace(/\st="inlineStr"/, () => ' t="s"')}>${inner.replace(is[0], () => `<v>${index(is[1] ?? "")}</v>`)}</c>`;
   });
 }
 
@@ -147,6 +148,10 @@ const formulasOf = (xml: string): string[] => xml.match(/<f\b[^>]*?(?:\/>|>[\s\S
 /** The parts that can be edited, in order: each sheet with its name, then the styles and the workbook. */
 function editableParts(files: Record<string, Uint8Array>): { name: string; sheet?: string }[] {
   const text = (name: string): string => (files[name] ? strFromU8(files[name]) : "");
+  // The read view and the checks expect SpreadsheetML in the default namespace, as Excel writes it.
+  if (/<[A-Za-z_][\w.-]*:(workbook|sst)\b/.test(text(WORKBOOK) + text(STRINGS))) {
+    throw new XlsxEditError("The file writes its XML with a namespace prefix, such as <x:workbook>, which the edit does not read. Open it in Excel, save it and upload it again, or design a new one with write_excel_template.");
+  }
   const sheets = sheetFiles(text(WORKBOOK), text(WORKBOOK_RELS)).filter((s) => files[s.file]);
   return [...sheets.map((s) => ({ name: s.file, sheet: s.name })), ...(files[STYLES] ? [{ name: STYLES }] : []), { name: WORKBOOK }];
 }
@@ -178,11 +183,16 @@ export function xlsxParts(bytes: Uint8Array): XlsxPartInfo[] {
  * `<!--fillId=2-->`, `<!--borderId=1-->`, `<!--s=7-->` for a cell format, `<!--dxfId=0-->`.
  */
 export function readXlsxPart(bytes: Uint8Array, part: string): string {
+  return xlsxPart(bytes, part).xml;
+}
+
+/** One part as `readXlsxPart` gives it, with its sheet's name for a sheet. */
+export function xlsxPart(bytes: Uint8Array, part: string): { name: string; sheet?: string; xml: string } {
   const files = unzipAll(bytes, EXCEL);
   const parts = editableParts(files);
   const found = parts.find((p) => p.name === part);
   if (!found) throw noPart(part, parts);
-  return readView(files, part, found.sheet !== undefined, () => sharedItems(files[STRINGS] ? strFromU8(files[STRINGS]) : ""));
+  return { ...found, xml: readView(files, part, found.sheet !== undefined, () => sharedItems(files[STRINGS] ? strFromU8(files[STRINGS]) : "")) };
 }
 
 /** The `count` of a list in `styles.xml` after the edits, from its entries. */

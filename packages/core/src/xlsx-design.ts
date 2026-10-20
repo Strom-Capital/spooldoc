@@ -325,7 +325,7 @@ const rule = z
         need("iconSet", `Give the icon set: ${ICON_SETS.join(", ")}`);
         const icons = Number(value.iconSet?.[0] ?? 0);
         if (value.cfvo?.length !== icons || value.cfvo.some((c) => c.type === "max")) {
-          ctx.addIssue({ code: "custom", path: ["cfvo"], message: `Give one cfvo for each of the ${icons || 3} icons, the first of type min` });
+          ctx.addIssue({ code: "custom", path: ["cfvo"], message: `Give one cfvo for each of the ${icons || 3} icons, where each icon starts, such as percent 0, 33 and 67; none of type max` });
         }
         break;
       }

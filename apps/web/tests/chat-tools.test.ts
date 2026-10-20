@@ -643,7 +643,9 @@ describe('Excel templates', () => {
     expect(result.textPreview).toContain('Lines!A2: "{d.pgs[i].invoiceNo}"');
     expect(result.textPreview).toContain('Lines!W2: "{d.pgs[i].lines[i].amount:formatN}" (format #,##0.00)');
     const sent = fakeCarbone.mock.calls.at(-1)![0];
-    expect(sent).toMatchObject({ kind: 'xlsx', format: 'xlsx', hardRefresh: true });
+    expect(sent).toMatchObject({ kind: 'xlsx', format: 'xlsx' });
+    // As a run does: Carbone passes the file through LibreOffice when the template has formulas or :formatN.
+    expect(sent).not.toHaveProperty('hardRefresh');
     expect(sentPageGroup(sent)).toBeUndefined();
     expect((sent.data as { pgs: unknown[] }).pgs).toHaveLength(6);
   });

@@ -13,7 +13,7 @@ import {
   MAX_TEMPLATE_FILE_BYTES,
   pdfPageCount,
   readXlsx,
-  readXlsxPart,
+  xlsxPart,
   readXlsxValues,
   sheetsWithoutPageSetup,
   spooledFileData,
@@ -535,7 +535,7 @@ What each file holds, its scope, is a setting of the template:
 - One page group (\`pageGroup\`): one file per page group, with \`d\` = \`{ pg, pgs, splf }\` as in HTML.
 The scope is the user's setting. write_excel_template takes \`scope\` only when it switches a template that is not Excel yet. To change it for an Excel template, ask the user first: they change "Each file holds" in the template menu. Never design for another scope than the template has.
 
-The tree. Keys are those of exceljs. Colours are six hex digits. Formulas have no \`=\`.
+The tree. Its keys follow exceljs where they can, but this list is the whole format: use these keys only. Colours are six hex digits. Formulas have no \`=\`.
 - Workbook: \`{ sheets, defaultFont?, definedNames?, activeSheet? }\`. \`defaultFont\`: \`{ name, size, color }\`, Arial 10 when not given. \`definedNames\`: \`[{ name, ref, sheet? }]\`, such as \`{ "name": "Rates", "ref": "Rates!$A$2:$B$20" }\`.
 - Sheet: \`name\` (at most 31 characters, none of \`[]:*?/\\\`), \`tabColor\`, \`views: { frozen: { rows, columns }, zoom, showGridLines, rightToLeft }\`, \`columns: [{ ref: "B" or "B:D", width (characters), hidden, outlineLevel, style }]\`, \`rows: [{ row, height (points), hidden, outlineLevel }]\`, \`cells\`, \`merges: ["A1:D1"]\`, \`autoFilter\`, \`conditionalFormatting\`, \`dataValidations\`, \`images\`, \`pageSetup\`, \`headerFooter\`.
 - Cell: \`{ ref: "B5", value?, style?, hyperlink?, note? }\`. \`value\` is text (tags allowed), a number, a boolean, \`{ "date": "2026-10-15" }\`, \`{ "richText": [{ text, font }] }\` or \`{ "formula": "SUM(D2:D9)" }\`. \`hyperlink\` is a URL or \`#'Order lines'!A1\`.
@@ -1122,7 +1122,9 @@ function computedCells(values: XlsxValue[]): { text: string; errorCells: number 
   ];
   const sheets = new Map<string, XlsxValue[]>();
   for (const cell of values) {
-    sheets.set(cell.sheet, [...(sheets.get(cell.sheet) ?? []), cell]);
+    const list = sheets.get(cell.sheet);
+    if (list) list.push(cell);
+    else sheets.set(cell.sheet, [cell]);
   }
   for (const [sheet, cells] of sheets) {
     const rows = [...new Set(cells.map((cell) => rowOf(cell.ref)))];
@@ -1223,7 +1225,7 @@ async function renderExcel(
   const data = dataOf(shown, index);
   let cells: { text: string; errorCells: number };
   try {
-    cells = computedCells(readXlsxValues(await renderer({ kind: 'xlsx', template: bytes, data, format: 'xlsx', hardRefresh: true })));
+    cells = computedCells(readXlsxValues(await renderer({ kind: 'xlsx', template: bytes, data, format: 'xlsx' })));
   } catch (error) {
     return none([carboneMessage(error)]);
   }
@@ -1877,13 +1879,11 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         }
         const file = excel.fileId === null ? null : excel.name;
         try {
-          const parts = xlsxParts(excel.bytes);
           if (part === undefined) {
-            return { ok: true, template: template.name, file, parts };
+            return { ok: true, template: template.name, file, parts: xlsxParts(excel.bytes) };
           }
-          const xml = readXlsxPart(excel.bytes, part);
+          const { xml, sheet } = xlsxPart(excel.bytes, part);
           const piece = xml.slice(from, from + PART_READ_MAX);
-          const sheet = parts.find((p) => p.name === part)?.sheet;
           return { ok: true, template: template.name, file, part, ...(sheet !== undefined ? { sheet } : {}), size: xml.length, from, xml: piece, more: from + piece.length < xml.length };
         } catch (error) {
           return fail(message(error));
