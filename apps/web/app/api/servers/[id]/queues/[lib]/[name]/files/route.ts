@@ -6,6 +6,7 @@ import { runs, watchSeen } from '@/lib/server/db/schema';
 import { errorResponse, json } from '@/lib/server/http';
 import { withConnection } from '@/lib/server/ibmi';
 import { UUID } from '@/lib/server/servers';
+import { SPOOLED_FILE_STATUSES } from '@/lib/spooled-file-status';
 import { SPOOLED_FILE_LIST, type SpooledFileView } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -38,7 +39,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     jobName: search.get('jobName')?.slice(0, 10) || undefined,
     jobUser: search.get('jobUser')?.slice(0, 10) || undefined,
     formType: search.get('formType')?.slice(0, 10) || undefined,
-    status: search.get('status')?.split(',').filter(Boolean).slice(0, 10),
+    status: search.get('status')?.split(',').filter(Boolean).slice(0, SPOOLED_FILE_STATUSES.length),
   };
   const max = Number.isInteger(limit) && limit > 0 ? Math.min(limit, SPOOLED_FILE_LIST.max) : SPOOLED_FILE_LIST.page;
   return withConnection(id, async (conn) => {

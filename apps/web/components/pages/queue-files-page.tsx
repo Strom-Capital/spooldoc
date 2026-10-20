@@ -6,12 +6,22 @@ import { toast } from 'sonner';
 import { Page } from '@/components/page';
 import { ServerErrorNote } from '@/components/server-status';
 import { Input } from '@/components/ui/input';
-import { EyeIcon, InboxIcon, RefreshCwIcon, SearchXIcon, XIcon } from 'lucide-react';
+import { ChevronDownIcon, EyeIcon, InboxIcon, RefreshCwIcon, SearchXIcon, XIcon } from 'lucide-react';
 import { SkeletonRows } from '@/components/skeleton-rows';
 import { SpoolFileDialog } from '@/components/spool-file-dialog';
+import { SpooledFileStatus } from '@/components/spooled-file-status';
 import { TableEmpty } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
+import { SPOOLED_FILE_STATUSES, statusFilterLabel, statusParam } from '@/lib/spooled-file-status';
 import { SPOOLED_FILE_LIST, type SpooledFileView } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { NewJobButton } from './new-job-button';
@@ -20,7 +30,7 @@ const key = (f: SpooledFileView) => `${f.jobNumber}/${f.jobUser}/${f.jobName}/${
 
 /**
  * The spooled files of one output queue: Refresh and New job in the header, "contains"
- * filters on the name and user data, and the table with its loading and empty states.
+ * filters on the name, job and user data, a status filter, and the table with its loading and empty states.
  * The newest 200 files show first; when there are more, the page says so and Load more
  * lists 200 more, up to 5000.
  */
@@ -38,6 +48,9 @@ export function QueueFilesPage({
   const [name, setName] = useState('');
   const [userData, setUserData] = useState('');
   const [job, setJob] = useState('');
+  // Nothing picked means any status.
+  const [statuses, setStatuses] = useState<string[]>([]);
+  const status = statusParam(statuses);
   const [files, setFiles] = useState<SpooledFileView[] | null>(null);
   const [more, setMore] = useState(false);
   const [limit, setLimit] = useState<number>(SPOOLED_FILE_LIST.page);
@@ -50,7 +63,7 @@ export function QueueFilesPage({
   // Refresh and Check again keep what is on screen and report the answer in a toast.
   const [checking, setChecking] = useState(false);
   const reportFor = useRef<number | null>(null);
-  const filtered = !!(name.trim() || userData.trim() || job.trim());
+  const filtered = !!(name.trim() || userData.trim() || job.trim() || status);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -61,6 +74,7 @@ export function QueueFilesPage({
       if (name.trim()) params.set('name', name.trim());
       if (userData.trim()) params.set('userData', userData.trim());
       if (job.trim()) params.set('job', job.trim());
+      if (status) params.set('status', status);
       params.set('limit', String(limit));
       try {
         const data = await api<{ files: SpooledFileView[]; more: boolean }>(
@@ -106,12 +120,12 @@ export function QueueFilesPage({
       clearTimeout(timer);
       controller.abort();
     };
-    // `filtered` follows name and userData, which are dependencies already.
+    // `filtered` follows the filters, which are dependencies already.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverId, library, queue, name, userData, job, nonce, limit]);
+  }, [serverId, library, queue, name, userData, job, status, nonce, limit]);
 
   /** Change a filter; new filters list from the newest files again. */
-  const filterBy = (set: (value: string) => void) => (value: string) => {
+  const filterBy = <T,>(set: (value: T) => void) => (value: T) => {
     set(value);
     setLimit(SPOOLED_FILE_LIST.page);
   };
@@ -187,6 +201,38 @@ export function QueueFilesPage({
             className="w-48"
             spellCheck={false}
           />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" aria-label="Status" title="Shows spooled files with one of the statuses picked">
+                {statusFilterLabel(statuses)}
+                <ChevronDownIcon data-icon="inline-end" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-44">
+              {SPOOLED_FILE_STATUSES.map((value) => (
+                <DropdownMenuCheckboxItem
+                  key={value}
+                  checked={statuses.includes(value)}
+                  onCheckedChange={(on) =>
+                    filterBy(setStatuses)(on === true ? [...statuses, value] : statuses.filter((picked) => picked !== value))
+                  }
+                  // Stay open, so several statuses can be picked.
+                  onSelect={(event) => event.preventDefault()}
+                >
+                  <SpooledFileStatus status={value} />
+                </DropdownMenuCheckboxItem>
+              ))}
+              {statuses.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => filterBy(setStatuses)([])}>
+                    <XIcon />
+                    Any status
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         {error && <ServerErrorNote error={error} server={{ id: serverId, name: serverName }} onRetry={() => setNonce((n) => n + 1)} />}
         <div className="overflow-x-auto rounded-lg border">
@@ -207,7 +253,7 @@ export function QueueFilesPage({
               </tr>
             </thead>
             <tbody aria-busy={loading} className={cn(loading && !!files?.length && 'opacity-60 transition-opacity')}>
-              {!files && !error && <SkeletonRows widths={['w-20', 'ml-auto w-8', 'w-36', 'w-16', 'ml-auto w-6', 'w-16', 'w-12', 'w-32', 'ml-auto w-14']} />}
+              {!files && !error && <SkeletonRows widths={['w-20', 'ml-auto w-8', 'w-36', 'w-16', 'ml-auto w-6', 'w-16', 'w-16 rounded-full', 'w-32', 'ml-auto w-14']} />}
               {files?.map((file) => (
                 <tr key={key(file)} className="cursor-pointer border-t hover:bg-muted/40" onClick={() => setViewing(file)}>
                   <td className="px-3 py-2 font-medium font-mono text-xs">{file.name}</td>
@@ -220,7 +266,9 @@ export function QueueFilesPage({
                   <td className="tabular px-3 py-2">
                     {file.attributes.pageWidth} x {file.attributes.pageLength}
                   </td>
-                  <td className="px-3 py-2">{file.status}</td>
+                  <td className="px-3 py-2">
+                    <SpooledFileStatus status={file.status} />
+                  </td>
                   <td className="tabular whitespace-nowrap px-3 py-2 text-muted-foreground">{file.attributes.created.replace('T', ' ')}</td>
                   <td className="px-2 py-1 text-right">
                     <Button
@@ -252,6 +300,7 @@ export function QueueFilesPage({
                         setName('');
                         setUserData('');
                         setJob('');
+                        setStatuses([]);
                         setLimit(SPOOLED_FILE_LIST.page);
                       }}
                     >
