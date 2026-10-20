@@ -3,24 +3,25 @@ import type { Definition, ValueType } from "./definition.js";
 import { short, tagParts, tagProblems, templatePaths, templateTags } from "./tags.js";
 import { fieldLabel, MAX_TEMPLATE_FILE_BYTES, starterLayout, type StarterBlock, type StarterColumn } from "./template.js";
 import { decodeXml, escapeXml, isOle, isZip, xmlAttribute } from "./xml.js";
+import { missingPrefixes } from "./xlsx-formula.js";
+import { columnName, elements, LAST_ROW, parseRange, parseRef, relationships, relsOf, sheetFiles } from "./xlsx-parts.js";
 import type { XlsxScope } from "./xlsx-scope.js";
 
 /**
- * Excel templates: a `.xlsx` made in Excel with Carbone tags in its cells. Spooldoc reads
- * the tags out of the file to check them, and makes a starter template from a definition.
- * The file itself is only ever changed by the user, in Excel.
+ * Excel templates: a `.xlsx` with Carbone tags in its cells, made in Excel, designed by the
+ * agent (`buildXlsx`) or edited by it (`editXlsx`). Spooldoc reads the tags out of the file
+ * to check them, reads the cells of an XLSX Carbone made, and makes a starter template
+ * from a definition.
  */
 
 /** The content type of an Excel workbook. */
 export const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 export { XLSX_SCOPES, type XlsxScope } from "./xlsx-scope.js";
+export { columnName };
 
 /** The most one part of the file (a sheet, the shared strings) may unzip to. */
 const MAX_PART_BYTES = 32 * 1024 * 1024;
-
-/** The last row of a sheet, for ranges over whole columns. */
-const LAST_ROW = 1048576;
 
 /** A cell of an Excel template that holds text. */
 export interface XlsxCell {
@@ -30,6 +31,17 @@ export interface XlsxCell {
   /** 1-based. */
   row: number;
   text: string;
+  /** True when the text is an inline string (`t="inlineStr"`), not a shared one. */
+  inline?: true;
+}
+
+/** A formula of an Excel template, as the file stores it: without `=`, newer functions with their prefix. */
+export interface XlsxFormula {
+  sheet: string;
+  ref: string;
+  /** 1-based. */
+  row: number;
+  formula: string;
 }
 
 /** A sheet of an Excel template. */
@@ -41,6 +53,14 @@ export interface XlsxSheet {
   formulas: number;
   /** True when the sheet has its own page setup: a paper size, orientation or scaling. The PDF follows it. */
   pageSetup: boolean;
+  /** The ranges with conditional formatting, as the file writes them (`A2:A9 C2:C9`). */
+  conditionalFormatting: string[];
+  /** The ranges with data validation, as the file writes them. */
+  dataValidations: string[];
+  /** The cells with a note (a comment in the file). */
+  notes: string[];
+  /** The Excel tables on the sheet, with their ranges. */
+  tables: { name: string; ref: string }[];
 }
 
 /** What Spooldoc reads from an Excel template. */
@@ -48,6 +68,8 @@ export interface XlsxTemplate {
   sheets: XlsxSheet[];
   /** Every cell with text, sheet by sheet, row by row. */
   cells: XlsxCell[];
+  /** Every formula with its text, sheet by sheet, row by row. Cells that share another cell's formula are counted in `XlsxSheet.formulas` only. */
+  formulas: XlsxFormula[];
   /** The cells' text, one per line. */
   text: string;
 }
@@ -62,51 +84,9 @@ export interface XlsxProblem {
 
 const NOT_XLSX = "The file is not an Excel workbook. Save it in Excel as an Excel Workbook (.xlsx) and upload it again.";
 
-/** A 1-based column number as letters: 1 is A, 27 is AA. */
-export function columnName(column: number): string {
-  let name = "";
-  for (let n = column; n > 0; n = Math.floor((n - 1) / 26)) name = String.fromCharCode(65 + ((n - 1) % 26)) + name;
-  return name;
-}
-
-/** The row and column of a cell reference such as `B5`, or undefined. */
-function parseRef(ref: string): { row: number; column: number } | undefined {
-  const m = /^\$?([A-Z]{1,3})\$?(\d{1,7})$/.exec(ref.toUpperCase());
-  if (!m) return undefined;
-  let column = 0;
-  for (const c of m[1]!) column = column * 26 + c.charCodeAt(0) - 64;
-  return { row: Number(m[2]), column };
-}
-
 /** A sheet name as a reference needs it: `Lines`, or `'Order lines'` with quotes. */
 function sheetRef(name: string): string {
   return /^[A-Za-z_][A-Za-z0-9_.]*$/.test(name) ? name : `'${name.replace(/'/g, "''")}'`;
-}
-
-/** An XML element of a scan: its local name (without a prefix such as `x:`), its tag text, and where its content starts and ends. */
-interface Element {
-  name: string;
-  tag: string;
-  closing: boolean;
-  empty: boolean;
-  /** The text up to the next tag. */
-  content: string;
-}
-
-/** Every element of some XML in order, in one pass. */
-function* elements(xml: string): Generator<Element> {
-  for (let i = xml.indexOf("<"); i !== -1; ) {
-    const end = xml.indexOf(">", i);
-    if (end === -1) return;
-    const closing = xml[i + 1] === "/";
-    const empty = xml[end - 1] === "/";
-    let nameEnd = i + (closing ? 2 : 1);
-    while (nameEnd < end && !" \t\r\n/".includes(xml[nameEnd] as string)) nameEnd++;
-    const full = xml.slice(i + (closing ? 2 : 1), nameEnd);
-    const next = xml.indexOf("<", end + 1);
-    yield { name: full.slice(full.indexOf(":") + 1), tag: xml.slice(i, end + 1), closing, empty, content: xml.slice(end + 1, next === -1 ? xml.length : next) };
-    i = next;
-  }
 }
 
 /** The shared strings of a workbook, each with the text of all its runs joined. Phonetic runs are skipped. */
@@ -130,17 +110,45 @@ function readSharedStrings(xml: string): string[] {
   return strings;
 }
 
-/** Reads one sheet: its text cells, merges, formulas and page setup. Rows and cells without `r` follow the one before. */
-function readSheet(xml: string, name: string, strings: string[], cells: XlsxCell[]): XlsxSheet {
-  const sheet: XlsxSheet = { name, merges: [], formulas: 0, pageSetup: false };
+/** One cell of a sheet as a scan finds it: its place, type, style, value text and formula. */
+interface ScannedCell {
+  ref: string;
+  row: number;
+  /** `t`, or `n` when not given. */
+  type: string;
+  /** `s`, the index in `cellXfs`, or 0. */
+  style: number;
+  /** The `<v>` text, the shared or inline string, or "" for none. */
+  value: string;
+  /** True when the cell has a `<v>` or an inline string. */
+  hasValue: boolean;
+  /** The formula's text; "" for a cell that shares another's formula. */
+  formula?: string;
+}
+
+/** What a scan of a sheet finds besides its cells. */
+interface SheetScan {
+  merges: string[];
+  pageSetup: boolean;
+  conditionalFormatting: string[];
+  dataValidations: string[];
+  /** The `r:id` of each table part. */
+  tableParts: string[];
+}
+
+/**
+ * Scans one sheet in one pass: each cell (to `onCell`), merges, page setup, conditional
+ * formatting, data validation and table parts. Rows and cells without `r` follow the one before.
+ */
+function scanSheet(xml: string, strings: string[], onCell: (cell: ScannedCell) => void): SheetScan {
+  const scan: SheetScan = { merges: [], pageSetup: false, conditionalFormatting: [], dataValidations: [], tableParts: [] };
   let row = 0;
   let column = 0;
-  let cell: { ref: string; row: number; type: string } | null = null;
-  let value = "";
+  let cell: ScannedCell | null = null;
   let inline: string | null = null;
-  let inValue = false;
   let phonetic = 0;
-  let formula = false;
+  /** Inside an `x14:conditionalFormatting` or `x14:dataValidation`, whose range is an `xm:sqref` element. */
+  let extRange: string[] | null = null;
   for (const el of elements(xml)) {
     switch (el.name) {
       case "row":
@@ -152,9 +160,12 @@ function readSheet(xml: string, name: string, strings: string[], cells: XlsxCell
       case "c":
         if (el.closing) {
           if (cell) {
-            const text = cell.type === "s" ? (strings[Number(value)] ?? "") : cell.type === "inlineStr" ? (inline ?? "") : !formula && cell.type === "str" ? value : "";
-            if (formula) sheet.formulas++;
-            else if (text !== "") cells.push({ sheet: name, ref: cell.ref, row: cell.row, text });
+            if (cell.type === "s" && cell.hasValue) cell.value = strings[Number(cell.value)] ?? "";
+            else if (cell.type === "inlineStr") {
+              cell.value = inline ?? "";
+              cell.hasValue = inline !== null;
+            }
+            onCell(cell);
           }
           cell = null;
         } else {
@@ -162,18 +173,18 @@ function readSheet(xml: string, name: string, strings: string[], cells: XlsxCell
           const at = ref ? parseRef(ref) : undefined;
           column = at ? at.column : column + 1;
           if (at) row = at.row;
-          cell = el.empty ? null : { ref: `${columnName(column)}${row}`, row, type: xmlAttribute(el.tag, "t") ?? "n" };
-          value = "";
+          cell = el.empty ? null : { ref: `${columnName(column)}${row}`, row, type: xmlAttribute(el.tag, "t") ?? "n", style: Number(xmlAttribute(el.tag, "s") ?? 0) || 0, value: "", hasValue: false };
           inline = null;
-          formula = false;
         }
         break;
       case "f":
-        if (cell && !el.closing) formula = true;
+        if (cell && !el.closing) cell.formula = el.empty ? "" : decodeXml(el.content);
         break;
       case "v":
-        inValue = !el.closing && !el.empty;
-        if (inValue) value = decodeXml(el.content);
+        if (cell && !el.closing && !el.empty) {
+          cell.value = decodeXml(el.content);
+          cell.hasValue = true;
+        }
         break;
       case "is":
         if (cell && !el.closing && !el.empty) inline = "";
@@ -186,50 +197,52 @@ function readSheet(xml: string, name: string, strings: string[], cells: XlsxCell
         break;
       case "mergeCell": {
         const ref = xmlAttribute(el.tag, "ref");
-        if (ref && !el.closing) sheet.merges.push(ref);
+        if (ref && !el.closing) scan.merges.push(ref);
         break;
       }
       case "pageSetup":
         if (!el.closing && ["paperSize", "orientation", "fitToWidth", "fitToHeight", "scale"].some((a) => xmlAttribute(el.tag, a) !== undefined)) {
-          sheet.pageSetup = true;
+          scan.pageSetup = true;
         }
         break;
+      case "conditionalFormatting":
+      case "dataValidation": {
+        if (el.closing) {
+          extRange = null;
+          break;
+        }
+        const list = el.name === "conditionalFormatting" ? scan.conditionalFormatting : scan.dataValidations;
+        const sqref = xmlAttribute(el.tag, "sqref");
+        if (sqref) list.push(sqref);
+        else if (!el.empty) extRange = list;
+        break;
+      }
+      case "sqref":
+        if (extRange && !el.closing && !el.empty && el.content.trim()) extRange.push(el.content.trim());
+        break;
+      case "tablePart": {
+        const id = xmlAttribute(el.tag, "r:id");
+        if (id && !el.closing) scan.tableParts.push(id);
+        break;
+      }
     }
   }
-  return sheet;
+  return scan;
 }
 
-/** The file of each sheet, in the workbook's order, from `xl/workbook.xml` and its relationships. */
-function sheetFiles(workbook: string, rels: string): { name: string; file: string }[] {
-  const targets = new Map<string, string>();
-  for (const el of elements(rels)) {
-    if (el.name !== "Relationship" || el.closing) continue;
-    const id = xmlAttribute(el.tag, "Id");
-    const target = xmlAttribute(el.tag, "Target");
-    if (!id || !target || !/\/worksheet$/.test(xmlAttribute(el.tag, "Type") ?? "")) continue;
-    targets.set(id, target.startsWith("/") ? target.slice(1) : `xl/${target.replace(/^\.\//, "")}`);
-  }
-  const sheets: { name: string; file: string }[] = [];
-  for (const el of elements(workbook)) {
-    if (el.name !== "sheet" || el.closing) continue;
-    const name = xmlAttribute(el.tag, "name");
-    const file = targets.get(xmlAttribute(el.tag, "r:id") ?? "");
-    if (name !== undefined && file) sheets.push({ name, file });
-  }
-  return sheets;
-}
-
-/** The parts of the zip `readXlsx` reads. */
+/** The parts of the zip `readXlsx` reads: the workbook, sheets and strings, and the notes and tables sheets point to. */
 const readPart = (name: string): boolean =>
-  name === "xl/workbook.xml" || name === "xl/_rels/workbook.xml.rels" || name === "xl/sharedStrings.xml" || /^xl\/worksheets\/[^/]+\.xml$/.test(name);
+  name === "xl/workbook.xml" ||
+  name === "xl/_rels/workbook.xml.rels" ||
+  name === "xl/sharedStrings.xml" ||
+  name === "xl/styles.xml" ||
+  /^xl\/worksheets\/[^/]+\.xml$/.test(name) ||
+  /^xl\/worksheets\/_rels\/[^/]+\.xml\.rels$/.test(name) ||
+  /^xl\/(?:[^/]+\/)?comments[^/]*\.xml$/.test(name) ||
+  /^xl\/tables\/[^/]+\.xml$/.test(name);
 
-/**
- * Reads an Excel template: the text of every cell of every sheet, with its sheet and cell,
- * and each sheet's merges, formulas and page setup.
- *
- * @throws Error saying what is wrong with the file and what to do, when it is not a `.xlsx`
- */
-export function readXlsx(bytes: Uint8Array): XlsxTemplate {
+/** The parts of an `.xlsx` that `readPart` takes, as text, within the limits. */
+function unzipXlsx(bytes: Uint8Array): (name: string) => string | undefined {
   if (isOle(bytes)) {
     throw new Error("The file is an Excel 97-2003 workbook (.xls). Save it in Excel as an Excel Workbook (.xlsx) and upload it again.");
   }
@@ -250,18 +263,204 @@ export function readXlsx(bytes: Uint8Array): XlsxTemplate {
   if (tooLarge) {
     throw new Error(`The file has a part larger than ${MAX_PART_BYTES / 1024 / 1024} MB unzipped. Spooldoc takes Excel templates up to that size.`);
   }
-  const decoder = new TextDecoder("utf-8");
-  const text = (name: string): string => (files[name] ? decoder.decode(files[name]) : "");
   if (!files["xl/workbook.xml"]) {
     throw new Error(`The file is a zip file, but not an Excel workbook: it has no xl/workbook.xml. ${NOT_XLSX}`);
   }
-  const strings = readSharedStrings(text("xl/sharedStrings.xml"));
-  const cells: XlsxCell[] = [];
-  const sheets = sheetFiles(text("xl/workbook.xml"), text("xl/_rels/workbook.xml.rels"))
-    .filter((s) => files[s.file])
-    .map((s) => readSheet(text(s.file), s.name, strings, cells));
+  const decoder = new TextDecoder("utf-8");
+  return (name) => (files[name] ? decoder.decode(files[name]) : undefined);
+}
+
+/** The sheets of an unzipped workbook that have a file, in the workbook's order. */
+function workbookSheets(text: (name: string) => string | undefined): { name: string; file: string; xml: string }[] {
+  const sheets = sheetFiles(text("xl/workbook.xml") ?? "", text("xl/_rels/workbook.xml.rels") ?? "").flatMap((s) => {
+    const xml = text(s.file);
+    return xml === undefined ? [] : [{ ...s, xml }];
+  });
   if (sheets.length === 0) throw new Error(`The workbook has no sheets Spooldoc can read. ${NOT_XLSX}`);
-  return { sheets, cells, text: cells.map((c) => c.text).join("\n") };
+  return sheets;
+}
+
+/**
+ * Reads an Excel template: the text of every cell of every sheet, with its sheet and cell;
+ * every formula; and each sheet's merges, page setup, conditional formatting and data
+ * validation ranges, notes and Excel tables.
+ *
+ * @throws Error saying what is wrong with the file and what to do, when it is not a `.xlsx`
+ */
+export function readXlsx(bytes: Uint8Array): XlsxTemplate {
+  const text = unzipXlsx(bytes);
+  const strings = readSharedStrings(text("xl/sharedStrings.xml") ?? "");
+  const cells: XlsxCell[] = [];
+  const formulas: XlsxFormula[] = [];
+  const sheets = workbookSheets(text).map(({ name, file, xml }): XlsxSheet => {
+    let count = 0;
+    const scan = scanSheet(xml, strings, (cell) => {
+      if (cell.formula !== undefined) {
+        count++;
+        if (cell.formula) formulas.push({ sheet: name, ref: cell.ref, row: cell.row, formula: cell.formula });
+      } else if (cell.value !== "" && (cell.type === "s" || cell.type === "inlineStr" || cell.type === "str")) {
+        cells.push({ sheet: name, ref: cell.ref, row: cell.row, text: cell.value, ...(cell.type === "inlineStr" ? { inline: true as const } : {}) });
+      }
+    });
+    const rels = relationships(text(relsOf(file)) ?? "", file);
+    const notes: string[] = [];
+    for (const rel of rels) {
+      if (rel.type !== "comments" || rel.external) continue;
+      for (const el of elements(text(rel.target) ?? "")) {
+        const ref = el.name === "comment" && !el.closing ? xmlAttribute(el.tag, "ref") : undefined;
+        if (ref) notes.push(ref);
+      }
+    }
+    const tables = scan.tableParts.flatMap((id) => {
+      const rel = rels.find((r) => r.id === id && !r.external);
+      for (const el of elements(rel ? (text(rel.target) ?? "") : "")) {
+        if (el.name !== "table" || el.closing) continue;
+        const ref = xmlAttribute(el.tag, "ref");
+        return ref ? [{ name: xmlAttribute(el.tag, "displayName") ?? xmlAttribute(el.tag, "name") ?? "", ref }] : [];
+      }
+      return [];
+    });
+    return {
+      name,
+      merges: scan.merges,
+      formulas: count,
+      pageSetup: scan.pageSetup,
+      conditionalFormatting: scan.conditionalFormatting,
+      dataValidations: scan.dataValidations,
+      notes,
+      tables,
+    };
+  });
+  return { sheets, cells, formulas, text: cells.map((c) => c.text).join("\n") };
+}
+
+/** A cell of an XLSX as Excel or Carbone computed it. */
+export interface XlsxValue {
+  sheet: string;
+  /** The cell, such as `B5`. */
+  ref: string;
+  /** As the file stores it: `n` a number, `s` a shared string, `b` a boolean, `e` an error, `str` a formula's text, `inlineStr` an inline string. */
+  type: "n" | "s" | "b" | "e" | "str" | "inlineStr";
+  /** The number, text or boolean; an error's text such as `#NAME?`; null for a formula cell with no stored value. */
+  value: number | string | boolean | null;
+  /** The formula, as the file stores it. */
+  formula?: string;
+  /** The number format, such as `#,##0.00` or `dd.mm.yyyy`, when it is not General. */
+  format?: string;
+  /** A number in a date or time format, as an ISO date (`2026-10-15`), time (`13:30:00`) or both (`2026-10-15 13:30:00`). */
+  display?: string;
+}
+
+/** Excel's built-in number formats, by `numFmtId`. Ids 14 to 22 and 45 to 47 are dates and times. */
+const BUILTIN_FORMATS: Record<number, string> = {
+  1: "0",
+  2: "0.00",
+  3: "#,##0",
+  4: "#,##0.00",
+  9: "0%",
+  10: "0.00%",
+  11: "0.00E+00",
+  12: "# ?/?",
+  13: "# ??/??",
+  14: "mm-dd-yy",
+  15: "d-mmm-yy",
+  16: "d-mmm",
+  17: "mmm-yy",
+  18: "h:mm AM/PM",
+  19: "h:mm:ss AM/PM",
+  20: "h:mm",
+  21: "h:mm:ss",
+  22: "m/d/yy h:mm",
+  37: "#,##0 ;(#,##0)",
+  38: "#,##0 ;[Red](#,##0)",
+  39: "#,##0.00;(#,##0.00)",
+  40: "#,##0.00;[Red](#,##0.00)",
+  45: "mm:ss",
+  46: "[h]:mm:ss",
+  47: "mmss.0",
+  48: "##0.0E+0",
+  49: "@",
+};
+
+/** The number format code of each cell format (`cellXfs`), by its index; undefined for General. */
+function cellFormats(styles: string): (string | undefined)[] {
+  const custom = new Map<number, string>();
+  const formats: (string | undefined)[] = [];
+  let inCellXfs = false;
+  for (const el of elements(styles)) {
+    if (el.name === "numFmt" && !el.closing) {
+      const id = Number(xmlAttribute(el.tag, "numFmtId"));
+      const code = xmlAttribute(el.tag, "formatCode");
+      if (code !== undefined) custom.set(id, code);
+    } else if (el.name === "cellXfs") {
+      inCellXfs = !el.closing && !el.empty;
+    } else if (el.name === "xf" && inCellXfs && !el.closing) {
+      const id = Number(xmlAttribute(el.tag, "numFmtId") ?? 0);
+      formats.push(id === 0 ? undefined : (custom.get(id) ?? BUILTIN_FORMATS[id]));
+    }
+  }
+  return formats;
+}
+
+/** Whether a number format shows a date, a time or both: its codes outside quotes, escapes and `[colour]` sections. */
+function dateParts(format: string): { date: boolean; time: boolean } {
+  const codes = format
+    .split(";")[0]!
+    .replace(/"[^"]*"/g, "")
+    .replace(/\\./g, "")
+    .replace(/\[(?![hms]+\])[^\]]*\]/gi, "")
+    .replace(/General/gi, "");
+  const time = /[hs]/i.test(codes);
+  return { date: /[dy]/i.test(codes) || (/m/i.test(codes) && !time), time };
+}
+
+/** A date serial as an ISO date, time, or both. Serials below 60 are a day off in Excel's 1900 calendar, which counts 29 February 1900. */
+function serialDisplay(serial: number, parts: { date: boolean; time: boolean }, date1904: boolean): string {
+  const days = serial + (date1904 ? 1462 : 0) + (!date1904 && serial < 60 ? 1 : 0);
+  const iso = new Date(Math.round((days - 25569) * 86_400_000)).toISOString();
+  const date = iso.slice(0, 10);
+  const time = iso.slice(11, 19);
+  return parts.date && parts.time ? `${date} ${time}` : parts.time ? time : date;
+}
+
+const VALUE_TYPES = new Set(["n", "s", "b", "e", "str", "inlineStr"]);
+
+/**
+ * Reads the cells of an XLSX as Excel or Carbone computed them: every cell with a value or
+ * a formula, sheet by sheet, row by row, with its type, value, formula and number format.
+ * A number in a date format also comes as a readable ISO date in `display`. Cells with
+ * only a style are left out. Rows and cells without `r` follow the one before.
+ *
+ * @throws Error saying what is wrong with the file, when it is not a `.xlsx`
+ */
+export function readXlsxValues(bytes: Uint8Array): XlsxValue[] {
+  const text = unzipXlsx(bytes);
+  const strings = readSharedStrings(text("xl/sharedStrings.xml") ?? "");
+  const formats = cellFormats(text("xl/styles.xml") ?? "");
+  const workbook = text("xl/workbook.xml") ?? "";
+  const workbookPr = /<(?:\w+:)?workbookPr\b[^>]*>/.exec(workbook)?.[0];
+  const date1904 = workbookPr !== undefined && /^(1|true)$/.test(xmlAttribute(workbookPr, "date1904") ?? "");
+  const values: XlsxValue[] = [];
+  for (const { name, xml } of workbookSheets(text)) {
+    scanSheet(xml, strings, (cell) => {
+      if (!cell.hasValue && cell.formula === undefined) return;
+      // `d`, an ISO date cell, is rare: it comes as text.
+      const type = (VALUE_TYPES.has(cell.type) ? cell.type : "str") as XlsxValue["type"];
+      let value: XlsxValue["value"] = cell.hasValue ? cell.value : null;
+      if (cell.hasValue && type === "n") value = Number(cell.value);
+      else if (cell.hasValue && type === "b") value = cell.value === "1" || cell.value === "true";
+      const format = formats[cell.style];
+      const out: XlsxValue = { sheet: name, ref: cell.ref, type, value };
+      if (cell.formula) out.formula = cell.formula;
+      if (format !== undefined) out.format = format;
+      if (format !== undefined && typeof value === "number" && Number.isFinite(value)) {
+        const parts = dateParts(format);
+        if (parts.date || parts.time) out.display = serialDisplay(value, parts, date1904);
+      }
+      values.push(out);
+    });
+  }
+  return values;
 }
 
 /** Why a file is not an Excel template Spooldoc can use, or null when it is one. */
@@ -317,6 +516,13 @@ const asTag = (path: string, type?: ValueType): string => xlsxValueTag(`d.${path
  * - a number field alone in a cell needs `:formatN`, or the cell is text and SUM gives 0;
  * - `:formatN` straight on a date field writes a number cell that holds no number;
  * - no merged cells in or below a loop row, since Carbone does not move them with the rows;
+ * - `:formatN` in an inline string cell stays text, so the tag must be a shared string;
+ * - conditional formatting, data validation and Excel tables stay on the rows they cover,
+ *   so a range that ends on the loop rows (the loop row to the `[i+1]` row) misses the
+ *   rows Carbone adds: use whole columns or a far row;
+ * - a note at or below the first loop row stays there while the rows move;
+ * - a newer function such as XLOOKUP needs its `_xlfn.` prefix in the file, or
+ *   LibreOffice computes `#NAME?`;
  * - in spooled file scope there is no `d.pg`, only `d.pgs[i]`;
  * - `{asset('name')}` is for HTML templates.
  *
@@ -336,6 +542,7 @@ export function checkXlsx(template: XlsxTemplate, def?: Definition | null, scope
     problems.push({ sheet, ref, message });
   };
   const firstLoopRow = new Map<string, number>();
+  const lastLoopRow = new Map<string, number>();
   /** In spooled file scope, the cells that read `d.pg`: one problem names the first and counts the rest. */
   const pageGroupCells: { cell: XlsxCell; tag: string; path: string }[] = [];
   for (const cell of template.cells) {
@@ -343,6 +550,14 @@ export function checkXlsx(template: XlsxTemplate, def?: Definition | null, scope
     const tags = templateTags(cell.text);
     if (tags.some((t) => /\[\s*i\s*(\+\s*1\s*)?\]/.test(t.text))) {
       firstLoopRow.set(cell.sheet, Math.min(firstLoopRow.get(cell.sheet) ?? Infinity, cell.row));
+      lastLoopRow.set(cell.sheet, Math.max(lastLoopRow.get(cell.sheet) ?? 0, cell.row));
+    }
+    if (cell.inline && cell.text.includes(":formatN")) {
+      add(
+        cell.sheet,
+        cell.ref,
+        "The cell is an inline string, so Carbone writes :formatN as text and SUM gives 0. Type the tag into the cell again in Excel, which saves it as a shared string.",
+      );
     }
     const pageGroupTags = new Set<number>();
     for (const tag of tags) {
@@ -385,9 +600,57 @@ export function checkXlsx(template: XlsxTemplate, def?: Definition | null, scope
       `${short(first.tag)}${more} read one page group, but this template gets every page group in one file: use d.pgs[i]${example}, or make one file per page group.`,
     );
   }
+  for (const formula of template.formulas) {
+    for (const { name, prefixed } of missingPrefixes(formula.formula)) {
+      add(formula.sheet, formula.ref, `${name} needs its prefix in the file, or LibreOffice computes #NAME?. Write ${prefixed} in the formula.`);
+    }
+  }
   for (const sheet of template.sheets) {
     const loop = firstLoopRow.get(sheet.name);
     if (loop === undefined) continue;
+    const last = lastLoopRow.get(sheet.name)!;
+    const rows = loop === last ? `the loop row ${loop}` : `the loop rows ${loop} to ${last}`;
+    /** The first range of a list that ends on the loop rows, or undefined. */
+    const onLoop = (sqref: string): string | undefined =>
+      sqref.split(/\s+/).find((range) => {
+        const at = parseRange(range);
+        return at !== undefined && at.bottom >= loop && at.bottom <= last;
+      });
+    const firstCell = (range: string): string => range.replace(/\$/g, "").split(":")[0]!;
+    for (const sqref of sheet.conditionalFormatting) {
+      const range = onLoop(sqref);
+      if (range) {
+        add(
+          sheet.name,
+          firstCell(range),
+          `The conditional formatting on ${range} ends on ${rows}, and Carbone does not stretch it over the rows it adds. Apply it to whole columns, or end it on a far row such as 10000.`,
+        );
+      }
+    }
+    for (const sqref of sheet.dataValidations) {
+      const range = onLoop(sqref);
+      if (range) {
+        add(
+          sheet.name,
+          firstCell(range),
+          `The data validation on ${range} ends on ${rows}, and Carbone does not stretch it over the rows it adds. Apply it to whole columns, or end it on a far row such as 10000.`,
+        );
+      }
+    }
+    for (const table of sheet.tables) {
+      if (onLoop(table.ref)) {
+        add(
+          sheet.name,
+          firstCell(table.ref),
+          `The Excel table ${table.name} (${table.ref}) ends on ${rows}, and a table does not grow over the rows Carbone adds. Convert it to a range (Table Design, Convert to Range) and use a filter on whole columns.`,
+        );
+      }
+    }
+    for (const note of sheet.notes) {
+      if ((parseRef(note)?.row ?? 0) >= loop) {
+        add(sheet.name, note, `The note is at or below the loop on row ${loop}, and Carbone does not move notes with the rows it adds. Move it above the loop, or delete it.`);
+      }
+    }
     for (const merge of sheet.merges) {
       const [from = "", to = from] = merge.split(":");
       const start = parseRef(from);
