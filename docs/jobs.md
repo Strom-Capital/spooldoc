@@ -12,7 +12,10 @@ inspector. Hide pipeline under the steps makes more room, and Show
 pipeline brings them back.
 
 The path at the top of the builder, Jobs and the job name, links back to
-the Jobs page. Click the name to rename the job.
+the Jobs page. To rename the job, click its name, or pick Rename in the More
+(⋯) menu. Enter or clicking away saves the name, and Escape cancels. Next to
+the name, the builder shows which version is active and whether the draft
+has changes.
 
 <p align="center">
   <picture>

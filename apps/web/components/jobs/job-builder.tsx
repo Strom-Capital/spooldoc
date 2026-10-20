@@ -4,6 +4,7 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   MoreHorizontalIcon,
+  PencilIcon,
   PlayIcon,
   RotateCcwIcon,
   SaveIcon,
@@ -13,7 +14,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -28,6 +29,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -105,9 +107,20 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
   const { job, viewing, setViewing, draftDiffers, updateJob } = useJob();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Escape leaves the name field without saving; the blur that follows must not save it.
+  const cancelled = useRef(false);
+  // Rename in the menu opens the name field once the menu has closed, so the menu's
+  // focus handling does not take focus from the field and close it straight away.
+  const renameAfterMenu = useRef(false);
+
+  function startRename() {
+    cancelled.current = false;
+    setEditing(true);
+  }
 
   async function onRename(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (cancelled.current) return;
     const name = String(new FormData(event.currentTarget).get('name') ?? '').trim();
     setEditing(false);
     if (name && name !== job.name) {
@@ -125,27 +138,46 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
     }
   }
 
+  const versionState =
+    job.activeVersion === null
+      ? 'Draft only'
+      : `v${job.activeVersion} active${viewing === 'draft' && draftDiffers ? ', draft has changes' : ''}`;
+
   return (
     <div className="shrink-0 border-b">
       <div className="flex min-h-12 flex-wrap items-center gap-2 px-3 py-1.5">
-        <div className="min-w-0 flex-1">
-          <Breadcrumb>
-            <BreadcrumbList className="gap-1">
-              <BreadcrumbItem className="px-1">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <Breadcrumb className="min-w-0">
+            <BreadcrumbList className="flex-nowrap gap-1">
+              <BreadcrumbItem className="shrink-0 px-1">
                 <BreadcrumbLink asChild>
                   <Link href="/jobs">Jobs</Link>
                 </BreadcrumbLink>
               </BreadcrumbItem>
-              <BreadcrumbSeparator />
+              <BreadcrumbSeparator className="shrink-0" />
               <BreadcrumbItem className="min-w-0">
                 {/* Not BreadcrumbPage: its role="link" would wrap the rename button and input. */}
                 <span aria-current="page" className="block min-w-0 max-w-full text-foreground">
                   {editing ? (
                     <form onSubmit={onRename} className="w-72 max-w-full">
-                      <Input name="name" defaultValue={job.name} autoFocus onBlur={(event) => event.currentTarget.form?.requestSubmit()} aria-label="Job name" className="h-7" />
+                      <Input
+                        name="name"
+                        defaultValue={job.name}
+                        autoFocus
+                        onBlur={(event) => event.currentTarget.form?.requestSubmit()}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Escape') {
+                            event.preventDefault();
+                            cancelled.current = true;
+                            setEditing(false);
+                          }
+                        }}
+                        aria-label="Job name"
+                        className="h-7"
+                      />
                     </form>
                   ) : (
-                    <button type="button" onClick={() => setEditing(true)} className="block max-w-full truncate rounded px-1 text-left font-semibold hover:bg-muted" title="Rename">
+                    <button type="button" onClick={startRename} className="block max-w-full truncate rounded px-1 text-left font-semibold hover:bg-muted" title="Rename">
                       {job.name}
                     </button>
                   )}
@@ -153,37 +185,34 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
-          <div className="flex flex-wrap items-center gap-1.5 px-1 text-muted-foreground text-xs">
-            {job.activeVersion !== null ? (
-              <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
-                v{job.activeVersion} active
-              </Badge>
-            ) : (
-              <span>Draft only</span>
-            )}
-            {viewing === 'draft' && job.activeVersion !== null && draftDiffers && <span>Draft has changes</span>}
-            {job.paused && <Badge variant="outline" className="h-4 px-1.5 text-[10px]">Paused</Badge>}
-          </div>
+          <span className="hidden min-w-0 shrink truncate text-muted-foreground text-xs lg:inline">{versionState}</span>
+          {job.paused && (
+            <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
+              Paused
+            </Badge>
+          )}
         </div>
-        <Select value={String(viewing)} onValueChange={(value) => void setViewing(value === 'draft' ? 'draft' : Number(value))}>
-          <SelectTrigger size="sm" className="w-36" aria-label="Version">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent align="end">
-            <SelectItem value="draft">Draft</SelectItem>
-            {job.versions.map((version) => (
-              <SelectItem key={version.number} value={String(version.number)}>
-                v{version.number}
-                {version.number === job.activeVersion ? ' (active)' : ''}
-                <span className="text-muted-foreground">{version.note ? ` ${version.note.slice(0, 24)}` : ''}</span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button variant="outline" size="sm" onClick={onSave} disabled={viewing !== 'draft'}>
-          <SaveIcon />
-          <span className="hidden sm:inline">Save version</span>
-        </Button>
+        <ButtonGroup>
+          <Select value={String(viewing)} onValueChange={(value) => void setViewing(value === 'draft' ? 'draft' : Number(value))}>
+            <SelectTrigger size="sm" className="w-36" aria-label="Version">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent align="end">
+              <SelectItem value="draft">Draft</SelectItem>
+              {job.versions.map((version) => (
+                <SelectItem key={version.number} value={String(version.number)}>
+                  v{version.number}
+                  {version.number === job.activeVersion ? ' (active)' : ''}
+                  <span className="text-muted-foreground">{version.note ? ` ${version.note.slice(0, 24)}` : ''}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={onSave} disabled={viewing !== 'draft'}>
+            <SaveIcon />
+            <span className="hidden sm:inline">Save version</span>
+          </Button>
+        </ButtonGroup>
         <Button size="sm" onClick={onRun}>
           <PlayIcon />
           <span className="hidden sm:inline">Run now</span>
@@ -195,7 +224,25 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
               <MoreHorizontalIcon />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent
+            align="end"
+            onCloseAutoFocus={(event) => {
+              if (renameAfterMenu.current) {
+                renameAfterMenu.current = false;
+                event.preventDefault();
+                startRename();
+              }
+            }}
+          >
+            <DropdownMenuItem
+              onSelect={() => {
+                renameAfterMenu.current = true;
+              }}
+            >
+              <PencilIcon />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem asChild>
               <Link href={`/runs?job=${job.id}`}>
                 <ScrollTextIcon />
