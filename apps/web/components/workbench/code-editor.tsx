@@ -66,7 +66,7 @@ const theme = EditorView.theme({
   '.cm-template-tag': { backgroundColor: 'var(--syntax-template)', color: 'var(--primary)', borderRadius: '2px' },
 });
 
-/** Carbone tags (`{d.pageGroup.x}`, `{#alias = ...}`, `{t(text)}`, ...) and `{asset('name')}` marked on top of the HTML highlighting. */
+/** Carbone tags (`{d.pg.x}`, `{#alias = ...}`, `{t(text)}`, ...) and `{asset('name')}` marked on top of the HTML highlighting. */
 const tagMatcher = new MatchDecorator({
   regexp: /\{(?:[dco](?=[.[:}])|#|\$|t\(|asset\()[^{}\n]*\}/g,
   decoration: Decoration.mark({ class: 'cm-template-tag' }),

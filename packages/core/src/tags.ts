@@ -113,12 +113,32 @@ export function templateTags(template: string): TemplateTag[] {
   return tags;
 }
 
-/** True when a template reads `d.<root>`, such as `pageGroups`. */
+/** True when a template reads `d.<root>`, such as `pgs`. `pgs` does not count as `pg`, nor `pg` as `pgs`. */
 export function templateUses(template: string, root: string): boolean {
   return templateTags(template).some((tag) => new RegExp(`(^|[^.\\w])d\\.${root}\\b`).test(tag.text));
 }
 
-/** The path of a `d` tag, before its formatters: `{d.pageGroup.lines[i].amount:formatN(2)}` gives `d.pageGroup.lines[i].amount`. */
+/** The roots of `d` before they were shortened: `d.pageGroups` is `d.pgs` and `d.pageGroup` is `d.pg`. Plural first. */
+const RENAMED_ROOTS: { old: string; now: string }[] = [
+  { old: "pageGroups", now: "pgs" },
+  { old: "pageGroup", now: "pg" },
+];
+
+/**
+ * What to do about a tag that reads an old root of `d`, such as `{d.pageGroup.invoiceNo}`,
+ * which Carbone would print as nothing. Undefined when the tag reads no old root.
+ */
+export function renamedRootProblem(tag: string): string | undefined {
+  for (const { old, now } of RENAMED_ROOTS) {
+    if (!new RegExp(`(^|[^.\\w])d\\.${old}\\b`).test(tag)) continue;
+    let fixed = tag;
+    for (const r of RENAMED_ROOTS) fixed = fixed.replace(new RegExp(`(^|[^.\\w])d\\.${r.old}\\b`, "g"), `$1d.${r.now}`);
+    return `d.${old} is now d.${now}. Write ${short(fixed)} instead of ${short(tag)}.`;
+  }
+  return undefined;
+}
+
+/** The path of a `d` tag, before its formatters: `{d.pg.lines[i].amount:formatN(2)}` gives `d.pg.lines[i].amount`. */
 function tagPath(tag: string): string {
   const inner = tag.slice(1, tag.endsWith("}") ? -1 : undefined);
   let depth = 0;
@@ -136,7 +156,7 @@ function tagPath(tag: string): string {
 
 /**
  * A data path as the check compares it: without `d.`, every `[...]` as `[]`, and without a
- * trailing `[]` (the `[i+1]` row). `d.pageGroup.lines[i].amount` gives `pageGroup.lines[].amount`.
+ * trailing `[]` (the `[i+1]` row). `d.pg.lines[i].amount` gives `pg.lines[].amount`.
  * Undefined for paths the check does not follow, such as `..` to a parent.
  */
 function normalPath(path: string): string | undefined {
@@ -153,8 +173,9 @@ function normalPath(path: string): string | undefined {
 const SPLF_FIELDS = ["name", "number", "jobName", "jobUser", "jobNumber"];
 
 /**
- * Every data path a template can use with this definition: `pageGroup` and its fields
- * and lists, the same under `pageGroups[]`, and `splf`, the spooled file.
+ * Every data path a template can use with this definition: `pg`, the page group, with
+ * its fields and lists, the same under `pgs[]`, every page group, and `splf`, the
+ * spooled file.
  */
 export function templatePaths(def: Definition): Set<string> {
   const fields: string[] = [];
@@ -167,8 +188,8 @@ export function templatePaths(def: Definition): Set<string> {
     fields.push(...Object.keys(def.xml.fields ?? {}));
     for (const [name, g] of Object.entries(def.xml.groups ?? {})) lists.push({ name, columns: Object.keys(g.map) });
   }
-  const paths = new Set<string>(["pageGroup", "pageGroups", "splf", ...SPLF_FIELDS.map((f) => `splf.${f}`)]);
-  for (const root of ["pageGroup", "pageGroups[]"]) {
+  const paths = new Set<string>(["pg", "pgs", "splf", ...SPLF_FIELDS.map((f) => `splf.${f}`)]);
+  for (const root of ["pg", "pgs[]"]) {
     paths.add(root.replace(/\[\]$/, ""));
     for (const f of fields) paths.add(`${root}.${f}`);
     for (const l of lists) {
@@ -195,11 +216,11 @@ function distance(a: string, b: string): number {
 }
 
 /**
- * The known path an unknown one probably meant: the same path under `pageGroup`, or a
+ * The known path an unknown one probably meant: the same path under `pg`, or a
  * name under the same parent that is a typo away or starts the same way.
  */
 function closest(path: string, known: Set<string>): string | undefined {
-  if (known.has(`pageGroup.${path}`)) return `pageGroup.${path}`;
+  if (known.has(`pg.${path}`)) return `pg.${path}`;
   const cut = path.lastIndexOf(".");
   const parent = path.slice(0, cut + 1);
   const name = path.slice(cut + 1).toLowerCase();
@@ -217,12 +238,12 @@ function closest(path: string, known: Set<string>): string | undefined {
   return best?.path;
 }
 
-/** `pageGroup.lines[].amount` written back as a tag, `{d.pageGroup.lines[i].amount}`. */
+/** `pg.lines[].amount` written back as a tag, `{d.pg.lines[i].amount}`. */
 const asTag = (path: string): string => `{d.${path.replace(/\[\]/g, "[i]")}}`;
 
 /** What to write instead of a Nunjucks span. */
 function nunjucksHelp(span: NunjucksSpan): string {
-  if (span.kind === "{") return "Write a Carbone tag such as {d.pageGroup.invoiceNo} instead.";
+  if (span.kind === "{") return "Write a Carbone tag such as {d.pg.invoiceNo} instead.";
   if (span.kind === "#") return "Write an HTML comment (<!-- -->) instead.";
   const word = /^[a-z]+/i.exec(span.inner.replace(/^-/, "").trimStart())?.[0] ?? "";
   if (word === "for" || word === "endfor") return "Write a loop as a row with [i] and a row with [i+1] instead.";
@@ -261,11 +282,17 @@ export function tagProblems(text: string, known: Set<string> | undefined, option
     } else if (inner.includes('"')) {
       add(tag.index, `${short(tag.text)} has double quotes, which Carbone prints as text. Use single quotes (').`);
     }
-    if (!known || !tag.text.startsWith("{d")) continue;
+    if (!tag.text.startsWith("{d")) continue;
+    const renamed = renamedRootProblem(tag.text);
+    if (renamed) {
+      add(tag.index, renamed);
+      continue;
+    }
+    if (!known) continue;
     const path = normalPath(tagPath(tag.text));
     if (path === undefined || known.has(path)) continue;
     if (path === "[]") {
-      add(tag.index, `${short(tag.text)} reads d as a list, but d is { pageGroup, pageGroups, splf }. Start the tag with d.pageGroup.`);
+      add(tag.index, `${short(tag.text)} reads d as a list, but d is { pg, pgs, splf }: pg is the page group, pgs every page group. Start the tag with d.pg.`);
       continue;
     }
     // .att and .val after a list read an object's keys and values.
@@ -273,9 +300,9 @@ export function tagProblems(text: string, known: Set<string> | undefined, option
     const near = closest(path, known);
     const hint = near
       ? ` Did you mean ${asTag(near)}?`
-      : path.startsWith("pageGroup")
+      : /^pgs?\b/.test(path)
         ? " Check the name against the definition's fields."
-        : " The data has pageGroup, pageGroups and splf.";
+        : " The data has pg, the page group, pgs, every page group, and splf, the spooled file.";
     add(tag.index, `${short(tag.text)} is not in the data.${hint}`);
   }
   return problems;
@@ -284,7 +311,7 @@ export function tagProblems(text: string, known: Set<string> | undefined, option
 /**
  * Checks a Carbone HTML template before it is rendered:
  *
- * - tags whose field is not in the definition (`{d.pageGroup.invoiceNumber}`, `{d.pageGroup.lines[i].ammount}`);
+ * - tags whose field is not in the definition (`{d.pg.invoiceNumber}`, `{d.pg.lines[i].ammount}`);
  * - smart quotes and double quotes inside tags;
  * - Nunjucks left over (`{{ }}`, `{% %}`, `{# #}`);
  * - tags that are never closed;

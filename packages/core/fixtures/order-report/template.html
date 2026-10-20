@@ -21,19 +21,19 @@
 <body>
   <h1>Open order lines by customer</h1>
   <dl>
-    <dt>Company</dt><dd>{d.pageGroup.company}</dd>
-    <dt>Title</dt><dd>{d.pageGroup.title}</dd>
-    <dt>Run Date</dt><dd>{d.pageGroup.runDate}</dd>
-    <dt>Run Time</dt><dd>{d.pageGroup.runTime}</dd>
-    <dt>Program</dt><dd>{d.pageGroup.program}</dd>
-    <dt>Warehouse</dt><dd>{d.pageGroup.warehouse}</dd>
+    <dt>Company</dt><dd>{d.pg.company}</dd>
+    <dt>Title</dt><dd>{d.pg.title}</dd>
+    <dt>Run Date</dt><dd>{d.pg.runDate}</dd>
+    <dt>Run Time</dt><dd>{d.pg.runTime}</dd>
+    <dt>Program</dt><dd>{d.pg.program}</dd>
+    <dt>Warehouse</dt><dd>{d.pg.warehouse}</dd>
   </dl>
   <h2>Lines</h2>
   <table>
     <thead><tr><th>Customer No</th><th>Customer Name</th><th>Order No</th><th>Line No</th><th>Item</th><th>Description</th><th>Unit</th><th>Quantity</th><th>Unit Price</th><th>Amount</th><th>Ship Date</th><th>Type Code</th><th>Type Text</th><th>Message</th></tr></thead>
     <tbody>
-      <tr><td>{d.pageGroup.lines[i].customerNo}</td><td>{d.pageGroup.lines[i].customerName}</td><td>{d.pageGroup.lines[i].orderNo}</td><td>{d.pageGroup.lines[i].lineNo}</td><td>{d.pageGroup.lines[i].item}</td><td>{d.pageGroup.lines[i].description}</td><td>{d.pageGroup.lines[i].unit}</td><td>{d.pageGroup.lines[i].quantity}</td><td>{d.pageGroup.lines[i].unitPrice}</td><td>{d.pageGroup.lines[i].amount}</td><td>{d.pageGroup.lines[i].shipDate}</td><td>{d.pageGroup.lines[i].typeCode}</td><td>{d.pageGroup.lines[i].typeText}</td><td>{d.pageGroup.lines[i].message}</td></tr>
-      <tr><td>{d.pageGroup.lines[i+1]}</td></tr>
+      <tr><td>{d.pg.lines[i].customerNo}</td><td>{d.pg.lines[i].customerName}</td><td>{d.pg.lines[i].orderNo}</td><td>{d.pg.lines[i].lineNo}</td><td>{d.pg.lines[i].item}</td><td>{d.pg.lines[i].description}</td><td>{d.pg.lines[i].unit}</td><td>{d.pg.lines[i].quantity}</td><td>{d.pg.lines[i].unitPrice}</td><td>{d.pg.lines[i].amount}</td><td>{d.pg.lines[i].shipDate}</td><td>{d.pg.lines[i].typeCode}</td><td>{d.pg.lines[i].typeText}</td><td>{d.pg.lines[i].message}</td></tr>
+      <tr><td>{d.pg.lines[i+1]}</td></tr>
     </tbody>
   </table>
 </body>

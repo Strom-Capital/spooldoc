@@ -184,7 +184,7 @@ export const definitionSchema = z
     xml: xmlSourceSchema.optional(),
     output: z
       .object({
-        name: z.string().min(1).describe("File name of each document, with tags such as {d.pageGroup.invoiceNo}"),
+        name: z.string().min(1).describe("File name of each document, with tags such as {d.pg.invoiceNo}"),
         title: z.string().optional(),
       })
       .strict()

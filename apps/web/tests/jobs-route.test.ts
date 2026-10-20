@@ -70,7 +70,7 @@ const tpl = ({ id = 'main', name = 'Document', source = template as string | nul
 });
 
 /** A second template: the invoice lines as HTML. */
-const LINES = tpl({ id: 'lines', name: 'Lines', source: '<ul><li>{d.pageGroup.lines[i].line}</li><li>{d.pageGroup.lines[i+1]}</li></ul>', formats: ['html'] });
+const LINES = tpl({ id: 'lines', name: 'Lines', source: '<ul><li>{d.pg.lines[i].line}</li><li>{d.pg.lines[i+1]}</li></ul>', formats: ['html'] });
 
 /** What the fake Carbone was sent for its n-th render. */
 const sent = (n = 0) => fakeCarbone.mock.calls[n]![0];
@@ -144,7 +144,7 @@ describe('jobs', () => {
     expect(result.extract.pageGroups).toHaveLength(6);
     expect(result.html).toContain('260102');
 
-    const unsaved = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { html: '<p>{d.pageGroup.invoiceNo}</p>' }), params({ id }))).json();
+    const unsaved = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { html: '<p>{d.pg.invoiceNo}</p>' }), params({ id }))).json();
     expect(unsaved.html).toContain('<p>260101</p>');
     // Nunjucks is not converted: the check lists it and nothing is sent.
     const old = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, { html: '<p>{{ doc.invoiceNo }}</p>' }), params({ id }))).json();
@@ -183,12 +183,12 @@ describe('jobs', () => {
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(PDF_BYTES);
     // The HTML is rendered and checked first, then the PDF, with the page width for the paper rule.
     expect(sent(1)).toMatchObject({ format: 'pdf', pageWidth: sample.attributes.pageWidth });
-    expect(sent(1).data.pageGroup.invoiceNo).toBe('260102');
+    expect(sent(1).data.pg.invoiceNo).toBe('260102');
 
     expect((await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { pageGroup: 50 }), params({ id }))).status).toBe(400);
-    const broken = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { html: '<p>{d.pageGroup.invoiceNumber}</p>' }), params({ id }));
+    const broken = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { html: '<p>{d.pg.invoiceNumber}</p>' }), params({ id }));
     expect(broken.status).toBe(422);
-    expect((await broken.json()).templateErrors).toEqual(['Template line 1: {d.pageGroup.invoiceNumber} is not in the data. Did you mean {d.pageGroup.invoiceNo}?']);
+    expect((await broken.json()).templateErrors).toEqual(['Template line 1: {d.pg.invoiceNumber} is not in the data. Did you mean {d.pg.invoiceNo}?']);
   });
 
   it('takes stock again when a watching job gets a version with the backlog on', async () => {
@@ -419,22 +419,22 @@ describe('runs', () => {
 
   it('fails a run with the line of each problem the tag check finds, before anything is sent to Carbone', async () => {
     const id = await readyJob();
-    const typo = template.replace('{d.pageGroup.customerName}', '{d.pageGroup.customerNam}');
+    const typo = template.replace('{d.pg.customerName}', '{d.pg.customerNam}');
     await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { templates: [tpl({ source: typo })] } } }), params({ id }));
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
     expect(run!.status).toBe('failed');
-    expect(run!.error).toMatch(/^The "Document" template has 1 problem\. Line \d+: \{d\.pageGroup\.customerNam\} is not in the data\. Did you mean \{d\.pageGroup\.customerName\}\?$/);
+    expect(run!.error).toMatch(/^The "Document" template has 1 problem\. Line \d+: \{d\.pg\.customerNam\} is not in the data\. Did you mean \{d\.pg\.customerName\}\?$/);
     expect(fakeCarbone).not.toHaveBeenCalled();
   });
 
   it('keeps Carbone\'s own text with a template error Carbone finds', async () => {
     const id = await readyJob();
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
-    fakeCarbone.mockRejectedValueOnce(new CarboneError('template', 'A loop in the template has no end row.', { detail: 'The marker {d.pageGroup.lines[i].item} has no corresponding [i+1]' }));
+    fakeCarbone.mockRejectedValueOnce(new CarboneError('template', 'A loop in the template has no end row.', { detail: 'The marker {d.pg.lines[i].item} has no corresponding [i+1]' }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
     expect(run!.error).toBe('The "Document" template, page group 1: A loop in the template has no end row.');
-    expect(run!.steps.find((step) => step.step === 'render')?.detail).toBe('The marker {d.pageGroup.lines[i].item} has no corresponding [i+1]');
+    expect(run!.steps.find((step) => step.step === 'render')?.detail).toBe('The marker {d.pg.lines[i].item} has no corresponding [i+1]');
   });
 
   it('makes only HTML when PDF is off', async () => {

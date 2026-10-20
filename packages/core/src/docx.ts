@@ -288,16 +288,16 @@ const heavy = { style: BorderStyle.SINGLE, size: 6, color: "333333" } as const;
 function fieldsParagraph(fields: StarterColumn[]): Paragraph {
   const runs: TextRun[] = [];
   for (const [n, field] of fields.entries()) {
-    const tag = valueTag(`d.pageGroup.${field.name}`, field.type);
+    const tag = valueTag(`d.pg.${field.name}`, field.type);
     if (n === 0) {
       runs.push(new TextRun({ text: fieldLabel(field.name), color: GREY }), new TextRun({ children: [new Tab(), tag] }));
       continue;
     }
     // The pattern that works in the Community Edition: hide from before the line break to after the value.
     runs.push(
-      new TextRun(`{d.pageGroup.${field.name}:ifEM:hideBegin}`),
+      new TextRun(`{d.pg.${field.name}:ifEM:hideBegin}`),
       new TextRun({ break: 1, text: fieldLabel(field.name), color: GREY }),
-      new TextRun({ children: [new Tab(), `${tag}{d.pageGroup.${field.name}:hideEnd}`] }),
+      new TextRun({ children: [new Tab(), `${tag}{d.pg.${field.name}:hideEnd}`] }),
     );
   }
   return new Paragraph({ tabStops: [{ type: TabStopType.LEFT, position: convertMillimetersToTwip(45) }], spacing: { line: 300 }, children: runs });
@@ -320,8 +320,8 @@ function blockTable(block: StarterBlock): (Paragraph | Table)[] {
     });
   const rows = [
     new TableRow({ tableHeader: true, children: block.columns.map((c) => cell(c, fieldLabel(c.name), true)) }),
-    new TableRow({ cantSplit: true, children: block.columns.map((c) => cell(c, valueTag(`d.pageGroup.${block.name}[i].${c.name}`, c.type))) }),
-    new TableRow({ children: block.columns.map((c, n) => cell(c, n === 0 ? `{d.pageGroup.${block.name}[i+1]}` : "")) }),
+    new TableRow({ cantSplit: true, children: block.columns.map((c) => cell(c, valueTag(`d.pg.${block.name}[i].${c.name}`, c.type))) }),
+    new TableRow({ children: block.columns.map((c, n) => cell(c, n === 0 ? `{d.pg.${block.name}[i+1]}` : "")) }),
   ];
   return [
     new Paragraph({ keepNext: true, spacing: { before: 280, after: 120 }, children: [new TextRun({ text: fieldLabel(block.name), bold: true, size: 22 })] }),

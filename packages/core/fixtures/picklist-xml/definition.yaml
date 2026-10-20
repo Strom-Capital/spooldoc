@@ -27,5 +27,5 @@ xml:
         quantity: { path: QTY, type: number }
         unit: UNIT
 output:
-  name: "{d.pageGroup.outputName}"
+  name: "{d.pg.outputName}"
   title: Pick list

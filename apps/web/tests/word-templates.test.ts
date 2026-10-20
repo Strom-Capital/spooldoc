@@ -34,7 +34,7 @@ const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.doc
 
 /** The Word starter template of the invoice definition: a .docx whose tags all pass the check. */
 const goodDocx = Buffer.from(await starterDocx(parseDefinition(yaml)));
-/** A .docx with `{d.pageGroup.invoiceNumber}`, which the invoice definition does not have. */
+/** A .docx with `{d.pg.invoiceNumber}`, which the invoice definition does not have. */
 const badDocx = Buffer.from(await starterDocx(parseDefinition(yaml.replace('name: invoiceNo,', 'name: invoiceNumber,').replace('field: invoiceNo }', 'field: invoiceNumber }'))));
 
 let auth: Record<string, string>;
@@ -138,13 +138,13 @@ describe('previewing a Word template', () => {
     expect(render.pdf).toBe(Buffer.from(PDF_BYTES).toString('base64'));
     expect(render.html).toBeUndefined();
     expect(fakeCarbone.mock.calls[0]![0]).toMatchObject({ kind: 'docx', format: 'pdf', converter: 'I' });
-    expect(fakeCarbone.mock.calls[0]![0].data.pageGroup.invoiceNo).toBe('260101');
+    expect(fakeCarbone.mock.calls[0]![0].data.pg.invoiceNo).toBe('260101');
 
     const docx = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { pageGroup: 1, format: 'docx' }), params({ id }));
     expect(docx.status).toBe(200);
     expect(docx.headers.get('content-type')).toBe(DOCX);
     expect(docx.headers.get('content-disposition')).toBe('attachment; filename="invoice-260102.docx"');
-    expect(readDocx(new Uint8Array(await docx.arrayBuffer())).text).toContain('{d.pageGroup.invoiceNo}');
+    expect(readDocx(new Uint8Array(await docx.arrayBuffer())).text).toContain('{d.pg.invoiceNo}');
     expect(fakeCarbone.mock.calls.at(-1)![0]).toMatchObject({ kind: 'docx', format: 'docx' });
     const pdf = await previewFile.POST(post(`/api/jobs/${id}/preview-file`, { format: 'pdf' }), params({ id }));
     expect(new Uint8Array(await pdf.arrayBuffer())).toEqual(PDF_BYTES);
@@ -164,8 +164,8 @@ describe('previewing a Word template', () => {
     const id = await readyJob();
     await upload(id, badDocx);
     const render = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, {}), params({ id }))).json();
-    expect(render.template.problems).toEqual([{ part: 'body', message: '{d.pageGroup.invoiceNumber} is not in the data. Did you mean {d.pageGroup.invoiceNo}?' }]);
-    expect(render.errors).toEqual(['Template body: {d.pageGroup.invoiceNumber} is not in the data. Did you mean {d.pageGroup.invoiceNo}?']);
+    expect(render.template.problems).toEqual([{ part: 'body', message: '{d.pg.invoiceNumber} is not in the data. Did you mean {d.pg.invoiceNo}?' }]);
+    expect(render.errors).toEqual(['Template body: {d.pg.invoiceNumber} is not in the data. Did you mean {d.pg.invoiceNo}?']);
     expect(render.pdf).toBeUndefined();
     expect(fakeCarbone).not.toHaveBeenCalled();
   });
@@ -187,7 +187,7 @@ describe('previewing a Word template', () => {
     const response = await starterRoute.POST(post(`/api/jobs/${id}/starter-docx`, {}), params({ id }));
     expect(response.headers.get('content-type')).toBe(DOCX);
     expect(response.headers.get('content-disposition')).toBe('attachment; filename="invoice-template.docx"');
-    expect(readDocx(new Uint8Array(await response.arrayBuffer())).text).toContain('{d.pageGroup.lines[i+1]}');
+    expect(readDocx(new Uint8Array(await response.arrayBuffer())).text).toContain('{d.pg.lines[i+1]}');
     const empty = await starterRoute.POST(post(`/api/jobs/${id}/starter-docx`, { yaml: '' }), params({ id }));
     expect(empty.status).toBe(400);
     expect((await empty.json()).error).toBe('Write a definition first: the starter template is made from it.');
@@ -223,7 +223,7 @@ describe('runs with a Word template', () => {
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
     const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
     expect(run!.status).toBe('failed');
-    expect(run!.error).toBe(`The "Document" template has 1 problem. Body: {d.pageGroup.invoiceNumber} is not in the data. Did you mean {d.pageGroup.invoiceNo}?`);
+    expect(run!.error).toBe(`The "Document" template has 1 problem. Body: {d.pg.invoiceNumber} is not in the data. Did you mean {d.pg.invoiceNo}?`);
     expect(fakeCarbone).not.toHaveBeenCalled();
   });
 });

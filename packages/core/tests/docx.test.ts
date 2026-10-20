@@ -25,19 +25,19 @@ const { definition } = loadFixture("invoice");
 
 describe("readDocx", () => {
   it("joins a tag Word split over runs, and keeps tabs and line breaks", () => {
-    const doc = docxOf(para(run("Invoice "), run("{d.pageGroup.inv", true), run("oiceNo}"), "<w:r><w:tab/><w:t>A</w:t><w:br/><w:t>B</w:t></w:r>"));
-    expect(readDocx(doc).paragraphs).toEqual([{ part: "body", text: "Invoice {d.pageGroup.invoiceNo}\tA\nB" }]);
+    const doc = docxOf(para(run("Invoice "), run("{d.pg.inv", true), run("oiceNo}"), "<w:r><w:tab/><w:t>A</w:t><w:br/><w:t>B</w:t></w:r>"));
+    expect(readDocx(doc).paragraphs).toEqual([{ part: "body", text: "Invoice {d.pg.invoiceNo}\tA\nB" }]);
   });
 
   it("reads headers and footers after the body, writes out entities and skips Word's fallback copy of a text box", () => {
-    const header = `<w:hdr ${W}>${para(run("{d.pageGroup.customerName} &amp; &#x41;&#66; &apos;x&apos;"))}</w:hdr>`;
+    const header = `<w:hdr ${W}>${para(run("{d.pg.customerName} &amp; &#x41;&#66; &apos;x&apos;"))}</w:hdr>`;
     const footer = `<w:ftr ${W}>${para(run("Page"))}</w:ftr>`;
     const box = `<w:p><w:r><mc:AlternateContent><mc:Choice><w:txbxContent>${para(run("In a box"))}</w:txbxContent></mc:Choice><mc:Fallback><w:txbxContent>${para(run("In a box"))}</w:txbxContent></mc:Fallback></mc:AlternateContent></w:r></w:p>`;
     const doc = docxOf(para(run("Body")) + box, { "word/footer1.xml": footer, "word/header2.xml": header });
     expect(readDocx(doc).paragraphs).toEqual([
       { part: "body", text: "Body" },
       { part: "body", text: "In a box" },
-      { part: "header", text: "{d.pageGroup.customerName} & AB 'x'" },
+      { part: "header", text: "{d.pg.customerName} & AB 'x'" },
       { part: "footer", text: "Page" },
     ]);
   });
@@ -65,30 +65,36 @@ describe("readDocx", () => {
 describe("checkDocx", () => {
   it("flags fields not in the definition, curly quotes and pictures as assets, with the part", () => {
     const header = `<w:hdr ${W}>${para(run("{asset('logo')}"))}</w:hdr>`;
-    const doc = docxOf(para(run("{d.pageGroup.invoiceNumber}")) + para(run("{d.pageGroup.invoiceDate:formatD(‘DD.MM.YYYY’)}")) + para(run("{d.pageGroup.invoiceNo")), {
+    const doc = docxOf(para(run("{d.pg.invoiceNumber}")) + para(run("{d.pg.invoiceDate:formatD(‘DD.MM.YYYY’)}")) + para(run("{d.pg.invoiceNo")), {
       "word/header1.xml": header,
     });
     const problems = checkDocx(readDocx(doc), definition);
     expect(problems).toEqual([
-      { part: "body", message: "{d.pageGroup.invoiceNumber} is not in the data. Did you mean {d.pageGroup.invoiceNo}?" },
+      { part: "body", message: "{d.pg.invoiceNumber} is not in the data. Did you mean {d.pg.invoiceNo}?" },
       { part: "body", message: expect.stringMatching(/curly quotes, which Word types by default.*Turn off smart quotes/) },
-      { part: "body", message: "This tag has no closing }: {d.pageGroup.invoiceNo" },
+      { part: "body", message: "This tag has no closing }: {d.pg.invoiceNo" },
       { part: "header", message: expect.stringMatching(/^\{asset\('logo'\)\} is for HTML templates\. In Word, insert the picture itself/) },
     ]);
-    expect(docxProblemText(problems.slice(0, 1))).toBe("Body: {d.pageGroup.invoiceNumber} is not in the data. Did you mean {d.pageGroup.invoiceNo}?");
+    expect(docxProblemText(problems.slice(0, 1))).toBe("Body: {d.pg.invoiceNumber} is not in the data. Did you mean {d.pg.invoiceNo}?");
   });
 
   it("does not check fields without a definition", () => {
-    expect(checkDocx(readDocx(docxOf(para(run("{d.pageGroup.anything}")))), null)).toEqual([]);
+    expect(checkDocx(readDocx(docxOf(para(run("{d.pg.anything}")))), null)).toEqual([]);
+  });
+
+  it("says what an old tag is now called", () => {
+    expect(checkDocx(readDocx(docxOf(para(run("{d.pageGroup.invoiceNo}")))), definition)).toEqual([
+      { part: "body", message: "d.pageGroup is now d.pg. Write {d.pg.invoiceNo} instead of {d.pageGroup.invoiceNo}." },
+    ]);
   });
 
   it("sends every page group only when the template reads them", () => {
     const { sample, definition: def } = loadFixture("invoice");
     const { pageGroups } = extract(def, sample);
-    const plain = readDocx(docxOf(para(run("{d.pageGroup.invoiceNo}"))));
-    const all = readDocx(docxOf(para(run("{d.pageGroups[i].invoiceNo}"))));
-    expect(templateData(plain, pageGroups[0]!, pageGroups, sample).pageGroups).toBeUndefined();
-    expect(templateData(all, pageGroups[0]!, pageGroups, sample).pageGroups).toHaveLength(pageGroups.length);
+    const plain = readDocx(docxOf(para(run("{d.pg.invoiceNo}"))));
+    const all = readDocx(docxOf(para(run("{d.pgs[i].invoiceNo}"))));
+    expect(templateData(plain, pageGroups[0]!, pageGroups, sample).pgs).toBeUndefined();
+    expect(templateData(all, pageGroups[0]!, pageGroups, sample).pgs).toHaveLength(pageGroups.length);
   });
 });
 
@@ -101,10 +107,10 @@ describe("starterDocx", () => {
   });
 
   it("writes a title with a tag in both starter templates", async () => {
-    const def = { ...definition, output: { name: "invoice-{d.pageGroup.invoiceNo}", title: "Invoice {d.pageGroup.invoiceNo}" } };
-    expect(readDocx(await starterDocx(def)).paragraphs[0]?.text).toBe("Invoice {d.pageGroup.invoiceNo}");
+    const def = { ...definition, output: { name: "invoice-{d.pg.invoiceNo}", title: "Invoice {d.pg.invoiceNo}" } };
+    expect(readDocx(await starterDocx(def)).paragraphs[0]?.text).toBe("Invoice {d.pg.invoiceNo}");
     expect(checkDocx(readDocx(await starterDocx(def)), def)).toEqual([]);
-    expect(starterTemplate(def)).toContain("<h1>Invoice {d.pageGroup.invoiceNo}</h1>");
+    expect(starterTemplate(def)).toContain("<h1>Invoice {d.pg.invoiceNo}</h1>");
     expect(checkTemplate(starterTemplate(def), def)).toEqual([]);
   });
 
@@ -113,9 +119,9 @@ describe("starterDocx", () => {
     const { paragraphs } = readDocx(bytes);
     const texts = paragraphs.map((p) => p.text);
     expect(texts[0]).toBe("Invoice");
-    expect(texts[1]).toMatch(/^Invoice No\t\{d\.pageGroup\.invoiceNo\}\{d\.pageGroup\.invoiceDate:ifEM:hideBegin\}\nInvoice Date\t\{d\.pageGroup\.invoiceDate:formatD\('DD\.MM\.YYYY'\)\}\{d\.pageGroup\.invoiceDate:hideEnd\}/);
-    expect(texts).toContain("{d.pageGroup.lines[i].amount:formatN(2)}");
-    expect(texts).toContain("{d.pageGroup.lines[i+1]}");
+    expect(texts[1]).toMatch(/^Invoice No\t\{d\.pg\.invoiceNo\}\{d\.pg\.invoiceDate:ifEM:hideBegin\}\nInvoice Date\t\{d\.pg\.invoiceDate:formatD\('DD\.MM\.YYYY'\)\}\{d\.pg\.invoiceDate:hideEnd\}/);
+    expect(texts).toContain("{d.pg.lines[i].amount:formatN(2)}");
+    expect(texts).toContain("{d.pg.lines[i+1]}");
     expect(paragraphs.at(-1)).toEqual({ part: "footer", text: "Page  of " });
     // Each part of a page field in its own run, as Word writes it: ICE prints nothing otherwise.
     const footer = new TextDecoder().decode(unzipSync(bytes)["word/footer1.xml"]);

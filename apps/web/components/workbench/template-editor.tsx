@@ -74,7 +74,7 @@ function HtmlTemplateEditor() {
         readOnly={readOnly}
         label="Template HTML"
         language="html"
-        placeholder="<!doctype html> ... {d.pageGroup.invoiceNo} ..."
+        placeholder="<!doctype html> ... {d.pg.invoiceNo} ..."
       />
     </div>
   );

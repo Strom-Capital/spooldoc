@@ -46,12 +46,12 @@ afterEach(() => {
 describe("carboneRender", () => {
   it("posts the template inline with the token and returns the file", async () => {
     fetchMock.mockResolvedValueOnce(fileResponse("%PDF-1.7"));
-    const out = await carboneRender(server, { template: "<html>{d.pageGroup.a}</html>", data: { pageGroup: { a: 1 } }, convertTo: "pdf", converter: "C" });
+    const out = await carboneRender(server, { template: "<html>{d.pg.a}</html>", data: { pg: { a: 1 } }, convertTo: "pdf", converter: "C" });
     expect(Buffer.from(out).toString()).toBe("%PDF-1.7");
     const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe("http://carbone.example.com:4000/render/template?download=true");
     expect(init?.headers).toMatchObject({ "carbone-version": "5", "content-type": "application/json", authorization: "Bearer tkn" });
-    expect(sent()).toEqual({ template: Buffer.from("<html>{d.pageGroup.a}</html>").toString("base64"), data: { pageGroup: { a: 1 } }, convertTo: "pdf", converter: "C", lang: "en-us" });
+    expect(sent()).toEqual({ template: Buffer.from("<html>{d.pg.a}</html>").toString("base64"), data: { pg: { a: 1 } }, convertTo: "pdf", converter: "C", lang: "en-us" });
   });
 
   it("checks success, not only the status: Carbone Cloud answers some errors with 200", async () => {
@@ -130,13 +130,13 @@ describe("carboneStatus and probeEdition", () => {
 describe("renderDocument", () => {
   it("sends a prepared template and uses Chromium for PDF, landscape for a wide page", async () => {
     fetchMock.mockImplementation(async () => fileResponse("%PDF"));
-    await renderDocument(server, { template: "<p>{asset('logo')} {d.pageGroup.a}</p>", data: { pageGroup: { a: 1 }, splf: {} }, format: "pdf", pageWidth: 198, asset: () => "data:,x" });
+    await renderDocument(server, { template: "<p>{asset('logo')} {d.pg.a}</p>", data: { pg: { a: 1 }, splf: {} }, format: "pdf", pageWidth: 198, asset: () => "data:,x" });
     const template = Buffer.from(String(sent().template), "base64").toString();
     expect(template).toContain("<html>");
-    expect(template).toContain("data:,x {d.pageGroup.a}");
+    expect(template).toContain("data:,x {d.pg.a}");
     expect(template).toContain('<carbone-pdf-options landscape="true">');
     expect(sent()).toMatchObject({ convertTo: "pdf", converter: "C" });
-    await renderDocument(server, { template: "<p>x</p>", data: { pageGroup: {}, splf: {} }, format: "html", pageWidth: 198 });
+    await renderDocument(server, { template: "<p>x</p>", data: { pg: {}, splf: {} }, format: "html", pageWidth: 198 });
     expect(Buffer.from(String(sent(1).template), "base64").toString()).not.toContain("landscape");
     expect(sent(1).converter).toBeUndefined();
   });
@@ -144,7 +144,7 @@ describe("renderDocument", () => {
   it("sends a Word template's bytes: DOCX with hardRefresh false, PDF with ICE, or LibreOffice for PAGEREF fields", async () => {
     fetchMock.mockImplementation(async () => fileResponse("PK"));
     const template = new Uint8Array([0x50, 0x4b, 3, 4, 0xff]);
-    const data = { pageGroup: {}, splf: {} };
+    const data = { pg: {}, splf: {} };
     await renderDocument(server, { kind: "docx", template, data, format: "docx" });
     expect(sent()).toEqual({ template: Buffer.from(template).toString("base64"), data, convertTo: "docx", hardRefresh: false, lang: "en-us" });
     await renderDocument(server, { kind: "docx", template, data, format: "pdf", converter: "I" });

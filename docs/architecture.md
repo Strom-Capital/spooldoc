@@ -61,7 +61,7 @@ where a run stopped.
 
 The extract and render steps are separate on purpose. The definition
 knows the page: labels, lines, columns, where tables start and stop. The
-template knows the document: `d.pageGroup.invoiceNo`, `d.pageGroup.lines`,
+template knows the document: `d.pg.invoiceNo`, `d.pg.lines`,
 formatted with formatters. The JSON between them is the contract. A new look is a new
 template with the same definition; a moved column is one fix in the
 definition with every template untouched. Values are typed once, the

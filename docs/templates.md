@@ -4,7 +4,7 @@ description: "The HTML and Word templates that make each document with Carbone t
 ---
 
 A template is an ordinary HTML page with [Carbone](https://carbone.io)
-tags, such as `{d.pageGroup.invoiceNo}`, or a Word document with the same
+tags, such as `{d.pg.invoiceNo}`, or a Word document with the same
 tags in its text (see [Word templates](#word-templates)). A job has one
 or more templates. Each page group the definition finds becomes a
 document through every template, in that template's formats: an HTML
@@ -34,16 +34,16 @@ A tag starts with `d`, the data of the document being made:
 
 | Path | What it is |
 |------|------------|
-| `d.pageGroup` | The page group the document is made from: the fields, tables, records and groups of the [definition](definitions.md). |
-| `d.pageGroups` | Every page group of the spooled file, for page counts or totals. Sent only to templates that use it. |
+| `d.pg` | `pg` is the page group: the one the document is made from, with the fields, tables, records and groups of the [definition](definitions.md). |
+| `d.pgs` | `pgs` is every page group of the spooled file, for page counts or totals. Sent only to templates that use it. |
 | `d.splf` | The spooled file: `name`, `number`, `jobName`, `jobUser`, `jobNumber`. |
 
 ```html
-<h1>Invoice {d.pageGroup.invoiceNo}</h1>
-<p>{d.pageGroup.customerName}<br>{d.pageGroup.invoiceDate:formatD('DD.MM.YYYY')}</p>
+<h1>Invoice {d.pg.invoiceNo}</h1>
+<p>{d.pg.customerName}<br>{d.pg.invoiceDate:formatD('DD.MM.YYYY')}</p>
 <table>
-  <tr><td>{d.pageGroup.lines[i].item}</td><td class="num">{d.pageGroup.lines[i].amount:formatN(2)} EUR</td></tr>
-  <tr><td>{d.pageGroup.lines[i+1]}</td></tr>
+  <tr><td>{d.pg.lines[i].item}</td><td class="num">{d.pg.lines[i].amount:formatN(2)} EUR</td></tr>
+  <tr><td>{d.pg.lines[i+1]}</td></tr>
 </table>
 ```
 
@@ -56,8 +56,8 @@ with an `[i+1]` tag, marks where the loop ends; Carbone removes it.
 
 ```html
 <tbody>
-  <tr><td>{d.pageGroup.lines[i].line}</td><td>{d.pageGroup.lines[i].item}</td></tr>
-  <tr><td>{d.pageGroup.lines[i+1]}</td></tr>
+  <tr><td>{d.pg.lines[i].line}</td><td>{d.pg.lines[i].item}</td></tr>
+  <tr><td>{d.pg.lines[i+1]}</td></tr>
 </tbody>
 ```
 
@@ -69,8 +69,8 @@ its `[i+1]` row is an error.
 `showBegin` and `showEnd` keep a part only when the condition holds:
 
 ```html
-{d.pageGroup.address2:ifNEM:showBegin}{d.pageGroup.address2}<br>{d.pageGroup.address2:showEnd}
-{d.pageGroup.type:ifEQ('C'):showBegin}<h2>Credit note</h2>{d.pageGroup.type:showEnd}
+{d.pg.address2:ifNEM:showBegin}{d.pg.address2}<br>{d.pg.address2:showEnd}
+{d.pg.type:ifEQ('C'):showBegin}<h2>Credit note</h2>{d.pg.type:showEnd}
 ```
 
 `ifNEM` is "not empty"; `ifEM`, `ifEQ`, `ifNE`, `ifGT`, `ifGTE`, `ifLT` and
@@ -82,14 +82,14 @@ Formatters follow the path, each after a colon:
 
 | Formatter | Example | Result |
 |-----------|---------|--------|
-| `formatN` | `{d.pageGroup.total:formatN(2)}` | `1,234.50` |
-| `formatD` | `{d.pageGroup.invoiceDate:formatD('DD.MM.YYYY')}`, `{d.pageGroup.invoiceDate:formatD('YYYY-MM-DD')}` | `01.10.2026`, `2026-10-01` |
-| `padl`, `padr` | `{d.pageGroup.no:padl(8)}`, `{d.pageGroup.no:padr(8, '.')}` | Padded to eight characters on the left, or on the right with dots |
-| `upperCase`, `lowerCase` | `{d.pageGroup.city:upperCase}` | `HELSINKI` |
+| `formatN` | `{d.pg.total:formatN(2)}` | `1,234.50` |
+| `formatD` | `{d.pg.invoiceDate:formatD('DD.MM.YYYY')}`, `{d.pg.invoiceDate:formatD('YYYY-MM-DD')}` | `01.10.2026`, `2026-10-01` |
+| `padl`, `padr` | `{d.pg.no:padl(8)}`, `{d.pg.no:padr(8, '.')}` | Padded to eight characters on the left, or on the right with dots |
+| `upperCase`, `lowerCase` | `{d.pg.city:upperCase}` | `HELSINKI` |
 
 Numbers use English separators. Write a currency after the tag, as in
-`{d.pageGroup.total:formatN(2)} EUR`, or from the data:
-`{d.pageGroup.total:formatN(2)} {d.pageGroup.currency}`. `formatN` without a number
+`{d.pg.total:formatN(2)} EUR`, or from the data:
+`{d.pg.total:formatN(2)} {d.pg.currency}`. `formatN` without a number
 shows three decimals.
 
 Inside a tag, quote text with straight single quotes. Carbone prints
@@ -108,12 +108,14 @@ Spooldoc checks each template before it renders, and the Template tab
 lists each problem with its line (for a Word template, with its part:
 body, header or footer):
 
-- a tag whose field is not in the definition, such as `{d.pageGroup.invoiceNumber}`,
+- a tag whose field is not in the definition, such as `{d.pg.invoiceNumber}`,
   with the field it most likely means;
 - double quotes or curly quotes inside a tag;
 - Nunjucks, such as `{{ doc.x }}` or `{% for %}`, from Spooldoc 0.2 and older
   or pasted from elsewhere;
 - a tag that is never closed;
+- a tag with an old name, `d.pageGroup` or `d.pageGroups`, with
+  its new name, `d.pg` or `d.pgs`;
 - an asset name that is not uploaded.
 
 A template with problems is not rendered, in the preview or in a run.
@@ -156,16 +158,16 @@ Word panel offers your earlier file back.
   Word, Preferences, AutoCorrect, AutoFormat As You Type. The check finds
   a tag with curly quotes.
 - **The tags are the ones HTML templates use**, such as
-  `{d.pageGroup.invoiceDate:formatD('DD.MM.YYYY')}`. Word splits a tag into
+  `{d.pg.invoiceDate:formatD('DD.MM.YYYY')}`. Word splits a tag into
   several pieces when part of it is styled or typed later; Spooldoc and
   Carbone read each paragraph as one text, so that is fine. A tag cannot
   go across two paragraphs.
 - **Repeat a table row** with a row of `[i]` tags and, below it, a row
-  with `{d.pageGroup.lines[i+1]}` in its first cell, as in HTML. Keep a loop
+  with `{d.pg.lines[i+1]}` in its first cell, as in HTML. Keep a loop
   inside one part: the body, a header or a footer.
 - **An optional line** is hidden with its line break when its field is
-  empty: `{d.pageGroup.address1}{d.pageGroup.address2:ifEM:hideBegin}`, then a line
-  break (Shift+Enter), then `{d.pageGroup.address2}{d.pageGroup.address2:hideEnd}`.
+  empty: `{d.pg.address1}{d.pg.address2:ifEM:hideBegin}`, then a line
+  break (Shift+Enter), then `{d.pg.address2}{d.pg.address2:hideEnd}`.
   The starter template writes its fields this way.
 - **Pictures**, such as a logo, are inserted in Word and are the same in
   every document. Set each to In line with text (Picture Format, Wrap
@@ -247,7 +249,7 @@ the PDF only: Spooldoc hides them in HTML output.
 ```html
 <carbone-pdf-footer>
   <div style="font-size: 8pt; width: 100%; text-align: center">
-    Invoice {d.pageGroup.invoiceNo}, page <span class="pageNumber"></span> of <span class="totalPages"></span>
+    Invoice {d.pg.invoiceNo}, page <span class="pageNumber"></span> of <span class="totalPages"></span>
   </div>
 </carbone-pdf-footer>
 ```
