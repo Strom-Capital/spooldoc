@@ -26,8 +26,8 @@ attention on the Home page. See [Connection status](#connection-status).
 
 Every attempt to reach a server records its state: the pages, the queue
 watcher and the runs. The Servers page shows it for each server, the
-server pickers show its icon, and the Queues page shows it next to the
-server.
+server pickers show its icon. With one server there is no picker, so the
+Queues page shows the state in words instead.
 
 | State | When | What happens next |
 |-------|------|-------------------|

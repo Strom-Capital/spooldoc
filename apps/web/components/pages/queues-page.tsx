@@ -243,7 +243,8 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
         {servers && servers.length > 1 && (
           <ServerSelect servers={shownServers ?? servers} value={server?.id ?? null} onChange={(id) => router.push(`/queues?server=${id}`)} />
         )}
-        {shownServer && <ServerStatus server={shownServer} variant="inline" />}
+        {/* The picker's icon shows the state; with one server there is no picker. */}
+        {servers?.length === 1 && shownServer && <ServerStatus server={shownServer} variant="inline" />}
         <div className="relative w-full max-w-sm">
           <SearchIcon className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" aria-hidden />
           <Input
