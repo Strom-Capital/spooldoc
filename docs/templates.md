@@ -136,8 +136,10 @@ Carbone's text under Details.
 
 A template can be a Word document instead: you lay it out
 in Word, with Word's own styles, headers and footers, and type the tags
-into its text. It makes DOCX files, PDFs or both. Pick Make it a Word
-template in the template's menu on the render step.
+into its text. It makes DOCX files, PDFs or both; a new Word template
+makes DOCX only, and so does a template that turns into one. Pick Make it
+a Word template in the template's menu on the render step, or ask the
+agent for one.
 
 Until you upload one, the preview uses a Word starter template made from
 the definition, with the same layout as the HTML one and "Page 1 of 2" in
@@ -219,8 +221,9 @@ saved. The tags, loops and optional lines are the ones in
 A template can be an Excel workbook instead, for documents people want to
 sort, filter and sum: you lay it out in Excel, with Excel's own formats,
 formulas and page setup, and type the tags into its cells. It makes XLSX
-files, PDFs or both; a new Excel template makes XLSX only. Pick Make it
-an Excel template in the template's menu on the render step.
+files, PDFs or both; a new Excel template makes XLSX only, and so does a
+template that turns into one. Pick Make it an Excel template in the
+template's menu on the render step, or ask the agent for one.
 
 Until you upload one, the preview uses an Excel starter template made
 from the definition. To make your own:
