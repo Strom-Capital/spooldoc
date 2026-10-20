@@ -13,7 +13,7 @@ set, the job builder works as before and the agent points to Settings.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/ai-assistant-dark.png">
-    <img src="assets/ai-assistant-light.png" alt="The agent panel beside the workbench, with suggested prompts and the message box" width="900">
+    <img src="assets/ai-assistant-light.png" alt="The agent panel beside the workbench, with a suggested prompt and the message box" width="900">
   </picture>
 </p>
 

@@ -26,12 +26,7 @@ import { ToolSummary } from './tool-summary';
 import { useWorkbenchSync } from './use-workbench-sync';
 import { useWorkbench } from './workbench-provider';
 
-const SUGGESTIONS = [
-  'Propose a definition and a template for this spooled file',
-  'Make one document per invoice, not one for the whole spooled file',
-  'Skip the first page, it only prints the run parameters',
-  'Make the document look like the printed page',
-];
+const SUGGESTIONS = ['Generate a definition and a template from this spooled file'];
 
 /**
  * The agent for the job's preview spooled file. The model proposes a definition and a
