@@ -1,31 +1,25 @@
-import { asc, count, eq } from 'drizzle-orm';
+import { asc } from 'drizzle-orm';
 import { guard } from '@/lib/server/auth';
 import { getConfig } from '@/lib/server/config';
 import { getDb } from '@/lib/server/db';
-import { queuePrefs, servers } from '@/lib/server/db/schema';
+import { servers } from '@/lib/server/db/schema';
 import { errorResponse, json, readJson } from '@/lib/server/http';
 import { connectionErrorResponse, signOn } from '@/lib/server/ibmi';
+import { serverJobs } from '@/lib/server/queues';
 import { encryptSecret } from '@/lib/server/secrets';
 import { createServerSchema } from '@/lib/server/server-input';
 import { serverView } from '@/lib/server/servers';
 
 export const dynamic = 'force-dynamic';
 
-/** Saved servers, by name, each with how many queues are hidden. */
+/** Saved servers, by name, each with the jobs that read from it. */
 export async function GET(request: Request): Promise<Response> {
   const auth = await guard(request);
   if ('response' in auth) {
     return auth.response;
   }
-  const db = getDb();
-  const rows = await db.select().from(servers).orderBy(asc(servers.name));
-  const hidden = await db
-    .select({ serverId: queuePrefs.serverId, n: count() })
-    .from(queuePrefs)
-    .where(eq(queuePrefs.hidden, true))
-    .groupBy(queuePrefs.serverId);
-  const hiddenBy = new Map(hidden.map((row) => [row.serverId, row.n]));
-  return json({ servers: rows.map((row) => ({ ...serverView(row), hiddenQueues: hiddenBy.get(row.id) ?? 0 })) });
+  const [rows, jobs] = await Promise.all([getDb().select().from(servers).orderBy(asc(servers.name)), serverJobs()]);
+  return json({ servers: rows.map((row) => ({ ...serverView(row), jobs: jobs.get(row.id) ?? [] })) });
 }
 
 /** Add a server: sign on first, then save it with the password encrypted. */

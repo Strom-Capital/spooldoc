@@ -92,7 +92,7 @@ locks make sure two instances never read the same data queue or run the
 same job at once. When watching starts, the job takes stock of what is
 already on the queue; with Backlog on those files run too, otherwise they
 are left for Run now. Once an hour the watcher also deletes runs past the
-retention period and samples no job uses.
+retention period, samples no job uses and old agent usage records.
 
 Spooldoc creates and attaches a data queue only when asked, from the
 trigger step's Set up real-time, and never changes a queue that already
@@ -125,6 +125,7 @@ backup:
 | `assets` | Logos, images and fonts for templates |
 | `template_files` | Uploaded Word and Excel templates. A row never changes, so a version keeps the file it was saved with |
 | `settings`, `ai_providers` | Intervals, retention, and the agent's model per provider with its key encrypted |
+| `agent_usage` | The agent's tokens per model step, and the cost when the provider reported one |
 
 The server applies migrations when it starts (`SPOOLDOC_MIGRATE=off` to
 run `pnpm --filter @spooldoc/web db:migrate` yourself).

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { EmptyState, Loading } from '@/components/empty-state';
+import { JobsPopover } from '@/components/jobs-popover';
 import { ErrorNote, Page } from '@/components/page';
 import { ActionsCell, ActionsHead, RowAction, RowMenu, useRowOpen } from '@/components/row-actions';
 import { ServerStatus, useReconnect } from '@/components/server-status';
@@ -95,7 +96,7 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
                 <th className="px-3 py-2 font-medium">Server</th>
                 <th className="px-3 py-2 font-medium">Libraries</th>
                 <th className="px-3 py-2 font-medium">Status</th>
-                <th className="px-3 py-2 text-right font-medium">Hidden queues</th>
+                <th className="px-3 py-2 text-right font-medium">Jobs</th>
                 <ActionsHead />
               </tr>
             </thead>
@@ -126,7 +127,13 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
                   <td className="px-3 py-2.5">
                     <ServerStatus server={server} connecting={pending === server.id} />
                   </td>
-                  <td className="tabular px-3 py-2.5 text-right">{server.hiddenQueues ?? 0}</td>
+                  <td className="tabular px-3 py-2.5 text-right">
+                    <JobsPopover
+                      jobs={server.jobs ?? []}
+                      label={`${server.jobs?.length ?? 0} ${server.jobs?.length === 1 ? 'job reads' : 'jobs read'} from ${server.name}`}
+                      heading="Jobs that read from this server"
+                    />
+                  </td>
                   <ActionsCell>
                     <RowAction onClick={() => void reconnect(server)} disabled={pending !== null}>
                       {pending === server.id ? <Spinner /> : <RefreshCwIcon />}

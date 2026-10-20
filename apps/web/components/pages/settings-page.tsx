@@ -1,10 +1,10 @@
 'use client';
 
-import { CopyIcon, RefreshCwIcon, SaveIcon } from 'lucide-react';
+import { CopyIcon, MousePointerClickIcon, RefreshCwIcon, SaveIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
-import { Loading } from '@/components/empty-state';
+import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,8 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { AI_PROVIDERS, aiProvider, DEFAULT_LOCAL_BASE_URL, EFFORTS, type AiProviderId, type Effort } from '@/lib/ai-providers';
-import { api, errorText } from '@/lib/client/api';
-import type { AiSettingsView, CarboneCheck, RenderingView, SettingsView } from '@/lib/types';
+import { api, errorText, isAbort } from '@/lib/client/api';
+import { usageText } from '@/lib/client/format';
+import type { AgentUsageView, AiSettingsView, CarboneCheck, RenderingView, SettingsView, UsageMonth } from '@/lib/types';
 
 type Unit = 's' | 'min';
 
@@ -239,7 +240,80 @@ function AiSection({ saved, ai, onChange }: { saved: AiSettingsView; ai: AiDraft
           </div>
         )}
       </div>
+      <AgentUsage />
     </section>
+  );
+}
+
+/** A `YYYY-MM` month as "October 2026". */
+function monthName(month: string): string {
+  const [year, number] = month.split('-').map(Number) as [number, number];
+  return new Date(Date.UTC(year, number - 1, 1)).toLocaleString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+/** One month's usage: a line per provider and model. */
+function UsageMonthList({ title, month }: { title: string; month: UsageMonth }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <h4 className="font-medium text-xs">
+        {title} <span className="font-normal text-muted-foreground">({monthName(month.month)})</span>
+      </h4>
+      {month.lines.length === 0 ? (
+        <p className="text-muted-foreground text-xs">The agent was not used.</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {month.lines.map((line) => (
+            <li key={`${line.provider}/${line.model}`} className="flex flex-wrap justify-between gap-x-4 text-sm">
+              <span className="min-w-0 break-all">
+                {AI_PROVIDERS.find((provider) => provider.id === line.provider)?.label ?? line.provider}, {line.model}
+              </span>
+              <span className="text-muted-foreground tabular-nums">{usageText(line)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The tokens the agent used this month and last month, and the cost where the provider
+ * reported it. Read-only: it loads on its own and is not part of the settings form.
+ */
+function AgentUsage() {
+  const [usage, setUsage] = useState<AgentUsageView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    api<AgentUsageView>(`/api/settings/agent-usage?tz=${encodeURIComponent(tz)}`, { signal: controller.signal }).then(setUsage, (err: unknown) => {
+      if (!isAbort(err)) setError(errorText(err));
+    });
+    return () => controller.abort();
+  }, []);
+
+  return (
+    <div className="mt-6 flex flex-col gap-3 border-t pt-5">
+      <div>
+        <h3 className="font-medium text-sm">Usage</h3>
+        <p className="text-muted-foreground text-xs">
+          Tokens the agent used, per provider and model. A cost shows only where the provider reports it: OpenRouter and the Vercel AI Gateway.
+          Usage is deleted with the retention below.
+        </p>
+      </div>
+      {error && <ErrorNote>Could not load the usage: {error}</ErrorNote>}
+      {!usage && !error && <Loading>Loading usage...</Loading>}
+      {usage &&
+        (usage.thisMonth.lines.length === 0 && usage.lastMonth.lines.length === 0 ? (
+          <EmptyState icon={MousePointerClickIcon} title="No usage yet" description="Tokens show here once the agent has answered in a job." className="py-6" />
+        ) : (
+          <>
+            <UsageMonthList title="This month" month={usage.thisMonth} />
+            <UsageMonthList title="Last month" month={usage.lastMonth} />
+          </>
+        ))}
+    </div>
   );
 }
 
@@ -424,8 +498,13 @@ function cleanupText(cleanup: NonNullable<SettingsView['cleanup']>): string {
   if (cleanup.error) return `The last cleanup, at ${at}, failed: ${cleanup.error}`;
   const runs = `${cleanup.runs} ${cleanup.runs === 1 ? 'run' : 'runs'}`;
   const samples = `${cleanup.samples} ${cleanup.samples === 1 ? 'spooled file' : 'spooled files'}`;
-  const files = cleanup.templateFiles > 0 ? ` and ${cleanup.templateFiles} unused Word ${cleanup.templateFiles === 1 ? 'template' : 'templates'}` : '';
-  return `The last cleanup, at ${at}, deleted ${runs}${files ? ', ' : ' and '}${samples}${files}.`;
+  const parts = [
+    runs,
+    samples,
+    cleanup.templateFiles > 0 && `${cleanup.templateFiles} unused Word ${cleanup.templateFiles === 1 ? 'template' : 'templates'}`,
+    cleanup.agentUsage > 0 && `${cleanup.agentUsage} agent usage ${cleanup.agentUsage === 1 ? 'record' : 'records'}`,
+  ].filter((part): part is string => typeof part === 'string');
+  return `The last cleanup, at ${at}, deleted ${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}.`;
 }
 
 /** App-wide settings: the Carbone connection, the agent's model, the watcher intervals and how long runs are kept. */
@@ -547,7 +626,7 @@ export function SettingsPage() {
                 <span className="text-sm">days</span>
               </div>
               <p className="text-muted-foreground text-xs">
-                1 to 3650 days. Preview samples no job uses are deleted after the same time. Old runs are cleaned up once an hour.
+                1 to 3650 days. Preview samples no job uses and the agent&apos;s usage are deleted after the same time. Old runs are cleaned up once an hour.
               </p>
               {settings.cleanup && <p className="text-muted-foreground text-xs">{cleanupText(settings.cleanup)}</p>}
             </div>

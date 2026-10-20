@@ -40,20 +40,47 @@ export async function listQueues(conn: Connection, server: ServerRow, q: string)
   });
 }
 
+type QueueJob = QueueView['jobs'][number];
+
 /**
- * The jobs that read from each output queue of a server, by upper-case `LIB/NAME`, in name
- * order. A job reads from the source of its active version, else of its draft.
+ * Every job that reads from an output queue, with its server and upper-case `LIB/NAME`, in
+ * name order. A job reads from the source of its active version, else of its draft.
  */
+async function jobSources(): Promise<{ serverId: string; queue: string; job: QueueJob }[]> {
+  return (await listJobs()).flatMap((job) =>
+    job.source.serverId
+      ? [
+          {
+            serverId: job.source.serverId,
+            queue: `${job.source.library}/${job.source.queue}`.toUpperCase(),
+            job: { id: job.id, name: job.name, mode: job.mode, paused: job.paused, activeVersion: job.activeVersion },
+          },
+        ]
+      : [],
+  );
+}
+
+/** Add `value` to the list under `key`. */
+function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
+  const list = map.get(key);
+  if (list) list.push(value);
+  else map.set(key, [value]);
+}
+
+/** The jobs that read from each output queue of a server, by upper-case `LIB/NAME`, in name order. */
 async function queueJobs(serverId: string): Promise<Map<string, QueueView['jobs']>> {
   const byQueue = new Map<string, QueueView['jobs']>();
-  for (const job of await listJobs()) {
-    if (job.source.serverId !== serverId) continue;
-    const key = `${job.source.library}/${job.source.queue}`.toUpperCase();
-    const list = byQueue.get(key) ?? [];
-    list.push({ id: job.id, name: job.name, mode: job.mode, paused: job.paused, activeVersion: job.activeVersion });
-    byQueue.set(key, list);
+  for (const source of await jobSources()) {
+    if (source.serverId === serverId) push(byQueue, source.queue, source.job);
   }
   return byQueue;
+}
+
+/** The jobs that read from any output queue of each server, by server id, in name order. */
+export async function serverJobs(): Promise<Map<string, QueueView['jobs']>> {
+  const byServer = new Map<string, QueueView['jobs']>();
+  for (const source of await jobSources()) push(byServer, source.serverId, source.job);
+  return byServer;
 }
 
 /**
