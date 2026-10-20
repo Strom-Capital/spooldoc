@@ -18,12 +18,11 @@ import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useAppInfo } from '@/components/app-info';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
 import { STEP_TITLE, STEPS } from '@/lib/client/job-steps';
+import { missingFields, type StepStatus } from '@/lib/client/step-status';
 import { contentLabel, formatList, hasOwnContent, type TemplateContent } from '@/lib/job-spec';
 import { cn } from '@/lib/utils';
 import { useJob, type Step } from './job-provider';
-
-/** How a step looks in the strip. */
-export type StepStatus = 'unset' | 'ok' | 'warn' | 'error';
+import { useStepStatuses } from './use-step-statuses';
 
 interface StepInfo {
   step: Step;
@@ -140,24 +139,15 @@ function useSteps(): StepInfo[] {
   const { spec, job, servers, destinations } = useJob();
   const { render, sampleId, templateId } = useWorkbench();
   const { rendering } = useAppInfo();
+  const { statuses } = useStepStatuses();
   const server = servers.find((s) => s.id === spec.source.serverId);
   const hasSource = !!spec.source.serverId && !!spec.source.library && !!spec.source.queue;
   const extract = render?.extract;
-  const missing = extract ? new Set(extract.hits.filter((h) => h.status === 'missing').map((h) => h.name)).size : 0;
+  const missing = extract ? missingFields(extract) : 0;
   const destination = destinations.find((d) => d.id === spec.destination.destinationId);
   const finish = spec.finish;
   const templates = spec.render.templates;
   const picked = templates.find((t) => t.id === templateId) ?? templates[0];
-
-  const extractStatus: StepStatus = !spec.extract.definition.trim()
-    ? 'unset'
-    : render?.definition?.error
-      ? 'error'
-      : !extract
-        ? 'unset'
-        : extract.pageGroups.length === 0 || missing > 0
-          ? 'warn'
-          : 'ok';
 
   return [
     {
@@ -166,7 +156,7 @@ function useSteps(): StepInfo[] {
       icon: InboxIcon,
       detail: hasSource ? `${spec.source.library}/${spec.source.queue}` : 'Pick a server and queue',
       sub: server?.name,
-      status: hasSource ? (server?.lastError ? 'warn' : 'ok') : 'unset',
+      status: statuses.source,
     },
     {
       step: 'trigger',
@@ -180,7 +170,7 @@ function useSteps(): StepInfo[] {
           : spec.trigger.mode === 'watch' && job.realtimeError
             ? 'Polled: real-time watching stopped'
             : undefined,
-      status: spec.trigger.mode === 'watch' && (job.lastWatchError || job.realtimeError || job.paused) ? 'warn' : 'ok',
+      status: statuses.trigger,
     },
     {
       step: 'extract',
@@ -194,7 +184,7 @@ function useSteps(): StepInfo[] {
             ? 'Definition to JSON'
             : 'Pick a spooled file',
       sub: extract ? (missing > 0 ? `${missing} missing ${missing === 1 ? 'field' : 'fields'}` : 'Every field found') : undefined,
-      status: extractStatus,
+      status: statuses.extract,
     },
     {
       step: 'render',
@@ -212,14 +202,14 @@ function useSteps(): StepInfo[] {
             : templates.length > 1
               ? templates.map((t) => `${t.name}: ${formatList(t.formats)}`).join(', ')
               : formatList(templates[0]!.formats),
-      status: !rendering || render?.carbone ? 'warn' : render?.template?.error ? 'error' : render?.html || render?.pdf ? 'ok' : 'unset',
+      status: statuses.render,
     },
     {
       step: 'destination',
       title: STEP_TITLE.destination,
       icon: SendIcon,
       detail: destination?.name ?? 'Pick a destination',
-      status: destination ? 'ok' : 'unset',
+      status: statuses.destination,
     },
     {
       step: 'finish',
@@ -235,7 +225,7 @@ function useSteps(): StepInfo[] {
             : finish.action === 'delete'
               ? 'Delete the spooled file'
               : 'Leave as is',
-      status: finish.action === 'move' && !finish.queue ? 'unset' : finish.action === 'delete' ? 'warn' : 'ok',
+      status: statuses.finish,
     },
   ];
 }
