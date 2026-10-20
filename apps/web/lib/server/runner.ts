@@ -300,7 +300,7 @@ async function prepareTemplate(template: JobTemplate, def: Definition, assets: s
   }
   let bytes: Uint8Array;
   if (template.fileId === null) {
-    bytes = template.kind === 'xlsx' ? starterXlsx(def, template.scope) : await starterDocx(def);
+    bytes = template.kind === 'xlsx' ? await starterXlsx(def, template.scope) : await starterDocx(def);
   } else {
     const file = await getTemplateFile(template.fileId);
     if (!file) throw new StepError('render', `The "${template.name}" template: ${TEMPLATE_FILE_GONE}`);

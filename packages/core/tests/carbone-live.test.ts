@@ -139,7 +139,7 @@ describe.skipIf(!url)("Carbone server", () => {
     const { sample, definition } = loadFixture(name);
     const { pageGroups } = extract(definition, sample);
     for (const scope of ["splf", "pageGroup"] as const) {
-      const template = starterXlsx(definition, scope);
+      const template = await starterXlsx(definition, scope);
       const read = readXlsx(template);
       expect(checkXlsx(read, definition, scope)).toEqual([]);
       const data = scope === "splf" ? spooledFileData(pageGroups, sample) : templateData(read, pageGroups[0]!, pageGroups, sample);
@@ -154,7 +154,7 @@ describe.skipIf(!url)("Carbone server", () => {
     const { sample, definition } = loadFixture("invoice");
     const { pageGroups } = extract(definition, sample);
     const lines = pageGroups.flatMap((g) => g.lines as { amount: number }[]);
-    const flat = starterXlsx(definition);
+    const flat = await starterXlsx(definition);
     // No formulas: hardRefresh comes from :formatN, and is still sent.
     expect(readXlsx(flat).sheets[0]!.formulas).toBe(0);
     expect(xlsxHardRefresh(readXlsx(flat))).toBe(true);
@@ -173,7 +173,7 @@ describe.skipIf(!url)("Carbone server", () => {
     // The page group starter's total under its table: LibreOffice computed and stored it.
     const first = pageGroups[0]!;
     const one = sheetCells(
-      await renderDocument(server, { kind: "xlsx", template: starterXlsx(definition, "pageGroup"), data: templateData(readXlsx(starterXlsx(definition, "pageGroup")), first, pageGroups, sample), format: "xlsx" }),
+      await renderDocument(server, { kind: "xlsx", template: await starterXlsx(definition, "pageGroup"), data: templateData(readXlsx(await starterXlsx(definition, "pageGroup")), first, pageGroups, sample), format: "xlsx" }),
     );
     const total = [...one.values()].find((cell) => cell.formula?.startsWith('SUM(INDIRECT(&quot;G'));
     expect(Number(total?.value)).toBeCloseTo((first.lines as { amount: number }[]).reduce((sum, line) => sum + line.amount, 0), 2);
@@ -243,9 +243,9 @@ describe.skipIf(!url)("Carbone server", () => {
   it("renders the Excel starter after an edit, its numbers still number cells", async () => {
     const { sample, definition } = loadFixture("invoice");
     const { pageGroups } = extract(definition, sample);
-    const template = editXlsx(starterXlsx(definition), [
-      { part: "xl/worksheets/sheet1.xml", find: '<t xml:space="preserve">Invoice No</t>', replace: "<t>Invoice</t>" },
-      { part: "xl/styles.xml", find: "<!--s=8-->", replace: '<xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/><!--s=8-->' },
+    const template = editXlsx(await starterXlsx(definition), [
+      { part: "xl/worksheets/sheet1.xml", find: "<t>Invoice No</t>", replace: "<t>Invoice</t>" },
+      { part: "xl/styles.xml", find: "</cellXfs>", replace: '<xf numFmtId="4" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/></cellXfs>' },
     ]);
     const read = readXlsx(template);
     expect(checkXlsx(read, definition)).toEqual([]);
@@ -262,7 +262,7 @@ describe.skipIf(!url)("Carbone server", () => {
     const { pageGroups } = extract(definition, sample);
     // 400 lines, enough for several pages.
     const many = Array.from({ length: 10 }, () => pageGroups).flat();
-    const pdf = await renderDocument(server, { kind: "xlsx", template: starterXlsx(definition), data: spooledFileData(many, sample), format: "pdf" });
+    const pdf = await renderDocument(server, { kind: "xlsx", template: await starterXlsx(definition), data: spooledFileData(many, sample), format: "pdf" });
     const pages = pdfPageCount(pdf)!;
     expect(pages).toBeGreaterThan(1);
     const sizes = pageSizes(pdf);

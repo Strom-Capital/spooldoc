@@ -494,6 +494,9 @@ const workbook = z.strictObject({
   activeSheet: z.number().int().min(0).optional(),
 });
 
+/** A design as `buildXlsx` takes it, before it is checked. */
+export type XlsxDesign = z.input<typeof workbook>;
+
 /** The number of objects and list items in a tree, counted up to `limit + 1`. */
 function countNodes(value: unknown, limit: number): number {
   let count = 0;
@@ -593,6 +596,29 @@ interface OneCellPicture {
   index: number;
 }
 
+/** The name Excel gives a sheet's filter range. */
+const FILTER_NAME = "_xlnm._FilterDatabase";
+
+/** A range with each cell absolute: `A1:F50` as `$A$1:$F$50`. */
+const absolute = (range: string): string => range.replace(/([A-Z]+)(\d+)/g, "$$$1$$$2");
+
+/**
+ * The names Excel keeps for a sheet's print area, print titles and filter, local to the
+ * sheet. hucre writes the first two without the quotes a sheet name such as `Order lines`
+ * needs, and the filter's not at all. Excel writes `_xlnm._FilterDatabase` with every
+ * filter, as LibreOffice and the other writers do; `finish` hides it, as Excel does.
+ */
+function builtInNames(design: SheetDesign): { name: string; range: string; scope: string }[] {
+  const sheet = quoted(design.name);
+  const page = design.pageSetup;
+  const titles = [page?.printTitlesRow, page?.printTitlesColumn].filter((t) => t !== undefined).map((t) => `${sheet}!${t}`);
+  return [
+    ...(page?.printArea !== undefined ? [{ name: "_xlnm.Print_Area", range: `${sheet}!${absolute(page.printArea)}`, scope: design.name }] : []),
+    ...(titles.length > 0 ? [{ name: "_xlnm.Print_Titles", range: titles.join(","), scope: design.name }] : []),
+    ...(design.autoFilter !== undefined ? [{ name: FILTER_NAME, range: `${sheet}!${absolute(design.autoFilter)}`, scope: design.name }] : []),
+  ];
+}
+
 /** Checks a design and turns it into hucre's options, collecting every problem with its path. */
 class Builder {
   readonly problems: string[] = [];
@@ -639,6 +665,7 @@ class Builder {
       if (seen.has(key)) this.problem(["definedNames", i, "name"], "The name is given twice.");
       seen.add(key);
     });
+    namedRanges.push(...design.sheets.flatMap(builtInNames));
     return {
       sheets,
       defaultFont: toFont(defaultFont, undefined),
@@ -901,22 +928,29 @@ class Builder {
       ...(d.horizontalCentered ? { horizontalCentered: true } : {}),
       ...(d.verticalCentered ? { verticalCentered: true } : {}),
       ...(d.printGridLines ? { showGridLines: true } : {}),
-      ...(d.printArea !== undefined ? { printArea: d.printArea.replace(/([A-Z]+)(\d+)/g, "$$$1$$$2") } : {}),
-      ...(d.printTitlesRow !== undefined ? { printTitlesRow: d.printTitlesRow } : {}),
-      ...(d.printTitlesColumn !== undefined ? { printTitlesColumn: d.printTitlesColumn } : {}),
     };
   }
 }
 
 /**
- * Anchors the pictures placed by their top-left cell to that cell alone, with their size
- * (`oneCellAnchor`). hucre writes every picture between two cells, which stretches it
- * over the cells when the design gives no end.
+ * Puts into the file hucre wrote what hucre cannot write:
+ *
+ * - The pictures placed by their top-left cell are anchored to that cell alone, with their
+ *   size (`oneCellAnchor`). hucre writes every picture between two cells, which stretches
+ *   it over the cells when the design gives no end.
+ * - A filter's `_xlnm._FilterDatabase` is hidden, as Excel writes it. hucre writes no
+ *   hidden names.
  */
-function anchorToOneCell(bytes: Uint8Array, pictures: OneCellPicture[]): Uint8Array {
-  if (pictures.length === 0) return bytes;
+function finish(bytes: Uint8Array, pictures: OneCellPicture[], filters: boolean): Uint8Array {
+  if (pictures.length === 0 && !filters) return bytes;
   const files = unzipSync(bytes);
   const text = (name: string): string => (files[name] ? strFromU8(files[name]) : "");
+  if (filters) {
+    const workbook = text("xl/workbook.xml");
+    if (!workbook.includes(`<definedName name="${FILTER_NAME}"`)) throw new Error(`hucre wrote no ${FILTER_NAME} name for the filters.`);
+    const hidden = workbook.replace(/<definedName name="_xlnm\._FilterDatabase"(?![^>]*\bhidden=)/g, '$& hidden="1"');
+    files["xl/workbook.xml"] = strToU8(hidden);
+  }
   const sheets = sheetFiles(text("xl/workbook.xml"), text("xl/_rels/workbook.xml.rels"));
   const bySheet = new Map<number, Set<number>>();
   for (const p of pictures) bySheet.set(p.sheet, (bySheet.get(p.sheet) ?? new Set()).add(p.index));
@@ -962,6 +996,8 @@ function anchorToOneCell(bytes: Uint8Array, pictures: OneCellPicture[]): Uint8Ar
  * setup, LibreOffice prints US Letter and cuts the columns. `scale` turns fitting off.
  * Margins are inches, or a length with a unit such as `"15mm"`.
  *
+ * A filter gets the hidden `_xlnm._FilterDatabase` name Excel writes with one.
+ *
  * Tables, charts, sparklines, protection and macros are not allowed: tables and charts
  * do not grow over the rows Carbone adds.
  *
@@ -980,5 +1016,5 @@ export async function buildXlsx(design: unknown, images: (name: string) => Desig
   }
   const options = builder.workbook(parsed.data);
   if (builder.problems.length > 0) throw new DesignError(builder.problems);
-  return anchorToOneCell(await writeXlsx(options), builder.oneCell);
+  return finish(await writeXlsx(options), builder.oneCell, parsed.data.sheets.some((sheet) => sheet.autoFilter !== undefined));
 }

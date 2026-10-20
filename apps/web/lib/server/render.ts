@@ -258,7 +258,7 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
   } else if (input.template.kind === 'xlsx' && result.template.kind === 'xlsx') {
     const scope = input.template.scope;
     try {
-      const bytes = input.template.file?.content ?? starterXlsx(def, scope);
+      const bytes = input.template.file?.content ?? await starterXlsx(def, scope);
       prepared = { kind: 'xlsx', bytes, read: readXlsx(bytes), scope };
     } catch (error) {
       result.template.error = message(error);

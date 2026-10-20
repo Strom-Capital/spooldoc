@@ -1,8 +1,9 @@
-import { strToU8, unzipSync, zipSync } from "fflate";
+import { unzipSync } from "fflate";
 import type { Definition, ValueType } from "./definition.js";
 import { short, tagParts, tagProblems, templatePaths, templateTags } from "./tags.js";
 import { fieldLabel, MAX_TEMPLATE_FILE_BYTES, starterLayout, type StarterBlock, type StarterColumn } from "./template.js";
-import { decodeXml, escapeXml, isOle, isZip, xmlAttribute } from "./xml.js";
+import { decodeXml, isOle, isZip, xmlAttribute } from "./xml.js";
+import { buildXlsx, type XlsxDesign } from "./xlsx-design.js";
 import { missingPrefixes } from "./xlsx-formula.js";
 import { columnName, elements, LAST_ROW, parseRange, parseRef, relationships, relsOf, sheetFiles } from "./xlsx-parts.js";
 import type { XlsxScope } from "./xlsx-scope.js";
@@ -679,38 +680,38 @@ export function sheetsWithoutPageSetup(template: XlsxTemplate): string[] {
   return template.sheets.filter((s) => !s.pageSetup).map((s) => s.name);
 }
 
-// The starter template, written as SpreadsheetML.
+// The starter template, written as a design for `buildXlsx`.
 
-const NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
-const XML_HEAD = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+type SheetDesign = XlsxDesign["sheets"][number];
+type CellDesign = NonNullable<SheetDesign["cells"]>[number];
+type StyleDesign = NonNullable<CellDesign["style"]>;
 
-/** The cell styles of the starter, by their index in `cellXfs`. */
-const STYLE = { text: 0, header: 1, headerNumber: 2, number: 3, date: 4, title: 5, totalLabel: 6, total: 7, label: 8 } as const;
+/** The font of every cell of the starter, unless its style says otherwise. */
+const STARTER_FONT = { name: "Arial", size: 10, color: "1A1A1A" };
 
-const STYLES = `${XML_HEAD}<styleSheet ${NS}>
-<numFmts count="2"><numFmt numFmtId="164" formatCode="#,##0.00"/><numFmt numFmtId="165" formatCode="dd.mm.yyyy"/></numFmts>
-<fonts count="4"><font><sz val="10"/><color rgb="FF1A1A1A"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="10"/><color rgb="FF1A1A1A"/><name val="Arial"/><family val="2"/></font><font><b/><sz val="14"/><color rgb="FF1A1A1A"/><name val="Arial"/><family val="2"/></font><font><sz val="10"/><color rgb="FF555555"/><name val="Arial"/><family val="2"/></font></fonts>
-<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE8E8E8"/><bgColor indexed="64"/></patternFill></fill></fills>
-<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FF333333"/></bottom><diagonal/></border><border><left/><right/><top style="thin"><color rgb="FF333333"/></top><bottom/><diagonal/></border></borders>
-<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-<cellXfs count="9">
-<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
-<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
-<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right"/></xf>
-<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>
-<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment horizontal="left"/></xf>
-<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
-<xf numFmtId="0" fontId="1" fillId="0" borderId="2" xfId="0" applyFont="1" applyBorder="1"/>
-<xf numFmtId="164" fontId="1" fillId="0" borderId="2" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1"/>
-<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>
-</cellXfs>
-<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
-</styleSheet>`;
+const RULE = { style: "thin", color: "333333" } as const;
+const HEADER: StyleDesign = { font: { bold: true }, fill: { type: "pattern", pattern: "solid", fgColor: "E8E8E8" }, border: { bottom: RULE } };
+const NUMBER_FORMAT = "#,##0.00";
+
+/** The cell styles of the starter. */
+const STYLE = {
+  header: HEADER,
+  headerNumber: { ...HEADER, alignment: { horizontal: "right" } },
+  number: { numFmt: NUMBER_FORMAT },
+  date: { numFmt: "dd.mm.yyyy", alignment: { horizontal: "left" } },
+  title: { font: { bold: true, size: 14 } },
+  totalLabel: { font: { bold: true }, border: { top: RULE } },
+  total: { numFmt: NUMBER_FORMAT, font: { bold: true }, border: { top: RULE } },
+  label: { font: { color: "555555" } },
+} satisfies Record<string, StyleDesign>;
+
+/** "Page 1 of 2" at the right of each page's footer, in 8 points. */
+const PAGE_FOOTER = "&R&8Page &P of &N";
 
 /** A cell of the starter: text (which may hold tags) or a formula, with its style. */
-type StarterCell = { text: string; style?: number } | { formula: string; style?: number } | null;
+type StarterCell = { text: string; style?: StyleDesign } | { formula: string; style?: StyleDesign } | null;
 
-/** A sheet of the starter, before it is written as XML. */
+/** A sheet of the starter, before it is written as a design. */
 interface StarterSheet {
   name: string;
   rows: StarterCell[][];
@@ -729,8 +730,8 @@ function columnWidth(column: StarterColumn, label = fieldLabel(column.name)): nu
   return Math.min(40, Math.max(8, label.length + 2, values + 2));
 }
 
-const cellStyle = (type?: ValueType): number => (type === "number" ? STYLE.number : type === "date" ? STYLE.date : STYLE.text);
-const headerStyle = (type?: ValueType): number => (type === "number" ? STYLE.headerNumber : STYLE.header);
+const cellStyle = (type?: ValueType): StyleDesign | undefined => (type === "number" ? STYLE.number : type === "date" ? STYLE.date : undefined);
+const headerStyle = (type?: ValueType): StyleDesign => (type === "number" ? STYLE.headerNumber : STYLE.header);
 
 /** A text without its tags, such as a title `Invoice {d.pg.invoiceNo}`: `Invoice `. One pass with `indexOf`. */
 export function withoutTags(text: string): string {
@@ -745,11 +746,17 @@ export function withoutTags(text: string): string {
   return out + text.slice(from);
 }
 
-/** A sheet name Excel takes: at most 31 characters, none of `[]:*?/\`, and not one already used. */
+/** A sheet name Excel takes: at most 31 characters, none of `[]:*?/\`, no apostrophe at either end, not "History", and not one already used. */
 function sheetName(wanted: string, used: Set<string>): string {
-  const base = wanted.replace(/[[\]:*?/\\{}]+/g, " ").replace(/\s+/g, " ").trim().slice(0, 31).trim() || "Sheet";
+  const base =
+    wanted
+      .replace(/[[\]:*?/\\{}]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 31)
+      .replace(/^[\s']+|[\s']+$/g, "") || "Sheet";
   let name = base;
-  for (let n = 2; used.has(name.toLowerCase()); n++) name = `${base.slice(0, 28)} ${n}`;
+  for (let n = 2; used.has(name.toLowerCase()) || name.toLowerCase() === "history"; n++) name = `${base.slice(0, 28)} ${n}`;
   used.add(name.toLowerCase());
   return name;
 }
@@ -835,69 +842,43 @@ function pageGroupSheets(title: string, fields: StarterColumn[], blocks: Starter
   return sheets;
 }
 
-/** One sheet as SpreadsheetML, with its strings added to `strings`. */
-function sheetXml(sheet: StarterSheet, first: boolean, strings: Map<string, number>): string {
-  const index = (text: string): number => {
-    let n = strings.get(text);
-    if (n === undefined) {
-      n = strings.size;
-      strings.set(text, n);
-    }
-    return n;
-  };
-  const lastColumn = Math.max(1, sheet.widths.length, ...sheet.rows.map((r) => r.length));
+/** One sheet of the starter as a design: its cells, column widths, header row and page setup. */
+function sheetDesign(sheet: StarterSheet): SheetDesign {
+  const lastColumn = columnName(Math.max(1, sheet.widths.length, ...sheet.rows.map((r) => r.length)));
   const landscape = sheet.widths.reduce((sum, w) => sum + w, 0) > PORTRAIT_CHARACTERS;
-  const rows = sheet.rows
-    .map((row, r) => {
-      const cells = row
-        .map((cell, c) => {
-          if (!cell) return "";
-          const ref = `${columnName(c + 1)}${r + 1}`;
-          const style = cell.style ? ` s="${cell.style}"` : "";
-          if ("formula" in cell) return `<c r="${ref}"${style}><f>${escapeXml(cell.formula)}</f></c>`;
-          if (cell.text === "") return style ? `<c r="${ref}"${style}/>` : "";
-          return `<c r="${ref}"${style} t="s"><v>${index(cell.text)}</v></c>`;
-        })
-        .join("");
-      return `<row r="${r + 1}">${cells}</row>`;
-    })
-    .join("");
+  const cells = sheet.rows.flatMap((row, r) =>
+    row.flatMap((cell, c): CellDesign[] => {
+      if (!cell) return [];
+      const ref = `${columnName(c + 1)}${r + 1}`;
+      const style = cell.style ? { style: cell.style } : {};
+      if ("formula" in cell) return [{ ref, value: { formula: cell.formula }, ...style }];
+      if (cell.text === "") return cell.style ? [{ ref, ...style }] : [];
+      return [{ ref, value: cell.text, ...style }];
+    }),
+  );
   const header = sheet.header;
-  const pane = header
-    ? `<pane ySplit="${header.row}" topLeftCell="A${header.row + 1}" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A${header.row + 1}" sqref="A${header.row + 1}"/>`
-    : "";
-  const cols = sheet.widths.map((w, n) => `<col min="${n + 1}" max="${n + 1}" width="${w}" customWidth="1"/>`).join("");
-  return [
-    `${XML_HEAD}<worksheet ${NS}>`,
-    `<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>`,
-    `<dimension ref="A1:${columnName(lastColumn)}${Math.max(1, sheet.rows.length)}"/>`,
-    `<sheetViews><sheetView workbookViewId="0"${first ? ' tabSelected="1"' : ""}>${pane}</sheetView></sheetViews>`,
-    `<sheetFormatPr defaultRowHeight="12.75"/>`,
-    cols ? `<cols>${cols}</cols>` : "",
-    `<sheetData>${rows}</sheetData>`,
-    header?.filter ? `<autoFilter ref="A${header.row}:${columnName(lastColumn)}${LAST_ROW}"/>` : "",
-    `<pageMargins left="0.4" right="0.4" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>`,
-    `<pageSetup paperSize="9" orientation="${landscape ? "landscape" : "portrait"}" fitToWidth="1" fitToHeight="0"/>`,
-    `<headerFooter><oddFooter>&amp;R&amp;8Page &amp;P of &amp;N</oddFooter></headerFooter>`,
-    `</worksheet>`,
-  ].join("");
+  return {
+    name: sheet.name,
+    ...(header ? { views: { frozen: { rows: header.row } } } : {}),
+    columns: sheet.widths.map((width, n) => ({ ref: columnName(n + 1), width })),
+    cells,
+    ...(header?.filter ? { autoFilter: `A${header.row}:${lastColumn}${LAST_ROW}` } : {}),
+    pageSetup: {
+      paperSize: "A4",
+      orientation: landscape ? "landscape" : "portrait",
+      fitToWidth: 1,
+      fitToHeight: 0,
+      ...(header?.printTitles ? { printTitlesRow: `${header.row}:${header.row}` } : {}),
+    },
+    headerFooter: { oddFooter: PAGE_FOOTER },
+  };
 }
 
 /**
- * An Excel starter template for a definition, built from `starterLayout`, that keeps every
- * rule of Carbone's Excel output: numbers with `:formatN` in number-formatted cells, dates as
- * Excel serials in date-formatted cells, totals (per page group) that stay right when rows are added, no
- * merged cells, and a page setup on each sheet for the PDF: A4, landscape when the columns are
- * wider than portrait fits, one page wide, the header row on each page and "Page 1 of 2" in
- * the footer. The user opens it in Excel, styles it, and uploads it.
- *
- * - `splf` (the default): a flat sheet per table, record or group, with a row per line and
- *   the page group's fields repeated on each row, and a frozen header row with a filter on
- *   the whole columns. No totals. Without a table, a row per page group.
- * - `pageGroup`: the title and the fields, then a table for each table, record or group,
- *   each with its total under it.
+ * The design of the Excel starter template for a definition, as `buildXlsx` takes it: see
+ * `starterXlsx`.
  */
-export function starterXlsx(def: Definition, scope: XlsxScope = "splf"): Uint8Array {
+function starterXlsxDesign(def: Definition, scope: XlsxScope = "splf"): XlsxDesign {
   const { title, fields, blocks } = starterLayout(def);
   const used = new Set<string>();
   const usable = blocks.filter((b) => b.columns.length > 0);
@@ -907,49 +888,24 @@ export function starterXlsx(def: Definition, scope: XlsxScope = "splf"): Uint8Ar
       : usable.length === 0
         ? [flatSheet(sheetName(withoutTags(title), used), fields, undefined)]
         : usable.map((block) => flatSheet(sheetName(fieldLabel(block.name), used), fields, block));
-  const strings = new Map<string, number>();
-  const sheetFilesXml = sheets.map((sheet, n) => sheetXml(sheet, n === 0, strings));
-  const defined = sheets.flatMap((sheet, n) => {
-    const h = sheet.header;
-    if (!h) return [];
-    const ref = sheetRef(sheet.name);
-    const last = columnName(Math.max(1, sheet.widths.length));
-    return [
-      ...(h.filter ? [`<definedName name="_xlnm._FilterDatabase" localSheetId="${n}" hidden="1">${escapeXml(`${ref}!$A$${h.row}:$${last}$${LAST_ROW}`)}</definedName>`] : []),
-      ...(h.printTitles ? [`<definedName name="_xlnm.Print_Titles" localSheetId="${n}">${escapeXml(`${ref}!$${h.row}:$${h.row}`)}</definedName>`] : []),
-    ];
-  });
-  const shared = [...strings.keys()].map((text) => `<si><t xml:space="preserve">${escapeXml(text)}</t></si>`).join("");
-  const files: Record<string, Uint8Array> = {
-    "[Content_Types].xml": strToU8(
-      `${XML_HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${sheets
-        .map((_, n) => `<Override PartName="/xl/worksheets/sheet${n + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`)
-        .join(
-          "",
-        )}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`,
-    ),
-    "_rels/.rels": strToU8(
-      `${XML_HEAD}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`,
-    ),
-    "docProps/core.xml": strToU8(
-      `${XML_HEAD}<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:title>${escapeXml(title)}</dc:title><dc:creator>Spooldoc</dc:creator></cp:coreProperties>`,
-    ),
-    "docProps/app.xml": strToU8(
-      `${XML_HEAD}<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Spooldoc</Application></Properties>`,
-    ),
-    "xl/workbook.xml": strToU8(
-      `${XML_HEAD}<workbook ${NS}><bookViews><workbookView/></bookViews><sheets>${sheets
-        .map((sheet, n) => `<sheet name="${escapeXml(sheet.name)}" sheetId="${n + 1}" r:id="rId${n + 1}"/>`)
-        .join("")}</sheets>${defined.length > 0 ? `<definedNames>${defined.join("")}</definedNames>` : ""}<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`,
-    ),
-    "xl/_rels/workbook.xml.rels": strToU8(
-      `${XML_HEAD}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets
-        .map((_, n) => `<Relationship Id="rId${n + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${n + 1}.xml"/>`)
-        .join("")}<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId${sheets.length + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>`,
-    ),
-    "xl/styles.xml": strToU8(STYLES),
-    "xl/sharedStrings.xml": strToU8(`${XML_HEAD}<sst ${NS} count="${strings.size}" uniqueCount="${strings.size}">${shared}</sst>`),
-  };
-  sheetFilesXml.forEach((xml, n) => (files[`xl/worksheets/sheet${n + 1}.xml`] = strToU8(xml)));
-  return zipSync(files, { level: 6 });
+  return { defaultFont: STARTER_FONT, sheets: sheets.map(sheetDesign) };
+}
+
+/**
+ * An Excel starter template for a definition, built from `starterLayout`, that keeps every
+ * rule of Carbone's Excel output: numbers with `:formatN` in number-formatted cells, dates as
+ * Excel serials in date-formatted cells, totals (per page group) that stay right when rows are added, no
+ * merged cells, and a page setup on each sheet for the PDF: A4, landscape when the columns are
+ * wider than portrait fits, one page wide, the header row on each page and "Page 1 of 2" in
+ * the footer. The user opens it in Excel, styles it, and uploads it. It is a design written
+ * with `buildXlsx`, as the agent's designs are.
+ *
+ * - `splf` (the default): a flat sheet per table, record or group, with a row per line and
+ *   the page group's fields repeated on each row, and a frozen header row with a filter on
+ *   the whole columns. No totals. Without a table, a row per page group.
+ * - `pageGroup`: the title and the fields, then a table for each table, record or group,
+ *   each with its total under it.
+ */
+export async function starterXlsx(def: Definition, scope: XlsxScope = "splf"): Promise<Uint8Array> {
+  return buildXlsx(starterXlsxDesign(def, scope));
 }

@@ -158,14 +158,14 @@ describe("editXlsx", () => {
     expect(readXlsx(out).cells.find((c) => c.ref === "A9")?.text).toBe("New");
   });
 
-  it("edits the starter: a header's text and a new cell format", () => {
+  it("edits the starter: a header's text and a new cell format", async () => {
     const { definition } = loadFixture("invoice");
-    const out = editXlsx(starterXlsx(definition), [
-      { part: SHEET1, find: '<t xml:space="preserve">Invoice No</t>', replace: "<t>Invoice</t>" },
-      { part: "xl/styles.xml", find: "<!--s=8-->", replace: '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><!--s=8-->' },
+    const out = editXlsx(await starterXlsx(definition), [
+      { part: SHEET1, find: "<t>Invoice No</t>", replace: "<t>Invoice</t>" },
+      { part: "xl/styles.xml", find: "</cellXfs>", replace: '<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/></cellXfs>' },
     ]);
     expect(readXlsx(out).cells[0]).toEqual({ sheet: "Lines", ref: "A1", row: 1, text: "Invoice" });
-    expect(text(out, "xl/styles.xml")).toContain('<cellXfs count="10">');
+    expect(text(out, "xl/styles.xml")).toContain('<cellXfs count="6">');
   });
 
   it("refuses an edit that does not match once, all or none", () => {

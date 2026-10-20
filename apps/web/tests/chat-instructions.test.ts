@@ -238,13 +238,13 @@ describe('Excel templates in the instructions', () => {
 
   it("shows a file's text by sheet and cell, its scope and what the tag check finds", async () => {
     const def = parseDefinition(yaml);
-    const notes = await fileTemplates([excel({ scope: 'pageGroup' })], yaml, async () => ({ name: 'lines.xlsx', content: starterXlsx(def, 'pageGroup') }));
+    const notes = await fileTemplates([excel({ scope: 'pageGroup' })], yaml, async () => ({ name: 'lines.xlsx', content: await starterXlsx(def, 'pageGroup') }));
     // The page group starter, read as the whole spooled file: every d.pg tag is a problem.
     const text = buildInstructions({ sample, definitionYaml: yaml, templates: lines, masked: false, fileTemplates: notes });
     expect(text).toContain('### 1. Lines (id `lines`): Excel, XLSX and PDF, one file per spooled file');
     expect(text).toContain('An Excel template file, `lines.xlsx`. Each file holds one page group');
     expect(text).toContain('Invoice!B3: {d.pg.invoiceNo}');
-    const spooled = await fileTemplates(lines, yaml, async () => ({ name: 'lines.xlsx', content: starterXlsx(def, 'pageGroup') }));
+    const spooled = await fileTemplates(lines, yaml, async () => ({ name: 'lines.xlsx', content: await starterXlsx(def, 'pageGroup') }));
     expect(spooled.lines).toMatchObject({ kind: 'xlsx', scope: 'splf' });
     const problems = buildInstructions({ sample, definitionYaml: yaml, templates: lines, masked: false, fileTemplates: spooled });
     expect(problems).toContain('- Invoice!B3: {d.pg.invoiceNo} and 23 other cells read one page group, but this template gets every page group in one file');

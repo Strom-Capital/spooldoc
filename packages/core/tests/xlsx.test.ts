@@ -231,10 +231,10 @@ describe("checkXlsx: what Carbone does not move", () => {
 });
 
 describe("starterXlsx", () => {
-  it.each(FIXTURES)("makes %s starters whose tags pass the check, with a page setup on every sheet", (name) => {
+  it.each(FIXTURES)("makes %s starters whose tags pass the check, with a page setup on every sheet", async (name) => {
     const { definition: def } = loadFixture(name);
     for (const scope of ["splf", "pageGroup"] as const) {
-      const read = readXlsx(starterXlsx(def, scope));
+      const read = readXlsx(await starterXlsx(def, scope));
       expect(checkXlsx(read, def, scope)).toEqual([]);
       expect(sheetsWithoutPageSetup(read)).toEqual([]);
       expect(read.sheets.every((sheet) => sheet.merges.length === 0)).toBe(true);
@@ -244,8 +244,8 @@ describe("starterXlsx", () => {
     }
   });
 
-  it("lays out a whole spooled file as one flat sheet: a header row, a row per line with the page group's fields, and no totals", () => {
-    const bytes = starterXlsx(definition);
+  it("lays out a whole spooled file as one flat sheet: a header row, a row per line with the page group's fields, and no totals", async () => {
+    const bytes = await starterXlsx(definition);
     const read = readXlsx(bytes);
     expect(read.sheets.map((sheet) => sheet.name)).toEqual(["Lines"]);
     const row = (n: number) => read.cells.filter((c) => c.row === n).map((c) => c.text);
@@ -258,30 +258,38 @@ describe("starterXlsx", () => {
     const files = unzipSync(bytes);
     const sheet = strFromU8(files["xl/worksheets/sheet1.xml"]!);
     expect(sheet).not.toContain("<f>");
-    expect(sheet).toContain('<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>');
+    expect(sheet).toContain('<pane ySplit="1" topLeftCell="A2" state="frozen" activePane="bottomLeft"/>');
     expect(sheet).toContain('<autoFilter ref="A1:W1048576"/>');
     expect(sheet).toContain('<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>');
     expect(sheet).toContain("Page &amp;P of &amp;N");
     expect(strFromU8(files["xl/workbook.xml"]!)).toContain('<definedName name="_xlnm.Print_Titles" localSheetId="0">Lines!$1:$1</definedName>');
   });
 
-  it("lays out one page group: the title, the fields and a table with its total under it", () => {
-    const bytes = starterXlsx(definition, "pageGroup");
+  it("lays out one page group: the title, the fields and a table with its total under it", async () => {
+    const bytes = await starterXlsx(definition, "pageGroup");
     const read = readXlsx(bytes);
     expect(read.sheets.map((sheet) => sheet.name)).toEqual(["Invoice"]);
     expect(read.cells.slice(0, 3).map((c) => `${c.ref}=${c.text}`)).toEqual(["A1=Invoice", "A3=Invoice No", "B3={d.pg.invoiceNo}"]);
     expect(read.cells.map((c) => c.text)).toContain("{d.pg.lines[i].amount:formatN}");
     expect(read.cells.map((c) => c.text)).toContain("{d.pg.lines[i+1]}");
-    expect(strFromU8(unzipSync(bytes)["xl/worksheets/sheet1.xml"]!)).toContain("<f>SUM(INDIRECT(&quot;G22:G&quot;&amp;ROW()-1))</f>");
+    expect(strFromU8(unzipSync(bytes)["xl/worksheets/sheet1.xml"]!)).toContain('<f>SUM(INDIRECT("G22:G"&amp;ROW()-1))</f>');
   });
 
-  it("makes a row per page group when the definition has no table, and a sheet name Excel takes", () => {
+  it("makes a row per page group when the definition has no table, and a sheet name Excel takes", async () => {
     const def = { ...definition, text: { ...definition.text!, tables: [] }, output: { name: "invoice", title: "Invoice {d.pg.invoiceNo}: copy" } };
-    const read = readXlsx(starterXlsx(def));
+    const read = readXlsx(await starterXlsx(def));
     expect(read.sheets.map((sheet) => sheet.name)).toEqual(["Invoice copy"]);
     expect(read.cells.map((c) => c.text)).toContain("{d.pgs[i].totalAmount:formatN}");
     expect(read.cells.map((c) => c.text)).toContain("{d.pgs[i+1]}");
     expect(checkXlsx(read, def)).toEqual([]);
+  });
+
+  it("names no sheet History, which Excel keeps for itself, and none with an apostrophe at either end", async () => {
+    const lines = definition.text!.tables![0]!;
+    const history = { ...definition, text: { ...definition.text!, tables: [{ ...lines, name: "history" }] } };
+    expect(readXlsx(await starterXlsx(history)).sheets.map((sheet) => sheet.name)).toEqual(["History 2"]);
+    const quoted = { ...definition, text: { ...definition.text!, tables: [] }, output: { name: "invoice", title: "'Invoices'" } };
+    expect(readXlsx(await starterXlsx(quoted)).sheets.map((sheet) => sheet.name)).toEqual(["Invoices"]);
   });
 });
 
