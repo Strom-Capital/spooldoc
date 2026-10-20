@@ -89,8 +89,9 @@ The job you edit is the draft. Saving a version takes a fixed copy of the
 draft, numbered from 1, with a note of what changed. Runs use the active
 version, which is the newest unless you activate an older one, and every
 run is logged against the version it used. Restoring a version copies it
-back into the draft. A draft that differs from the active version is
-marked, so you know what runs and what you are still working on.
+back into the draft. Pills beside the job name show the active version,
+or Draft only before the first one, and Draft changed when the draft
+differs from it, so you know what runs and what you are still working on.
 
 A version must be complete: a server and queue, a definition, templates
 with different names, and a destination, plus the queue to move files to
