@@ -1,11 +1,12 @@
 'use client';
 
-import { CheckIcon, CopyIcon, ImageIcon, MoreHorizontalIcon, PlusIcon, RefreshCwIcon, Trash2Icon, TypeIcon } from 'lucide-react';
+import { CheckIcon, CopyIcon, ImageIcon, PlusIcon, RefreshCwIcon, Trash2Icon, TypeIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
+import { RowMenu } from '@/components/row-actions';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,7 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
@@ -146,23 +147,17 @@ export function AssetsPage() {
                       <span title={asset.updatedAt}>, changed {ago(asset.updatedAt)}</span>
                     </p>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-sm" aria-label={`More actions for ${asset.name}`} disabled={replacing === asset.id}>
-                        {replacing === asset.id ? <Spinner /> : <MoreHorizontalIcon />}
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onSelect={() => chooseReplacement(asset)}>
-                        <RefreshCwIcon />
-                        Replace file
-                      </DropdownMenuItem>
-                      <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(asset)}>
-                        <Trash2Icon />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  <RowMenu label={asset.name} busy={replacing === asset.id}>
+                    <DropdownMenuItem onSelect={() => chooseReplacement(asset)}>
+                      <RefreshCwIcon />
+                      Replace file
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(asset)}>
+                      <Trash2Icon />
+                      Delete
+                    </DropdownMenuItem>
+                  </RowMenu>
                 </div>
                 <UsageSnippet text={usage(asset)} />
                 <div className="mt-auto text-xs">

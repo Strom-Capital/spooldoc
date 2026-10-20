@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Page } from '@/components/page';
+import { RowOpenButton, useRowOpen } from '@/components/row-actions';
 import { ServerErrorNote } from '@/components/server-status';
 import { Input } from '@/components/ui/input';
-import { ChevronDownIcon, EyeIcon, InboxIcon, RefreshCwIcon, SearchXIcon, XIcon } from 'lucide-react';
+import { ChevronDownIcon, InboxIcon, RefreshCwIcon, SearchXIcon, XIcon } from 'lucide-react';
 import { SkeletonRows } from '@/components/skeleton-rows';
 import { SpoolFileDialog } from '@/components/spool-file-dialog';
 import { SpooledFileStatus } from '@/components/spooled-file-status';
@@ -63,6 +64,7 @@ export function QueueFilesPage({
   const [checking, setChecking] = useState(false);
   const reportFor = useRef<number | null>(null);
   const filtered = !!(name.trim() || userData.trim() || job.trim() || status);
+  const rowOpen = useRowOpen();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -248,16 +250,17 @@ export function QueueFilesPage({
                 <th className="px-3 py-2 font-medium">Width x length</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 font-medium">Created</th>
-                <th className="px-3 py-2">
-                  <span className="sr-only">View</span>
-                </th>
               </tr>
             </thead>
             <tbody aria-busy={loading} className={cn(loading && !!files?.length && 'opacity-60 transition-opacity')}>
-              {!files && !error && <SkeletonRows widths={['w-20', 'ml-auto w-8', 'w-36', 'w-16', 'ml-auto w-6', 'w-16', 'w-16 rounded-full', 'w-32', 'ml-auto w-14']} />}
+              {!files && !error && <SkeletonRows widths={['w-20', 'ml-auto w-8', 'w-36', 'w-16', 'ml-auto w-6', 'w-16', 'w-16 rounded-full', 'w-32']} />}
               {files?.map((file) => (
-                <tr key={key(file)} className="cursor-pointer border-t hover:bg-muted/40" onClick={() => setViewing(file)}>
-                  <td className="px-3 py-2 font-medium font-mono text-xs">{file.name}</td>
+                <tr key={key(file)} {...rowOpen(() => setViewing(file), 'border-t')}>
+                  <td className="px-3 py-2">
+                    <RowOpenButton onClick={() => setViewing(file)} className="font-mono text-xs">
+                      {file.name}
+                    </RowOpenButton>
+                  </td>
                   <td className="tabular px-3 py-2 text-right">{file.number}</td>
                   <td className="px-3 py-2 font-mono text-xs">
                     {file.jobNumber}/{file.jobUser}/{file.jobName}
@@ -271,26 +274,13 @@ export function QueueFilesPage({
                     <SpooledFileStatus status={file.status} />
                   </td>
                   <td className="tabular whitespace-nowrap px-3 py-2 text-muted-foreground">{file.attributes.created.replace('T', ' ')}</td>
-                  <td className="px-2 py-1 text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setViewing(file);
-                      }}
-                    >
-                      <EyeIcon />
-                      View
-                    </Button>
-                  </td>
                 </tr>
               ))}
               {files?.length === 0 &&
                 (!loading || checking) &&
                 (filtered ? (
                   <TableEmpty
-                    colSpan={9}
+                    colSpan={8}
                     icon={SearchXIcon}
                     title="No spooled files match"
                     description="Nothing on this queue matches the filters."
@@ -311,7 +301,7 @@ export function QueueFilesPage({
                   </TableEmpty>
                 ) : (
                   <TableEmpty
-                    colSpan={9}
+                    colSpan={8}
                     icon={InboxIcon}
                     title={`${library}/${queue} is empty`}
                     description="When a program prints to this queue, its spooled files show up here. A job that watches the queue turns each new one into documents."

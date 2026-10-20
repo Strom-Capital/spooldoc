@@ -1,11 +1,12 @@
 'use client';
 
-import { InboxIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, RefreshCwIcon, ServerIcon, Trash2Icon } from 'lucide-react';
+import { PencilIcon, PlusIcon, RefreshCwIcon, ServerIcon, Trash2Icon } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
+import { ActionsCell, ActionsHead, RowAction, RowMenu, useRowOpen } from '@/components/row-actions';
 import { ServerStatus, useReconnect } from '@/components/server-status';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,7 +19,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
 import { api, errorText } from '@/lib/client/api';
 import type { ServerView } from '@/lib/types';
@@ -49,6 +50,7 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
 
   // The row shows the result either way: Connected, or why not.
   const { reconnect, pending } = useReconnect(() => void load());
+  const rowOpen = useRowOpen();
 
   async function remove(server: ServerView) {
     try {
@@ -94,16 +96,16 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
                 <th className="px-3 py-2 font-medium">Libraries</th>
                 <th className="px-3 py-2 font-medium">Status</th>
                 <th className="px-3 py-2 text-right font-medium">Hidden queues</th>
-                <th className="px-3 py-2">
-                  <span className="sr-only">Actions</span>
-                </th>
+                <ActionsHead />
               </tr>
             </thead>
             <tbody>
               {servers.map((server) => (
-                <tr key={server.id} className="border-t align-top">
+                <tr key={server.id} {...rowOpen(`/queues?server=${server.id}`, 'border-t align-top')}>
                   <td className="px-3 py-2.5">
-                    <div className="font-medium">{server.name}</div>
+                    <Link href={`/queues?server=${server.id}`} className="font-medium text-primary hover:underline">
+                      {server.name}
+                    </Link>
                     <div className="font-mono text-muted-foreground text-xs">
                       {server.user}@{server.host}
                     </div>
@@ -125,37 +127,27 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
                     <ServerStatus server={server} connecting={pending === server.id} />
                   </td>
                   <td className="tabular px-3 py-2.5 text-right">{server.hiddenQueues ?? 0}</td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center justify-end gap-1">
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/queues?server=${server.id}`}>
-                          <InboxIcon />
-                          Queues
-                        </Link>
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => void reconnect(server)} disabled={pending !== null}>
-                        {pending === server.id ? <Spinner /> : <RefreshCwIcon />}
+                  <ActionsCell>
+                    <RowAction onClick={() => void reconnect(server)} disabled={pending !== null}>
+                      {pending === server.id ? <Spinner /> : <RefreshCwIcon />}
+                      Reconnect
+                    </RowAction>
+                    <RowMenu label={server.name}>
+                      <DropdownMenuItem onSelect={() => void reconnect(server)} disabled={pending !== null}>
+                        <RefreshCwIcon />
                         Reconnect
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon-sm" aria-label={`More actions for ${server.name}`}>
-                            <MoreHorizontalIcon />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onSelect={() => setEditing(server)}>
-                            <PencilIcon />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(server)}>
-                            <Trash2Icon />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </td>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setEditing(server)}>
+                        <PencilIcon />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(server)}>
+                        <Trash2Icon />
+                        Delete
+                      </DropdownMenuItem>
+                    </RowMenu>
+                  </ActionsCell>
                 </tr>
               ))}
             </tbody>

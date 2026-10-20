@@ -41,6 +41,7 @@ import { dateTime } from '@/lib/client/format';
 import { deleteNotice, startsDeleting } from '@/lib/job-spec';
 import type { JobDetail } from '@/lib/types';
 import { AiButton, AiSidebar, useAiSidebar } from './ai-sidebar';
+import { DeleteJobDialog } from './delete-job-dialog';
 import { DestinationInspector, FinishInspector, SourceInspector } from './inspectors';
 import { TriggerInspector } from './trigger-inspector';
 import { SaveVersionDialog, RunNowDialog } from './job-dialogs';
@@ -132,16 +133,6 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
     setEditing(false);
     if (name && name !== job.name) {
       await updateJob({ name }).catch((err) => toast.error('Could not rename the job', { description: errorText(err) }));
-    }
-  }
-
-  async function onDelete() {
-    try {
-      await api(`/api/jobs/${job.id}`, { method: 'DELETE' });
-      toast.success(`Deleted ${job.name}`);
-      router.push('/jobs');
-    } catch (err) {
-      toast.error(`Could not delete ${job.name}`, { description: errorText(err) });
     }
   }
 
@@ -274,22 +265,7 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <AlertDialog open={deleting} onOpenChange={setDeleting}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {job.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The job, its versions, its runs and their files are deleted. Nothing changes on the IBM i.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction variant="destructive" onClick={onDelete}>
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteJobDialog job={deleting ? job : null} onClose={() => setDeleting(false)} onDeleted={() => router.push('/jobs')} />
     </div>
   );
 }

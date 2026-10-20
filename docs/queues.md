@@ -29,10 +29,12 @@ Draft only. On a hidden queue, the list notes that its jobs still run.
 
 - **Search** matches the library and the queue name.
 - **Sort** by any column.
-- **Hide** the queues you never need. Hidden queues stay hidden for everyone
-  until shown again; a switch shows them for a moment. Hiding is undoable
-  from the toast.
-- **New job** starts a [job](jobs.md) with this queue as its source.
+- **Hide** the queues you never need, from the ⋯ menu at the end of the
+  row, or several at once with the checkboxes. Hidden queues stay hidden
+  for everyone until shown again; a switch shows them for a moment, and
+  Unhide in the menu brings one back. Hiding is undoable from the toast.
+- **New job** on the row, or in its ⋯ menu, starts a [job](jobs.md) with
+  this queue as its source.
 
 A server with libraries set lists only the queues of those libraries. With
 one library, the page leaves out the Library column and searches queue
@@ -40,7 +42,7 @@ names. See [Servers](servers.md).
 
 ## The files of a queue
 
-Open a queue to list its spooled files. The path above the title names
+Click a queue, or its name, to list its spooled files. The path above the title names
 the queue's place: Queues, the server and the queue. Queues opens the
 Queues page, and the server opens it on that server.
 
@@ -70,8 +72,8 @@ The list shows the newest 200 files. When the queue has more, or more
 match the filters, the page says so under the list, and Load more lists
 200 more, up to 5000. Past that, narrow the filters to find older files.
 
-Open a file to see its pages as the printer would print them, decoded with
-the file's own code page. This is the same view the job builder uses, so a
+Click a file, or its name, to see its pages as the printer would print
+them, decoded with the file's own code page. This is the same view the job builder uses, so a
 page that reads right here will read right in a job. A page that shows the
 wrong characters usually means the spooled file has no CHRID and the job
 CCSID is not supported; set `SPOOLDOC_DEFAULT_CCSID`. See
