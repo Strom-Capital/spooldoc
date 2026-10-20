@@ -7,9 +7,10 @@ A job is a pipeline from one output queue to a destination. The Jobs page
 lists them with their server, queue, trigger and last run. A job whose
 active version or draft no longer matches the job format, after an upgrade
 for example, is listed with the reason instead of breaking the page.
-Click a job, or its name, to open it in the job builder. A watching job
-has Pause or Resume on its row. The ⋯ menu at the end of the row has
-Pause or Resume, Job log for this job, and Delete job, which asks first.
+Click a job, or its name, to open it in the job builder. Each row has
+Job log, and a watching job has Pause or Resume too. The ⋯ menu at the
+end of the row has Pause or Resume, Job log, and Delete job, which asks
+first.
 The job builder shows the pipeline as six steps, and each step opens an
 inspector. Click a step to open it, or use Next and Back to go through them
 in order. Next sits at the end of each form, and in the bar above the page

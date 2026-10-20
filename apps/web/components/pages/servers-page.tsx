@@ -132,6 +132,10 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
                       {pending === server.id ? <Spinner /> : <RefreshCwIcon />}
                       Reconnect
                     </RowAction>
+                    <RowAction onClick={() => setEditing(server)}>
+                      <PencilIcon />
+                      Edit
+                    </RowAction>
                     <RowMenu label={server.name}>
                       <DropdownMenuItem onSelect={() => void reconnect(server)} disabled={pending !== null}>
                         <RefreshCwIcon />

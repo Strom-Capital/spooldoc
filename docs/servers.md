@@ -8,7 +8,7 @@ has a name, a host, a user profile and its password, and optionally the
 libraries to list output queues from.
 
 Click a server, or its name, to open its output queues on the Queues page.
-Reconnect sits on each row. The ⋯ menu at the end of the row has
+Reconnect and Edit sit on each row. The ⋯ menu at the end of the row has
 Reconnect, Edit and Delete.
 
 ## Adding a server

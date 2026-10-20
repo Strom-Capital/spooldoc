@@ -47,7 +47,10 @@ export function RowOpenButton({ className, ...props }: Omit<ComponentProps<'butt
   );
 }
 
-/** The one action a row shows besides its menu: a quiet ghost button with an icon and a label. */
+/**
+ * One of the at most two actions a row shows besides its menu: a quiet ghost button
+ * with an icon and a label. One that only some rows have goes first.
+ */
 export function RowAction({ className, ...props }: Omit<ComponentProps<typeof Button>, 'variant' | 'size'>) {
   return (
     <Button

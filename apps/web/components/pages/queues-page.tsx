@@ -329,7 +329,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
           </thead>
           <tbody aria-busy={loading} className={cn(loading && queues && 'opacity-60 transition-opacity')}>
             {!queues && !error && (
-              <SkeletonRows widths={['w-4', ...(oneLibrary ? [] : ['w-16']), 'w-24', 'ml-auto w-5', 'ml-auto w-5', 'ml-auto w-6', 'ml-auto w-5', 'w-48', 'ml-auto w-28']} />
+              <SkeletonRows widths={['w-4', ...(oneLibrary ? [] : ['w-16']), 'w-24', 'ml-auto w-5', 'ml-auto w-5', 'ml-auto w-6', 'ml-auto w-5', 'w-48', 'ml-auto w-44']} />
             )}
             {server &&
               shown.map((queue) => {
@@ -380,6 +380,10 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
                       <RowAction onClick={() => void newJob(source)} disabled={creating !== null}>
                         {starting ? <Spinner /> : <PlusIcon />}
                         New job
+                      </RowAction>
+                      <RowAction onClick={() => void setHidden([queue], !queue.hidden)}>
+                        {queue.hidden ? <EyeIcon /> : <EyeOffIcon />}
+                        {queue.hidden ? 'Unhide' : 'Hide'}
                       </RowAction>
                       <RowMenu label={queueKey(queue)}>
                         <DropdownMenuItem onSelect={() => void newJob(source)} disabled={creating !== null}>

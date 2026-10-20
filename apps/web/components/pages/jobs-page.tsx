@@ -158,6 +158,12 @@ export function JobsPage() {
                         {job.paused ? 'Resume' : 'Pause'}
                       </RowAction>
                     )}
+                    <RowAction asChild>
+                      <Link href={`/runs?job=${job.id}`}>
+                        <ScrollTextIcon />
+                        Job log
+                      </Link>
+                    </RowAction>
                     <RowMenu label={job.name}>
                       {job.mode === 'watch' && (
                         <DropdownMenuItem onSelect={() => setPaused(job, !job.paused)}>
@@ -168,7 +174,7 @@ export function JobsPage() {
                       <DropdownMenuItem asChild>
                         <Link href={`/runs?job=${job.id}`}>
                           <ScrollTextIcon />
-                          Job log for this job
+                          Job log
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />

@@ -29,10 +29,10 @@ Draft only. On a hidden queue, the list notes that its jobs still run.
 
 - **Search** matches the library and the queue name.
 - **Sort** by any column.
-- **Hide** the queues you never need, from the ⋯ menu at the end of the
-  row, or several at once with the checkboxes. Hidden queues stay hidden
-  for everyone until shown again; a switch shows them for a moment, and
-  Unhide in the menu brings one back. Hiding is undoable from the toast.
+- **Hide** the queues you never need, on the row or in its ⋯ menu, or
+  several at once with the checkboxes. Hidden queues stay hidden for
+  everyone until shown again; a switch shows them for a moment, and
+  Unhide on the row brings one back. Hiding is undoable from the toast.
 - **New job** on the row, or in its ⋯ menu, starts a [job](jobs.md) with
   this queue as its source.
 
