@@ -233,8 +233,11 @@ from the definition. To make your own:
 Uploads are kept as for [Word templates](#word-templates): each is its
 own file, and a saved version keeps the file it was saved with. Spooldoc
 takes `.xlsx` files up to 10 MB; it refuses an Excel 97-2003 `.xls` and
-says to save it as an Excel Workbook. The agent cannot write or edit
-Excel files yet; it can add an Excel template and check it.
+says to save it as an Excel Workbook.
+
+The [agent](agent.md#excel-templates) can design an Excel template for
+you, or change yours. Each change is a new file, and the Excel panel
+offers your earlier file back.
 
 ### What each file holds
 
@@ -281,11 +284,24 @@ sheet of its own.
   so it gives a wrong total.
 - **No merged cells in or below a loop.** Carbone does not move merged
   cells with the rows it adds. A merge above the loop is fine.
-- **Filters, data validation and conditional formatting** stay on the
-  template's rows; they do not grow with the loop. Put them on whole
-  columns, such as `A:G`.
-- **Pictures**, such as a logo, are inserted in Excel, above any loop.
+- **Ranges do not grow.** Carbone moves no range when it adds rows, so
+  filters, data validation and conditional formatting stay on the
+  template's rows. Put them on whole columns, such as `A:G`, or down to a
+  far row, such as `D2:D10000`.
+- **No Excel tables or charts over a loop.** They do not grow with the
+  rows Carbone adds. Use a filter on whole columns instead of a table.
+- **Notes** print in the PDF as note icons and do not move with the rows.
+  Keep them above the loop, and only where the XLSX matters more than the
+  PDF.
+- **Pictures**, such as a logo, are inserted in Excel, above the header
+  row. A picture over the rows repeated at the top prints on every page.
   `{asset('name')}` is for HTML templates only.
+- **In the PDF**, data bars and colour scales print, icon sets do not,
+  and a gradient fill prints as one colour.
+- **Functions.** LibreOffice works out the formulas. It has the
+  long-standing functions and XLOOKUP, XMATCH, IFS, SWITCH, TEXTJOIN,
+  CONCAT, MAXIFS, MINIFS and IFNA. Avoid LET and the functions that spill
+  into more cells, such as FILTER, SORT, UNIQUE and SEQUENCE.
 - One sheet per document does not work. A block per page group in one
   sheet does: a loop over `d.pgs`.
 
@@ -301,10 +317,43 @@ and Word, and these rules:
 - a number field alone in a cell without `:formatN`;
 - `:formatN` straight on a date field, which writes a number cell with no
   number in it;
+- a `:formatN` tag in a cell saved as an inline string, which Carbone
+  writes as text: type the tag into the cell again in Excel;
 - merged cells in or below a loop row;
+- conditional formatting, data validation or an Excel table whose range
+  ends on the loop rows, so it misses the rows Carbone adds;
+- a note in or below the loop;
+- a newer function, such as XLOOKUP, written without its `_xlfn.` prefix
+  in the file, which LibreOffice computes as `#NAME?`. Excel writes the
+  prefix itself; an edit to the XML must too;
 - `d.pg` in a template that holds the whole spooled file, with the
   `d.pgs[i]` tag to use instead;
 - `{asset('name')}`.
+
+### Excel templates by the agent
+
+The agent designs an Excel template as data, a tree of sheets, cells and
+styles. Spooldoc checks it and writes the file with the
+[hucre](https://github.com/productdevbook/hucre) library, with these
+parts only:
+
+| Part | What it can set |
+|------|-----------------|
+| The workbook | Its sheets, the default font (Arial 10 unless set), named ranges, the sheet that opens first. |
+| A sheet | Name, tab colour, frozen rows and columns, zoom, grid lines, column widths, hidden and grouped columns and rows, row heights, merged cells, a filter. |
+| A cell | Text with tags, a number, true or false, a date, rich text, a formula, a link, a note. |
+| A style, on a cell or a column | Number format, font, size, colour, bold, italics, underline, strikethrough, a solid or gradient fill, borders, alignment, wrapping, indent, rotation. |
+| Conditional formatting | Rules on a value, a formula, text, duplicates, the top or bottom values and the average, colour scales, data bars, icon sets. |
+| Data validation | A list, whole or decimal numbers, dates, text length or a formula, with its prompt and error message. |
+| Images | A PNG or JPEG uploaded under Assets, by name, at a cell with a size in pixels, or over a range. |
+| Page setup | Paper size, orientation, fit to pages or a scale, margins, centring, grid lines, the print area, rows and columns repeated on each page. |
+| Header and footer | Left, centre and right parts with the page number, the number of pages, the date and the sheet name; a different first page, and different even pages. |
+
+Anything else in a design is refused with where it is, and nothing is
+saved. Excel tables, charts, sparklines, protection and macros are not
+part of a design. A sheet without a page setup gets A4 portrait, one
+page wide. The tags, loops and formulas are the ones in
+[Tags in Excel](#tags-in-excel).
 
 ### The PDF
 
@@ -318,8 +367,9 @@ sheet's page setup in Excel, on the Page Layout tab:
 - **Print Titles**: the header row in Rows to repeat at top.
 - **Header & Footer**: Page 1 of ? for page numbers.
 
-The starter template has all of these. A sheet without a page setup
-prints on US Letter portrait, and its columns can be cut off; the
+The starter template has all of these, and a sheet the agent designs
+without one gets A4 portrait, one page wide. A sheet you made in Excel
+without a page setup prints on US Letter portrait, and its columns can be cut off; the
 Template tab says which sheets have none. Every sheet is printed, one
 after the other. Many columns on one page make small text: keep the
 columns a printed copy needs, or use the PDF of a page group instead.

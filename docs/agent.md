@@ -6,9 +6,8 @@ description: "The agent beside the job builder: which models it uses, what it ca
 The agent sits beside the workbench in the job builder. Ask it for a
 definition and it reads the sample pages, writes the YAML to the job's
 draft, reads the extraction report, fixes missing fields, then writes a
-template and renders it: HTML, or a Word template it designs or edits. It
-can add and check an Excel template, which you make in Excel. When
-it is not clear which kind you want, it
+template and renders it: HTML, or a Word or Excel template it designs or
+edits. When it is not clear which kind you want, it
 [asks you first](#which-kind-of-template). The page view, the JSON and the preview update as
 it works, and everything it writes can be edited by hand. Without a model
 set, the job builder works as before and the agent points to Settings.
@@ -38,7 +37,7 @@ request can read one back.
 
 ## What it can do
 
-The agent works through thirteen tools: nine on the job's draft and its
+The agent works through sixteen tools: twelve on the job's draft and its
 preview sample, two that read other jobs' files, one that reads the
 Carbone syntax reference, and one that asks you a question:
 
@@ -50,6 +49,9 @@ Carbone syntax reference, and one that asks you a question:
 | `write_word_template` | Designs a [Word template](templates.md#word-templates) and saves it as a new file the template uses. Returns what the check and Carbone find, the text of the first document and, for models that take files, the document itself. |
 | `read_word_template` | Lists the parts of a Word template (the body, headers and footers), or reads one part's XML. |
 | `edit_word_template` | Changes a Word template, yours or the starter template, by replacing text in its XML, and saves the result as a new file. Returns what `write_word_template` returns. |
+| `write_excel_template` | Designs an [Excel template](templates.md#excel-templates) and saves it as a new file the template uses. Returns what the check and Carbone find, the computed cells of the first document and, for models that take files, its PDF. |
+| `read_excel_template` | Lists the parts of an Excel template (each sheet by name, the styles and the workbook), or reads one part's XML. |
+| `edit_excel_template` | Changes an Excel template, yours or the starter template, by replacing text in its XML, and saves the result as a new file. Returns what `write_excel_template` returns. |
 | `render_preview` | Renders the document of a page group with one template, HTML, Word or Excel, again after a change to the definition, and returns what the check finds and the visible text (an Excel template's by sheet and cell). An Excel template of the whole spooled file renders every page group. For a Word or Excel template it also shows models that take files the PDF. |
 | `add_template` | Adds a template, HTML, Word or Excel, with a name and formats, and for Excel what each file holds. It uses the starter until the agent writes it or you upload a file. |
 | `remove_template` | Removes a template. The last template cannot be removed. |
@@ -82,9 +84,8 @@ edits the layout, and where:
 - **HTML** is edited here in Spooldoc. It is the quickest to make, the
   preview shows it right away, and it can also make an HTML page, for
   example an email body.
-- **Word** is edited in Word, by you. It can also make a DOCX.
-- **Excel** is edited in Excel, by you, from the starter template. It
-  makes an XLSX, by default one of the whole spooled file with a row per
+- **Word** is edited in Word, by you or the agent. It can also make a DOCX.
+- **Excel** is edited in Excel, by you or the agent. It makes an XLSX, by default one of the whole spooled file with a row per
   line, and can also make a PDF of it.
 
 Once the definition reads the sample well, and before it writes the
@@ -108,10 +109,10 @@ It does not ask when:
 - the template is a Word or Excel template already, or its formats settle
   it: a template that makes HTML is an HTML template.
 
-The agent cannot write or edit Excel files yet. For an Excel template it
-adds the template, checks it with `render_preview` and tells you to
-download the starter template, change it in Excel and upload it. See
-[Excel templates](templates.md#excel-templates).
+The agent switches a template to Word or Excel only while it still uses
+a starter template. A template with content of its own keeps its kind:
+the agent asks you to switch it in the render step, or adds a template of
+the other kind when you ask for one.
 
 ## Word templates
 
@@ -157,12 +158,62 @@ in the file.
 and the template uses it from then on. Your earlier file is kept, and the
 Word panel says when the agent made the current file and offers
 **Use previous file**, or **Use starter template** when there was none. A
-saved version keeps the file it ran with. The agent changes an HTML
-template to Word only while it still uses the HTML starter; otherwise it
-asks you to switch it in the render step, or adds a Word template when
-you ask for one.
+saved version keeps the file it ran with.
 
 The file is an ordinary Word document: open it in Word, change it and
+upload it again, or ask the agent for the next change.
+
+## Excel templates
+
+Ask for an Excel template ("a sheet of every invoice line, to filter by
+customer") and the agent designs a workbook people can work in: real
+number and date cells, a frozen header row with a filter, column widths,
+fonts, fills, borders, number formats, formulas, conditional formatting,
+data validation, the PNG and JPEG images uploaded under Assets, and a page
+setup that prints every column on the page. It then renders the file and
+looks at the result, and changes the design until it reads well.
+Its instructions include guidance on workbook design: one header row to
+filter on, no blank rows or merged cells in the data, units in the
+header, and totals that do not get in the way of the filter.
+
+It writes the design as data: a tree of sheets, cells, styles and page
+setup, and Spooldoc builds the `.xlsx` from it. Only the parts listed in
+[templates](templates.md#excel-templates-by-the-agent) are allowed, and
+no code the model writes runs on the server.
+
+To change an Excel template you made yourself, it edits the file instead
+of designing a new one, so everything else in it stays as you made it: it
+reads the XML of a sheet, the styles or the workbook and replaces the
+text it needs to. A sheet reads with its text in its cells, and the styles
+with the number of each entry, so a cell's style can be found and a new
+one added at the end. Spooldoc writes new text back into the workbook's
+shared strings, as Excel does, and every part the edit does not touch
+stays byte for byte the same. An edit that would break the file is
+refused, and nothing is saved.
+
+**What it looks at.** After each design or edit the agent gets the file
+as a run makes it, with the formulas worked out: its computed cells by
+sheet and cell, with the cells that give a formula error counted. Long
+sheets are cut to their first and last rows. A model that takes files
+also gets the PDF of up to five pages. A longer PDF is made again from
+shortened data, the first page groups or the first lines, and a note
+says so and how many pages the whole file prints on. Models from
+Anthropic, OpenAI and Google take files, directly or through OpenRouter
+and the Vercel AI Gateway; other models, and a local model, get the
+cells only. As for Word, the conversation stores only the text of the
+result. Values in the file are masked when [masking](#masking) is on.
+
+**What each file holds** is your setting. The agent designs for the one
+the template has. When it should change, the agent asks you first, and
+you change Each file holds in the template's menu. See
+[What each file holds](templates.md#what-each-file-holds).
+
+**Nothing is overwritten.** As for Word, each design or edit is saved as
+a new file, and your earlier file is kept. The Excel panel says when the
+agent made the current file and offers **Use previous file**, or **Use
+starter template** when there was none.
+
+The file is an ordinary Excel workbook: open it in Excel, change it and
 upload it again, or ask the agent for the next change.
 
 The agent writes [Carbone tags](templates.md). Its instructions hold
@@ -188,7 +239,8 @@ What the model receives:
   names of the uploaded assets, and the Carbone edition.
 - Tool results: the extraction report and the rendered text, and for a
   Word or Excel template, the rendered document (see
-  [Word templates](#word-templates)).
+  [Word templates](#word-templates) and
+  [Excel templates](#excel-templates)).
 - On request, other jobs' definitions and templates: layout, not
   customer data. Nothing else of a job (its server, destination, finish
   settings, runs or samples) is readable.
@@ -207,7 +259,7 @@ part of a long conversation goes to the model with each message (the last
 model's thinking around them dropped first);
 the model's instructions carry the current definition, templates and
 sample pages, so nothing it needs is lost. The stored messages hold what
-the model saw, except the rendered Word documents: with masking on, the
+the model saw, except the rendered Word and Excel documents: with masking on, the
 tool results are masked too.
 
 ## Masking
