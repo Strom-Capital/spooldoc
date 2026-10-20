@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, errorText } from '@/lib/client/api';
 import type { TemplateContent } from '@/lib/job-spec';
-import type { FieldHit, RenderResult } from '@/lib/client/render';
+import { groupOfPage, type FieldHit, type RenderResult } from '@/lib/client/render';
 
 /** Editor tabs: the Extract step shows the definition and the JSON, Render the template and the JSON. */
 export type WorkbenchTab = 'json' | 'definition' | 'template';
@@ -38,10 +38,11 @@ export interface WorkbenchState {
   onDraftWritten(): Promise<void>;
   selectedHit: FieldHit | null;
   setSelectedHit(hit: FieldHit | null): void;
-  /** Sample page number shown in the page view. */
+  /** Sample page number shown in the page view. Another page can pick another page group. */
   page: number;
-  setPage(page: number): void;
-  /** 0-based page group shown in the JSON view and the preview. */
+  /** Show `page`; `pageGroup` picks which page group when the page is in more than one. */
+  setPage(page: number, pageGroup?: number): void;
+  /** 0-based page group shown in the JSON view and the preview. Another page group can move the page. */
   pageGroupIndex: number;
   setPageGroupIndex(index: number): void;
   tab: WorkbenchTab;
@@ -97,8 +98,8 @@ export function WorkbenchProvider({
   children: ReactNode;
 }) {
   const [selectedHit, setSelectedHit] = useState<FieldHit | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageGroupIndex, setPageGroupIndex] = useState(0);
+  const [page, setPageOnly] = useState(1);
+  const [pageGroupIndex, setPageGroupOnly] = useState(0);
   const [tab, setTab] = useState<WorkbenchTab>('definition');
   const [nonce, setNonce] = useState(0);
   const [result, setResult] = useState<{ key: string; render: RenderResult | null; error: string | null } | null>(null);
@@ -107,7 +108,8 @@ export function WorkbenchProvider({
   const [shownSample, setShownSample] = useState(sampleId);
   if (sampleId !== shownSample) {
     setShownSample(sampleId);
-    setPage(1);
+    setPageOnly(1);
+    setPageGroupOnly(0);
     setSelectedHit(null);
   }
 
@@ -139,6 +141,32 @@ export function WorkbenchProvider({
   const error = sampleId ? (result?.error ?? null) : null;
   const loading = !!sampleId && result?.key !== requestKey;
   const reload = useCallback(async () => setNonce((n) => n + 1), []);
+
+  // The page and the page group follow each other: each keeps its value while the other still fits.
+  const ranges = render?.extract?.pageRanges;
+  const setPage = useCallback(
+    (next: number, pageGroup?: number) => {
+      setPageOnly(next);
+      const group = ranges ? groupOfPage(ranges, next, pageGroup ?? pageGroupIndex) : -1;
+      if (group >= 0) setPageGroupOnly(group);
+    },
+    [ranges, pageGroupIndex],
+  );
+  const setPageGroupIndex = useCallback(
+    (next: number) => {
+      setPageGroupOnly(next);
+      const range = ranges?.[next];
+      if (range && (page < range.first || page > range.last)) setPageOnly(range.first);
+    },
+    [ranges, page],
+  );
+  // A changed definition can move the page groups: keep the page and pick its page group.
+  const [shownRanges, setShownRanges] = useState(ranges);
+  if (ranges !== shownRanges) {
+    setShownRanges(ranges);
+    const group = ranges ? groupOfPage(ranges, page, pageGroupIndex) : -1;
+    if (group >= 0 && group !== pageGroupIndex) setPageGroupOnly(group);
+  }
 
   return (
     <WorkbenchContext.Provider

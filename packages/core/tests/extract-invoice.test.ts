@@ -22,6 +22,22 @@ describe("invoice extraction", () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it("gives the pages of each page group, with every hit inside them", () => {
+    expect(result.pageRanges).toEqual([
+      { first: 1, last: 1 },
+      { first: 2, last: 3 },
+      { first: 4, last: 4 },
+      { first: 5, last: 5 },
+      { first: 6, last: 6 },
+      { first: 7, last: 8 },
+    ]);
+    for (const hit of result.hits.filter((h) => h.page > 0)) {
+      const range = result.pageRanges[hit.pageGroup]!;
+      expect(hit.page).toBeGreaterThanOrEqual(range.first);
+      expect(hit.page).toBeLessThanOrEqual(range.last);
+    }
+  });
+
   it("reads totals as numbers that match the line amounts", () => {
     for (const d of docs) {
       expect(typeof d.totalAmount).toBe("number");

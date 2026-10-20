@@ -10,7 +10,6 @@ import { Spinner } from '@/components/ui/spinner';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { shownError, type ShownError } from '@/lib/client/api';
 import { download, postForFile } from '@/lib/client/download';
-import { PageGroupSelect } from './page-group-select';
 import { useWorkbench } from './workbench-provider';
 
 /** A PDF in base64 as an object URL, revoked when it changes or the pane goes. */
@@ -90,7 +89,6 @@ export function HtmlPreview({ header, fileName = (name) => name }: { header?: Re
     <section className="flex h-full min-h-0 flex-col" aria-label="Preview">
       <div className="flex h-10 shrink-0 items-center gap-2 border-b px-2 text-sm">
         {header ?? <span className="font-medium">Preview</span>}
-        <PageGroupSelect />
         <div className="ml-auto flex items-center gap-2">
           {word ? (
             fileButton('docx', 'DOCX')

@@ -1,8 +1,7 @@
 'use client';
 
 import { CodeEditor } from './code-editor';
-import { EditorBar, EditorMessage } from './editor-bar';
-import { SaveStatus } from './save-status';
+import { EditorMessage } from './editor-bar';
 import { useWorkbench } from './workbench-provider';
 
 /** The definition YAML of the job. Changes are saved to the draft and rendered as you type. */
@@ -11,7 +10,6 @@ export function DefinitionEditor() {
   const error = render?.definition?.error;
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <EditorBar status={<SaveStatus />} />
       {error && <EditorMessage tone="error">{error}</EditorMessage>}
       <CodeEditor
         value={yaml}

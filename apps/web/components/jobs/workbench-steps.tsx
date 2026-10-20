@@ -5,7 +5,9 @@ import { ChatPanel } from '@/components/workbench/chat-panel';
 import { DefinitionEditor } from '@/components/workbench/definition-editor';
 import { HtmlPreview } from '@/components/workbench/html-preview';
 import { JsonView } from '@/components/workbench/json-view';
+import { PageGroupSelect, PageSelect } from '@/components/workbench/position-select';
 import { PageView } from '@/components/workbench/page-view';
+import { SaveStatus } from '@/components/workbench/save-status';
 import { PaneTabs, SplitPanes } from '@/components/workbench/split-panes';
 import { TemplateEditor } from '@/components/workbench/template-editor';
 import { useWorkbench, WorkbenchProvider } from '@/components/workbench/workbench-provider';
@@ -50,16 +52,26 @@ export function JobWorkbench({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** The bar above the Extract and Render panes: the preview spooled file, problems and extra controls. */
-function StepHeader({ end }: { end?: React.ReactNode }) {
+/**
+ * The bar above the Extract and Render panes: what is shown, as a path from the preview
+ * spooled file to its page group, then on Extract the page and on Render the template.
+ * Problems show under it.
+ */
+function StepHeader({ page, template }: { page?: boolean; template?: React.ReactNode }) {
   const { render, loading, error } = useWorkbench();
+  const groups = (render?.extract?.pageGroups.length ?? 0) > 0;
+  const pages = (render?.sample.pages.length ?? 0) > 0;
   return (
     <div className="shrink-0 border-b">
-      <div className="flex min-h-11 flex-wrap items-center gap-2 px-3 py-1.5">
-        <span className="text-muted-foreground text-xs">Try on</span>
+      <div className="flex min-h-11 flex-wrap items-center gap-x-2 gap-y-1.5 px-3 py-1.5">
         <PreviewPicker sample={render?.sample ?? null} />
+        {groups && <PathSlash />}
+        <PageGroupSelect />
+        {page && pages && <PathSlash />}
+        {page && <PageSelect />}
+        {template && <PathSlash />}
+        {template}
         {loading && <Spinner className="shrink-0 text-muted-foreground" />}
-        {end && <div className="ml-auto flex items-center gap-3">{end}</div>}
       </div>
       {error && <p className="truncate px-3 pb-1.5 text-destructive text-xs">{error}</p>}
       {render?.mismatch && (
@@ -74,6 +86,23 @@ function StepHeader({ end }: { end?: React.ReactNode }) {
         </p>
       )}
     </div>
+  );
+}
+
+/** Whether the definition and template are saved to the draft, at the end of the tab row. */
+function DraftStatus() {
+  return (
+    <span className="text-muted-foreground text-xs">
+      <SaveStatus />
+    </span>
+  );
+}
+
+function PathSlash() {
+  return (
+    <span aria-hidden className="text-muted-foreground/60 text-sm">
+      /
+    </span>
   );
 }
 
@@ -93,7 +122,7 @@ export function ExtractStep() {
   const current = tab === 'template' ? 'definition' : tab;
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <StepHeader />
+      <StepHeader page />
       <div className="min-h-0 flex-1">
         <SplitPanes
           labels={['Page', 'Definition and JSON']}
@@ -108,6 +137,7 @@ export function ExtractStep() {
                 ]}
                 value={current}
                 onChange={setTab}
+                end={<DraftStatus />}
               />
               <div className="min-h-0 flex-1">{current === 'json' ? <JsonView /> : <DefinitionEditor />}</div>
             </div>
@@ -126,7 +156,7 @@ export function RenderStep() {
   const current = tab === 'definition' ? 'template' : tab;
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <StepHeader end={<TemplateControls template={template} onPick={setTemplateId} />} />
+      <StepHeader template={<TemplateControls template={template} onPick={setTemplateId} />} />
       <div className="min-h-0 flex-1">
         <SplitPanes
           labels={['Template and JSON', 'Preview']}
@@ -139,6 +169,7 @@ export function RenderStep() {
                 ]}
                 value={current}
                 onChange={setTab}
+                end={<DraftStatus />}
               />
               <div className="min-h-0 flex-1">{current === 'json' ? <JsonView /> : <TemplateEditor />}</div>
             </div>

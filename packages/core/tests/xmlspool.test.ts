@@ -46,6 +46,24 @@ describe("XML in spool", () => {
     expect(qty?.length).toBe("<QTY>".length);
   });
 
+  it("gives the pages of each page group, and a page two of them share", () => {
+    expect(result.pageRanges).toEqual([1, 2, 3, 4, 5].map((no) => ({ first: no, last: no })));
+    // Print the first two page groups on one page.
+    const [one, two, ...rest] = sample.pages;
+    const shift = Math.max(...one!.lines.map((l) => l.no));
+    const pages = [
+      { no: 1, lines: [...one!.lines, ...two!.lines.map((l) => ({ ...l, no: l.no + shift }))] },
+      ...rest.map((page) => ({ ...page, no: page.no - 1 })),
+    ];
+    expect(extractXml(definition, { ...sample, pages }).pageRanges).toEqual([
+      { first: 1, last: 1 },
+      { first: 1, last: 1 },
+      { first: 2, last: 2 },
+      { first: 3, last: 3 },
+      { first: 4, last: 4 },
+    ]);
+  });
+
   it("is what extract returns for an xml definition, and equals expected.json", () => {
     expect(extract(definition, sample)).toEqual(result);
     expect(result.pageGroups).toEqual(expected);

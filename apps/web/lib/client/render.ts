@@ -1,4 +1,4 @@
-import type { CodePageSource, DocxProblem, ExtractResult, FieldHit, Sample, SamplePage, TemplateProblem } from '@spooldoc/core';
+import type { CodePageSource, DocxProblem, ExtractResult, FieldHit, PageRange, Sample, SamplePage, TemplateProblem } from '@spooldoc/core';
 import type { TemplateFileView } from '@/lib/types';
 
 export type { FieldHit, SamplePage };
@@ -47,6 +47,15 @@ export function pageLines(page: SamplePage, width: number): string[] {
 /** A stable key for a hit. */
 export function hitKey(hit: FieldHit): string {
   return `${hit.pageGroup}:${hit.name}:${hit.page}:${hit.line}:${hit.column}`;
+}
+
+/**
+ * The page group `page` is printed in: `current` when it is one of them (XML page groups can
+ * share a page), else the first. -1 when the page is in none, like a skipped first page.
+ */
+export function groupOfPage(ranges: PageRange[], page: number, current: number): number {
+  const fits = (range: PageRange | undefined) => !!range && page >= range.first && page <= range.last;
+  return fits(ranges[current]) ? current : ranges.findIndex(fits);
 }
 
 /** `pageGroups[0].invoiceNo = 260101` */

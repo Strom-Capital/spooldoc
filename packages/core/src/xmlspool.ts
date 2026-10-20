@@ -140,7 +140,7 @@ export function extractXml(def: Definition, sample: Sample): ExtractResult {
   const xml = def.xml;
   const hits: FieldHit[] = [];
   const warnings: string[] = [];
-  if (!xml) return { pageGroups: [], hits, warnings: ["definition has no xml section"] };
+  if (!xml) return { pageGroups: [], pageRanges: [], hits, warnings: ["definition has no xml section"] };
   const joined = joinPages(sample.pages, sample.attributes.pageWidth);
   const spans = findPageGroups(joined.text, xml.pageGroup);
   if (spans.length === 0) warnings.push(`no <${xml.pageGroup}> element found`);
@@ -224,5 +224,6 @@ export function extractXml(def: Definition, sample: Sample): ExtractResult {
     }
     return out;
   });
-  return { pageGroups, hits, warnings };
+  const pageRanges = spans.map((span) => ({ first: locate(span.start).page, last: locate(span.end - 1).page }));
+  return { pageGroups, pageRanges, hits, warnings };
 }

@@ -1,9 +1,10 @@
 'use client';
 
 import type { SamplePage } from '@spooldoc/core';
-import { ChevronLeftIcon, ChevronRightIcon, MoveHorizontalIcon } from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
+import { ButtonGroup } from '@/components/ui/button-group';
 import { pageLines } from '@/lib/client/render';
 
 /** Smallest and largest font size when fitting the page width, in pixels. */
@@ -15,8 +16,8 @@ const FRAME_PX = 12 * 2 + 12 * 2 + 2;
 /**
  * Pages of a spooled file as a monospace grid, one page at a time, with page paging and
  * fit-to-width. By default the text shrinks so the whole page width fits the pane.
- * `overlay` is drawn over the current page's grid (positioned in `ch` and `em`), and
- * `toolbar` sits at the right of the toolbar.
+ * `overlay` is drawn over the current page's grid (positioned in `ch` and `em`). Without
+ * `paging` the page is picked elsewhere. The zoom sits in the bottom corner, over the page.
  */
 export function SpoolViewer({
   pages,
@@ -24,7 +25,7 @@ export function SpoolViewer({
   page,
   onPage,
   overlay,
-  toolbar,
+  paging = true,
   scrollerRef,
   empty = 'This spooled file has no pages.',
 }: {
@@ -33,7 +34,7 @@ export function SpoolViewer({
   page: number;
   onPage(page: number): void;
   overlay?: (current: SamplePage) => ReactNode;
-  toolbar?: ReactNode;
+  paging?: boolean;
   scrollerRef?: RefObject<HTMLDivElement | null>;
   empty?: string;
 }) {
@@ -71,56 +72,64 @@ export function SpoolViewer({
 
   return (
     <section className="flex h-full min-h-0 flex-col" aria-label="Page view">
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2 text-sm">
-        <span className="mr-1 font-medium">Page</span>
-        <Button variant="ghost" size="icon-sm" onClick={() => go(-1)} disabled={index <= 0} aria-label="Previous page">
-          <ChevronLeftIcon />
-        </Button>
-        <select
-          value={current?.no ?? ''}
-          onChange={(event) => onPage(Number(event.target.value))}
-          aria-label="Page"
-          className="h-7 rounded-md border bg-background px-1.5 text-sm"
-        >
-          {pages.map((p) => (
-            <option key={p.no} value={p.no}>
-              {p.no} of {pages.length}
-            </option>
-          ))}
-        </select>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => go(1)}
-          disabled={index < 0 || index >= pages.length - 1}
-          aria-label="Next page"
-        >
-          <ChevronRightIcon />
-        </Button>
-        <span className="ml-auto truncate text-muted-foreground text-xs">{toolbar}</span>
-        <Button
-          variant={fit ? 'secondary' : 'ghost'}
-          size="icon-sm"
-          onClick={() => setFit((value) => !value)}
-          aria-pressed={fit}
-          aria-label="Fit page width"
-          title={fit ? 'Fitting the page width; click for actual size' : 'Fit the page width to the pane'}
-        >
-          <MoveHorizontalIcon />
-        </Button>
-      </div>
-      <div ref={scroller} className="min-h-0 flex-1 overflow-auto bg-muted/30 p-3">
-        {current ? (
-          <div className="spool-page inline-block rounded border p-3 shadow-sm" style={fit && fontSize ? { fontSize } : undefined}>
-            <div ref={grid} className="relative" style={{ width: `${width}ch` }}>
-              {lines.join('\n') || ' '}
-              {overlay?.(current)}
+      {paging && (
+        <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2 text-sm">
+          <span className="mr-1 font-medium">Page</span>
+          <Button variant="ghost" size="icon-sm" onClick={() => go(-1)} disabled={index <= 0} aria-label="Previous page">
+            <ChevronLeftIcon />
+          </Button>
+          <select
+            value={current?.no ?? ''}
+            onChange={(event) => onPage(Number(event.target.value))}
+            aria-label="Page"
+            className="h-7 rounded-md border bg-background px-1.5 text-sm"
+          >
+            {pages.map((p) => (
+              <option key={p.no} value={p.no}>
+                {p.no} of {pages.length}
+              </option>
+            ))}
+          </select>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => go(1)}
+            disabled={index < 0 || index >= pages.length - 1}
+            aria-label="Next page"
+          >
+            <ChevronRightIcon />
+          </Button>
+        </div>
+      )}
+      <div className="relative min-h-0 flex-1">
+        <div ref={scroller} className="h-full overflow-auto bg-muted/30 p-3 pb-14">
+          {current ? (
+            <div className="spool-page inline-block rounded border p-3 shadow-sm" style={fit && fontSize ? { fontSize } : undefined}>
+              <div ref={grid} className="relative" style={{ width: `${width}ch` }}>
+                {lines.join('\n') || ' '}
+                {overlay?.(current)}
+              </div>
             </div>
-          </div>
-        ) : (
-          <p className="text-muted-foreground text-sm">{empty}</p>
-        )}
+          ) : (
+            <p className="text-muted-foreground text-sm">{empty}</p>
+          )}
+        </div>
+        {current && <Zoom fit={fit} onFit={setFit} />}
       </div>
     </section>
+  );
+}
+
+/** Fit the page width to the pane, or show the page at its actual size. */
+function Zoom({ fit, onFit }: { fit: boolean; onFit(fit: boolean): void }) {
+  return (
+    <ButtonGroup aria-label="Zoom" className="absolute right-3 bottom-3 rounded-lg bg-background shadow-md">
+      <Button variant={fit ? 'secondary' : 'outline'} size="sm" aria-pressed={fit} onClick={() => onFit(true)}>
+        Fit width
+      </Button>
+      <Button variant={fit ? 'outline' : 'secondary'} size="sm" aria-pressed={!fit} onClick={() => onFit(false)}>
+        100%
+      </Button>
+    </ButtonGroup>
   );
 }
