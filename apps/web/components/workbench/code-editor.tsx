@@ -51,7 +51,9 @@ const theme = EditorView.theme({
   '.cm-scroller': { fontFamily: 'var(--font-mono)', lineHeight: '1.25rem' },
   '.cm-content': { paddingBlock: '8px', caretColor: 'var(--foreground)' },
   '.cm-cursor': { borderLeftColor: 'var(--foreground)' },
-  '.cm-gutters': { backgroundColor: 'var(--background)', color: 'var(--muted-foreground)', border: 'none', opacity: '0.7' },
+  // Dim the numbers, not the gutter: a see-through gutter shows the code scrolled under it.
+  '.cm-gutters': { backgroundColor: 'var(--background)', color: 'var(--muted-foreground)', border: 'none' },
+  '.cm-gutterElement': { opacity: '0.7' },
   '.cm-activeLine': { backgroundColor: 'color-mix(in oklab, var(--muted) 60%, transparent)' },
   '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--foreground)' },
   '&.cm-focused .cm-selectionBackground, .cm-selectionBackground, ::selection': {
