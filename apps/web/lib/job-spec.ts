@@ -51,9 +51,9 @@ export function kindName(kind: TemplateKind, lower = false): string {
   return `${lower ? article.toLowerCase() : article} ${name}`;
 }
 
-/** The formats a new template of a kind makes: PDF, or XLSX only for an Excel template. */
+/** The formats a new template of a kind makes: its own file, so PDF for HTML, DOCX for Word and XLSX for Excel. */
 export function kindDefaultFormats(kind: TemplateKind): Format[] {
-  return kind === 'xlsx' ? ['xlsx'] : ['pdf'];
+  return kind === 'xlsx' ? ['xlsx'] : kind === 'docx' ? ['docx'] : ['pdf'];
 }
 
 /** How each format is named in the app and stored as a file. */

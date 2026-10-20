@@ -86,8 +86,8 @@ PDF and DOCX files; an [Excel template](templates.md#excel-templates)
 makes XLSX and PDF files, and the menu says so under each kind. Switching
 the kind starts the template from the other kind's starter, and asks
 first when it has HTML or a file of its own; saved versions keep theirs.
-It then makes the files a new template of that kind makes: XLSX for an
-Excel template, PDF for an HTML or Word one. The switch says which files
+It then makes the files a new template of that kind makes: PDF for an
+HTML template, DOCX for a Word template and XLSX for an Excel template. The switch says which files
 it stops making: an HTML template that makes PDFs makes XLSX files as an
 Excel template, and you can turn PDF back on in the menu.
 

@@ -136,8 +136,10 @@ Carbone's text under Details.
 
 A template can be a Word document instead: you lay it out
 in Word, with Word's own styles, headers and footers, and type the tags
-into its text. It makes DOCX files, PDFs or both. Pick Make it a Word
-template in the template's menu on the render step.
+into its text. It makes DOCX files, PDFs or both; a new Word template
+makes DOCX only, and so does a template that turns into one. Pick Make it
+a Word template in the template's menu on the render step, or ask the
+agent for one.
 
 Until you upload one, the preview uses a Word starter template made from
 the definition, with the same layout as the HTML one and "Page 1 of 2" in

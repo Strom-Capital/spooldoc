@@ -472,7 +472,7 @@ describe('Word templates by the agent', () => {
     expect(result).toMatchObject({ ok: true, template: 'Template 1', templateId: 'template-1', errors: [], view: null, pages: null, file: { name: 'invoice.docx' } });
     expect(result.textPreview).toContain('Invoice {d.pg.invoiceNo}');
     // The HTML starter template became a Word one.
-    expect(store.templates[0]).toMatchObject({ kind: 'docx', fileId: result.file.id, formats: ['pdf'] });
+    expect(store.templates[0]).toMatchObject({ kind: 'docx', fileId: result.file.id, formats: ['docx'] });
     const saved = store.files.get(result.file.id)!;
     expect(saved.previousId).toBeNull();
     expect(readDocx(saved.content).fields).toEqual(['PAGE']);

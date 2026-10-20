@@ -1954,7 +1954,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           .array(z.enum(FORMATS))
           .min(1)
           .optional()
-          .describe('The formats to make (default PDF; XLSX for an Excel template)'),
+          .describe('The formats to make (default PDF; DOCX for a Word template; XLSX for an Excel template)'),
       }),
       execute: inTurn(async ({ name, kind = 'html', scope, formats }): Promise<TemplateChangeResult> => {
         const other = formats?.find((format) => !KIND_FORMATS[kind].includes(format));
