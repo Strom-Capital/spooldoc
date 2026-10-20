@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useRef, useState, type FormEvent } from 'react';
+import { useCallback, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -46,6 +46,7 @@ import { TriggerInspector } from './trigger-inspector';
 import { SaveVersionDialog, RunNowDialog } from './job-dialogs';
 import { JobProvider, useJob } from './job-provider';
 import { PipelineStrip } from './pipeline-strip';
+import { StepNavProvider } from './step-nav';
 import { ExtractStep, JobChat, JobWorkbench, RenderStep } from './workbench-steps';
 
 /** The job builder: the pipeline, the selected step, and the agent. */
@@ -64,6 +65,7 @@ function Builder() {
   const ai = useAiSidebar();
   const [stripOpen, setStripOpen] = useState(true);
   const [saving, setSaving] = useState(false);
+  const openSave = useCallback(() => setSaving(true), []);
   const [running, setRunning] = useState(false);
 
   return (
@@ -87,12 +89,14 @@ function Builder() {
             </Button>
           </div>
           <div className="min-h-0 flex-1">
-            {step === 'source' && <SourceInspector />}
-            {step === 'trigger' && <TriggerInspector />}
-            {step === 'extract' && <ExtractStep />}
-            {step === 'render' && <RenderStep />}
-            {step === 'destination' && <DestinationInspector />}
-            {step === 'finish' && <FinishInspector />}
+            <StepNavProvider onSaveVersion={openSave}>
+              {step === 'source' && <SourceInspector />}
+              {step === 'trigger' && <TriggerInspector />}
+              {step === 'extract' && <ExtractStep />}
+              {step === 'render' && <RenderStep />}
+              {step === 'destination' && <DestinationInspector />}
+              {step === 'finish' && <FinishInspector />}
+            </StepNavProvider>
           </div>
         </div>
         <AiSidebar open={ai.open} setOpen={ai.setOpen}>

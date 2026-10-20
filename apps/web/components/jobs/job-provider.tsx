@@ -4,14 +4,14 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from 'sonner';
 import { jobSpecSchema, specsDiffer, type DraftPatch, type JobSpec } from '@/lib/job-spec';
 import { api, errorText, shownError, type ShownError } from '@/lib/client/api';
+import type { Step } from '@/lib/client/job-steps';
 import { withLatestCall, type LatestCall } from '@/lib/client/server-state';
 import type { DestinationView, JobDetail, ServerView } from '@/lib/types';
 
 /** Which spec the builder shows: the draft, or a saved version (read-only). */
 export type Viewing = 'draft' | number;
 
-/** A pipeline step, as selected in the strip. */
-export type Step = 'source' | 'trigger' | 'extract' | 'render' | 'destination' | 'finish';
+export type { Step } from '@/lib/client/job-steps';
 
 type SaveState = 'saved' | 'saving' | 'error';
 
