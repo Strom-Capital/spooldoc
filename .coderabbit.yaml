@@ -1,8 +1,9 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 #
-# CodeRabbit reviews pull requests that are ready for review. It reads AGENTS.md and CLAUDE.md
-# on its own; docs/principles.md is added below. CI already runs build,
-# typecheck, lint and test, so the review is for what those miss.
+# CodeRabbit reviews pull requests that are ready for review. It reads
+# AGENTS.md and CLAUDE.md on its own; docs/principles.md is added below.
+# CI already runs build, typecheck, lint and test, so the review is for
+# what those miss.
 language: en-US
 
 reviews:
