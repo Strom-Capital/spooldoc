@@ -405,4 +405,12 @@ describe("withFunctionPrefixes", () => {
       { name: "FILTER", prefixed: "_xlfn._xlws.FILTER" },
     ]);
   });
+
+  it("reads a long formula in linear time", () => {
+    const start = performance.now();
+    expect(withFunctionPrefixes("A".repeat(200_000))).toBe("A".repeat(200_000));
+    expect(missingPrefixes(`${"_xlfn.".repeat(50_000)}A`)).toEqual([]);
+    expect(withFunctionPrefixes(`${"SUM(".repeat(20_000)}XLOOKUP(1)`)).toBe(`${"SUM(".repeat(20_000)}_xlfn.XLOOKUP(1)`);
+    expect(performance.now() - start).toBeLessThan(1000);
+  });
 });

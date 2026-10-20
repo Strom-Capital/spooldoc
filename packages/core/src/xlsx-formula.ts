@@ -20,9 +20,6 @@ export const FUNCTION_PREFIXES: Readonly<Record<string, string>> = {
   SORT: "_xlfn._xlws.",
 };
 
-/** A function call in a formula: its name, with any prefix, before `(`. */
-const CALL = /((?:_xlfn\.|_xlws\.)*)([A-Za-z][A-Za-z0-9.]*)\s*\(/gy;
-
 /** One function call outside string literals and quoted sheet names: where its prefix starts, the prefix as written and the name. */
 interface Call {
   start: number;
@@ -30,7 +27,14 @@ interface Call {
   name: string;
 }
 
-/** The function calls of a formula, skipping `"text"` and `'Sheet name'`. */
+const PREFIXES = ["_xlfn.", "_xlws."];
+const isLetter = (c: string | undefined): boolean => c !== undefined && /[A-Za-z]/.test(c);
+const isNamePart = (c: string | undefined): boolean => c !== undefined && /[A-Za-z0-9.]/.test(c);
+
+/**
+ * The function calls of a formula, skipping `"text"` and `'Sheet name'`. One pass, by
+ * hand rather than with a regular expression, so a long formula costs linear time.
+ */
 function calls(formula: string): Call[] {
   const out: Call[] = [];
   for (let at = 0; at < formula.length; ) {
@@ -49,16 +53,31 @@ function calls(formula: string): Call[] {
     }
     // A name starts after something that is not part of a name.
     if (/[A-Za-z_]/.test(c) && (at === 0 || !/[A-Za-z0-9_.$]/.test(formula[at - 1]!))) {
-      CALL.lastIndex = at;
-      const m = CALL.exec(formula);
-      if (m) {
-        out.push({ start: at, prefix: m[1]!, name: m[2]! });
-        at = CALL.lastIndex;
+      let pos = at;
+      let prefix = "";
+      for (let found = true; found; ) {
+        found = false;
+        for (const p of PREFIXES) {
+          if (formula.startsWith(p, pos)) {
+            prefix += p;
+            pos += p.length;
+            found = true;
+          }
+        }
+      }
+      let end = pos;
+      if (isLetter(formula[end])) while (isNamePart(formula[end])) end++;
+      let after = end;
+      while (formula[after] === " " || formula[after] === "\t" || formula[after] === "\n" || formula[after] === "\r") after++;
+      if (end > pos && formula[after] === "(") {
+        out.push({ start: at, prefix, name: formula.slice(pos, end) });
+        at = after + 1;
         continue;
       }
-      let end = at + 1;
-      while (end < formula.length && /[A-Za-z0-9_.$!]/.test(formula[end]!)) end++;
-      at = end;
+      // Not a call: skip the rest of the name, such as a cell or a sheet reference.
+      let skip = Math.max(end, at + 1);
+      while (skip < formula.length && /[A-Za-z0-9_.$!]/.test(formula[skip]!)) skip++;
+      at = skip;
       continue;
     }
     at++;

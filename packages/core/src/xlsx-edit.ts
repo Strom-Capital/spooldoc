@@ -299,6 +299,25 @@ function checkWorkbook(workbook: string, rels: string): void {
   }
 }
 
+/** The XML without the empty elements `<name .../>` that `drop` picks. One pass with `indexOf`. */
+function withoutTags(xml: string, name: string, drop: (tag: string) => boolean): string {
+  let out = "";
+  let from = 0;
+  for (let at = xml.indexOf(`<${name}`, from); at !== -1; at = xml.indexOf(`<${name}`, from)) {
+    const end = xml.indexOf(">", at);
+    if (end === -1) break;
+    const tag = xml.slice(at, end + 1);
+    const next = xml[at + name.length + 1];
+    if (tag.endsWith("/>") && (next === " " || next === "/") && drop(tag)) {
+      out += xml.slice(from, at);
+    } else {
+      out += xml.slice(from, end + 1);
+    }
+    from = end + 1;
+  }
+  return out + xml.slice(from);
+}
+
 /** A relationship Id not used yet in a `.rels` part. */
 function freeId(rels: string): string {
   const used = new Set([...rels.matchAll(/\sId="([^"]*)"/g)].map((m) => m[1]));
@@ -433,9 +452,9 @@ export function editXlsx(bytes: Uint8Array, edits: readonly XlsxEdit[]): Uint8Ar
   if (formulasChanged && files[CALC_CHAIN]) {
     changed.set(CALC_CHAIN, null);
     const rels = (changed.get(WORKBOOK_RELS) as string | undefined) ?? text(WORKBOOK_RELS);
-    changed.set(WORKBOOK_RELS, rels.replace(/<Relationship\b[^>]*Type="[^"]*\/calcChain"[^>]*\/>/g, ""));
+    changed.set(WORKBOOK_RELS, withoutTags(rels, "Relationship", (tag) => (xmlAttribute(tag, "Type") ?? "").endsWith("/calcChain")));
     const types = (changed.get(CONTENT_TYPES) as string | undefined) ?? text(CONTENT_TYPES);
-    changed.set(CONTENT_TYPES, types.replace(/<Override\b[^>]*PartName="\/xl\/calcChain\.xml"[^>]*\/>/g, ""));
+    changed.set(CONTENT_TYPES, withoutTags(types, "Override", (tag) => xmlAttribute(tag, "PartName") === "/xl/calcChain.xml"));
   }
 
   // References: the edited parts, and every sheet when the styles changed.

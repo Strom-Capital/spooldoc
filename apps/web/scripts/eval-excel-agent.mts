@@ -416,7 +416,8 @@ function sheetParts(files: Record<string, Uint8Array>): { name: string; part: st
     const name = /name="([^"]*)"/.exec(m[0])?.[1] ?? '';
     const target = targets.get(/r:id="([^"]+)"/.exec(m[0])?.[1]) ?? '';
     const part = target.startsWith('/') ? target.slice(1) : `xl/${target}`;
-    return { name: name.replace(/&amp;/g, '&').replace(/&apos;/g, "'"), part, index };
+    // One pass, so `&amp;apos;` stays `&apos;`.
+    return { name: name.replace(/&(amp|apos);/g, (_, entity: string) => (entity === 'amp' ? '&' : "'")), part, index };
   });
 }
 
