@@ -7,15 +7,17 @@ The agent sits beside the workbench in the job builder. Ask it for a
 definition and it reads the sample pages, writes the YAML to the job's
 draft, reads the extraction report, fixes missing fields, then writes a
 template and renders it: HTML, or a Word or Excel template it designs or
-edits. When it is not clear which kind you want, it
-[asks you first](#which-kind-of-template). The page view, the JSON and the preview update as
+edits. An empty chat offers one prompt per format: Word, Excel, HTML and
+PDF. Each names the kind of template, so the agent starts right away.
+When you write your own message and it is not clear which kind you want,
+it [asks you first](#which-kind-of-template). The page view, the JSON and the preview update as
 it works, and everything it writes can be edited by hand. Without a model
 set, the job builder works as before and the agent points to Settings.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/ai-assistant-dark.png">
-    <img src="assets/ai-assistant-light.png" alt="The agent panel beside the workbench, with a suggested prompt and the message box" width="900">
+    <img src="assets/ai-assistant-light.png" alt="The agent panel beside the workbench, with the suggested prompts and the message box" width="900">
   </picture>
 </p>
 
