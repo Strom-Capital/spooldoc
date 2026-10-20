@@ -8,7 +8,7 @@ import { closeConnection, connectionErrorResponse, signOn } from '@/lib/server/i
 import { jobsUsingServer } from '@/lib/server/jobs-using';
 import { encryptSecret } from '@/lib/server/secrets';
 import { updateServerSchema } from '@/lib/server/server-input';
-import { getServerRow, serverCredentials, serverView } from '@/lib/server/servers';
+import { getServerRow, recordServerState, serverCredentials, serverView } from '@/lib/server/servers';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,8 +74,11 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
     }
     try {
       const info = await signOn(creds);
-      Object.assign(values, { host: creds.host, user: creds.user, ccsid: info.jobCcsid, vrm: info.vrm, lastCheckedAt: new Date(), lastError: null, errorDismissed: null });
+      // The sign-on worked: the server is connected again, which also ends a pause after a failed sign-on.
+      await recordServerState(row, { ok: true, info });
+      Object.assign(values, { host: creds.host, user: creds.user });
     } catch (error) {
+      // Nothing is saved, so the server's state, which is about the saved password, stays.
       return connectionErrorResponse(error, [creds.password]);
     }
     values.passwordEnc = encryptSecret(creds.password);

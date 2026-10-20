@@ -2,7 +2,7 @@
 
 import { TriangleAlertIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { ErrorNote } from '@/components/page';
+import { ServerErrorNote } from '@/components/server-status';
 import { SpoolViewer } from '@/components/spool-viewer';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
@@ -14,13 +14,13 @@ type Loaded = { sample: SampleView; warnings: string[] } | { error: ShownError }
 
 /** The pages of a spooled file on a queue, read from the IBM i when opened. Reading changes nothing on the queue. */
 export function SpoolFileDialog({
-  serverId,
+  server,
   library,
   queue,
   file,
   onClose,
 }: {
-  serverId: string;
+  server: { id: string; name: string };
   library: string;
   queue: string;
   file: SpooledFileView;
@@ -28,6 +28,8 @@ export function SpoolFileDialog({
 }) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [page, setPage] = useState(1);
+  const [attempt, setAttempt] = useState(0);
+  const serverId = server.id;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -39,7 +41,7 @@ export function SpoolFileDialog({
       (err) => !controller.signal.aborted && setLoaded({ error: shownError(err) }),
     );
     return () => controller.abort();
-  }, [serverId, library, queue, file]);
+  }, [serverId, library, queue, file, attempt]);
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -59,9 +61,17 @@ export function SpoolFileDialog({
             <Spinner /> Reading the spooled file...
           </div>
         )}
-        {loaded && 'error' in loaded && <ErrorNote className="m-4" detail={loaded.error.detail}>
-            {loaded.error.message}
-          </ErrorNote>}
+        {loaded && 'error' in loaded && (
+          <ServerErrorNote
+            className="m-4"
+            error={loaded.error}
+            server={server}
+            onRetry={() => {
+              setLoaded(null);
+              setAttempt((n) => n + 1);
+            }}
+          />
+        )}
         {loaded && 'sample' in loaded && (
           <>
             {loaded.warnings.length > 0 && (

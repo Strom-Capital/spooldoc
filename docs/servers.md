@@ -18,8 +18,64 @@ libraries to list output queues from.
 | Libraries | Optional. Only the output queues of these libraries are listed. Empty lists every queue the profile can see. |
 
 Spooldoc signs on when it saves a server, so a wrong host or password shows
-up at once. A server that cannot be reached later appears under Needs
-attention on the Home page.
+up at once. When a server cannot be reached later, or its sign-on fails,
+its status on the Servers page says so, and it appears under Needs
+attention on the Home page. See [Connection status](#connection-status).
+
+## Connection status
+
+Every attempt to reach a server records its state: the pages, the queue
+watcher and the runs. The Servers page shows it for each server, the
+server pickers show its icon, and the Queues page shows it next to the
+server.
+
+| State | When | What happens next |
+|-------|------|-------------------|
+| Connected | The last attempt worked. Shows the OS version, the CCSID and when it was checked. | Normal use. |
+| Not checked | Spooldoc has not signed on since the server was added. | The first use signs on. |
+| Connecting... | Reconnect was pressed and the sign-on runs. | |
+| Cannot reach | The host does not answer, the attempt timed out, or the connection dropped and trying again did not help. Shows since when and why. | Spooldoc tries again by itself. |
+| Sign-on failed | The IBM i did not accept the user profile or password: a wrong or expired password, or a disabled profile. Shows since when and why. | Spooldoc does not sign on again until you edit the password or press Reconnect. |
+
+An error about one output queue, spooled file or authority is about that
+object, not the server, and does not change its state.
+
+### When the connection drops
+
+A connection can drop, for example when the network or a VPN changes.
+Spooldoc then throws the connection away. A read, such as listing queues or
+reading a spooled file, is tried once more at once on a new connection. A
+change on the IBM i, such as holding, moving or deleting a spooled file, is
+not tried again, since the IBM i may have done it already: the message
+names the spooled file and asks you to check it.
+
+When the server still cannot be reached, the queue watcher tries again
+after 10 seconds, then waits twice as long each time, up to 2 minutes.
+Once the server answers, its state goes back to Connected and the item
+under Needs attention goes away. Spooldoc also turns on TCP keepalive, so a
+dead connection is noticed sooner.
+
+### Reconnect
+
+Reconnect on the Servers page signs on to the server again from scratch,
+not with the connection Spooldoc already has open, and shows the result.
+The error box on the Queues page, on a queue's spooled files, on a spooled
+file, in the job builder and under Needs attention offers Reconnect too
+when the server cannot be reached or its sign-on failed. Once Reconnect
+works, the page loads again.
+
+Use it after you fix the cause, such as the network or the password on the
+IBM i, to see at once whether it works. You do not need it after a network
+problem that went away by itself.
+
+### Why sign-on stops after a failed password
+
+The IBM i disables a user profile after a number of failed sign-ons in a
+row, set by the system value `QMAXSIGN`. If Spooldoc kept signing on with a
+wrong password every few seconds, it would disable the profile. So after a
+failed sign-on, Spooldoc does not sign on again by itself: the pages say
+so, and the queue watcher leaves the server alone. Edit the password on the
+Servers page, or press Reconnect once the password is fixed on the IBM i.
 
 ## What the profile needs
 
@@ -52,6 +108,7 @@ goes into the job log, Needs attention and the server log.
 | No password (`CPF22E5`) | Use a user profile with a password. |
 | No such user (`CPF2204`) | Check the user on the Servers page. |
 | Unknown host, refused, timed out | Check the host name, that the host servers run (`STRHOSTSVR SERVER(*ALL)`), and the ports below. |
+| Connection dropped (`08003`, `08S01`, connection reset) | Nothing, as a rule: Spooldoc connects again on the next try. If it keeps failing, check the network or VPN to the host. |
 | No authority to an object | A security officer grants it, for example with `GRTOBJAUT ... AUT(*USE)` for the object named. |
 | No authority to a spooled file | Other users' spooled files need `*SPLCTL`, or `*JOBCTL` on a queue created with `OPRCTL(*YES)`. |
 | Output queue, library or data queue gone | Point the job's source at another queue, or turn on real-time watching again to create the data queue. |

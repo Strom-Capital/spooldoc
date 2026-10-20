@@ -1,11 +1,12 @@
 'use client';
 
-import { CheckCircle2Icon, InboxIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, RefreshCwIcon, ServerIcon, Trash2Icon, XCircleIcon } from 'lucide-react';
+import { InboxIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, RefreshCwIcon, ServerIcon, Trash2Icon } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
+import { ServerStatus, useReconnect } from '@/components/server-status';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -20,17 +21,15 @@ import {
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
 import { api, errorText } from '@/lib/client/api';
-import { ago } from '@/lib/client/format';
 import type { ServerView } from '@/lib/types';
 import { ServerDialog } from './server-dialog';
 
-/** The server list with add, edit, test and delete. */
+/** The server list with each server's connection status, and add, edit, reconnect and delete. */
 export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
   const [servers, setServers] = useState<ServerView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<ServerView | 'new' | null>(null);
   const [deleting, setDeleting] = useState<ServerView | null>(null);
-  const [testing, setTesting] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -48,18 +47,8 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
     );
   }, []);
 
-  async function test(server: ServerView) {
-    setTesting(server.id);
-    try {
-      await api(`/api/servers/${server.id}/test`, { method: 'POST' });
-      toast.success(`Connected to ${server.name}`);
-    } catch (err) {
-      // The error is also recorded on the server and shown in the row.
-      toast.error(`Could not connect to ${server.name}`, { description: errorText(err) });
-    }
-    setTesting(null);
-    await load();
-  }
+  // The row shows the result either way: Connected, or why not.
+  const { reconnect, pending } = useReconnect(() => void load());
 
   async function remove(server: ServerView) {
     try {
@@ -133,21 +122,7 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
                     )}
                   </td>
                   <td className="px-3 py-2.5">
-                    {server.lastError ? (
-                      <div className="flex max-w-sm items-start gap-1.5 text-destructive">
-                        <XCircleIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
-                        <span>{server.lastError}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-start gap-1.5">
-                        <CheckCircle2Icon className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
-                        <span>
-                          {server.vrm ?? 'Signed on'}
-                          {server.ccsid ? <span className="text-muted-foreground">, CCSID {server.ccsid}</span> : null}
-                        </span>
-                      </div>
-                    )}
-                    {server.lastCheckedAt && <div className="mt-0.5 text-muted-foreground text-xs">Checked {ago(server.lastCheckedAt)}</div>}
+                    <ServerStatus server={server} connecting={pending === server.id} />
                   </td>
                   <td className="tabular px-3 py-2.5 text-right">{server.hiddenQueues ?? 0}</td>
                   <td className="px-3 py-2.5">
@@ -158,9 +133,9 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
                           Queues
                         </Link>
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => test(server)} disabled={testing === server.id}>
-                        {testing === server.id ? <Spinner /> : <RefreshCwIcon />}
-                        Test
+                      <Button variant="ghost" size="sm" onClick={() => void reconnect(server)} disabled={pending !== null}>
+                        {pending === server.id ? <Spinner /> : <RefreshCwIcon />}
+                        Reconnect
                       </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

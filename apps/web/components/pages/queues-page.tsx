@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ErrorNote, Page } from '@/components/page';
 import { ServerSelect } from '@/components/server-select';
+import { ServerErrorNote, ServerStatus } from '@/components/server-status';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -29,6 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
+import { withLatestCall, type LatestCall } from '@/lib/client/server-state';
 import type { QueueCountView, QueueView, ServerView } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { NewJobButton } from './new-job-button';
@@ -63,14 +65,29 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
   // Ready and held counts load after the list: counting reads every spooled file.
   const [counted, setCounted] = useState<{ serverId: string; counts: Map<string, QueueCountView> | null; error: ShownError | null } | null>(null);
 
-  useEffect(() => {
+  // What the latest queue list call came to, shown on the server until the servers load
+  // again. Kept apart from `servers`, so it does not start another call.
+  const [latest, setLatest] = useState<(LatestCall & { serverId: string }) | null>(null);
+
+  // Loading the servers again also loads the queues again, as the server changes.
+  const loadServers = useCallback(() => {
     api<{ servers: ServerView[] }>('/api/servers').then(
-      (data) => setServers(data.servers),
+      (data) => {
+        setServers(data.servers);
+        setLatest(null);
+      },
       (err) => setError(shownError(err)),
     );
   }, []);
+  useEffect(loadServers, [loadServers]);
 
   const server = servers?.find((s) => s.id === serverId) ?? null;
+  // The servers as they read after the latest call, for the status and the picker.
+  const shownServers = useMemo(
+    () => servers?.map((s) => (latest?.serverId === s.id ? withLatestCall(s, latest) : s)) ?? null,
+    [servers, latest],
+  );
+  const shownServer = shownServers?.find((s) => s.id === serverId) ?? null;
   const queues = loaded && server && loaded.serverId === server.id ? loaded.queues : null;
   const setQueues = useCallback(
     (update: (current: QueueView[] | null) => QueueView[] | null) =>
@@ -101,9 +118,12 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
         });
         setLoaded({ serverId: server.id, queues: data.queues });
         setError(null);
+        setLatest({ serverId: server.id, error: null, at: new Date().toISOString() });
       } catch (err) {
         if (!isAbort(err)) {
-          setError(shownError(err));
+          const shown = shownError(err);
+          setError(shown);
+          setLatest({ serverId: server.id, error: shown, at: new Date().toISOString() });
           setLoaded(null);
         }
       } finally {
@@ -221,8 +241,9 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
     >
       <div className="mb-4 flex flex-wrap items-center gap-3">
         {servers && servers.length > 1 && (
-          <ServerSelect servers={servers} value={server?.id ?? null} onChange={(id) => router.push(`/queues?server=${id}`)} />
+          <ServerSelect servers={shownServers ?? servers} value={server?.id ?? null} onChange={(id) => router.push(`/queues?server=${id}`)} />
         )}
+        {shownServer && <ServerStatus server={shownServer} variant="inline" />}
         <div className="relative w-full max-w-sm">
           <SearchIcon className="pointer-events-none absolute top-2 left-2.5 size-4 text-muted-foreground" aria-hidden />
           <Input
@@ -256,11 +277,7 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
           </div>
         )}
       </div>
-      {error && (
-        <ErrorNote className="mb-4" detail={error.detail}>
-          {error.message}
-        </ErrorNote>
-      )}
+      {error && <ServerErrorNote className="mb-4" error={error} server={server} onRetry={loadServers} />}
       {!error && counts?.error && (
         <ErrorNote className="mb-4" detail={counts.error.detail}>
           Could not count the ready and held files. {counts.error.message}

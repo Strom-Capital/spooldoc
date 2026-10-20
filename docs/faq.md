@@ -91,6 +91,14 @@ so. A file that was on the queue before watching started is left for Run
 now unless Backlog is on. Each file runs once, even after its run was
 deleted by retention. See [Watching a queue](jobs.md#watching-a-queue).
 
+## The connection dropped after I changed networks
+
+Spooldoc throws a dropped connection away and opens a new one on the next
+try, so pages and the watcher recover by themselves once the IBM i can be
+reached again; no restart is needed. Until then the server shows "Cannot
+reach" with the reason. Press Reconnect on the Servers page to try at once.
+See [Connection status](servers.md#connection-status).
+
 ## Can I run the same file again?
 
 Yes: Retry in the job log runs it again with the active version.

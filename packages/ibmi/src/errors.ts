@@ -1,5 +1,16 @@
 import { ConnectionError, type ConnectionErrorCode } from "./connection.js";
 
+/**
+ * A connection that was open and is not any more: the JDBC states 08003 and 08S01, or the
+ * socket's own words. It is a host error, since the connection is the problem, not an object.
+ */
+const LOST = /\b08003\b|\b08S01\b|connection does not exist|Communication link failure|Connection reset|Socket closed|Broken pipe|Connection dropped unexpectedly/i;
+
+/** True when an error text says that an open connection dropped, rather than that one could not be opened. */
+export function isConnectionLost(text: string): boolean {
+  return LOST.test(text);
+}
+
 const RULES: [ConnectionErrorCode, RegExp][] = [
   [
     "auth",
@@ -9,6 +20,8 @@ const RULES: [ConnectionErrorCode, RegExp][] = [
     "host",
     /UnknownHostException|nodename nor servname|Name or service not known|ConnectException|Connection refused|NoRouteToHost|SocketTimeoutException|timed out|cannot establish the connection|\b08001\b/i,
   ],
+  // Before notfound, which would take "The connection does not exist." for a missing object.
+  ["host", LOST],
   ["authority", /CPF3401|CPF2189|CPF2182|CPF2207|CPF3C52|not authorized|SQL0551|SQL0552/i],
   ["notfound", /CPF3C40|CPF3344|CPF3342|CPF3330|CPF2105|CPF2110|ObjectDoesNotExistException|not found|does not exist|no longer in the system|SQL0204/i],
 ];
@@ -73,11 +86,13 @@ const HOST_REASONS: [string, RegExp][] = [
 
 /**
  * A readable message for an unreachable system, such as "Cannot reach
- * ibmi.example.com: unknown host", from the Java exception text. The host comes from
+ * ibmi.example.com: unknown host", from the Java exception text, or "The connection to
+ * ibmi.example.com dropped" for a connection that was open. The host comes from
  * an `UnknownHostException` or from the JDBC driver's "(host)" detail; without one
  * the message names `fallbackHost`, else "the system". Undefined when no reason is recognized.
  */
 export function hostMessage(text: string, fallbackHost?: string): string | undefined {
+  if (isConnectionLost(text)) return `The connection to ${fallbackHost ?? "the system"} dropped`;
   const reason = HOST_REASONS.find(([, re]) => re.test(text))?.[0];
   if (!reason) return undefined;
   const host =
@@ -177,6 +192,9 @@ export function guidance(code: ConnectionErrorCode, text: string, context?: stri
 
     case "host": {
       const reached = hostMessage(text, host);
+      if (isConnectionLost(text)) {
+        return `${reached}. Spooldoc connects again on the next try. If it keeps failing, check the network or VPN to ${system}.`;
+      }
       if (!reached) return `Cannot reach ${system}. Check the host name on the Servers page, the network, and that a firewall lets ${PORTS} through.`;
       if (/unknown host/.test(reached)) return `${reached}. Check the host name on the Servers page.`;
       if (/refused/.test(reached)) return `${reached}. Check that the host servers run on the IBM i (STRHOSTSVR SERVER(*ALL)) and that ${PORTS} are open.`;

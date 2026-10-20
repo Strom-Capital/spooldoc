@@ -49,9 +49,10 @@ export function Page({
 
 /**
  * A red message box for an error. `detail`, such as the IBM i's own message text, is
- * kept behind a Details toggle so the message itself says what to do.
+ * kept behind a Details toggle so the message itself says what to do. `action`, such as
+ * a Try again button, sits at the bottom.
  */
-export function ErrorNote({ children, detail, className }: { children: ReactNode; detail?: string; className?: string }) {
+export function ErrorNote({ children, detail, action, className }: { children: ReactNode; detail?: string; action?: ReactNode; className?: string }) {
   return (
     <div role="alert" className={cn('rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive text-sm', className)}>
       {children}
@@ -63,6 +64,7 @@ export function ErrorNote({ children, detail, className }: { children: ReactNode
           <p className="mt-1 whitespace-pre-wrap break-words font-mono opacity-90">{detail}</p>
         </details>
       )}
+      {action && <div className="mt-2 flex flex-wrap items-center gap-2 text-foreground">{action}</div>}
     </div>
   );
 }

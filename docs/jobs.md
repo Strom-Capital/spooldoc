@@ -21,7 +21,7 @@ pipeline brings them back.
 | Step | What you set |
 |------|--------------|
 | Source | The server, the output queue, and filters on spooled file name, user data, job name, job user and form type. Each filter is a "contains" match; empty means any file on the queue. |
-| Trigger | On demand, or Watching the queue. See [Watching a queue](#watching-a-queue). |
+| Trigger | On demand, or Watching the queue, and whether held files count. See [Running on demand](#running-on-demand) and [Watching a queue](#watching-a-queue). |
 | Extract | The [definition](definitions.md): the YAML that turns pages into JSON. |
 | Render | The [templates](templates.md): each has a name, HTML or a Word file, and the formats it makes. The starter template renders every field and table of the definition until you write your own. See [Templates](#templates). |
 | Destination | Where the files go. See [Destinations](destinations.md). |
@@ -92,10 +92,26 @@ when the finish action is Move.
 
 ## Running on demand
 
-Run now takes one spooled file from the queue through the active version
-and shows the run in the [job log](job-log.md). A file the definition's
-`match` rules do not accept ends as skipped and is left alone. Retry in the
-job log runs the same file again with the active version.
+Run now takes the spooled files you pick from the queue through the
+active version and shows the runs in the [job log](job-log.md). A file the
+definition's `match` rules do not accept ends as skipped and is left
+alone. Retry in the job log runs the same file again with the active
+version.
+
+Run now lists the ready files the job has not processed. With held files
+included in the trigger step, it lists held ones too, for programs that
+print with `HOLD(*YES)`. A switch in Run now shows the rest of the queue.
+
+## Other jobs on the same queue
+
+When other jobs read the same output queue, the trigger step names each
+one, says whether it is watching or runs on demand, and what its finish
+step does. A file that matches the filters of more than one job can be
+run by each, and each finish action applies to it. A watching job runs a
+file as soon as it is ready, so an on-demand job on the same queue may
+find it already held, moved or deleted. Use the filters on the Source step
+to keep the jobs apart. Jobs with no active version and paused watchers
+are not named.
 
 ## Watching a queue
 
@@ -119,7 +135,9 @@ deleted or the connection dropped, the queue is polled at the poll
 interval meanwhile and Spooldoc keeps trying to read it again. The trigger
 step and Needs attention on the Home page say why and since when, and the
 [server log](configuration.md#server-log) has each attempt. Once reading
-works again, the note goes away.
+works again, the note goes away. After a dropped connection, Spooldoc opens
+a new one by itself, so real-time watching comes back without a restart;
+see [Connection status](servers.md#connection-status).
 
 Every run renders with [Carbone](carbone.md). While Carbone does not work,
 the watcher starts no runs: new spooled files wait on the queue, and the

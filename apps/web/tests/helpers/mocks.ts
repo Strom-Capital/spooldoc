@@ -46,6 +46,11 @@ export const fakeJt400 = {
     await connections.get(key)?.close();
     connections.delete(key);
   }),
+  /** Like the real one: closes the cached connection, then signs on with a new one. */
+  reconnect: vi.fn(async (creds: Credentials) => {
+    await fakeJt400.closeConnection(fakeJt400.connectionKey(creds));
+    return (await fakeJt400.getConnection(creds)).describe();
+  }),
 };
 
 /** A request to the app with the Origin of the app, as a browser would send it. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyError, ConnectionError, guidance, messageIdOf, redact, summarize, toConnectionError } from "../src/index.js";
+import { classifyError, ConnectionError, guidance, isConnectionLost, messageIdOf, redact, summarize, toConnectionError } from "../src/index.js";
 
 const PASSWORD = "s3cret!Pw";
 
@@ -94,6 +94,31 @@ describe("toConnectionError", () => {
     const out = toConnectionError(err, [PASSWORD]);
     expect(out.code).toBe("host");
     expect(out.message).toBe(message);
+  });
+
+  const dropped: [string, string][] = [
+    ["08003", "java.sql.SQLException: The connection does not exist. (08003)"],
+    ["08S01", "java.sql.SQLException: [SQL08S01] Communication failure. (08S01)"],
+    ["a communication link failure", "java.sql.SQLException: Communication link failure. (Connection reset)"],
+    ["a reset connection", "java.net.SocketException: Connection reset"],
+    ["a closed socket", "java.net.SocketException: Socket closed"],
+    ["a broken pipe", "java.net.SocketException: Broken pipe (Write failed)"],
+    ["a dropped connection", "com.ibm.as400.access.ConnectionDroppedException: Connection dropped unexpectedly."],
+  ];
+
+  it.each(dropped)("calls %s a dropped connection and says what happens next", (_label, text) => {
+    expect(isConnectionLost(text)).toBe(true);
+    const err = toConnectionError(javaError(text), [PASSWORD], undefined, { host: "ibmi.example.com" });
+    expect(err.code).toBe("host");
+    expect(err.message).toBe(
+      "The connection to ibmi.example.com dropped. Spooldoc connects again on the next try. If it keeps failing, check the network or VPN to ibmi.example.com.",
+    );
+  });
+
+  it("still calls a missing library not found", () => {
+    const err = toConnectionError(javaError("java.sql.SQLException: [SQL0204] MYLIB in *LIBL type *LIB does not exist."), [PASSWORD]);
+    expect(err.code).toBe("notfound");
+    expect(isConnectionLost("Library MYLIB does not exist.")).toBe(false);
   });
 
   it("reads the detail from a Java cause when the bridge message has none", () => {

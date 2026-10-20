@@ -4,6 +4,12 @@ import type { SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
 import type { AiProviderId, Effort } from './ai-providers';
 import type { JobSpec } from './job-spec';
 
+/**
+ * Why a server cannot be used: `host` it cannot be reached (Spooldoc tries again by
+ * itself), `auth` the sign-on failed (Spooldoc does not sign on again until the user acts).
+ */
+export type ServerErrorCode = 'host' | 'auth';
+
 /** A saved IBM i server. Never carries the password. */
 export interface ServerView {
   id: string;
@@ -15,8 +21,14 @@ export interface ServerView {
   dataQueue: { library: string; name: string; owned: boolean } | null;
   ccsid: number | null;
   vrm: string | null;
+  /** When Spooldoc last reached the server or failed to; recorded at most once a minute while it works. */
   lastCheckedAt: string | null;
+  /** Why the last attempt to reach the server failed, until one works again. */
   lastError: string | null;
+  /** The class of `lastError`. */
+  errorCode: ServerErrorCode | null;
+  /** When the attempts first failed since the last one that worked. */
+  errorSince: string | null;
   createdAt: string;
   hiddenQueues?: number;
 }
@@ -242,7 +254,8 @@ export interface DashboardView {
   runs: { success: number; warning: number; failed: number; skipped: number; logged: number };
   series: RunBucket[];
   attention: {
-    servers: { id: string; name: string; error: string }[];
+    /** Servers that cannot be used, with why, the class of error and since when. */
+    servers: { id: string; name: string; error: string; errorCode: ServerErrorCode | null; since: string | null }[];
     jobs: { id: string; name: string; error: string }[];
     /** Queues that should be watched in real time but are polled, with why and since when. */
     queues: { id: string; serverId: string; serverName: string; library: string; name: string; error: string; since: string }[];
