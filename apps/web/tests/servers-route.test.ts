@@ -1,7 +1,8 @@
 import { ConnectionError } from '@spooldoc/ibmi';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { servers } from '@/lib/server/db/schema';
+import { emptySpec } from '@/lib/job-spec';
+import { jobs, servers } from '@/lib/server/db/schema';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
 import { GOOD_PASSWORD } from './helpers/fake-connection';
@@ -50,6 +51,30 @@ describe('/api/servers', () => {
     expect(listed).not.toContain(GOOD_PASSWORD);
     expect(listed).not.toContain('passwordEnc');
     for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('lists the jobs that read from each server, in name order', async () => {
+    const { id } = await (await addServer()).json();
+    const other = (await (await addServer({ ...input, name: 'Other' })).json()).id;
+    const jobOn = async (serverId: string, name: string, queue: string) => {
+      const jobId = await insertJob(serverId, { source: { ...emptySpec().source, serverId, library: 'MYLIB', queue } });
+      await db().update(jobs).set({ name }).where(eq(jobs.id, jobId));
+      return jobId;
+    };
+    const statements = await jobOn(id, 'Statements', 'MYOUTQ');
+    const invoices = await jobOn(id, 'Invoices', 'EMAIL');
+    await jobOn(other, 'Elsewhere', 'MYOUTQ');
+
+    const { servers: listed } = await (await list.GET(appRequest('/api/servers', { headers: auth }))).json();
+    expect(listed.map((server: { name: string; jobs: { name: string }[] }) => [server.name, server.jobs.map((job) => job.name)])).toEqual([
+      ['Other', ['Elsewhere']],
+      ['Production', ['Invoices', 'Statements']],
+    ]);
+    expect(listed[1].jobs).toEqual([
+      { id: invoices, name: 'Invoices', mode: 'manual', paused: false, activeVersion: null },
+      { id: statements, name: 'Statements', mode: 'manual', paused: false, activeVersion: null },
+    ]);
+    expect(listed[0]).not.toHaveProperty('hiddenQueues');
   });
 
   it('refuses a wrong password with 422 and saves nothing', async () => {

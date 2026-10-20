@@ -11,6 +11,11 @@ Click a server, or its name, to open its output queues on the Queues page.
 Reconnect and Edit sit on each row. The ⋯ menu at the end of the row has
 Reconnect, Edit and Delete.
 
+The Jobs column counts the [jobs](jobs.md) that read from any output queue
+of the server. Hover over the count, or click, tap or press Enter on it, to
+list them, each with a link to the job and its state, as on the
+[Queues](queues.md) page.
+
 ## Adding a server
 
 | Field | What it is |

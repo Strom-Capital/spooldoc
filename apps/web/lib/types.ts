@@ -30,7 +30,8 @@ export interface ServerView {
   /** When the attempts first failed since the last one that worked. */
   errorSince: string | null;
   createdAt: string;
-  hiddenQueues?: number;
+  /** Jobs that read from a queue of this server, in name order. Only the server list has them. */
+  jobs?: QueueView['jobs'];
 }
 
 /** An output queue of a server. */
