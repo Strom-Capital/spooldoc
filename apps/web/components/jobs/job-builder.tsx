@@ -239,7 +239,7 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
         <Hint
           text={
             job.activeVersion === null
-              ? 'Run the job by hand on spooled files you pick. Save a version first.'
+              ? 'Run the job by hand on spooled files you pick. It runs the active version, so save a version and make it active first.'
               : `Run version ${job.activeVersion} now on spooled files you pick from the source queue.`
           }
         >
