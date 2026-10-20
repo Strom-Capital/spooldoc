@@ -203,7 +203,7 @@ export function QueueFilesPage({
           />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" aria-label="Status" title="Shows spooled files with one of the statuses picked">
+              <Button variant="outline" aria-label={`Status: ${status ? statusFilterLabel(statuses) : 'any'}`} title="Shows spooled files with one of the statuses picked">
                 {statusFilterLabel(statuses)}
                 <ChevronDownIcon data-icon="inline-end" />
               </Button>
