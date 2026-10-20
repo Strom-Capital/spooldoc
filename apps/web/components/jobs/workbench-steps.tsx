@@ -16,6 +16,7 @@ import { templateFileName, withContent, type TemplateContent } from '@/lib/job-s
 import { useJob } from './job-provider';
 import { TemplateControls } from './template-controls';
 import { PreviewPicker } from './preview-picker';
+import { NextStepButton } from './step-nav';
 
 /** The workbench state for the job's spec, the picked template and the preview spooled file, around the builder. */
 export function JobWorkbench({ children }: { children: React.ReactNode }) {
@@ -72,6 +73,7 @@ function StepHeader({ page, template }: { page?: boolean; template?: React.React
         {template && <PathSlash />}
         {template}
         {loading && <Spinner className="shrink-0 text-muted-foreground" />}
+        <NextStepButton />
       </div>
       {error && <p className="truncate px-3 pb-1.5 text-destructive text-xs">{error}</p>}
       {render?.mismatch && (

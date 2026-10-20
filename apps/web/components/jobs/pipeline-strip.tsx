@@ -17,6 +17,7 @@ import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useAppInfo } from '@/components/app-info';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
+import { STEP_TITLE, STEPS } from '@/lib/client/job-steps';
 import { formatList, type TemplateContent } from '@/lib/job-spec';
 import { cn } from '@/lib/utils';
 import { useJob, type Step } from './job-provider';
@@ -109,8 +110,7 @@ const MIN_ZOOM = 0.45;
 const PAD = 12;
 /** Room kept under the steps for Hide pipeline, which the job builder centers there. */
 const BUTTON_BAND = 26;
-const STEPS = 6;
-const TOTAL_WIDTH = STEPS * NODE_WIDTH + (STEPS - 1) * GAP;
+const TOTAL_WIDTH = STEPS.length * NODE_WIDTH + (STEPS.length - 1) * GAP;
 
 /**
  * Fit the steps whenever the strip changes size (the sidebars or the window). When all
@@ -162,7 +162,7 @@ function useSteps(): StepInfo[] {
   return [
     {
       step: 'source',
-      title: 'Source',
+      title: STEP_TITLE.source,
       icon: InboxIcon,
       detail: hasSource ? `${spec.source.library}/${spec.source.queue}` : 'Pick a server and queue',
       sub: server?.name,
@@ -170,7 +170,7 @@ function useSteps(): StepInfo[] {
     },
     {
       step: 'trigger',
-      title: 'Trigger',
+      title: STEP_TITLE.trigger,
       icon: spec.trigger.mode === 'watch' ? RadioIcon : PlayIcon,
       detail: spec.trigger.mode === 'watch' ? 'Watching the queue' : 'On demand',
       sub: job.paused
@@ -184,7 +184,7 @@ function useSteps(): StepInfo[] {
     },
     {
       step: 'extract',
-      title: 'Extract',
+      title: STEP_TITLE.extract,
       icon: FileJsonIcon,
       detail: !spec.extract.definition.trim()
         ? 'Write a definition'
@@ -198,7 +198,7 @@ function useSteps(): StepInfo[] {
     },
     {
       step: 'render',
-      title: 'Render',
+      title: STEP_TITLE.render,
       icon: FileTextIcon,
       detail: templates.length > 1 ? `${templates.length} templates` : contentName(templates[0]!),
       sub: !rendering
@@ -216,14 +216,14 @@ function useSteps(): StepInfo[] {
     },
     {
       step: 'destination',
-      title: 'Destination',
+      title: STEP_TITLE.destination,
       icon: SendIcon,
       detail: destination?.name ?? 'Pick a destination',
       status: destination ? 'ok' : 'unset',
     },
     {
       step: 'finish',
-      title: 'Finish',
+      title: STEP_TITLE.finish,
       icon: CheckCheckIcon,
       detail:
         finish.action === 'hold'

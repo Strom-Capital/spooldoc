@@ -2,7 +2,7 @@
 
 import { Trash2Icon } from 'lucide-react';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { ServerSelect } from '@/components/server-select';
 import { ServerErrorNote } from '@/components/server-status';
 import { Input } from '@/components/ui/input';
@@ -12,17 +12,23 @@ import { cn } from '@/lib/utils';
 import type { FinishAction, SourceFilter } from '@/lib/job-spec';
 import { useJob } from './job-provider';
 import { QueueSelect } from './queue-select';
+import { StepFooter, useFocusOnArrival } from './step-nav';
 
-/** A padded, scrollable inspector panel with a heading. */
+/** A padded, scrollable inspector panel with a heading, and Back and Next at the end. */
 export function Panel({ title, description, children }: { title: string; description: ReactNode; children: ReactNode }) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useFocusOnArrival(heading);
   return (
     <div className="h-full overflow-auto">
       <div className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-5 sm:px-6">
         <div>
-          <h2 className="font-semibold text-lg">{title}</h2>
+          <h2 ref={heading} tabIndex={-1} className="font-semibold text-lg outline-none">
+            {title}
+          </h2>
           <p className="mt-0.5 text-muted-foreground text-sm">{description}</p>
         </div>
         {children}
+        <StepFooter />
       </div>
     </div>
   );

@@ -8,8 +8,12 @@ lists them with their server, queue, trigger and last run. A job whose
 active version or draft no longer matches the job format, after an upgrade
 for example, is listed with the reason instead of breaking the page. The
 job builder shows the pipeline as six steps, and each step opens an
-inspector. Hide pipeline under the steps makes more room, and Show
-pipeline brings them back.
+inspector. Click a step to open it, or use Next and Back to go through them
+in order. Next sits at the end of each form, and in the bar above the page
+on Extract and Render. On Finish, Save version takes its place while the
+draft has changes that are not in the active version. The draft saves as
+you type, so moving between steps loses nothing. Hide pipeline under the
+steps makes more room, and Show pipeline brings them back.
 
 The path at the top of the builder, Jobs and the job name, links back to
 the Jobs page. To rename the job, click its name, or pick Rename in the More

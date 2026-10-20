@@ -66,8 +66,9 @@ Rendering. See [Contributing](contributing.md) for the tools and the tests.
    the queues you do not need, and open one to see its spooled files and
    their pages. See [Queues](queues.md).
 5. **Start a job.** From a queue, choose New job. The job builder shows the
-   pipeline: source, trigger, extract, render, destination, finish. Pick a
-   spooled file on the queue as the preview sample.
+   pipeline: source, trigger, extract, render, destination, finish. Next
+   at the end of each step opens the one after it. Pick a spooled file on
+   the queue as the preview sample.
 6. **Let the agent propose.** With a model set under Settings, ask the
    agent for a definition. It reads the sample pages, writes a YAML
    definition, reads the extraction report and fixes missing fields, then
