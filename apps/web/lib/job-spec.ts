@@ -125,6 +125,17 @@ export function withContent(template: JobTemplate, content: TemplateContent): Jo
   return { id: template.id, name: template.name, ...templateContent(content), formats: formats.length > 0 ? formats : ['pdf'] };
 }
 
+/**
+ * What switching a template to the other kind does to the files it makes, or null when it
+ * makes the same files: "It makes PDF files, not HTML. A Word template makes PDF and DOCX."
+ */
+export function kindSwitchNote(template: JobTemplate, kind: TemplateKind): string | null {
+  const kept = withContent(template, kind === 'docx' ? { kind, fileId: null } : { kind, source: null }).formats;
+  const dropped = template.formats.filter((format) => !kept.includes(format));
+  if (dropped.length === 0) return null;
+  return `It makes ${formatList(kept)} files, not ${formatList(dropped)}. ${kind === 'docx' ? 'A Word' : 'An HTML'} template makes ${formatList(KIND_FORMATS[kind])}.`;
+}
+
 /** True when the template has content of its own: HTML that was written, or an uploaded Word file. */
 export function hasOwnContent(template: TemplateContent): boolean {
   return template.kind === 'html' ? template.source !== null : template.fileId !== null;

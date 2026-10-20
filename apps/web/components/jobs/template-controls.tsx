@@ -29,8 +29,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   FORMAT_FILES,
+  formatList,
   hasOwnContent,
   KIND_FORMATS,
+  kindSwitchNote,
   nameTaken,
   newTemplate,
   FORMATS,
@@ -70,7 +72,7 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
     const content = next === 'docx' ? ({ kind: 'docx', fileId: null } as const) : ({ kind: 'html', source: null } as const);
     save(templates.map((t) => (t.id === template.id ? withContent(t, content) : t)));
     setSwitching(null);
-    toast.success(`${template.name} is ${next === 'docx' ? 'a Word' : 'an HTML'} template`);
+    toast.success(`${template.name} is ${next === 'docx' ? 'a Word' : 'an HTML'} template`, { description: kindSwitchNote(template, next) ?? undefined });
   };
 
   const pickKind = (next: TemplateKind) => {
@@ -136,7 +138,10 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => pickKind(other)}>
                 {other === 'docx' ? <FileTypeIcon /> : <FileCodeIcon />}
-                Make it {KIND_NAME[other]}
+                <span className="flex flex-col">
+                  Make it {KIND_NAME[other]}
+                  <span className="text-muted-foreground text-xs">Makes {formatList(KIND_FORMATS[other])}</span>
+                </span>
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setRenaming(true)}>
                 <PencilIcon />
@@ -171,7 +176,7 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
             <AlertDialogTitle>Make {template.name} {switching === 'docx' ? 'a Word' : 'an HTML'} template?</AlertDialogTitle>
             <AlertDialogDescription>
               {kind === 'html' ? 'Its HTML' : 'Its uploaded Word file'} is removed from the draft, and the template starts from the{' '}
-              {switching === 'docx' ? 'Word' : 'HTML'} starter. Saved versions keep it.
+              {switching === 'docx' ? 'Word' : 'HTML'} starter. Saved versions keep it. {switching && kindSwitchNote(template, switching)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
