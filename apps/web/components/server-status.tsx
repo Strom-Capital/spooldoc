@@ -3,6 +3,7 @@
 import { CheckCircle2Icon, CircleAlertIcon, CircleDashedIcon, RefreshCwIcon, RotateCcwIcon, XCircleIcon, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { Hint } from '@/components/hint';
 import { ErrorNote } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -127,6 +128,9 @@ export function ServerStatus({
  *
  * @param onDone - Gets the server as it is now, or null when Reconnect failed
  */
+/** What Reconnect does, on every Reconnect button. */
+export const RECONNECT_HINT = 'Sign on to the IBM i again from scratch. If the password is wrong, it counts as a failed sign-on there.';
+
 export function useReconnect(onDone?: (server: ServerView | null) => void): {
   reconnect(server: { id: string; name: string }): Promise<void>;
   pending: string | null;
@@ -161,10 +165,12 @@ export function ReconnectButton({
 }) {
   const { reconnect, pending } = useReconnect(onDone);
   return (
-    <Button variant={variant} size="sm" onClick={() => void reconnect(server)} disabled={pending !== null}>
-      {pending ? <Spinner /> : <RefreshCwIcon />}
-      Reconnect
-    </Button>
+    <Hint text={RECONNECT_HINT}>
+      <Button variant={variant} size="sm" onClick={() => void reconnect(server)} disabled={pending !== null}>
+        {pending ? <Spinner /> : <RefreshCwIcon />}
+        Reconnect
+      </Button>
+    </Hint>
   );
 }
 

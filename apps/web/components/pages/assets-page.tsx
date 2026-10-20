@@ -4,6 +4,7 @@ import { CheckIcon, CopyIcon, ImageIcon, PlusIcon, RefreshCwIcon, Trash2Icon, Ty
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
+import { Hint } from '@/components/hint';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
 import { RowMenu } from '@/components/row-actions';
@@ -296,9 +297,11 @@ function UsageSnippet({ text }: { text: string }) {
       <code className="min-w-0 flex-1 truncate font-mono text-xs" title={text}>
         {text}
       </code>
-      <Button variant="ghost" size="icon-xs" onClick={copy} aria-label="Copy template code" title="Copy template code">
-        {copied ? <CheckIcon /> : <CopyIcon />}
-      </Button>
+      <Hint text={copied ? 'Copied' : 'Copy the code that puts this asset in a template'}>
+        <Button variant="ghost" size="icon-xs" onClick={copy} aria-label="Copy template code">
+          {copied ? <CheckIcon /> : <CopyIcon />}
+        </Button>
+      </Hint>
     </div>
   );
 }

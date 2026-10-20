@@ -1,11 +1,12 @@
 'use client';
 
-import { FolderInputIcon, FilePenLineIcon, RotateCcwIcon } from 'lucide-react';
+import { FilePenLineIcon, RotateCcwIcon } from 'lucide-react';
 import { useState } from 'react';
+import { Hint } from '@/components/hint';
 import { Button } from '@/components/ui/button';
 import { CodeEditor } from './code-editor';
 import { EditorBar, EditorMessage } from './editor-bar';
-import { StartFromJobDialog } from './start-from-job-dialog';
+import { StartFromJobButton, StartFromJobDialog } from './start-from-job-dialog';
 import { FileTemplate } from './file-template';
 import { useWorkbench } from './workbench-provider';
 
@@ -32,22 +33,23 @@ function HtmlTemplateEditor() {
     <div className="flex h-full min-h-0 flex-col">
       <EditorBar>
         {!readOnly && html === null && starter && (
-          <Button size="sm" variant="ghost" onClick={() => setHtml(starter)}>
-            <FilePenLineIcon />
-            Start from the generated template
-          </Button>
+          <Hint text="Copy the starter template made from the definition into the editor, so you can change it.">
+            <Button size="sm" variant="ghost" onClick={() => setHtml(starter)}>
+              <FilePenLineIcon />
+              Start from the generated template
+            </Button>
+          </Hint>
         )}
         {!readOnly && html !== null && (
-          <Button size="sm" variant="ghost" onClick={() => setHtml(null)} title="Remove the template and use the generated starter template">
-            <RotateCcwIcon />
-            Use the starter template
-          </Button>
+          <Hint text="Remove this HTML from the draft and use the starter template made from the definition. Saved versions keep their own HTML.">
+            <Button size="sm" variant="ghost" onClick={() => setHtml(null)}>
+              <RotateCcwIcon />
+              Use the starter template
+            </Button>
+          </Hint>
         )}
         {!readOnly && (
-          <Button size="sm" variant="ghost" onClick={() => setStartFrom(true)} title="Copy a template of another job into this one, and on request its definition into this draft">
-            <FolderInputIcon />
-            Start from job
-          </Button>
+          <StartFromJobButton onClick={() => setStartFrom(true)} />
         )}
       </EditorBar>
       {startFrom && <StartFromJobDialog onClose={() => setStartFrom(false)} />}

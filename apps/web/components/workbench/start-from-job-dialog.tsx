@@ -1,9 +1,10 @@
 'use client';
 
-import { CopyIcon } from 'lucide-react';
+import { CopyIcon, FolderInputIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Loading } from '@/components/empty-state';
+import { Hint } from '@/components/hint';
 import { ErrorNote } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -33,6 +34,18 @@ function contentName(template: JobTemplateFiles): string {
 /** The `type:` of a definition YAML, read without parsing it. */
 function typeOf(yaml: string): string | null {
   return /^type:\s*["']?([a-z0-9-]+)/m.exec(yaml)?.[1] ?? null;
+}
+
+/** Opens the dialog below, from a template's toolbar. */
+export function StartFromJobButton({ onClick }: { onClick(): void }) {
+  return (
+    <Hint text="Copy a template from another job into this one. You can also take that job's definition. Both replace what this draft has.">
+      <Button size="sm" variant="ghost" onClick={onClick}>
+        <FolderInputIcon />
+        Start from job
+      </Button>
+    </Hint>
+  );
 }
 
 /**
@@ -189,10 +202,22 @@ export function StartFromJobDialog({ onClose }: { onClose(): void }) {
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={copy} disabled={copies.length === 0}>
-            <CopyIcon />
-            {copies.length === 0 ? 'Copy' : `Copy the ${copies.join(' and ')}`}
-          </Button>
+          <Hint
+            text={
+              copies.length > 0
+                ? undefined
+                : !files
+                  ? 'Choose a job first.'
+                  : hasDefinition
+                    ? 'The chosen template uses the starter template, so there is nothing to copy. Tick Also replace the definition to copy that.'
+                    : 'The chosen job has no template or definition to copy yet.'
+            }
+          >
+            <Button onClick={copy} disabled={copies.length === 0}>
+              <CopyIcon />
+              {copies.length === 0 ? 'Copy' : `Copy the ${copies.join(' and ')}`}
+            </Button>
+          </Hint>
         </DialogFooter>
       </DialogContent>
     </Dialog>

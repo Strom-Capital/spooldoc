@@ -2,6 +2,7 @@
 
 import { ChevronsUpDownIcon, FileTextIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { Hint } from '@/components/hint';
 import { Loading } from '@/components/empty-state';
 import { ServerErrorNote } from '@/components/server-status';
 import { SpooledFileStatus } from '@/components/spooled-file-status';
@@ -122,6 +123,15 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
           setOpen(next);
         }}
       >
+        <Hint
+          text={
+            sample
+              ? `Saved copy from ${dateTime(sample.capturedAt)}: ${sample.pages.length} ${sample.pages.length === 1 ? 'page' : 'pages'}, ${sample.attributes.pageWidth}x${sample.attributes.pageLength}, CCSID ${sample.codePage}`
+              : ready
+                ? 'Pick a spooled file from the source queue. Spooldoc saves a copy of it to preview the definition and template with. The file on the IBM i is not changed.'
+                : undefined
+          }
+        >
         <PopoverTrigger asChild>
           <Button
             variant="outline"
@@ -129,11 +139,6 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
             role="combobox"
             aria-expanded={open}
             disabled={!ready || busy}
-            title={
-              sample
-                ? `Saved copy from ${dateTime(sample.capturedAt)}: ${sample.pages.length} ${sample.pages.length === 1 ? 'page' : 'pages'}, ${sample.attributes.pageWidth}x${sample.attributes.pageLength}, CCSID ${sample.codePage}`
-                : undefined
-            }
             className="min-w-0 max-w-72 justify-between font-normal"
           >
             {busy ? <Spinner /> : <FileTextIcon />}
@@ -142,6 +147,7 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
             <ChevronsUpDownIcon className="opacity-50" />
           </Button>
         </PopoverTrigger>
+        </Hint>
         <PopoverContent className="w-[26rem] max-w-[calc(100vw-2rem)] p-0" align="start">
           {sample && (
             <p className="border-b px-3 py-2 text-muted-foreground text-xs">

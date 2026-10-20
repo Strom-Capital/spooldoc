@@ -4,6 +4,7 @@ import { AlertTriangleIcon, CopyIcon, RadioIcon, UsersIcon, ZapIcon } from 'luci
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { Hint } from '@/components/hint';
 import { ErrorNote } from '@/components/page';
 import { ServerErrorNote } from '@/components/server-status';
 import {
@@ -331,10 +332,18 @@ export function TriggerInspector() {
                       </p>
                     </div>
                     <div>
-                      <Button variant="outline" size="sm" onClick={() => run('realtime')} disabled={outcome.busy}>
-                        {outcome.busy ? <Spinner /> : <ZapIcon />}
-                        Set up real-time
-                      </Button>
+                      <Hint
+                        text={
+                          server?.dataQueue
+                            ? `Attaches ${library}/${queue} to the data queue ${server.dataQueue.library}/${server.dataQueue.name} with CHGOUTQ. Switch to polling detaches it again.`
+                            : `Creates the data queue ${library}/SPOOLDOC with CRTDTAQ and attaches ${library}/${queue} to it with CHGOUTQ. Switch to polling detaches it again.`
+                        }
+                      >
+                        <Button variant="outline" size="sm" onClick={() => run('realtime')} disabled={outcome.busy}>
+                          {outcome.busy ? <Spinner /> : <ZapIcon />}
+                          Set up real-time
+                        </Button>
+                      </Hint>
                     </div>
                   </div>
                 )

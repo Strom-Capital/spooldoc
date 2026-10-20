@@ -1,8 +1,9 @@
 'use client';
 
-import { DownloadIcon, FileSpreadsheetIcon, FileTextIcon, FolderInputIcon, MousePointerClickIcon, Undo2Icon, UploadIcon } from 'lucide-react';
+import { DownloadIcon, FileSpreadsheetIcon, FileTextIcon, MousePointerClickIcon, Undo2Icon, UploadIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { Hint } from '@/components/hint';
 import { ErrorNote } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -12,7 +13,7 @@ import { bytes, dateTime } from '@/lib/client/format';
 import { FORMAT_FILES, KIND_NAMES, type FileTemplateContent } from '@/lib/job-spec';
 import type { TemplateFileDetails, TemplateFileView } from '@/lib/types';
 import { EditorBar, EditorMessage } from './editor-bar';
-import { StartFromJobDialog } from './start-from-job-dialog';
+import { StartFromJobButton, StartFromJobDialog } from './start-from-job-dialog';
 import { useWorkbench } from './workbench-provider';
 
 /** The file's details, for the file id they were read for. */
@@ -109,37 +110,44 @@ export function FileTemplate({ kind }: { kind: FileTemplateContent['kind'] }) {
               onChange={(event) => void upload(event.target.files?.[0])}
               aria-label={`${kindLabel} file`}
             />
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={busy !== null}
-              onClick={() => input.current?.click()}
-              title={`Upload a .${extension} made in ${app}. This template uses it from then on; saved versions keep theirs.`}
+            <Hint
+              text={
+                busy !== null
+                  ? 'Wait for the file to finish.'
+                  : `Choose a .${extension} file made in ${app}. It becomes this template's file in the draft, in place of the current one. A saved version keeps the file it was saved with.`
+              }
             >
-              {busy === 'upload' ? <Spinner /> : <UploadIcon />}
-              Upload template
-            </Button>
+              <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => input.current?.click()}>
+                {busy === 'upload' ? <Spinner /> : <UploadIcon />}
+                Upload template
+              </Button>
+            </Hint>
           </>
         )}
         {fileId ? (
-          <Button size="sm" variant="ghost" asChild>
-            <a href={`/api/template-files/${fileId}/file`} download>
-              <DownloadIcon />
-              Download template
-            </a>
-          </Button>
+          <Hint text={`Save this .${extension} file to your computer. Change it in ${app}, then upload it again with Upload template.`}>
+            <Button size="sm" variant="ghost" asChild>
+              <a href={`/api/template-files/${fileId}/file`} download>
+                <DownloadIcon />
+                Download template
+              </a>
+            </Button>
+          </Hint>
         ) : (
-          <Button size="sm" variant="ghost" disabled={busy !== null || !yaml.trim()} onClick={downloadStarter} title={`The starter template for the definition, to change in ${app}`}>
-            {busy === 'starter' ? <Spinner /> : <DownloadIcon />}
-            Download starter template
-          </Button>
+          <Hint
+            text={
+              !yaml.trim()
+                ? 'Write a definition first. The starter template is made from its fields.'
+                : `Save a .${extension} file made from the definition's fields to your computer. Change it in ${app}, then upload it with Upload template.`
+            }
+          >
+            <Button size="sm" variant="ghost" disabled={busy !== null || !yaml.trim()} onClick={downloadStarter}>
+              {busy === 'starter' ? <Spinner /> : <DownloadIcon />}
+              Download starter template
+            </Button>
+          </Hint>
         )}
-        {!readOnly && (
-          <Button size="sm" variant="ghost" onClick={() => setStartFrom(true)} title="Copy a template of another job into this one, and on request its definition into this draft">
-            <FolderInputIcon />
-            Start from job
-          </Button>
-        )}
+        {!readOnly && <StartFromJobButton onClick={() => setStartFrom(true)} />}
       </EditorBar>
       {startFrom && <StartFromJobDialog onClose={() => setStartFrom(false)} />}
       {error && (
@@ -290,10 +298,18 @@ function PreviousFile({ file, readOnly, onUse }: { file: TemplateFileDetails; re
             : 'The agent made this file in place of the starter template.'}
       </p>
       {!readOnly && !gone && (
-        <Button size="sm" variant="outline" onClick={onUse}>
-          <Undo2Icon />
-          {file.previous ? 'Use previous file' : 'Use starter template'}
-        </Button>
+        <Hint
+          text={
+            file.previous
+              ? `Use ${file.previous.name} again as this template's file in the draft. The agent's file is then no longer used.`
+              : "Go back to the starter template made from the definition. The agent's file is then no longer used."
+          }
+        >
+          <Button size="sm" variant="outline" onClick={onUse}>
+            <Undo2Icon />
+            {file.previous ? 'Use previous file' : 'Use starter template'}
+          </Button>
+        </Hint>
       )}
     </div>
   );

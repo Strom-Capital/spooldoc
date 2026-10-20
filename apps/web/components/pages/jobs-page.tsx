@@ -4,6 +4,7 @@ import { CircleAlertIcon, PauseIcon, PlayIcon, RadioIcon, ScrollTextIcon, Trash2
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { Hint } from '@/components/hint';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { DeleteJobDialog } from '@/components/jobs/delete-job-dialog';
 import { ErrorNote, Page } from '@/components/page';
@@ -153,10 +154,12 @@ export function JobsPage() {
                   </td>
                   <ActionsCell>
                     {job.mode === 'watch' && (
-                      <RowAction onClick={() => setPaused(job, !job.paused)}>
-                        {job.paused ? <PlayIcon /> : <PauseIcon />}
-                        {job.paused ? 'Resume' : 'Pause'}
-                      </RowAction>
+                      <Hint text={job.paused ? 'Start watching the queue again.' : 'Stop watching the queue. Files that arrive meanwhile are left for Run now.'}>
+                        <RowAction onClick={() => setPaused(job, !job.paused)}>
+                          {job.paused ? <PlayIcon /> : <PauseIcon />}
+                          {job.paused ? 'Resume' : 'Pause'}
+                        </RowAction>
+                      </Hint>
                     )}
                     <RowAction asChild>
                       <Link href={`/runs?job=${job.id}`}>

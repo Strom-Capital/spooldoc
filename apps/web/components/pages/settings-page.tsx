@@ -4,6 +4,7 @@ import { CopyIcon, MousePointerClickIcon, RefreshCwIcon, SaveIcon } from 'lucide
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
+import { Hint } from '@/components/hint';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
 import { Badge } from '@/components/ui/badge';
@@ -210,9 +211,11 @@ function AiSection({ saved, ai, onChange }: { saved: AiSettingsView; ai: AiDraft
                 spellCheck={false}
               />
               {hasKey && (
-                <Button type="button" variant="outline" onClick={() => onChange({ ...ai, apiKey: '', removeKey: !ai.removeKey })}>
-                  {ai.removeKey ? 'Keep key' : 'Remove key'}
-                </Button>
+                <Hint text={ai.removeKey ? 'Keep the saved key after all.' : 'Remove the saved key when you save. Nothing changes until then.'}>
+                  <Button type="button" variant="outline" onClick={() => onChange({ ...ai, apiKey: '', removeKey: !ai.removeKey })}>
+                    {ai.removeKey ? 'Keep key' : 'Remove key'}
+                  </Button>
+                </Hint>
               )}
             </div>
             <p className="text-muted-foreground text-xs">
@@ -362,10 +365,14 @@ function CarboneStatus({ check, busy, onCheck }: { check: CarboneCheck | null; b
           <Badge variant="destructive">{check ? 'Not working' : 'Not checked yet'}</Badge>
         )}
         {check && <span className="text-muted-foreground text-xs">Checked {new Date(check.at).toLocaleString()}</span>}
-        <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={onCheck} disabled={busy}>
-          {busy ? <Spinner /> : <RefreshCwIcon />}
-          Check again
-        </Button>
+        <div className="ml-auto">
+          <Hint text="Try the saved settings against Carbone now. Save your changes first to check them.">
+            <Button type="button" variant="outline" size="sm" onClick={onCheck} disabled={busy}>
+              {busy ? <Spinner /> : <RefreshCwIcon />}
+              Check again
+            </Button>
+          </Hint>
+        </div>
       </div>
       {check?.ok && check.edition === 'community' && (
         <p className="text-muted-foreground text-xs">
@@ -475,9 +482,11 @@ function RenderingSection({
                 spellCheck={false}
               />
               {saved.hasApiKey && (
-                <Button type="button" variant="outline" onClick={() => onChange({ ...draft, apiKey: '', removeKey: !draft.removeKey })}>
-                  {draft.removeKey ? 'Keep key' : 'Remove key'}
-                </Button>
+                <Hint text={draft.removeKey ? 'Keep the saved key after all.' : 'Remove the saved key when you save. Nothing changes until then.'}>
+                  <Button type="button" variant="outline" onClick={() => onChange({ ...draft, apiKey: '', removeKey: !draft.removeKey })}>
+                    {draft.removeKey ? 'Keep key' : 'Remove key'}
+                  </Button>
+                </Hint>
               )}
             </div>
             <p className="text-muted-foreground text-xs">

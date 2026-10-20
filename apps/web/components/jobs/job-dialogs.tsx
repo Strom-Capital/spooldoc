@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { Loading } from '@/components/empty-state';
+import { Hint } from '@/components/hint';
 import { ErrorNote } from '@/components/page';
 import { ServerErrorNote } from '@/components/server-status';
 import { SpooledFileStatus } from '@/components/spooled-file-status';
@@ -362,10 +363,12 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
               <Button variant="outline" onClick={onClose} disabled={busy}>
                 Cancel
               </Button>
-              <Button onClick={onRun} disabled={busy || selected.size === 0}>
-                {busy ? <Spinner /> : <PlayIcon />}
-                Run {selected.size > 0 ? selected.size : ''} {selected.size === 1 ? 'file' : 'files'}
-              </Button>
+              <Hint text={busy ? undefined : selected.size === 0 ? 'Tick the spooled files to run first.' : finish === 'none' ? undefined : finishText}>
+                <Button onClick={onRun} disabled={busy || selected.size === 0}>
+                  {busy ? <Spinner /> : <PlayIcon />}
+                  Run {selected.size > 0 ? selected.size : ''} {selected.size === 1 ? 'file' : 'files'}
+                </Button>
+              </Hint>
             </DialogFooter>
           </>
         )}

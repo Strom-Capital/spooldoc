@@ -1,9 +1,9 @@
 import { CircleAlertIcon, RadioIcon, WorkflowIcon, XCircleIcon, XIcon, type LucideIcon } from 'lucide-react';
 import Link from 'next/link';
 import { ReconnectButton, serverState, ServerStateIcon, sinceTime, stateWord } from '@/components/server-status';
+import { Hint } from '@/components/hint';
 import { Button } from '@/components/ui/button';
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ago } from '@/lib/client/format';
 import type { AttentionItem, DashboardView } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -79,9 +79,11 @@ export function AttentionList({
         <CardTitle className="text-base">Needs attention</CardTitle>
         {items.length > 1 && (
           <CardAction>
-            <Button variant="ghost" size="sm" onClick={() => onDismiss(items.map((i) => i.item))}>
-              Dismiss all
-            </Button>
+            <Hint text="Hide every item here. A new error on any of them shows again.">
+              <Button variant="ghost" size="sm" onClick={() => onDismiss(items.map((i) => i.item))}>
+                Dismiss all
+              </Button>
+            </Hint>
           </CardAction>
         )}
       </CardHeader>
@@ -102,14 +104,11 @@ export function AttentionList({
                 {when && <span className="shrink-0 text-muted-foreground text-xs">{when}</span>}
               </Link>
               {server && <ReconnectButton server={server} variant="ghost" onDone={(view) => view && onReconnected()} />}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label={`Dismiss ${title}`} onClick={() => onDismiss([item])}>
-                    <XIcon />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Dismiss</TooltipContent>
-              </Tooltip>
+              <Hint text="Hide this from Needs attention. A new error on it shows again.">
+                <Button variant="ghost" size="icon" aria-label={`Dismiss ${title}`} onClick={() => onDismiss([item])}>
+                  <XIcon />
+                </Button>
+              </Hint>
             </li>
           ))}
         </ul>

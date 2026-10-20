@@ -2,6 +2,7 @@
 
 import { CheckIcon, CopyIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Hint } from '@/components/hint';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { hitKey } from '@/lib/client/render';
@@ -105,8 +106,10 @@ function CopyButton({ text }: { text: string }) {
     }
   }
   return (
-    <Button variant="ghost" size="icon-sm" onClick={copy} aria-label="Copy JSON" title="Copy JSON" className="absolute top-1 right-1 bg-background/80">
-      {copied ? <CheckIcon /> : <CopyIcon />}
-    </Button>
+    <Hint text={copied ? 'Copied' : 'Copy the JSON to the clipboard'}>
+      <Button variant="ghost" size="icon-sm" onClick={copy} aria-label="Copy JSON" className="absolute top-1 right-1 bg-background/80">
+        {copied ? <CheckIcon /> : <CopyIcon />}
+      </Button>
+    </Hint>
   );
 }
