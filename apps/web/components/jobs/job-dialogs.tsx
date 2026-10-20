@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { api, errorText, shownError, type ShownError } from '@/lib/client/api';
-import { deleteNotice, filterParams, splfKey, startsDeleting } from '@/lib/job-spec';
+import { deleteNotice, filterParams, splfKey, startsDeleting, triggerStatuses } from '@/lib/job-spec';
 import type { RunView, SpooledFileView } from '@/lib/types';
 import { useJob } from './job-provider';
 
@@ -137,8 +137,8 @@ const idOf = (f: SpooledFileView) => ({ name: f.name, number: f.number, jobName:
 
 /**
  * Pick spooled files of the source queue and run the active version on each. By default
- * only ready files this job has not processed are listed. Mount it when it opens, so it
- * starts empty each time.
+ * only the files this job has not processed with the statuses of its trigger, ready or
+ * also held, are listed. Mount it when it opens, so it starts empty each time.
  */
 export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; onClose(): void; onSaveVersion(): void }) {
   const { job, activeSpec, draftDiffers } = useJob();
@@ -169,7 +169,9 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, job.id, source?.serverId, source?.library, source?.queue, filterKey]);
 
-  const shown = (files ?? []).filter((file) => showAll || (file.status === 'READY' && !file.processedBy));
+  const includeHeld = activeSpec?.trigger.includeHeld ?? false;
+  const statuses = triggerStatuses({ includeHeld });
+  const shown = (files ?? []).filter((file) => showAll || (statuses.includes(file.status) && !file.processedBy));
   const finish = activeSpec?.finish.action ?? 'none';
   const finishText =
     finish === 'hold'
@@ -285,7 +287,7 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
             <div className="flex items-center gap-2">
               <Switch id="run-show-all" checked={showAll} onCheckedChange={setShowAll} />
               <Label htmlFor="run-show-all" className="font-normal">
-                Show held and processed files
+                {includeHeld ? 'Show processed files' : 'Show held and processed files'}
               </Label>
             </div>
             {error && <ErrorNote detail={error.detail}>{error.message}</ErrorNote>}
@@ -294,7 +296,7 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
                 <Loading className="p-3">Loading spooled files...</Loading>
               ) : shown.length === 0 ? (
                 <p className="p-4 text-center text-muted-foreground text-sm">
-                  {files && files.length > 0 ? 'No ready files this job has not processed. Turn on the switch to see the rest.' : 'The queue has no matching spooled files.'}
+                  {files && files.length > 0 ? `No ${includeHeld ? 'ready or held' : 'ready'} files this job has not processed. Turn on the switch to see the rest.` : 'The queue has no matching spooled files.'}
                 </p>
               ) : (
                 <table className="w-full text-sm">

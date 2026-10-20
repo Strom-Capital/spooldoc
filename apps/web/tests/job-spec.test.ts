@@ -11,6 +11,7 @@ import {
   newTemplate,
   templateFileName,
   templateSlug,
+  triggerStatuses,
   withContent,
   type JobTemplate,
 } from '@/lib/job-spec';
@@ -82,6 +83,13 @@ describe('job filters', () => {
     const filter = { splf: 'INV ', userData: '', jobName: 'INVPRT', jobUser: '', formType: '*STD' };
     expect(filterParams(filter).toString()).toBe('name=INV&jobName=INVPRT&formType=*STD');
     expect(ibmiFilter(filter)).toEqual({ name: 'INV', userData: undefined, jobName: 'INVPRT', jobUser: undefined, formType: '*STD' });
+  });
+});
+
+describe('trigger statuses', () => {
+  it('are ready files, and held ones when the trigger includes them', () => {
+    expect(triggerStatuses({ includeHeld: false })).toEqual(['READY']);
+    expect(triggerStatuses({ includeHeld: true })).toEqual(['READY', 'HELD']);
   });
 });
 

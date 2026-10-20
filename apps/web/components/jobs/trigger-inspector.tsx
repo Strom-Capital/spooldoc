@@ -22,6 +22,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { api, errorText } from '@/lib/client/api';
 import { ago } from '@/lib/client/format';
+import { sameQueueJobs, type SameQueueJobs } from '@/lib/client/jobs';
 import type { JobSummary, SettingsView } from '@/lib/types';
 import { Choice, Panel, SettingRow } from './inspectors';
 import { useJob } from './job-provider';
@@ -36,21 +37,13 @@ function useSettings(): SettingsView | null {
   return settings;
 }
 
-/** Other jobs whose active version watches the same queue and that are not paused. */
-function useOtherWatchers(jobId: string, serverId: string | null, library: string, queue: string): JobSummary[] {
+/** The other jobs that run files from the same queue, watching or on demand. */
+function useSameQueueJobs(jobId: string, source: { serverId: string | null; library: string; queue: string }): SameQueueJobs {
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   useEffect(() => {
     api<{ jobs: JobSummary[] }>('/api/jobs').then((data) => setJobs(data.jobs), () => undefined);
   }, []);
-  return jobs.filter(
-    (other) =>
-      other.id !== jobId &&
-      other.mode === 'watch' &&
-      !other.paused &&
-      other.source.serverId === serverId &&
-      other.source.library === library &&
-      other.source.queue === queue,
-  );
+  return sameQueueJobs(jobs, jobId, source);
 }
 
 function seconds(value: number): string {
@@ -63,6 +56,42 @@ const FINISH_TEXT: Record<JobSummary['finish'], string> = {
   delete: 'deletes the files after delivery',
   none: 'leaves the files as they are',
 };
+
+/** The other jobs on the source queue, and what each does with a file. */
+function SameQueueNotice({ label, others, watching }: { label: string; others: SameQueueJobs; watching: boolean }) {
+  const list = [
+    ...others.watching.map((other) => ({ job: other, how: 'watching' })),
+    ...others.onDemand.map((other) => ({ job: other, how: 'on demand' })),
+  ];
+  if (list.length === 0) return null;
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+      <UsersIcon className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+      <div>
+        <p>
+          {label} is also the source of{' '}
+          {list.map(({ job, how }, index) => (
+            <span key={job.id}>
+              {index > 0 && (index === list.length - 1 ? ' and ' : ', ')}
+              <Link href={`/jobs/${job.id}`} className="font-medium text-primary hover:underline">
+                {job.name}
+              </Link>{' '}
+              ({how}, it {FINISH_TEXT[job.finish]})
+            </span>
+          ))}
+          .
+        </p>
+        <p className="mt-1 text-muted-foreground text-xs">
+          A file that matches the filters of more than one job can be run by each, and each finish action applies to it.
+          {!watching &&
+            others.watching.length > 0 &&
+            ' A watching job runs a file as soon as it is ready, so its finish action may apply before you pick the file in Run now.'}{' '}
+          Use the filters on the Source step to keep them apart.
+        </p>
+      </div>
+    </div>
+  );
+}
 
 /** The result of a set-up or switch call: an error, and commands for an operator. */
 interface Outcome {
@@ -90,16 +119,16 @@ async function queueAction(url: string, body: unknown): Promise<Outcome> {
 }
 
 /**
- * Trigger: on demand or watching; which files the watcher runs; how the queue is
- * watched (real-time or polling, with set-up and switching back); other jobs on the
- * same queue; and pause and resume.
+ * Trigger: on demand or watching; which files Run now lists or the watcher runs; how
+ * the queue is watched (real-time or polling, with set-up and switching back); other
+ * jobs on the same queue; and pause and resume.
  */
 export function TriggerInspector() {
   const { spec, updateDraft, readOnly, job, updateJob, servers, activeSpec } = useJob();
   const settings = useSettings();
   const { serverId, library, queue } = spec.source;
   const { queues, error: queuesError } = useQueues(serverId);
-  const others = useOtherWatchers(job.id, serverId, library, queue);
+  const others = useSameQueueJobs(job.id, spec.source);
   const server = servers.find((s) => s.id === serverId) ?? null;
   const info = queues?.find((q) => q.library === library && q.name === queue) ?? null;
   const [outcome, setOutcome] = useState<Outcome>(IDLE);
@@ -121,6 +150,21 @@ export function TriggerInspector() {
     ? `Runs every ${statuses} file: the new ones, and those already waiting when watching starts.`
     : `Runs the new ${statuses} files. Files already waiting when watching starts are left for Run now.`;
 
+  const statusChoice = (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm">Status</p>
+      <div role="radiogroup" aria-label="Status" className="grid gap-2 sm:grid-cols-2">
+        <Choice selected={!trigger.includeHeld} disabled={readOnly} onSelect={() => setTrigger({ includeHeld: false })} title="Ready files">
+          The usual case: files waiting to be printed.
+        </Choice>
+        <Choice selected={trigger.includeHeld} disabled={readOnly} onSelect={() => setTrigger({ includeHeld: true })} title="Ready and held files">
+          For programs that print with HOLD(*YES).
+          {watching && realtime && ' Held files are picked up by the safety check, as the data queue only reports ready ones.'}
+        </Choice>
+      </div>
+    </div>
+  );
+
   return (
     <Panel title="Trigger" description="When the job runs. You can always run it by hand with Run now.">
       <div role="radiogroup" aria-label="Trigger" className="grid gap-3 sm:grid-cols-2">
@@ -139,29 +183,20 @@ export function TriggerInspector() {
         </p>
       )}
 
-      {watching && others.length > 0 && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
-          <UsersIcon className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+      {library && <SameQueueNotice label={`${library}/${queue}`} others={others} watching={watching} />}
+
+      {!watching && (
+        <section aria-labelledby="run-now-files" className="flex flex-col gap-4 rounded-lg border p-4">
           <div>
-            <p>
-              {library}/{queue} is also watched by{' '}
-              {others.map((other, index) => (
-                <span key={other.id}>
-                  {index > 0 && (index === others.length - 1 ? ' and ' : ', ')}
-                  <Link href={`/jobs/${other.id}`} className="font-medium text-primary hover:underline">
-                    {other.name}
-                  </Link>{' '}
-                  (it {FINISH_TEXT[other.finish]})
-                </span>
-              ))}
-              .
-            </p>
-            <p className="mt-1 text-muted-foreground text-xs">
-              A file that matches the filters of both jobs is run by both, and both finish actions apply to it. Use the filters on the
-              Source step to keep them apart.
+            <h3 id="run-now-files" className="font-medium text-sm">
+              Which files Run now lists
+            </h3>
+            <p className="mt-0.5 text-muted-foreground text-xs">
+              Run now lists the {statuses} files this job has not processed. A switch there shows the rest.
             </p>
           </div>
-        </div>
+          {statusChoice}
+        </section>
       )}
 
       {watching && (
@@ -172,18 +207,7 @@ export function TriggerInspector() {
             </h3>
             <p className="mt-0.5 text-muted-foreground text-xs">{summary}</p>
           </div>
-          <div className="flex flex-col gap-2">
-            <p className="text-sm">Status</p>
-            <div role="radiogroup" aria-label="Status" className="grid gap-2 sm:grid-cols-2">
-              <Choice selected={!trigger.includeHeld} disabled={readOnly} onSelect={() => setTrigger({ includeHeld: false })} title="Ready files">
-                The usual case: files waiting to be printed.
-              </Choice>
-              <Choice selected={trigger.includeHeld} disabled={readOnly} onSelect={() => setTrigger({ includeHeld: true })} title="Ready and held files">
-                For programs that print with HOLD(*YES).
-                {realtime && ' Held files are picked up by the safety check, as the data queue only reports ready ones.'}
-              </Choice>
-            </div>
-          </div>
+          {statusChoice}
           <div className="flex flex-col gap-2">
             <p className="text-sm">Files already on the queue when watching starts or resumes</p>
             <div role="radiogroup" aria-label="Files already on the queue" className="grid gap-2 sm:grid-cols-2">

@@ -61,8 +61,8 @@ export function filterParams(filter: SourceFilter, params = new URLSearchParams(
   return params;
 }
 
-/** The spooled file statuses the watcher takes for a trigger. */
-export function watchedStatuses(trigger: { includeHeld: boolean }): string[] {
+/** The spooled file statuses a job takes: the watcher runs them and Run now lists them. */
+export function triggerStatuses(trigger: { includeHeld: boolean }): string[] {
   return trigger.includeHeld ? ['READY', 'HELD'] : ['READY'];
 }
 
@@ -209,7 +209,7 @@ export const jobSpecSchema = z.object({
       mode: z.enum(['manual', 'watch']).default('manual'),
       /** When watching starts, also run the files already ready on the queue (else they are left for Run now). */
       backlog: z.boolean().default(false),
-      /** The watcher also takes held files, not only ready ones. */
+      /** The job also takes held files, not only ready ones: the watcher runs them and Run now lists them. */
       includeHeld: z.boolean().default(false),
     })
     .default({ mode: 'manual', backlog: false, includeHeld: false }),
