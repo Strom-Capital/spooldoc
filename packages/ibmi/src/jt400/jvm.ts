@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
-import type { Connection, Credentials } from "../connection.js";
+import type { SpooledFileId } from "@spooldoc/core";
+import { ConnectionError, type Connection, type Credentials, type SystemInfo } from "../connection.js";
 import { noAnswerError, withDeadline } from "../deadline.js";
+import { isConnectionLost } from "../errors.js";
 import { openJt400Connection } from "./connection.js";
 
 /**
@@ -13,7 +15,9 @@ import { openJt400Connection } from "./connection.js";
  * restart the process.
  *
  * Keys are a SHA-256 of `host|user|password`; the raw password is never a key.
- * A connection unused for `IDLE_MS` is closed by an unref'd timer.
+ * A connection unused for `IDLE_MS` is closed by an unref'd timer. A call that fails
+ * because the connection dropped closes it too, so the next call opens a new one; a read
+ * is tried once more on that new connection, a change on the IBM i is not.
  */
 export const IDLE_MS = 10 * 60 * 1000;
 
@@ -26,9 +30,11 @@ export const CONNECT_TIMEOUT_MS = 45 * 1000;
 interface Entry {
   /** The jt400 connection itself. */
   raw: Promise<Connection>;
-  /** What callers get: marks use and evicts on close. */
+  /** What callers get: marks use, moves on after a drop, and evicts on close. */
   connection: Promise<Connection>;
   lastUsed: number;
+  /** Why the entry left the cache: a call found the connection dropped, or it was closed. */
+  gone?: "dropped" | "closed";
 }
 
 interface Cache {
@@ -65,22 +71,123 @@ function startSweeper(c: Cache): void {
   c.timer.unref();
 }
 
-/** Wraps a connection so each call marks the entry as used and `close()` evicts it. */
-function tracked(key: string, entry: Entry, conn: Connection): Connection {
-  const touch = <T>(p: Promise<T>): Promise<T> => {
+/**
+ * True when an error means the connection itself failed, not the call: a host error
+ * (which includes a dropped connection), or a text that says the connection dropped.
+ */
+function isDropped(err: unknown): boolean {
+  const e = err as { name?: unknown; code?: unknown; message?: unknown } | null;
+  if (e?.name === "ConnectionError") return e.code === "host";
+  return isConnectionLost(String(e?.message ?? err));
+}
+
+/** The cached entry for these credentials, opening one when there is none. Marks it as used. */
+function entryFor(creds: Credentials): Entry {
+  const c = cache();
+  const key = connectionKey(creds);
+  let entry = c.entries.get(key);
+  if (!entry) {
+    const raw = openJt400Connection(creds);
+    const created: Entry = { raw, connection: raw, lastUsed: Date.now() };
+    created.connection = raw.then(() => tracked(key, creds, created));
+    entry = created;
+    c.entries.set(key, entry);
+    raw.catch(() => {
+      if (c.entries.get(key) !== created) return;
+      c.entries.delete(key);
+      created.gone = "closed";
+    });
+    startSweeper(c);
+  }
+  entry.lastUsed = Date.now();
+  return entry;
+}
+
+/**
+ * Waits for an entry's connection to open, at most `CONNECT_TIMEOUT_MS`. An open that
+ * takes longer fails with a host error and is dropped from the cache, so the next call
+ * starts a new attempt instead of joining it.
+ */
+function opened<T>(key: string, entry: Entry, host: string, value: Promise<T>): Promise<T> {
+  return withDeadline(value, CONNECT_TIMEOUT_MS, () => {
+    if (cache().entries.get(key) === entry) void closeConnection(key);
+    return noAnswerError(host, CONNECT_TIMEOUT_MS);
+  });
+}
+
+/** Takes an entry whose connection dropped out of the cache, unless it has been replaced already. */
+function drop(key: string, entry: Entry): void {
+  if (cache().entries.get(key) === entry) void evict(key, "dropped");
+}
+
+const splfName = (id: SpooledFileId): string => `spooled file ${id.name} number ${id.number} of job ${id.jobNumber}/${id.jobUser}/${id.jobName}`;
+
+/**
+ * Wraps a connection so each call marks the entry as used and `close()` evicts it.
+ *
+ * A call that fails because the connection dropped evicts the entry. A read is then tried
+ * once more on a new connection, and later calls use that one. A change on the IBM i
+ * (hold, move, delete, a command) is not tried again, since the IBM i may have done it
+ * already: it fails with a host error that says what to check.
+ */
+function tracked(key: string, creds: Credentials, first: Entry): Connection {
+  let entry = first;
+
+  /** The entry to call: this one while it is open; after a drop, the one now cached or a new one. */
+  const current = async (): Promise<[Entry, Connection]> => {
+    if (entry.gone) {
+      const cached = cache().entries.get(key);
+      if (cached) entry = cached;
+      else if (entry.gone === "dropped") entry = entryFor(creds);
+      else {
+        // Closed on purpose, or it never opened: say why rather than sign on again.
+        await entry.raw;
+        throw new ConnectionError("other", `The connection to ${creds.host} was closed. Try again.`);
+      }
+    }
     entry.lastUsed = Date.now();
-    return p;
+    return [entry, await opened(key, entry, creds.host, entry.raw)];
   };
+
+  const read = async <T>(run: (conn: Connection) => Promise<T>, again = true): Promise<T> => {
+    const [used, conn] = await current();
+    try {
+      return await run(conn);
+    } catch (err) {
+      if (!isDropped(err)) throw err;
+      drop(key, used);
+      // Not when it was closed on purpose while the call ran.
+      if (!again || used.gone !== "dropped") throw err;
+      return read(run, false);
+    }
+  };
+
+  const write = async <T>(run: (conn: Connection) => Promise<T>, check: string): Promise<T> => {
+    const [used, conn] = await current();
+    try {
+      return await run(conn);
+    } catch (err) {
+      if (!isDropped(err)) throw err;
+      drop(key, used);
+      const e = err as { message?: string; messageId?: string; detail?: string };
+      throw new ConnectionError(
+        "host",
+        `The connection to ${creds.host} dropped before the IBM i answered. Check whether ${check}, then try again.`,
+        { messageId: e.messageId, detail: e.detail ?? e.message },
+      );
+    }
+  };
+
   return {
-    describe: () => touch(conn.describe()),
-    listOutputQueues: (filter) => touch(conn.listOutputQueues(filter)),
-    listSpooledFiles: (queue, filter) => touch(conn.listSpooledFiles(queue, filter)),
-    readSpooledFile: (id) => touch(conn.readSpooledFile(id)),
-    holdSpooledFile: (id) => touch(conn.holdSpooledFile(id)),
-    moveSpooledFile: (id, queue) => touch(conn.moveSpooledFile(id, queue)),
-    deleteSpooledFile: (id) => touch(conn.deleteSpooledFile(id)),
-    readDataQueue: (dtaq, wait) => touch(conn.readDataQueue(dtaq, wait)),
-    runCommand: (command) => touch(conn.runCommand(command)),
+    describe: (): Promise<SystemInfo> => read((conn) => conn.describe()),
+    listOutputQueues: (filter) => read((conn) => conn.listOutputQueues(filter)),
+    listSpooledFiles: (queue, filter) => read((conn) => conn.listSpooledFiles(queue, filter)),
+    readSpooledFile: (id) => read((conn) => conn.readSpooledFile(id)),
+    readDataQueue: (dtaq, wait) => read((conn) => conn.readDataQueue(dtaq, wait)),
+    holdSpooledFile: (id) => write((conn) => conn.holdSpooledFile(id), `${splfName(id)} was held`),
+    moveSpooledFile: (id, queue) => write((conn) => conn.moveSpooledFile(id, queue), `${splfName(id)} was moved to ${queue.library}/${queue.name}`),
+    deleteSpooledFile: (id) => write((conn) => conn.deleteSpooledFile(id), `${splfName(id)} was deleted`),
+    runCommand: (command) => write((conn) => conn.runCommand(command), "the command ran"),
     close: () => closeConnection(key),
   };
 }
@@ -91,36 +198,36 @@ function tracked(key: string, entry: Entry, conn: Connection): Connection {
  * dropped from the cache, so the next call starts a new attempt instead of joining it.
  */
 export async function getConnection(creds: Credentials): Promise<Connection> {
-  const c = cache();
-  const key = connectionKey(creds);
-  let entry = c.entries.get(key);
-  if (!entry) {
-    const raw = openJt400Connection(creds);
-    const created: Entry = { raw, connection: raw, lastUsed: Date.now() };
-    created.connection = raw.then((conn) => tracked(key, created, conn));
-    entry = created;
-    c.entries.set(key, entry);
-    raw.catch(() => {
-      if (c.entries.get(key) === created) c.entries.delete(key);
-    });
-    startSweeper(c);
-  }
-  entry.lastUsed = Date.now();
-  const opening = entry;
-  return withDeadline(entry.connection, CONNECT_TIMEOUT_MS, () => {
-    if (c.entries.get(key) === opening) void closeConnection(key);
-    return noAnswerError(creds.host, CONNECT_TIMEOUT_MS);
-  });
+  const entry = entryFor(creds);
+  return opened(connectionKey(creds), entry, creds.host, entry.connection);
 }
 
-/** Closes and forgets the cached connection with this key. Unknown keys are ignored. */
-export async function closeConnection(key: string): Promise<void> {
+/**
+ * Signs on again from scratch: closes the cached connection for these credentials, opens a
+ * new one and reads the system info. A connection that died cannot pass for a working one.
+ *
+ * @returns The system info; throws ConnectionError when the sign-on fails
+ */
+export async function reconnect(creds: Credentials): Promise<SystemInfo> {
+  await closeConnection(connectionKey(creds));
+  const conn = await getConnection(creds);
+  return conn.describe();
+}
+
+/** Takes the entry with this key out of the cache and closes its connection. */
+async function evict(key: string, gone: NonNullable<Entry["gone"]>): Promise<void> {
   const c = cache();
   const entry = c.entries.get(key);
   if (!entry) return;
   c.entries.delete(key);
+  entry.gone = gone;
   const conn = await entry.raw.catch(() => null);
   await conn?.close().catch(() => undefined);
+}
+
+/** Closes and forgets the cached connection with this key. Unknown keys are ignored. */
+export async function closeConnection(key: string): Promise<void> {
+  await evict(key, "closed");
 }
 
 /** Closes every cached connection. */

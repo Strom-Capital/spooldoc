@@ -41,7 +41,8 @@ export const LOGIN_TIMEOUT_SECONDS = 15;
 export async function openJdbc(host: string, user: string, password: string): Promise<Jt400Db> {
   const { connect } = await import("node-jt400");
   // Every key is passed to the jt400 JDBC driver as a property, whose values must be strings.
-  const db = await connect({ host, user, password, naming: "sql", "login timeout": String(LOGIN_TIMEOUT_SECONDS) });
+  // TCP keepalive lets the socket notice a dropped network instead of waiting on it.
+  const db = await connect({ host, user, password, naming: "sql", "login timeout": String(LOGIN_TIMEOUT_SECONDS), "keep alive": "true" });
   return db as unknown as Jt400Db;
 }
 
