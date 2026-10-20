@@ -11,7 +11,10 @@ import { api, shownError, type ShownError } from '@/lib/client/api';
 import type { QueueView } from '@/lib/types';
 import { useJob } from './job-provider';
 
-/** The visible output queues of a server, loaded once per server, and again on `reload`. */
+/**
+ * The visible output queues of a server, loaded once per server, and again on `reload`.
+ * What the call came to shows on the server's status in the job builder.
+ */
 export function useQueues(serverId: string | null): { queues: QueueView[] | null; error: ShownError | null; reload(): void } {
   const [state, setState] = useState<{ serverId: string | null; queues: QueueView[] | null; error: ShownError | null }>({
     serverId: null,
@@ -19,6 +22,7 @@ export function useQueues(serverId: string | null): { queues: QueueView[] | null
     error: null,
   });
   const [attempt, setAttempt] = useState(0);
+  const { noteServerCall } = useJob();
   const reload = useCallback(() => {
     setState((current) => ({ ...current, queues: null, error: null }));
     setAttempt((n) => n + 1);
@@ -29,13 +33,20 @@ export function useQueues(serverId: string | null): { queues: QueueView[] | null
     }
     let cancelled = false;
     api<{ queues: QueueView[] }>(`/api/servers/${serverId}/queues?visible=1`).then(
-      (data) => !cancelled && setState({ serverId, queues: data.queues, error: null }),
-      (err) => !cancelled && setState({ serverId, queues: null, error: shownError(err) }),
+      (data) => {
+        noteServerCall(serverId, null);
+        if (!cancelled) setState({ serverId, queues: data.queues, error: null });
+      },
+      (err) => {
+        const error = shownError(err);
+        noteServerCall(serverId, error);
+        if (!cancelled) setState({ serverId, queues: null, error });
+      },
     );
     return () => {
       cancelled = true;
     };
-  }, [serverId, attempt]);
+  }, [serverId, attempt, noteServerCall]);
   return state.serverId === serverId ? { ...state, reload } : { queues: null, error: null, reload };
 }
 

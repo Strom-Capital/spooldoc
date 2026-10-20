@@ -24,7 +24,7 @@ const idOf = (f: SpooledFileView) => ({ name: f.name, number: f.number, jobName:
  * held, moved or deleted. Once the queue is set, the newest file is picked when none is.
  */
 export function PreviewPicker({ sample }: { sample: SampleView | null }) {
-  const { job, spec, refresh, servers, reloadServers } = useJob();
+  const { job, spec, refresh, servers, reloadServers, noteServerCall } = useJob();
   const { serverId, library, queue, filter } = spec.source;
   const server = servers.find((s) => s.id === serverId) ?? null;
   const [open, setOpen] = useState(false);
@@ -37,13 +37,20 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
   const ready = !!serverId && !!library && !!queue;
   const sourceKey = `${serverId}/${library}/${queue}?${filterParams(filter)}`;
 
+  /** Lists the source queue. What the call came to shows on the server's status. */
   async function list(limit: number): Promise<SpooledFileView[]> {
     const params = new URLSearchParams({ limit: String(limit) });
     filterParams(filter, params);
-    const data = await api<{ files: SpooledFileView[] }>(
-      `/api/servers/${serverId}/queues/${encodeURIComponent(library)}/${encodeURIComponent(queue)}/files?${params}`,
-    );
-    return data.files;
+    try {
+      const data = await api<{ files: SpooledFileView[] }>(
+        `/api/servers/${serverId}/queues/${encodeURIComponent(library)}/${encodeURIComponent(queue)}/files?${params}`,
+      );
+      noteServerCall(serverId!, null);
+      return data.files;
+    } catch (err) {
+      noteServerCall(serverId!, shownError(err));
+      throw err;
+    }
   }
 
   async function pick(file: SpooledFileView) {
@@ -55,7 +62,10 @@ export function PreviewPicker({ sample }: { sample: SampleView | null }) {
       await api<{ sample: SampleView }>(`/api/jobs/${job.id}/preview-sample`, { method: 'POST', body: { splf: idOf(file) } });
       await refresh();
     } catch (err) {
-      setError({ error: shownError(err), retry: () => void pick(file) });
+      const shown = shownError(err);
+      // Reading the file failed on the server's connection: its status says so too.
+      if (serverId && (shown.code === 'host' || shown.code === 'auth')) noteServerCall(serverId, shown);
+      setError({ error: shown, retry: () => void pick(file) });
     } finally {
       setBusy(false);
     }

@@ -142,7 +142,7 @@ const idOf = (f: SpooledFileView) => ({ name: f.name, number: f.number, jobName:
  * starts empty each time.
  */
 export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; onClose(): void; onSaveVersion(): void }) {
-  const { job, activeSpec, draftDiffers, servers, reloadServers } = useJob();
+  const { job, activeSpec, draftDiffers, servers, reloadServers, noteServerCall } = useJob();
   const [showAll, setShowAll] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [files, setFiles] = useState<SpooledFileView[] | null>(null);
@@ -156,13 +156,21 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
   useEffect(() => {
     if (!open || !source?.serverId) return;
     let cancelled = false;
+    const serverId = source.serverId;
     const params = new URLSearchParams({ forJob: job.id, limit: '200' });
     filterParams(source.filter, params);
     api<{ files: SpooledFileView[] }>(
-      `/api/servers/${source.serverId}/queues/${encodeURIComponent(source.library)}/${encodeURIComponent(source.queue)}/files?${params}`,
+      `/api/servers/${serverId}/queues/${encodeURIComponent(source.library)}/${encodeURIComponent(source.queue)}/files?${params}`,
     ).then(
-      (data) => !cancelled && setFiles(data.files),
-      (err) => !cancelled && setError(shownError(err)),
+      (data) => {
+        noteServerCall(serverId, null);
+        if (!cancelled) setFiles(data.files);
+      },
+      (err) => {
+        const shown = shownError(err);
+        noteServerCall(serverId, shown);
+        if (!cancelled) setError(shown);
+      },
     );
     return () => {
       cancelled = true;

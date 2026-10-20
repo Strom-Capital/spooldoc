@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { toast } from 'sonner';
 import { jobSpecSchema, specsDiffer, type DraftPatch, type JobSpec } from '@/lib/job-spec';
 import { api, errorText, shownError, type ShownError } from '@/lib/client/api';
+import { withLatestCall, type LatestCall } from '@/lib/client/server-state';
 import type { DestinationView, JobDetail, ServerView } from '@/lib/types';
 
 /** Which spec the builder shows: the draft, or a saved version (read-only). */
@@ -41,6 +42,11 @@ export interface JobState {
   serversError: ShownError | null;
   /** Load the servers again, for example after Reconnect changed the state of one. */
   reloadServers(): void;
+  /**
+   * Say what a call to a server came to, so its status shows it at once: an error from
+   * the call, or null when it worked. The servers are not loaded again.
+   */
+  noteServerCall(serverId: string, error: ShownError | null): void;
   destinations: DestinationView[];
 }
 
@@ -61,7 +67,9 @@ export function JobProvider({ initial, children }: { initial: JobDetail; childre
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [saveError, setSaveError] = useState<string | null>(null);
   const [step, setStep] = useState<Step>(initial.draft.source.serverId && initial.draft.source.queue ? 'extract' : 'source');
-  const [servers, setServers] = useState<ServerView[]>([]);
+  const [loadedServers, setServers] = useState<ServerView[]>([]);
+  // The latest call to each server since the servers loaded.
+  const [calls, setCalls] = useState<Record<string, LatestCall>>({});
   const [serversError, setServersError] = useState<ShownError | null>(null);
   const [destinations, setDestinations] = useState<DestinationView[]>([]);
   const pending = useRef<DraftPatch>({});
@@ -72,11 +80,22 @@ export function JobProvider({ initial, children }: { initial: JobDetail; childre
     api<{ servers: ServerView[] }>('/api/servers').then(
       (data) => {
         setServers(data.servers);
+        setCalls({});
         setServersError(null);
       },
       (err) => setServersError(shownError(err)),
     );
   }, []);
+
+  const noteServerCall = useCallback((serverId: string, error: ShownError | null) => {
+    setCalls((current) => {
+      const last = current[serverId];
+      if (last && last.error?.message === error?.message && last.error?.code === error?.code) return current;
+      return { ...current, [serverId]: { error, at: new Date().toISOString() } };
+    });
+  }, []);
+  // The servers as they read after the latest calls. Nothing fetches on `servers`, so this starts no call.
+  const servers = useMemo(() => loadedServers.map((server) => withLatestCall(server, calls[server.id])), [loadedServers, calls]);
 
   useEffect(() => {
     reloadServers();
@@ -234,9 +253,10 @@ export function JobProvider({ initial, children }: { initial: JobDetail; childre
       servers,
       serversError,
       reloadServers,
+      noteServerCall,
       destinations,
     }),
-    [job, spec, viewing, setViewing, activeSpec, draftDiffers, updateDraft, updateJob, refresh, flush, saveState, saveError, step, servers, serversError, reloadServers, destinations],
+    [job, spec, viewing, setViewing, activeSpec, draftDiffers, updateDraft, updateJob, refresh, flush, saveState, saveError, step, servers, serversError, reloadServers, noteServerCall, destinations],
   );
 
   return <JobContext.Provider value={value}>{children}</JobContext.Provider>;

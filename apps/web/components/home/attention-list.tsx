@@ -45,9 +45,10 @@ export function AttentionList({
         icon: { state },
         warn: state === 'unreachable',
         title: s.name,
-        text: `${stateWord(state)}: ${s.error}`,
+        text: s.error,
         href: '/servers',
-        when: s.since ? `since ${sinceTime(s.since)}` : '',
+        // The state as its own element, as the server status reads: "Cannot reach since 10:42".
+        when: s.since ? `${stateWord(state)} since ${sinceTime(s.since)}` : stateWord(state),
         server: { id: s.id, name: s.name },
       };
     }),
