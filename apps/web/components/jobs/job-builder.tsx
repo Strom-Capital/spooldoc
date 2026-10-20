@@ -3,8 +3,11 @@
 import {
   ChevronDownIcon,
   ChevronUpIcon,
+  CircleCheckIcon,
+  CirclePauseIcon,
   MoreHorizontalIcon,
   PencilIcon,
+  PenLineIcon,
   PlayIcon,
   RotateCcwIcon,
   SaveIcon,
@@ -26,7 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
+import { StatusPill } from '@/components/status-pill';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
@@ -138,11 +141,6 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
     }
   }
 
-  const versionState =
-    job.activeVersion === null
-      ? 'Draft only'
-      : `v${job.activeVersion} active${viewing === 'draft' && draftDiffers ? ', draft has changes' : ''}`;
-
   return (
     <div className="shrink-0 border-b">
       <div className="flex min-h-12 flex-wrap items-center gap-2 px-3 py-1.5">
@@ -185,11 +183,26 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
-          <span className="hidden min-w-0 shrink truncate text-muted-foreground text-xs lg:inline">{versionState}</span>
+          <div className="hidden shrink-0 items-center gap-1.5 lg:flex">
+            {job.activeVersion === null ? (
+              <StatusPill tone="neutral" icon={PenLineIcon} title="No version is saved yet. Save a version to run the job.">
+                Draft only
+              </StatusPill>
+            ) : (
+              <StatusPill tone="ready" icon={CircleCheckIcon} title={`Watching and Run now use version ${job.activeVersion}.`}>
+                v{job.activeVersion} active
+              </StatusPill>
+            )}
+            {job.activeVersion !== null && viewing === 'draft' && draftDiffers && (
+              <StatusPill tone="held" icon={PenLineIcon} title={`The draft has changes that are not in version ${job.activeVersion}. Save a version to use them.`}>
+                Draft changed
+              </StatusPill>
+            )}
+          </div>
           {job.paused && (
-            <Badge variant="outline" className="h-4 shrink-0 px-1.5 text-[10px]">
+            <StatusPill tone="held" icon={CirclePauseIcon} title="A paused job is not watched." className="shrink-0">
               Paused
-            </Badge>
+            </StatusPill>
           )}
         </div>
         <ButtonGroup>
