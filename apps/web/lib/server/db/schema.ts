@@ -197,7 +197,7 @@ export const jobs = pgTable('jobs', {
 });
 
 /**
- * The AI assistant's conversation for a job: the UI message list as the chat panel shows
+ * The agent's conversation for a job: the UI message list as the chat panel shows
  * it, tool calls and their (masked) results included. One thread per job; New chat
  * deletes the row, and the row goes with the job.
  */
@@ -394,8 +394,8 @@ export const assets = pgTable(
 );
 
 /**
- * A Word template file, uploaded or made by the AI assistant. A row never changes (a
- * trigger refuses updates): uploading again, or a change by the assistant, adds a row,
+ * A Word template file, uploaded or made by the agent. A row never changes (a
+ * trigger refuses updates): uploading again, or a change by the agent, adds a row,
  * so a job version keeps the exact file it ran with. Templates point at it with
  * `{ kind: 'docx', fileId }`; a file no draft or version points at is deleted after the
  * retention, unless a file a draft uses names it as its previous one.
@@ -409,9 +409,9 @@ export const templateFiles = pgTable(
     contentType: text('content_type').notNull(),
     size: integer('size').notNull(),
     content: bytea('content').notNull(),
-    /** `upload`, or `assistant` for a file the AI assistant wrote or edited. */
+    /** `upload`, or `assistant` for a file the agent wrote or edited. */
     madeBy: text('made_by', { enum: ['upload', 'assistant'] }).notNull().default('upload'),
-    /** The file the template used before the assistant made this one; null for an upload or the starter template. Not a foreign key: the cleanup may delete it. */
+    /** The file the template used before the agent made this one; null for an upload or the starter template. Not a foreign key: the cleanup may delete it. */
     previousId: uuid('previous_id'),
     createdBy: text('created_by').references(() => user.id, { onDelete: 'set null' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

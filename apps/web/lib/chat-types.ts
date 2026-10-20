@@ -87,7 +87,7 @@ export type WriteTemplateResult =
  */
 export type WordView = 'pdf' | 'png' | null;
 
-/** A Word template file the assistant made, as tool results report it. */
+/** A Word template file the agent made, as tool results report it. */
 export interface WordFileListing {
   id: string;
   name: string;

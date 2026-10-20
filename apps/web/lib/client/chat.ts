@@ -156,7 +156,7 @@ export function chatErrorText(error: Error): string {
   } catch {
     // Not JSON: an error from the stream.
   }
-  return error.message || 'The chat request failed.';
+  return error.message || 'The request to the agent failed.';
 }
 
 /** The parts of a chat message `chatActivity` looks at. */

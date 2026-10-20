@@ -16,7 +16,7 @@ const STEPS: { key: keyof Setup; title: string; text: string; href: string; acti
     action: 'Settings',
   },
   { key: 'server', title: 'Add a server', text: 'Connect to an IBM i and test the connection.', href: '/servers', action: 'Servers' },
-  { key: 'ai', title: 'Choose an AI provider', text: 'The chat proposes definitions and templates from a sample spooled file.', href: '/settings', action: 'Settings' },
+  { key: 'ai', title: 'Set up the agent', text: 'The agent proposes definitions and templates from a sample spooled file.', href: '/settings', action: 'Settings' },
   { key: 'job', title: 'Create a job', text: 'Pick an output queue and turn its spooled files into documents.', href: '/jobs', action: 'Jobs' },
   { key: 'run', title: 'Run it', text: 'Run the job on a file, or activate a version and let it watch the queue.', href: '/jobs', action: 'Jobs' },
 ];

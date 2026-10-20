@@ -84,16 +84,16 @@ export interface AssetView {
   jobs: { id: string; name: string }[];
 }
 
-/** A Word template file, uploaded or made by the AI assistant, without its bytes. */
+/** A Word template file, uploaded or made by the agent, without its bytes. */
 export interface TemplateFileView {
   id: string;
   /** The file's name. */
   name: string;
   size: number;
   createdAt: string;
-  /** `assistant` for a file the AI assistant wrote or edited. */
+  /** `assistant` for a file the agent wrote or edited. */
   madeBy: 'upload' | 'assistant';
-  /** The file the template used before the assistant made this one; null for an upload or the starter template. */
+  /** The file the template used before the agent made this one; null for an upload or the starter template. */
   previousId: string | null;
 }
 

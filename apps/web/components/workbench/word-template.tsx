@@ -1,6 +1,6 @@
 'use client';
 
-import { DownloadIcon, FileTextIcon, FolderInputIcon, SparklesIcon, Undo2Icon, UploadIcon } from 'lucide-react';
+import { DownloadIcon, FileTextIcon, FolderInputIcon, MousePointerClickIcon, Undo2Icon, UploadIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ErrorNote } from '@/components/page';
@@ -19,10 +19,10 @@ import { useWorkbench } from './workbench-provider';
 type FileInfo = { id: string; file: TemplateFileDetails } | { id: string; error: string };
 
 /**
- * The Word template shown: its `.docx`, uploaded or made by the AI
- * assistant, or the starter template generated from the definition until there is one.
+ * The Word template shown: its `.docx`, uploaded or made by the agent,
+ * or the starter template generated from the definition until there is one.
  * The user changes the file in Word; here they upload it, download it or the starter
- * template, see what the tag check finds, by part, and put back the file the assistant
+ * template, see what the tag check finds, by part, and put back the file the agent
  * replaced.
  */
 export function WordTemplate() {
@@ -72,7 +72,7 @@ export function WordTemplate() {
     }
   }
 
-  /** Use the file the assistant replaced, or the starter template when it replaced none. */
+  /** Use the file the agent replaced, or the starter template when it replaced none. */
   function restorePrevious(file: TemplateFileDetails) {
     setContent({ kind: 'docx', fileId: file.previous?.id ?? null });
     toast.success(file.previous ? `Using ${file.previous.name} again` : 'Using the starter template again');
@@ -144,7 +144,7 @@ export function WordTemplate() {
       {!fileId && (
         <EditorMessage tone="note">
           This template has no Word file yet. The preview uses a starter template generated from the definition. Download it, change it in
-          Word and upload it, or ask the AI assistant to design one.
+          Word and upload it, or ask the agent to design one.
         </EditorMessage>
       )}
       {current && 'error' in current && <EditorMessage tone="error">{current.error}</EditorMessage>}
@@ -168,7 +168,7 @@ export function WordTemplate() {
               <div className="min-w-0">
                 <p className="truncate font-medium">{current.file.name}</p>
                 <p className="text-muted-foreground text-xs">
-                  {bytes(current.file.size)}, {current.file.madeBy === 'assistant' ? 'made by the AI assistant' : 'uploaded'} {dateTime(current.file.createdAt)}
+                  {bytes(current.file.size)}, {current.file.madeBy === 'assistant' ? 'made by the agent' : 'uploaded'} {dateTime(current.file.createdAt)}
                 </p>
               </div>
             ) : current ? (
@@ -206,20 +206,20 @@ export function WordTemplate() {
 }
 
 /**
- * What the AI assistant replaced with the current file, and a button to use it again:
+ * What the agent replaced with the current file, and a button to use it again:
  * the earlier file while it is kept, or the starter template when there was no file.
  */
 function PreviousFile({ file, readOnly, onUse }: { file: TemplateFileDetails; readOnly: boolean; onUse: () => void }) {
   const gone = file.previousId !== null && file.previous === null;
   return (
     <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-md border border-dashed p-3 text-xs">
-      <SparklesIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+      <MousePointerClickIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <p className="min-w-0 flex-1 text-muted-foreground">
         {file.previous
-          ? `The AI assistant made this file in place of ${file.previous.name} from ${dateTime(file.previous.createdAt)}, which is kept.`
+          ? `The agent made this file in place of ${file.previous.name} from ${dateTime(file.previous.createdAt)}, which is kept.`
           : gone
-            ? 'The AI assistant made this file. The file before it is no longer kept.'
-            : 'The AI assistant made this file in place of the starter template.'}
+            ? 'The agent made this file. The file before it is no longer kept.'
+            : 'The agent made this file in place of the starter template.'}
       </p>
       {!readOnly && !gone && (
         <Button size="sm" variant="outline" onClick={onUse}>

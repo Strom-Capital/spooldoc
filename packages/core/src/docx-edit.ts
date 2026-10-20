@@ -3,7 +3,7 @@ import { MAX_DOCX_BYTES, readDocx } from "./docx.js";
 
 /**
  * Editing a Word template's XML with `str_replace` rules: a text that occurs exactly once
- * in one part is replaced. This is how the AI assistant changes a Word file it did not
+ * in one part is replaced. This is how the agent changes a Word file it did not
  * design, such as one the user made in Word. Only the parts Spooldoc reads (the body,
  * headers and footers) can be edited; every other file in the zip comes out byte for
  * byte the same.

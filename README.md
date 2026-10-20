@@ -22,9 +22,9 @@ into page groups and reads each into JSON with a definition you write in
 YAML, makes documents of them with ordinary HTML templates (PDF or HTML) or
 Word templates (DOCX or PDF), and delivers the files. The JSON
 keeps reading the page and laying out the document apart, so a template
-never deals with lines and columns and a new look is just a new template. An AI
-assistant proposes the definition and the template from a sample spooled
-file; you check the extracted fields next to the page and refine by chat or
+never deals with lines and columns and a new look is just a new template. The
+agent proposes the definition and the template from a sample spooled
+file; you check the extracted fields next to the page and refine with the agent or
 by hand. Every run is logged.
 
 ## Architecture
@@ -39,7 +39,7 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.svg">
-    <img src="docs/assets/architecture-light.svg" alt="Architecture: programs on the IBM i print to an output queue, optionally with a data queue; Spooldoc's watcher picks up new spooled files by polling or in real time, and a run captures, extracts, renders, delivers and finishes each one, reading and then holding, moving or deleting the file through jt400; the job builder and the AI assistant, which sends page text to a model provider, write to the same Postgres database that holds servers, jobs, versions, samples, runs, files and assets; delivered files go to a destination" width="1000">
+    <img src="docs/assets/architecture-light.svg" alt="Architecture: programs on the IBM i print to an output queue, optionally with a data queue; Spooldoc's watcher picks up new spooled files by polling or in real time, and a run captures, extracts, renders, delivers and finishes each one, reading and then holding, moving or deleting the file through jt400; the job builder and the agent, which sends page text to a model provider, write to the same Postgres database that holds servers, jobs, versions, samples, runs, files and assets; delivered files go to a destination" width="1000">
   </picture>
 </p>
 
@@ -55,9 +55,9 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 - **HTML and Word templates**: [Carbone](https://carbone.io) tags with your
   logos, images and fonts, rendered to PDF, HTML or DOCX by a Carbone server
   of your own or Carbone Cloud. A Word template is made in Word and uploaded,
-  or designed by the AI assistant. Spooldoc checks every tag against the
+  or designed by the agent. Spooldoc checks every tag against the
   definition first.
-- **AI assistant**: Anthropic, Google, OpenAI, OpenRouter, Vercel AI
+- **Agent**: Anthropic, Google, OpenAI, OpenRouter, Vercel AI
   Gateway or a local model writes the first definition and template, reads
   the extraction report and fixes what is missing. It designs and edits Word
   templates too, looking at every page it renders. Use a local model, or
@@ -69,7 +69,7 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ai-assistant-dark.png">
-    <img src="docs/assets/ai-assistant-light.png" alt="The job builder: the pipeline from source to finish across the top, the sample invoice page with every extracted field highlighted, the YAML definition beside it, and the AI assistant panel on the right" width="900">
+    <img src="docs/assets/ai-assistant-light.png" alt="The job builder: the pipeline from source to finish across the top, the sample invoice page with every extracted field highlighted, the YAML definition beside it, and the agent panel on the right" width="900">
   </picture>
 </p>
 
@@ -96,7 +96,7 @@ To build the image from source instead, run `docker compose up --build -d`
 in the clone.
 
 Open http://localhost:3000 and create the first account. Add a server,
-open its queues, start a job from one, and let the assistant propose a
+open its queues, start a job from one, and let the agent propose a
 definition from a sample spooled file. See
 [Getting started](docs/getting-started.md) for the whole first run, and
 [Deployment](docs/deployment.md) for secrets, networking and backups.
@@ -115,7 +115,7 @@ To run from source instead, see [Contributing](docs/contributing.md).
 | [Definitions](docs/definitions.md) | The YAML that turns pages into JSON |
 | [Templates](docs/templates.md) | HTML and Word templates, filters, assets, PDF layout |
 | [Carbone](docs/carbone.md) | The Carbone server, Settings, Community and Enterprise |
-| [AI assistant](docs/ai-assistant.md) | Models, tools, masking |
+| [Agent](docs/agent.md) | Models, tools, masking |
 | [Destinations](docs/destinations.md) | Where documents go |
 | [Job log](docs/job-log.md) | Runs, statuses, retry, retention |
 | [Configuration](docs/configuration.md) | Environment variables and settings |
@@ -150,6 +150,6 @@ with invented ones before you paste a spooled file, a log or a screenshot.
 ## License
 
 [MIT](LICENSE). Carbone runs as its own service under its own licence;
-Spooldoc only calls it. The AI assistant's Carbone syntax reference is the
+Spooldoc only calls it. The agent's Carbone syntax reference is the
 [Carbone Skill](https://github.com/carboneio/carbone-skill) by Carbone,
 under the Apache License 2.0 (`apps/web/lib/server/carbone-skill.LICENSE`).

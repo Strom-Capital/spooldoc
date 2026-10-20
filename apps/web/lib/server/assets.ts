@@ -92,7 +92,7 @@ export async function assetNames(): Promise<{ name: string; kind: AssetView['kin
   return rows.map((row) => ({ name: row.name, kind: assetKind(row.contentType) }));
 }
 
-/** The PNG and JPEG assets with their size in pixels, by name: the pictures a Word template the assistant designs can place. */
+/** The PNG and JPEG assets with their size in pixels, by name: the pictures a Word template the agent designs can place. */
 export async function imageAssets(): Promise<Map<string, DesignImage>> {
   const rows = await getDb()
     .select({ name: assets.name, content: assets.content })

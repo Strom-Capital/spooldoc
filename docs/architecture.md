@@ -18,7 +18,7 @@ flowchart LR
     end
     subgraph app [Spooldoc]
         direction TB
-        builder[Job builder] <--> assistant[AI assistant]
+        builder[Job builder] <--> agent[Agent]
         watcher[Queue watcher] --> run[Run: capture, extract,<br>render, deliver, finish]
         builder --> db[(Postgres)]
         run --> db
@@ -27,7 +27,7 @@ flowchart LR
     dtaq -.-> watcher
     run --> carbone[Carbone]
     run --> dest[Destination]
-    assistant -.-> model[Model provider]
+    agent -.-> model[Model provider]
 ```
 
 ## A run
@@ -122,7 +122,7 @@ backup:
 | `destinations` | Where jobs deliver |
 | `assets` | Logos, images and fonts for templates |
 | `template_files` | Uploaded Word templates. A row never changes, so a version keeps the file it was saved with |
-| `settings`, `ai_providers` | Intervals, retention, and the chat model per provider with its key encrypted |
+| `settings`, `ai_providers` | Intervals, retention, and the agent's model per provider with its key encrypted |
 
 The server applies migrations when it starts (`SPOOLDOC_MIGRATE=off` to
 run `pnpm --filter @spooldoc/web db:migrate` yourself).

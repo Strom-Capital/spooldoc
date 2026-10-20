@@ -87,7 +87,7 @@ describe('toolSummary for Word templates', () => {
     ...fields,
   });
 
-  it('says what was saved and what the assistant looked at', () => {
+  it('says what was saved and what the agent looked at', () => {
     expect(toolSummary(done('write_word_template', word({ view: 'pdf', pages: 2 })))).toEqual({ text: 'Designed invoice.docx for Document, looked at 2 pages', tone: 'ok' });
     expect(toolSummary(done('edit_word_template', word({ view: 'png', pages: 9 })))).toEqual({ text: 'Edited invoice.docx for Document, looked at page 1', tone: 'ok' });
     expect(toolSummary(done('edit_word_template', word({})))).toEqual({ text: 'Edited invoice.docx for Document', tone: 'ok' });

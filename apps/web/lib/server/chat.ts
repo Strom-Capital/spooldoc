@@ -70,7 +70,7 @@ export interface InstructionsInput {
   definitionYaml: string | null;
   /** The job's templates, each with its formats and content (null for the starter). */
   templates: JobTemplate[];
-  /** Mask values in the page text (Settings, AI model). */
+  /** Mask values in the page text (Settings, Agent). */
   masked: boolean;
   /** Uploaded images and fonts the template can print with `{asset('name')}`. */
   assets?: ChatAsset[];
@@ -493,7 +493,7 @@ export interface DraftStore {
    */
   changeTemplates(change: (templates: JobTemplate[]) => JobTemplate[]): Promise<JobTemplate[]>;
   /**
-   * Store a Word template the assistant made as a new file and point the template at it.
+   * Store a Word template the agent made as a new file and point the template at it.
    * An HTML template becomes a Word one only while it has no HTML of its own.
    * Throws an Error with a message for the model when the template is gone or has HTML.
    */
@@ -524,7 +524,7 @@ export interface JobFilesReader {
 export interface ToolsInput {
   sample: Sample;
   store: DraftStore;
-  /** Mask values in page text and tool results (Settings, AI model). */
+  /** Mask values in page text and tool results (Settings, Agent). */
   masked: boolean;
   /** Names `{asset('name')}` accepts. Renders print a placeholder for them, never the file. */
   assets?: ChatAsset[];
@@ -923,7 +923,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
     return { bytes: await starterDocx(def), name: `${def.type}.docx`, fileId: null };
   }
 
-  /** Save a Word template the assistant made, render the first document and report both. */
+  /** Save a Word template the agent made, render the first document and report both. */
   async function saveWord(toolCallId: string, template: JobTemplate, file: { name: string; content: Uint8Array; previousId: string | null }, def: Definition, sample: Sample): Promise<WordTemplateResult> {
     if (file.content.length > MAX_DOCX_BYTES) {
       return fail(`The file is larger than ${MAX_DOCX_BYTES / 1024 / 1024} MB, the most Spooldoc takes. Use smaller pictures.`);

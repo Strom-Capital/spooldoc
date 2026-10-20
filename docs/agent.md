@@ -1,25 +1,25 @@
 ---
-title: "AI assistant"
-description: "The chat beside the job builder: which models it uses, what it can do and what it sees."
+title: "Agent"
+description: "The agent beside the job builder: which models it uses, what it can do and what it sees."
 ---
 
-The AI assistant sits beside the workbench in the job builder. Ask it for a
+The agent sits beside the workbench in the job builder. Ask it for a
 definition and it reads the sample pages, writes the YAML to the job's
 draft, reads the extraction report, fixes missing fields, then writes a
 template and renders it: HTML, or a Word template it designs or edits. The page view, the JSON and the preview update as
 it works, and everything it writes can be edited by hand. Without a model
-set, the job builder works as before and the assistant points to Settings.
+set, the job builder works as before and the agent points to Settings.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/ai-assistant-dark.png">
-    <img src="assets/ai-assistant-light.png" alt="The AI assistant panel beside the workbench, with suggested prompts, the Values masked badge and the model name under the message box" width="900">
+    <img src="assets/ai-assistant-light.png" alt="The agent panel beside the workbench, with suggested prompts, the Values masked badge and the model name under the message box" width="900">
   </picture>
 </p>
 
 ## Choosing a model
 
-Under Settings, AI model, with no restart:
+Under Settings, Agent, with no restart:
 
 | Setting | What it is |
 |---------|------------|
@@ -29,13 +29,13 @@ Under Settings, AI model, with no restart:
 | Effort | How much the model reasons before it answers, from None to Max, or the provider's default. Models that do not reason ignore it. |
 
 Each provider keeps its own key, model and effort, so switching back is
-one click. None (chat off) turns the assistant off and keeps every
+one click. None (agent off) turns the agent off and keeps every
 provider's settings. Any signed-in user can set or replace a key, but no
 request can read one back.
 
 ## What it can do
 
-The assistant works through twelve tools: nine on the job's draft and its
+The agent works through twelve tools: nine on the job's draft and its
 preview sample, two that read other jobs' files, and one that reads the
 Carbone syntax reference:
 
@@ -48,7 +48,7 @@ Carbone syntax reference:
 | `read_word_template` | Lists the parts of a Word template (the body, headers and footers), or reads one part's XML. |
 | `edit_word_template` | Changes a Word template, yours or the starter template, by replacing text in its XML, and saves the result as a new file. Returns what `write_word_template` returns. |
 | `render_preview` | Renders the document of a page group with one template, HTML or Word, again after a change to the definition, and returns what the check finds and the visible text. For a Word template it also shows models that take files the document. |
-| `add_template` | Adds a template, HTML or Word, with a name and formats. It uses the starter until the assistant writes it. |
+| `add_template` | Adds a template, HTML or Word, with a name and formats. It uses the starter until the agent writes it. |
 | `remove_template` | Removes a template. The last template cannot be removed. |
 | `list_jobs` | Lists the other jobs with their definition type, templates and whether those have content of their own. |
 | `read_job_files` | Reads another job's definition YAML and each of its templates, from its active version or else its draft, so a new job can start from them. |
@@ -66,7 +66,7 @@ right.
 ## Word templates
 
 Ask for a Word template ("make a Word invoice with our logo, in dark
-blue") and the assistant designs one: page size and margins, headers and
+blue") and the agent designs one: page size and margins, headers and
 footers, a different first page, named styles, fonts, colours, spacing,
 borders, shaded table rows, merged cells, page numbers and the PNG and
 JPEG images uploaded under Assets. It then renders the first document and
@@ -78,7 +78,7 @@ layouts that still read when printed in black and white.
 It writes the design as data, in the shape of the
 [docx](https://docx.js.org) library's options, and Spooldoc builds the
 `.docx` from it. Only the parts of the library listed in
-[templates](templates.md#word-templates-by-the-assistant) are allowed, and
+[templates](templates.md#word-templates-by-the-agent) are allowed, and
 no code the model writes runs on the server.
 
 To change a Word template you made yourself, it edits the file instead of
@@ -88,7 +88,7 @@ needs to. Text Word split over several runs with the same formatting is
 joined first, so a tag can be found. An edit that would break the file is
 refused, and nothing is saved.
 
-**What it looks at.** After each design or edit the assistant gets the
+**What it looks at.** After each design or edit the agent gets the
 first document as it prints, as a PDF of every page made the way a run
 makes it. The first page of a document often differs from the rest, with
 the letterhead and the address on page 1 and the running header,
@@ -105,17 +105,17 @@ in the file.
 
 **Nothing is overwritten.** Each design or edit is saved as a new file,
 and the template uses it from then on. Your earlier file is kept, and the
-Word panel says when the assistant made the current file and offers
+Word panel says when the agent made the current file and offers
 **Use previous file**, or **Use starter template** when there was none. A
-saved version keeps the file it ran with. The assistant changes an HTML
+saved version keeps the file it ran with. The agent changes an HTML
 template to Word only while it still uses the HTML starter; otherwise it
 asks you to switch it in the render step, or adds a Word template when
 you ask for one.
 
 The file is an ordinary Word document: open it in Word, change it and
-upload it again, or ask the assistant for the next change.
+upload it again, or ask the agent for the next change.
 
-The assistant writes [Carbone tags](templates.md). Its instructions hold
+The agent writes [Carbone tags](templates.md). Its instructions hold
 the [Carbone Skill](https://github.com/carboneio/carbone-skill) by Carbone
 (Apache License 2.0) as the syntax reference, and say which Carbone
 features the connected server has: on the Community Edition it leaves out
@@ -144,7 +144,7 @@ connection, other spooled files, or the job log.
 
 ## The conversation
 
-Each job keeps one conversation with the assistant, stored with the job
+Each job keeps one conversation with the agent, stored with the job
 and shown again when you come back to the job builder; it is deleted with
 the job. New chat in the panel header forgets it and starts another, while
 the definition and template it wrote stay in the draft. Only the recent
@@ -161,12 +161,12 @@ tool results are masked too.
 The model works best with the values as printed: it reads the pages,
 checks what it extracted and designs templates around real names,
 amounts and dates. That is how it works unless you turn on **Mask values**
-under Settings, AI model.
+under Settings, Agent.
 
 With masking on, before page text or a tool result goes to the model,
 digits become `9` and letters `X` or `x`, while labels that repeat across
 pages, positions and lengths stay as printed. The model sees the layout,
-not the customer, and does less well with values it cannot read. The chat
+not the customer, and does less well with values it cannot read. The agent
 panel shows "Values masked" or "Values sent in clear". What the model
 writes, and the job builder itself, always use the real values.
 

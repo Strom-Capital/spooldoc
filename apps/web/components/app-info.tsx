@@ -5,9 +5,9 @@ import { createContext, useContext, type ReactNode } from 'react';
 /** What the pages need to know about the signed-in user and the server. */
 export interface AppInfo {
   user: { id: string; email: string; name: string };
-  /** The chat model, never its key. */
+  /** The agent's model, never its key. */
   model: { provider: string; id: string } | null;
-  /** Values are masked before page text goes to the model (Settings, AI model). */
+  /** Values are masked before page text goes to the model (Settings, Agent). */
   masking: boolean;
   /** The last check found a working Carbone server, so documents can be rendered. */
   rendering: boolean;

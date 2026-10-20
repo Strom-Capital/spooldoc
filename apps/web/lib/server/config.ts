@@ -108,7 +108,7 @@ export function getConfig(): AppConfig {
 
 /** Settings Spooldoc no longer reads, with where they went, by name. */
 const RETIRED: Record<string, string> = {
-  SPOOLDOC_MASK: 'SPOOLDOC_MASK is no longer read. Masking is set in the app, under Settings, AI model.',
+  SPOOLDOC_MASK: 'SPOOLDOC_MASK is no longer read. Masking is set in the app, under Settings, Agent.',
 };
 
 /** What to say about settings in the environment that Spooldoc no longer reads, one message each. */

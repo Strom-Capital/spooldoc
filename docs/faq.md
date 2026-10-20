@@ -29,7 +29,7 @@ keeping them apart makes both easier:
   a value that does not convert is reported where it was read.
 - **You can check the reading before the rendering.** The workbench shows
   the JSON next to the page with every hit highlighted, and the extraction
-  report lists found, missing and empty fields. The assistant works from
+  report lists found, missing and empty fields. The agent works from
   that report too.
 - **One spooled file, many documents.** Six invoices printed back to back
   are six page groups, split on the invoice number: six JSON objects and
@@ -54,9 +54,9 @@ program-described printer files produce, in any EBCDIC code page the file
 declares. XML printed into a spooled file works too. AFPDS and *USERASCII
 are not supported yet.
 
-## Do I need an AI model?
+## Do I need a model?
 
-No. The assistant writes the first definition and template and fixes
+No. The agent writes the first definition and template and fixes
 missing fields, which saves most of the work, but a definition is plain
 YAML you can write by hand with the page view beside you, and the starter
 template renders every field. See [Definitions](definitions.md).
@@ -68,7 +68,7 @@ masked when you turn masking on so digits and letters are replaced while
 the layout stays, plus the definition and
 template, and the documents it renders from a Word template. Never
 credentials, never other spooled files. See
-[AI assistant](ai-assistant.md#what-it-sees).
+[agent](agent.md#what-it-sees).
 
 ## The page shows `[` and `\` where Ä and Ö should be
 

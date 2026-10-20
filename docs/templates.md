@@ -26,7 +26,7 @@ Cloud. See [Carbone](carbone.md) to set one up.
 "Start from job" in the template editor's bar copies another job's
 template, HTML or Word, into the template shown, and on request its
 definition into the draft. When the other job has more than one template, pick the one to copy.
-The [AI assistant](ai-assistant.md) does the same when asked.
+The [agent](agent.md) does the same when asked.
 
 ## The data
 
@@ -143,7 +143,7 @@ changes only the draft. Download template gives the uploaded file back.
 Spooldoc takes `.docx` files up to 10 MB; it refuses a Word 97-2003
 `.doc` and says to save it as a Word Document.
 
-The [AI assistant](ai-assistant.md#word-templates) can design a Word
+The [agent](agent.md#word-templates) can design a Word
 template for you, or change yours. Each change is a new file, and the
 Word panel offers your earlier file back.
 
@@ -183,9 +183,9 @@ The PDF of a template with cross-references (PAGEREF or REF fields) is
 made with LibreOffice instead, which works them out itself. Tables of
 contents have not been tested: check the PDF before you rely on one.
 
-### Word templates by the assistant
+### Word templates by the agent
 
-The assistant designs a Word template as data in the shape of the
+The agent designs a Word template as data in the shape of the
 [docx](https://docx.js.org) library's options, and Spooldoc builds the
 file with these parts of the library only:
 

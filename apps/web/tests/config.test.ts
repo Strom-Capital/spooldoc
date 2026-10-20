@@ -74,7 +74,7 @@ describe('getConfig', () => {
 
   it('says where a setting it no longer reads went', () => {
     expect(retiredSettings({})).toEqual([]);
-    expect(retiredSettings({ SPOOLDOC_MASK: 'false' })).toEqual(['SPOOLDOC_MASK is no longer read. Masking is set in the app, under Settings, AI model.']);
+    expect(retiredSettings({ SPOOLDOC_MASK: 'false' })).toEqual(['SPOOLDOC_MASK is no longer read. Masking is set in the app, under Settings, Agent.']);
     // A value it does not read is no longer an error either.
     withEnv({ SPOOLDOC_MASK: 'maybe' });
     expect(() => getConfig()).not.toThrow();

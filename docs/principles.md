@@ -70,24 +70,24 @@ In practice:
 ## The page is the truth, and a person decides
 
 The user checks every extracted value next to the page it came from. The
-AI assistant proposes; it does not decide. What it writes is plain YAML,
+agent proposes; it does not decide. What it writes is plain YAML,
 HTML, and Word files that a person can read, edit and keep without it.
 
 In practice:
 
-- Spooldoc works without a model. The assistant saves time, it is not a
+- Spooldoc works without a model. The agent saves time, it is not a
   requirement.
-- A Word template the assistant makes is an ordinary `.docx` the user
+- A Word template the agent makes is an ordinary `.docx` the user
   opens and changes in Word, made of Word's own paragraphs, tables and
-  styles. The assistant designs it as data that Spooldoc builds; no code
+  styles. The agent designs it as data that Spooldoc builds; no code
   the model writes runs on the server.
-- The assistant never overwrites what the user made. A Word file it
+- The agent never overwrites what the user made. A Word file it
   writes or edits is a new file, and the earlier one stays to go back to.
 - Where values go is the user's choice, made in Settings and shown in
-  the assistant panel: as printed, so the model can read them, or masked
+  the agent panel: as printed, so the model can read them, or masked
   before page text leaves the server. A local model keeps them on the
   user's network either way.
-- Nothing the assistant proposes runs on the IBM i or goes live until the
+- Nothing the agent proposes runs on the IBM i or goes live until the
   user saves and activates it.
 
 ## Show only what works

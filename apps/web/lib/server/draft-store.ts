@@ -36,7 +36,7 @@ export async function updateDraft(jobId: string, change: (draft: JobSpec) => Job
 /**
  * The chat tools' view of a job's draft: its definition and its templates.
  *
- * @param userId - Who is chatting, recorded on the Word template files the assistant makes
+ * @param userId - Who is chatting, recorded on the Word template files the agent makes
  */
 export function draftStore(jobId: string, userId: string | null = null): DraftStore {
   const read = async (): Promise<JobSpec> => {

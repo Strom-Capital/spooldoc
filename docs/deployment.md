@@ -74,7 +74,7 @@ such as a site-to-site VPN; do not open the host server ports to the
 internet. Set `SPOOLDOC_ALLOWED_HOSTS` so users can only add the systems
 you intend.
 
-The assistant calls the model provider over HTTPS, or a local model at the
+The agent calls the model provider over HTTPS, or a local model at the
 base URL you enter. Nothing else leaves the host.
 
 ## More than one instance

@@ -6,7 +6,7 @@ import { getDb } from './db';
 import { jobChats } from './db/schema';
 
 /**
- * The stored thread of a job's AI assistant: every message the chat panel shows, with
+ * The stored thread of a job's agent: every message the chat panel shows, with
  * the tool calls and their results as the model saw them (masked when masking is on).
  * One thread per job, deleted with the job.
  */

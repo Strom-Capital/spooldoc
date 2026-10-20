@@ -1,6 +1,6 @@
 'use client';
 
-import { FolderInputIcon, RotateCcwIcon, WandSparklesIcon } from 'lucide-react';
+import { FolderInputIcon, FilePenLineIcon, RotateCcwIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { CodeEditor } from './code-editor';
@@ -33,7 +33,7 @@ function HtmlTemplateEditor() {
       <EditorBar>
         {!readOnly && html === null && starter && (
           <Button size="sm" variant="ghost" onClick={() => setHtml(starter)}>
-            <WandSparklesIcon />
+            <FilePenLineIcon />
             Start from the generated template
           </Button>
         )}
