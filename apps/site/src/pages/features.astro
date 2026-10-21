@@ -9,18 +9,20 @@ import Base from '../layouts/Base.astro';
 import CodeBlock from '../components/CodeBlock.astro';
 import Shot from '../components/Shot.astro';
 import { FEATURES } from '../lib/features';
-import { docsUrl, links } from '../lib/links';
+import { docsUrl } from '../lib/links';
 import { FEATURES_DESCRIPTION } from '../lib/structuredData';
 ---
 <Base title="Features" description={FEATURES_DESCRIPTION}>
   <section class="section intro">
     <div class="container">
       <div class="section-head">
-        <h1>What Spooldoc does today</h1>
+        <h1>What Spooldoc does</h1>
         <p class="lead">
-          Spooldoc reads the spooled files your IBM i (AS/400, iSeries) prints and lays them
-          out as PDF, Word or Excel documents. The guides have the details, and the
-          <a href={links.releases}>release notes</a> say what changed.
+          Spooldoc reads each spooled file your IBM i (AS/400, iSeries) prints into data. A
+          template in HTML, Word or Excel then lays that data out as a PDF, Word or Excel
+          document. The template never sees lines and columns, so a new look is a new template,
+          and a moved column is one fix in the definition. Nothing is installed on the IBM i,
+          and your programs need no changes.
         </p>
       </div>
       <nav class="toc" aria-label="Features">

@@ -12,7 +12,7 @@ export const SITE_NAME = 'Spooldoc';
  */
 export const HOME_TITLE = 'Spooldoc: IBM i spool files to PDF, Word and Excel';
 export const FEATURES_DESCRIPTION =
-  'What Spooldoc does with IBM i spool files today: YAML definitions read the pages, and HTML, Word or Excel templates make PDF, HTML, DOCX or XLSX files. The agent drafts, and every run is in the job log.';
+  'What Spooldoc does with IBM i spool files: a YAML definition reads each page into data, and HTML, Word or Excel templates lay it out as PDF, DOCX or XLSX.';
 /** The brand guide's 25-word description: the meta description of the home page. */
 export const SITE_DESCRIPTION =
   'Spooldoc turns IBM i spooled files into documents. A YAML definition reads each page into data; HTML, Word or Excel templates lay it out. Open source.';
