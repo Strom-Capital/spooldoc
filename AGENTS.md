@@ -2,9 +2,10 @@
 
 Spooldoc turns IBM i spooled files into documents: it watches output
 queues, reads each spooled file into JSON with a YAML definition, renders
-it with an HTML template to PDF or HTML, and delivers the files. A pnpm
-workspace in TypeScript: `packages/core`, `packages/ibmi` and the Next.js
-app in `apps/web`. The layout is in
+each page group with HTML, Word or Excel templates through Carbone to PDF,
+HTML, DOCX or XLSX, and delivers the files to a download or an IFS folder.
+A pnpm workspace in TypeScript: `packages/core`, `packages/ibmi`,
+`packages/docs` and the Next.js app in `apps/web`. The layout is in
 [docs/contributing.md](docs/contributing.md#layout).
 
 ## Before you change anything
