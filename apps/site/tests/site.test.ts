@@ -8,6 +8,7 @@ import { DEFINITION_EXAMPLE, FEATURES } from '../src/lib/features';
 import { docsUrl, formatDate, links, url } from '../src/lib/links';
 import { llmsTxt } from '../src/lib/llms';
 import { sortPosts, type PostLike } from '../src/lib/sortPosts';
+import { OVERVIEW_VIDEO, vttCues } from '../src/lib/video';
 import { FEATURES_DESCRIPTION, HOME_TITLE, homeJsonLd, postJsonLd, serializeJsonLd } from '../src/lib/structuredData';
 
 const site = new URL('https://spooldoc.com');
@@ -180,6 +181,29 @@ describe('features', () => {
       expect(feature.docs.length).toBeGreaterThan(0);
       for (const doc of feature.docs) expect(slugs, doc.slug).toContain(doc.slug);
     }
+  });
+});
+
+describe('overview video', () => {
+  const folder = path.join(process.cwd(), 'public/video');
+  const { name } = OVERVIEW_VIDEO;
+
+  it('has a video and a poster for each theme, and captions', () => {
+    for (const file of [`${name}-light.mp4`, `${name}-dark.mp4`, `${name}-light.jpg`, `${name}-dark.jpg`, `${name}.vtt`]) {
+      expect(fs.existsSync(path.join(folder, file)), file).toBe(true);
+    }
+  });
+
+  it('has a transcript with the words of the captions', () => {
+    const cues = vttCues(fs.readFileSync(path.join(folder, `${name}.vtt`), 'utf8'));
+    expect(cues.length).toBeGreaterThan(0);
+    expect(OVERVIEW_VIDEO.transcript.join(' ')).toBe(cues.join(' '));
+  });
+
+  it('is on the home page, with its transcript', () => {
+    const home = fs.readFileSync(path.join(process.cwd(), 'src/pages/index.astro'), 'utf8');
+    expect(home).toContain('<SiteVideo name={OVERVIEW_VIDEO.name} label={OVERVIEW_VIDEO.label} />');
+    expect(home).toContain('<summary>Transcript</summary>');
   });
 });
 

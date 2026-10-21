@@ -3,11 +3,13 @@ import Base from '../layouts/Base.astro';
 import CodeBlock from '../components/CodeBlock.astro';
 import PostList from '../components/PostList.astro';
 import Shot from '../components/Shot.astro';
+import SiteVideo from '../components/SiteVideo.astro';
 import { FEATURES, QUICK_START } from '../lib/features';
 import { assetSize, siteVersion } from '../lib/docs';
 import { docsUrl, links, url } from '../lib/links';
 import { zoomLabel } from '../lib/imageLinks';
 import { getPosts } from '../lib/posts';
+import { OVERVIEW_VIDEO } from '../lib/video';
 import { HOME_TITLE, homeJsonLd, LONG_DESCRIPTION, SITE_DESCRIPTION } from '../lib/structuredData';
 
 const posts = (await getPosts()).slice(0, 3);
@@ -50,6 +52,19 @@ const tour = [
     </div>
     <div class="container">
       <Shot name="ai-assistant" eager class="hero-shot" alt="The job builder: the sample invoice page with every extracted field highlighted, the YAML definition beside it, and the agent panel on the right" />
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="overview">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="overview">Spooldoc in 90 seconds</h2>
+      </div>
+      <SiteVideo name={OVERVIEW_VIDEO.name} label={OVERVIEW_VIDEO.label} />
+      <details class="transcript">
+        <summary>Transcript</summary>
+        {OVERVIEW_VIDEO.transcript.map((paragraph) => <p>{paragraph}</p>)}
+      </details>
     </div>
   </section>
 
@@ -143,6 +158,10 @@ const tour = [
 
   .diagram { margin: 0; padding: var(--space-5); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.8); background: var(--card); text-align: center; }
   .diagram img { width: 100%; max-width: 1000px; }
+
+  .transcript { margin-top: var(--space-4); max-width: 46rem; }
+  .transcript summary { cursor: pointer; font-weight: 500; }
+  .transcript p { margin: var(--space-3) 0 0; color: var(--muted-foreground); line-height: 1.7; }
 
   .tour { display: grid; gap: var(--space-6) var(--space-5); }
   @media (min-width: 760px) { .tour { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
