@@ -6,6 +6,7 @@ import { ErrorNote } from '@/components/page';
 import { StatusPill, type StatusTone } from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { duration } from '@/lib/client/format';
+import { shortUrl } from '@/lib/destination-config';
 import type { DeliveryKind, DeliveryView } from '@/lib/types';
 
 /** Deliveries shown at first and per Show more. */
@@ -158,9 +159,9 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
                           {!delivery.to ? (
                             text.noTarget
                           ) : webhook ? (
-                            // A URL breaks anywhere, so a long one never widens the table.
-                            <span className="[overflow-wrap:anywhere]">
-                              {text.to} {delivery.to}
+                            // Without the scheme, and broken only where one word does not fit.
+                            <span className="break-words">
+                              {text.to} {shortUrl(delivery.to)}
                             </span>
                           ) : (
                             <>
