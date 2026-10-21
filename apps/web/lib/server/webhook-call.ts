@@ -42,12 +42,15 @@ export interface DraftCall {
 }
 
 /**
- * The call a Send test makes for one page group of the draft's preview sample: the
- * page group rendered from the draft in the formats the job sends, as `document.test`,
- * to the URL in use (the test URL while one is set). Nothing is sent and nothing is
- * stored. A 4xx or 503 response when there is nothing to call.
+ * The call for one page group of the draft's preview sample: the page group rendered from
+ * the draft in the formats the job sends, to the URL in use (the test URL while one is
+ * set). It is `document.test` for a Send test and in test mode, else `document.created`,
+ * as a run sends it. Nothing is sent and nothing is stored. A 4xx or 503 response when
+ * there is nothing to call.
+ *
+ * @param use - `test` for a Send test, `preview` for the call a run would make
  */
-export async function draftCall(job: JobRow, input: z.infer<typeof webhookCallSchema>): Promise<DraftCall | { response: Response }> {
+export async function draftCall(job: JobRow, input: z.infer<typeof webhookCallSchema>, use: 'test' | 'preview'): Promise<DraftCall | { response: Response }> {
   const picked = await draftPageGroup(job, { sampleId: input.sampleId, pageGroup: input.pageGroupIndex }, 'the call');
   if ('response' in picked) return picked;
   const { draft, sample, def, groups, index } = picked;
@@ -82,7 +85,7 @@ export async function draftCall(job: JobRow, input: z.infer<typeof webhookCallSc
   }
   const document = fileNameFor(def, groups[index]!, index, sample.splf.name.toLowerCase());
   const payload = webhookPayload({
-    type: 'document.test',
+    type: use === 'test' || target.toTestUrl ? 'document.test' : 'document.created',
     at: new Date(),
     document: { pageGroupIndex: index, name: document, data: { pg: groups[index]!, splf: sample.splf } },
     pageGroups: groups.length,

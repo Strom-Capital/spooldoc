@@ -17,11 +17,15 @@ const KIND_TEXT: Record<DeliveryKind, { title: string; plural: string; none: str
   webhook: { title: 'Webhook calls', plural: 'calls', none: 'This run sent no webhook call.', to: 'Posted to', noTarget: 'No URL', test: 'Sent to the test URL of the destination.' },
 };
 
-/** The receiver's answer to a webhook call, such as "200 OK, 142 ms"; "No answer" when it never answered. */
+/** The receiver's answer to a webhook call and the tries, such as "200 OK in 142 ms, 3 tries", "No answer after 3 tries" or "Not tried". */
 function answerText(delivery: DeliveryView): string {
-  if (delivery.httpStatus === null) return delivery.attempts === 0 ? 'Not tried' : 'No answer';
-  const ms = delivery.ms === null ? '' : `, ${duration(delivery.ms)}`;
-  return `${delivery.httpStatus} ${STATUS_TEXT[delivery.httpStatus] ?? ''}`.trim() + ms;
+  const { attempts } = delivery;
+  if (attempts === 0) return 'Not tried';
+  const tries = attempts === null ? null : attempts === 1 ? '1 try' : `${attempts} tries`;
+  if (delivery.httpStatus === null) return tries ? `No answer after ${tries}` : 'No answer';
+  const status = `${delivery.httpStatus} ${STATUS_TEXT[delivery.httpStatus] ?? ''}`.trim();
+  const answer = delivery.ms === null ? status : `${status} in ${duration(delivery.ms)}`;
+  return attempts !== null && attempts > 1 ? `${answer}, ${tries}` : answer;
 }
 
 /** The words of the HTTP statuses a receiver answers most. */
@@ -89,14 +93,13 @@ const time = (iso: string): string => new Date(iso).toLocaleTimeString(undefined
 
 /**
  * The deliveries of a run, such as its emails or webhook calls, one row per document: the
- * document, where it went, the status and the time, and for a webhook call the answer and
- * the tries. A failed row opens to show what went wrong and the other system's own text. A
+ * document, where it went (and for a webhook call the answer and the tries), the status and
+ * the time. A failed row opens to show what went wrong and the other system's own text. A
  * long list shows the first deliveries and says how many more there are.
  */
 export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; deliveries: DeliveryView[] }) {
   const text = KIND_TEXT[kind];
   const webhook = kind === 'webhook';
-  const columns = webhook ? 5 : 3;
   const [shown, setShown] = useState(PAGE);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const sent = deliveries.filter((delivery) => delivery.status !== 'failed').length;
@@ -125,8 +128,6 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
             <thead className="bg-muted/50 text-left text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 font-medium">Document</th>
-                {webhook && <th className="w-px whitespace-nowrap px-3 py-2 font-medium">Answer</th>}
-                {webhook && <th className="hidden w-px whitespace-nowrap px-3 py-2 text-right font-medium sm:table-cell">Attempts</th>}
                 <th className="w-px whitespace-nowrap px-3 py-2 font-medium">Status</th>
                 <th className="hidden w-px whitespace-nowrap px-3 py-2 text-right font-medium sm:table-cell">Time</th>
               </tr>
@@ -153,10 +154,22 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
                         ) : (
                           <div className="break-words">{delivery.document}</div>
                         )}
-                        <div className="text-muted-foreground text-xs">{delivery.to ? <>{text.to} <Addresses text={delivery.to} /></> : text.noTarget}</div>
+                        <div className="text-muted-foreground text-xs">
+                          {!delivery.to ? (
+                            text.noTarget
+                          ) : webhook ? (
+                            // A URL breaks anywhere, so a long one never widens the table.
+                            <span className="[overflow-wrap:anywhere]">
+                              {text.to} {delivery.to}
+                            </span>
+                          ) : (
+                            <>
+                              {text.to} <Addresses text={delivery.to} />
+                            </>
+                          )}
+                        </div>
+                        {webhook && delivery.status !== 'already_sent' && <div className="tabular text-muted-foreground text-xs">{answerText(delivery)}</div>}
                       </td>
-                      {webhook && <td className="tabular w-px whitespace-nowrap px-3 py-2 text-xs">{answerText(delivery)}</td>}
-                      {webhook && <td className="tabular hidden w-px whitespace-nowrap px-3 py-2 text-right text-xs sm:table-cell">{delivery.attempts ?? ''}</td>}
                       <td className="w-px whitespace-nowrap px-3 py-2">
                         <StatusPill tone={status.tone} icon={status.icon} title={status.title}>
                           {status.label}
@@ -166,7 +179,8 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
                     </tr>
                     {failed && expanded && (
                       <tr>
-                        <td colSpan={columns} className="px-3 pb-3">
+                        {/* Any text breaks anywhere here, so the error and the answer wrap inside the table. */}
+                        <td colSpan={3} className="px-3 pb-3 [&_*]:[overflow-wrap:anywhere]">
                           <ErrorNote detail={failedDetail(delivery)}>{delivery.error}</ErrorNote>
                         </td>
                       </tr>

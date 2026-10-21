@@ -28,11 +28,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if ('response' in body) {
     return body.response;
   }
-  const call = await draftCall(job, body.data);
+  const call = await draftCall(job, body.data, 'test');
   if ('response' in call) {
     return call.response;
   }
-  const result = await postWebhook(call.target, { id: call.id, body: call.body, maxAttempts: 1 });
+  const result = await postWebhook(call.target, { id: call.id, body: call.body, maxAttempts: 1, later: 'Send the test again later.' });
   const clean = (text: string) => redact(text, call.secrets);
   const answer = result.response ?? '';
   const view: WebhookTestView = {

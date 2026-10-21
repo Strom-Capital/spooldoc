@@ -275,8 +275,9 @@ the new one.
 In the job's destination step, **Files to send** picks the formats of the
 document's files that go in each call: every format the templates make,
 by default. With none picked, each call holds the data only. Beside it,
-the step prints the call of one page group as Send test would make it,
-with the real values of the sample.
+the step prints the call of one page group as a run would make it, with
+the real values of the sample: `document.created`, or `document.test`
+while a test URL is set.
 
 <p align="center">
   <picture>

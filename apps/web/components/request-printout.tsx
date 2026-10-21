@@ -18,8 +18,6 @@ const FOLD_LINES = 40;
 /** The answer prints line by line, this fast, for its first lines; the rest prints at once. */
 const PRINT_MS = 60;
 const PRINT_LINES = 12;
-/** The longest header value printed in full; a longer one ends in "…". */
-const HEADER_WIDTH = 56;
 
 /** One token of a printed line, colored by what it is. */
 type Token = { text: string; kind?: 'key' | 'string' | 'number' | 'literal' | 'punct' | 'muted' | 'name' | 'ok' | 'bad' };
@@ -72,8 +70,7 @@ function requestLines(preview: WebhookPreviewView): { head: Line[]; body: Line[]
   const head: Line[] = [
     { text: `${preview.method} ${url.pathname}${url.search} HTTP/1.1`, tokens: [{ text: preview.method, kind: 'literal' }, { text: ` ${url.pathname}${url.search} HTTP/1.1` }] },
     ...preview.headers.map((header) => {
-      const value = header.value.length > HEADER_WIDTH ? `${header.value.slice(0, HEADER_WIDTH - 1)}…` : header.value;
-      return { text: `${header.name}: ${header.value}`, tokens: [{ text: `${header.name}:`, kind: 'name' as const }, { text: ` ${value}` }], title: header.value };
+      return { text: `${header.name}: ${header.value}`, tokens: [{ text: `${header.name}:`, kind: 'name' as const }, { text: ` ${header.value}` }] };
     }),
     plain(''),
   ];
@@ -105,10 +102,14 @@ function responseLines(result: WebhookTestView): Line[] {
   return [status, ...(body.length > 0 ? [plain(''), ...body] : []), ...cut];
 }
 
-/** One printed line, 20 px high, never wrapped. */
+/**
+ * One printed line, 20 px high. A long line wraps like a printer, at any character, onto
+ * more 20 px lines, with a hanging indent so a wrapped value stays under its key.
+ */
 function PrintedLine({ line, flash }: { line: Line; flash?: boolean }) {
+  const hang = `${(/^ */.exec(line.text)?.[0].length ?? 0) + 2}ch`;
   return (
-    <div className="h-5 whitespace-pre" title={line.title}>
+    <div className="min-h-5 whitespace-pre-wrap [overflow-wrap:anywhere]" style={{ paddingLeft: hang, textIndent: `-${hang}` }} title={line.title}>
       <span className={cn(flash && 'flash')}>
         {line.tokens.map((token, index) => (
           <span key={index} className={token.kind && TOKEN_CLASS[token.kind]}>
@@ -160,15 +161,19 @@ function Perforation({ drawn }: { drawn: boolean }) {
           drawn ? 'scale-x-100' : 'scale-x-0',
         )}
       />
-      <span className="absolute top-0 -left-1.5 size-3 -translate-y-1/2 rounded-full border bg-background" />
-      <span className="absolute top-0 -right-1.5 size-3 -translate-y-1/2 rounded-full border bg-background" />
+      {/* The notches are half circles drawn inside the paper's edges, so nothing sticks out of it. */}
+      <span className="absolute inset-x-0 top-0 h-3 -translate-y-1/2" style={NOTCHES} />
     </div>
   );
 }
 
+const NOTCH = (side: string) =>
+  `radial-gradient(circle at ${side} 50%, var(--background) 5.5px, var(--border) 6px, var(--border) 6.5px, transparent 7px)`;
+const NOTCHES: CSSProperties = { backgroundImage: `${NOTCH('0')}, ${NOTCH('100%')}` };
+
 /** The text column of the paper, inside the strips. */
 function Column({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn('overflow-x-auto py-5 pr-[calc(1rem+10px)] pl-[calc(1rem+10px)] sm:pr-[calc(1.75rem+12px)] sm:pl-[calc(1.75rem+12px)]', className)}>{children}</div>;
+  return <div className={cn('min-w-0 py-5 pr-[calc(1rem+10px)] pl-[calc(1rem+10px)] sm:pr-[calc(1.75rem+12px)] sm:pl-[calc(1.75rem+12px)]', className)}>{children}</div>;
 }
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
@@ -259,10 +264,10 @@ export function RequestPrintout({
       : '';
 
   return (
-    <section aria-label="Webhook call preview" className="flex flex-col gap-3">
+    <section aria-label="Webhook call preview" className="flex min-w-0 flex-col gap-3">
       {error && <ErrorNote>{error}</ErrorNote>}
       <div
-        className="relative overflow-hidden rounded-sm border bg-[var(--page-paper)] font-mono text-[12.5px] text-[var(--page-ink)] leading-5 shadow-xs"
+        className="relative min-w-0 overflow-hidden rounded-sm border bg-[var(--page-paper)] font-mono text-[12.5px] text-[var(--page-ink)] leading-5 shadow-xs"
         style={PAPER}
         aria-busy={loading || undefined}
       >
@@ -319,7 +324,7 @@ export function RequestPrintout({
       {test.result?.error && <ErrorNote detail={test.result.detail}>{test.result.error}</ErrorNote>}
       {test.error && <ErrorNote detail={test.error.detail}>{test.error.message}</ErrorNote>}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <Hint text="Sends this page group to the URL now, marked as a test. One try, and nothing goes in the Job log.">
+        <Hint text="Sends this page group to the URL now, marked as a test (document.test). One try, and nothing goes in the Job log.">
           <Button type="button" variant="outline" onClick={onSendTest} disabled={disabled || test.sending || !preview}>
             {test.sending ? <Spinner /> : <SendIcon />}
             {test.sending ? 'Sending...' : 'Send test'}

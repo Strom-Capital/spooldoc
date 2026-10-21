@@ -74,7 +74,7 @@ describe('the webhook preview', () => {
     expect(JSON.stringify(view)).not.toContain(secret);
 
     const body = JSON.parse(view.body) as WebhookPayload;
-    expect(body).toMatchObject({ type: 'document.test', data: { document: { name: 'invoice-260102', pageGroup: 2 }, run: null, job: { name: 'MYJOB', version: null } } });
+    expect(body).toMatchObject({ type: 'document.created', data: { document: { name: 'invoice-260102', pageGroup: 2 }, run: null, job: { name: 'MYJOB', version: null } } });
     expect(body.data.files).toEqual([{ name: 'invoice-260102.pdf', contentType: 'application/pdf', size: expect.any(Number), template: 'Template 1', content: expect.stringMatching(/ of base64$/) }]);
     expect(view.bodyBytes).toBeGreaterThan(view.body.length / 2);
     expect(calls).toEqual([]);
@@ -84,6 +84,7 @@ describe('the webhook preview', () => {
     const id = await webhookJob('https://inspect.example.com/abc');
     const view = (await (await post(previewRoute, id, { pageGroupIndex: 0 })).json()) as WebhookPreviewView;
     expect(view).toMatchObject({ url: 'https://inspect.example.com/abc', testMode: true });
+    expect((JSON.parse(view.body) as WebhookPayload).type).toBe('document.test');
     expect(view.headers.map((h) => h.name)).not.toContain('Authorization');
   });
 
@@ -129,7 +130,7 @@ describe('Send test', () => {
       ms: expect.any(Number),
       body: 'down, ***',
       truncated: false,
-      error: 'hooks.example.com had a problem and did not take the call (503 Service Unavailable). Retry the run later.',
+      error: 'hooks.example.com had a problem and did not take the call (503 Service Unavailable). Send the test again later.',
       detail: 'down, ***',
     });
     expect(calls).toHaveLength(1);

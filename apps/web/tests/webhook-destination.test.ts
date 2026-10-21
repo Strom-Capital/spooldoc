@@ -257,7 +257,7 @@ describe('the webhook destination', () => {
     const runId = await run(jobId);
     expect(receiver.calls).toHaveLength(6);
     expect((await runRow(runId)).error).toContain(
-      'Could not deliver: hooks.example.com answered 301 Moved Permanently and points to https://new.example.com/hook. Spooldoc does not follow redirects.',
+      'Could not send to hooks.example.com: it answered 301 Moved Permanently and points to https://new.example.com/hook. Spooldoc does not follow redirects. Change the URL of MYHOOK to the address the receiver takes.',
     );
   });
 

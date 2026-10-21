@@ -92,14 +92,14 @@ A run that sent nothing says "This run sent no email."
 A run of a job that delivers to a [webhook destination](destinations.md#webhook)
 has a Webhook calls section under its files, with a count such as
 "Webhook calls (5 of 6 sent)". It lists one call per document: the
-document, the URL it was posted to without its query string, the
-receiver's answer such as "200 OK, 142 ms", the tries, its status and
-the time.
+document with the URL it was posted to, without its query string, and
+the receiver's answer with the tries, such as "200 OK in 142 ms, 3
+tries" or "No answer after 3 tries", then its status and the time.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/job-log-webhooks-dark.png">
-    <img src="assets/job-log-webhooks-light.png" alt="A run of an invoice job opened from the job log lists its PDF files, then Webhook calls (6 of 6 sent): each invoice posted to https://hooks.example.com/spooldoc with the answer 200 OK and the time it took, 1 attempt, Sent, and the time." width="900">
+    <img src="assets/job-log-webhooks-light.png" alt="A run of an invoice job opened from the job log lists its PDF files, then Webhook calls (6 of 6 sent): each invoice posted to https://hooks.example.com/spooldoc with the answer 200 OK and the time it took, Sent, and the time." width="900">
   </picture>
 </p>
 

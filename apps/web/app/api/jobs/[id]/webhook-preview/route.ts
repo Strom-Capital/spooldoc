@@ -11,8 +11,8 @@ export const dynamic = 'force-dynamic';
 const MASK = '••••••';
 
 /**
- * The webhook call of one page group of the preview spooled file, as Send test would make
- * it: the URL in use, the headers with the custom values masked, the real signature, and
+ * The webhook call of one page group of the preview spooled file, as a run would make it
+ * (`document.created`, or `document.test` in test mode): the URL in use, the headers with the custom values masked, the real signature, and
  * the body with each file's base64 replaced by its size. Nothing is sent.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
@@ -28,7 +28,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if ('response' in body) {
     return body.response;
   }
-  const call = await draftCall(job, body.data);
+  const call = await draftCall(job, body.data, 'preview');
   if ('response' in call) {
     return call.response;
   }

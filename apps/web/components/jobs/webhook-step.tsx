@@ -98,8 +98,8 @@ export function WebhookStep({ destination }: { destination: WebhookDestination }
   }
 
   return (
-    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-      <div className="flex flex-col gap-5">
+    <div className="grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      <div className="flex min-w-0 flex-col gap-5">
         <div className="flex flex-col gap-1.5">
           <span className="font-medium text-sm" id="webhook-files">
             Files to send
@@ -161,7 +161,7 @@ export function WebhookStep({ destination }: { destination: WebhookDestination }
           </p>
         </div>
       </div>
-      <div className="lg:sticky lg:top-0">
+      <div className="min-w-0 lg:sticky lg:top-0">
         <RequestPrintout
           preview={preview}
           previous={previous}

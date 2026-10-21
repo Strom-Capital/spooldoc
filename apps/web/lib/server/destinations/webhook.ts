@@ -157,7 +157,15 @@ function networkError(failure: NetworkFailure, url: URL, target: WebhookTarget):
 }
 
 /** A receiver's answer that is not 2xx, in plain words, with what to do. */
-function statusError(response: Response, text: string, url: URL, target: WebhookTarget, attempts: number, bodyBytes: number): { message: string; detail?: string; stops: boolean } {
+function statusError(
+  response: Response,
+  text: string,
+  url: URL,
+  target: WebhookTarget,
+  attempts: number,
+  bodyBytes: number,
+  later: string,
+): { message: string; detail?: string; stops: boolean } {
   const host = url.hostname;
   const status = `${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
   const detail = text.trim() ? text.slice(0, RESPONSE_LIMIT) : undefined;
@@ -166,7 +174,7 @@ function statusError(response: Response, text: string, url: URL, target: Webhook
   if (response.status >= 300 && response.status < 400) {
     const location = response.headers.get('location');
     const to = location ? ` and points to ${urlWithoutQuery(new URL(location, url).href)}` : '';
-    return fail(`Could not deliver: ${host} answered ${status}${to}. Spooldoc does not follow redirects. Change the URL of ${target.destination} to the address the receiver takes.`);
+    return fail(`Could not send to ${host}: it answered ${status}${to}. Spooldoc does not follow redirects. Change the URL of ${target.destination} to the address the receiver takes.`);
   }
   if (response.status === 401 || response.status === 403) return fail(`${host} refused the call (${status}). Check the headers of ${target.destination}.`);
   if (response.status === 404 || response.status === 405 || response.status === 410) {
@@ -175,8 +183,8 @@ function statusError(response: Response, text: string, url: URL, target: Webhook
   if (response.status === 413) {
     return fail(`${host} refused the call as too large (${status}): it was ${bytes(bodyBytes)}. Turn off files the receiver does not need in the job's Destination step.`);
   }
-  if (response.status === 429) return fail(`${host} asked Spooldoc to slow down (${status})${tries}. Retry the run later.`);
-  if (response.status >= 500) return fail(`${host} had a problem and did not take the call (${status})${tries}. Retry the run later.`);
+  if (response.status === 429) return fail(`${host} asked Spooldoc to slow down (${status})${tries}. ${later}`);
+  if (response.status >= 500) return fail(`${host} had a problem and did not take the call (${status})${tries}. ${later}`);
   return fail(`${host} refused the call (${status}). Its answer is under Details.`);
 }
 
@@ -187,8 +195,10 @@ const retried = (status: number) => status === 408 || status === 429 || status >
  * at most 30 seconds. A network error, 408, 429 or 5xx is tried again after 2 and then
  * 10 seconds, or after the Retry-After the receiver asks for, up to a minute, for at most
  * `maxAttempts` tries. Any other answer is final. Never throws.
+ *
+ * @param input.later - What a 429 or 5xx message ends with: "Retry the run later." for a run
  */
-export async function postWebhook(target: WebhookTarget, input: { id: string; body: string; maxAttempts?: number }): Promise<WebhookCallResult> {
+export async function postWebhook(target: WebhookTarget, input: { id: string; body: string; maxAttempts?: number; later?: string }): Promise<WebhookCallResult> {
   const url = new URL(target.url);
   const maxAttempts = input.maxAttempts ?? MAX_ATTEMPTS;
   const bodyBytes = Buffer.byteLength(input.body);
@@ -221,7 +231,7 @@ export async function postWebhook(target: WebhookTarget, input: { id: string; bo
         continue;
       }
     }
-    return { ok: false, ...result, error: statusError(answer, text, url, target, attempt, bodyBytes) };
+    return { ok: false, ...result, error: statusError(answer, text, url, target, attempt, bodyBytes, input.later ?? 'Retry the run later.') };
   }
 }
 
