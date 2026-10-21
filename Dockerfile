@@ -15,6 +15,7 @@ WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN corepack enable && corepack install
 COPY packages/core/package.json packages/core/
+COPY packages/docs/package.json packages/docs/
 COPY packages/ibmi/package.json packages/ibmi/
 COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile

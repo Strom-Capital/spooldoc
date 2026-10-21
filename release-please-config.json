@@ -10,6 +10,7 @@
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
         { "type": "json", "path": "packages/core/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "packages/docs/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "packages/ibmi/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "apps/web/package.json", "jsonpath": "$.version" }
       ]

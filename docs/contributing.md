@@ -78,6 +78,7 @@ its definition, template and expected JSON next to the sample.
 | Path | What it holds |
 |------|---------------|
 | `packages/core` | Pure TypeScript, no UI and no IBM i dependency: samples, the *SCS parser, definitions, extraction, templates, PDF, masking, workspace. |
+| `packages/docs` | Reads the guides in `docs/` for the app's `/docs`: the sidebar from `docs/README.md`, front matter, headings, links and search sections. No Next.js code. |
 | `packages/ibmi` | The IBM i connection through jt400: queues, spooled files, hold, move, delete, data queues, CL commands. The root export does not load Java; `@spooldoc/ibmi/jt400` does. |
 | `apps/web` | The Next.js app. `lib/server` holds config, the database (`db/`, with the Drizzle schema and migrations in `drizzle/`), sign-in, the IBM i connection (`ibmi.ts` is the only module that loads jt400), the Carbone connection (`rendering.ts`) and rendering, the job runner, destinations and the queue watcher, started from `instrumentation.ts`. Route handlers are under `app/api`, pages under `components/pages`, the job builder under `components/jobs` and `components/workbench`. |
 | `demo-spool` | CL and RPG sources that create output queues and print invented documents on any IBM i. |

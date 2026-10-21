@@ -162,6 +162,17 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* A guide's light and dark screenshot (data-theme-image, from @spooldoc/docs): only the one for the app's theme shows. */
+img[data-theme-image='dark'] {
+  display: none;
+}
+.dark img[data-theme-image='light'] {
+  display: none;
+}
+.dark img[data-theme-image='dark'] {
+  display: inline;
+}
+
 /* Page view: one character cell per column, highlights positioned in ch units. */
 .spool-page {
   font-family: var(--font-mono);

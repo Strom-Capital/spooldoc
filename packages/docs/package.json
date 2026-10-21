@@ -1,0 +1,43 @@
+{
+  "name": "@spooldoc/docs",
+  "version": "0.3.0",
+  "description": "Spooldoc docs reader: the guides in docs/, read for the app and the website",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Strom-Capital/spooldoc.git",
+    "directory": "packages/docs"
+  },
+  "homepage": "https://github.com/Strom-Capital/spooldoc#readme",
+  "bugs": "https://github.com/Strom-Capital/spooldoc/issues",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint --max-warnings 0 src tests",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "github-slugger": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5"
+  }
+}
