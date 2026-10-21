@@ -117,8 +117,8 @@ describe('docs', () => {
       '</p>',
     ].join('\n');
     expect(rewriteDocsMarkdown(picture, options)).toBe(
-      '<p align="center"><img class="dark:hidden" src="/docs/assets/home-light.png" alt="The Home page" width="900" height="563">' +
-        '<img class="hidden dark:inline" src="/docs/assets/home-dark.png" alt="The Home page" width="900" height="563"></p>',
+      '<p align="center"><img data-theme-image="light" src="/docs/assets/home-light.png" alt="The Home page" width="900" height="563">' +
+        '<img data-theme-image="dark" src="/docs/assets/home-dark.png" alt="The Home page" width="900" height="563"></p>',
     );
     for (const slug of slugs) {
       expect(docsPage(slug, options).markdown, slug).not.toContain('<picture');

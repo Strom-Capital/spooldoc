@@ -15,12 +15,12 @@ type Pluggable = NonNullable<StreamdownProps['rehypePlugins']>[number];
 const [sanitize, schema] = defaultRehypePlugins.sanitize as [unknown, { attributes: Record<string, string[]> }];
 
 /**
- * Streamdown's own plugins, with images allowed a class so a screenshot can follow the
- * theme, and then GitHub's heading anchors, so `#anchor` links from the guides land.
+ * Streamdown's own plugins, with images allowed `data-theme-image` so a screenshot can
+ * follow the theme (see globals.css), and then GitHub's heading anchors, so `#anchor` links from the guides land.
  */
 const rehypePlugins: Pluggable[] = [
   defaultRehypePlugins.raw!,
-  [sanitize, { ...schema, attributes: { ...schema.attributes, img: [...(schema.attributes.img ?? []), 'className', 'width', 'height'] } }] as Pluggable,
+  [sanitize, { ...schema, attributes: { ...schema.attributes, img: [...(schema.attributes.img ?? []), 'dataThemeImage', 'width', 'height'] } }] as Pluggable,
   defaultRehypePlugins.harden!,
   rehypeSlug,
 ];

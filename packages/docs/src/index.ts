@@ -173,17 +173,19 @@ function atxHeading(line: string): { depth: number; text: string } | undefined {
 /**
  * The body as the app shows it: links to other guides go to /docs, links outside docs/
  * go to the file on GitHub at this version, and each light and dark `<picture>` becomes
- * two images that follow the app's theme rather than the system's.
+ * two images that follow the app's theme rather than the system's. The images are marked
+ * `data-theme-image="light"` and `data-theme-image="dark"`, and the page's own CSS shows
+ * the one for its theme.
  */
 export function rewriteDocsMarkdown(markdown: string, options: DocsOptions): string {
   return mapProse(markdown, (text) =>
     text
       .replace(PICTURE, (_, dark: string, light: string, alt: string, width?: string) => {
-        const image = (src: string, className: string) => {
+        const image = (src: string, theme: 'light' | 'dark') => {
           const size = docsImageSize(src, options, width ? Number(width) : undefined);
-          return `<img class="${className}" src="${docsHref(src, options)}" alt="${alt}" width="${size.width}" height="${size.height}">`;
+          return `<img data-theme-image="${theme}" src="${docsHref(src, options)}" alt="${alt}" width="${size.width}" height="${size.height}">`;
         };
-        return `<p align="center">${image(light, 'dark:hidden')}${image(dark, 'hidden dark:inline')}</p>`;
+        return `<p align="center">${image(light, 'light')}${image(dark, 'dark')}</p>`;
       })
       .replace(/(\]\()([^()\s]+)(\))/g, (_, open: string, target: string, end: string) => `${open}${docsHref(target, options)}${end}`),
   );
