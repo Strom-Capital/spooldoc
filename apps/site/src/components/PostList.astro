@@ -9,10 +9,7 @@ const { posts, headingLevel: H = 'h3' } = Astro.props;
   {posts.map((post) => (
     <li>
       <a class="post" href={url(`/blog/${post.id}/`)}>
-        <span class="meta">
-          <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
-          {post.data.tags.includes('release') && <span class="tag">Release</span>}
-        </span>
+        <time class="meta" datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
         <span class="body">
           <H class="title">{post.data.title}</H>
           <span class="desc">{post.data.description}</span>
@@ -27,8 +24,7 @@ const { posts, headingLevel: H = 'h3' } = Astro.props;
   .posts li { border-bottom: 1px solid var(--border); container-type: inline-size; }
   .post { display: grid; gap: 6px 32px; padding: 20px 0; text-decoration: none; color: var(--foreground); }
   @container (min-width: 640px) { .post { grid-template-columns: 180px minmax(0, 1fr); } }
-  .meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font: 13px/1.5 var(--font-mono); color: var(--muted-foreground); }
-  .tag { font: 500 12px/1 var(--font-sans); color: var(--primary); border: 1px solid currentColor; border-radius: 999px; padding: 3px 8px; }
+  .meta { font: 13px/1.5 var(--font-mono); color: var(--muted-foreground); padding-top: 3px; }
   .body { display: grid; gap: 4px; min-width: 0; }
   .title { margin: 0; font-size: 1.15rem; font-weight: 600; letter-spacing: -0.015em; }
   .desc { color: var(--muted-foreground); font-size: 0.95rem; max-width: 64ch; }

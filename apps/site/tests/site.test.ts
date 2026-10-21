@@ -78,6 +78,12 @@ describe('blog posts', () => {
     }
   });
 
+  it('show no tags on the pages: tags are for RSS and the JSON-LD only', () => {
+    for (const file of sources(path.join(process.cwd(), 'src')).filter((name) => name.endsWith('.astro'))) {
+      expect(fs.readFileSync(file, 'utf8'), file).not.toMatch(/data\.tags/);
+    }
+  });
+
   it('use no images hosted on GitHub', () => {
     for (const file of files) {
       expect(read(file), file).not.toMatch(/user-attachments|githubusercontent/);

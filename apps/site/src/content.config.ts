@@ -4,7 +4,8 @@ import { z } from 'astro/zod';
 
 /**
  * Blog posts: `src/content/blog/YYYY-MM-DD-slug.md`. A post can be about anything;
- * a release post carries the tag `release`.
+ * a release post carries the tag `release`. Tags go to RSS categories and the JSON-LD
+ * keywords; the pages show no tags.
  */
 const blog = defineCollection({
   loader: glob({
