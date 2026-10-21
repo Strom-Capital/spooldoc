@@ -95,6 +95,13 @@ const count = shots.length;
    * Without JavaScript: a row that scrolls and snaps to each screenshot. The frame's shadow
    * shows past the edges where the browser supports overflow-clip-margin.
    */
+  /*
+   * How far the frame's shadow may paint past the viewport. No wider than the page gutter
+   * (16px on a phone), or the page scrolls sideways. A plain length: Chrome does not take
+   * min() here.
+   */
+  .viewport { --clip-margin: 16px; }
+  @media (min-width: 900px) { .viewport { --clip-margin: 20px; } }
   .viewport {
     overflow-x: auto;
     scroll-snap-type: x mandatory;
@@ -106,11 +113,11 @@ const count = shots.length;
 
   /* With JavaScript, from the first paint where the browser can tell, or once the script runs. */
   @media (scripting: enabled) {
-    .viewport { overflow: clip; overflow-clip-margin: 20px; scroll-snap-type: none; padding-bottom: 0; }
+    .viewport { overflow: clip; overflow-clip-margin: var(--clip-margin); scroll-snap-type: none; padding-bottom: 0; }
     .slide { scroll-snap-align: none; }
     .controls { display: flex; }
   }
-  .carousel[data-ready] .viewport { overflow: clip; overflow-clip-margin: 20px; scroll-snap-type: none; padding-bottom: 0; }
+  .carousel[data-ready] .viewport { overflow: clip; overflow-clip-margin: var(--clip-margin); scroll-snap-type: none; padding-bottom: 0; }
   .carousel[data-ready] .slide { scroll-snap-align: none; }
   .carousel[data-ready] .controls { display: flex; }
 
