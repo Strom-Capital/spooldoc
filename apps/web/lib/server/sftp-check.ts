@@ -22,12 +22,13 @@ const SIGN_IN_WITH = { 'spooldoc-key': 'the key', 'own-key': 'your key', passwor
  * Spooldoc does not know. It writes nothing.
  */
 export async function checkSftp(config: SftpConfig, secrets: SftpSecrets): Promise<SftpCheckView> {
+  // Spooldoc's own words name no secret; the server's text, under Details, is cleaned.
   const hidden = sftpSecretValues(secrets);
   const clean = (text: string | undefined) => (text === undefined ? undefined : redact(text, hidden));
   const { host, port, username } = config;
   const stages: SftpCheckStage[] = [];
   const view: SftpCheckView = { stages };
-  const add = (stage: SftpCheckStage) => stages.push({ ...stage, text: clean(stage.text)!, ...(stage.detail ? { detail: clean(stage.detail) } : {}) });
+  const add = (stage: SftpCheckStage) => stages.push({ ...stage, ...(stage.detail ? { detail: clean(stage.detail) } : {}) });
   const reached = (ms: number) => add({ stage: 'reach', status: 'ok', text: `Reached ${host} on port ${port}`, ms });
   const trusted = (session: { hostKey: { type: string; bits: number; fingerprint: string } }) =>
     add({ stage: 'hostKey', status: 'ok', text: `Trusted ${session.hostKey.type} key ${session.hostKey.fingerprint}` });

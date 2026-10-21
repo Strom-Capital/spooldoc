@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckIcon, CopyIcon, MousePointerClickIcon, RefreshCwIcon, SaveIcon, SendIcon } from 'lucide-react';
+import { CheckIcon, MousePointerClickIcon, RefreshCwIcon, SaveIcon, SendIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
@@ -9,6 +9,7 @@ import { DocsLink } from '@/components/docs-link';
 import { Hint } from '@/components/hint';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
+import { PublicKey } from '@/components/public-key';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -400,37 +401,6 @@ function CarboneStatus({ check, busy, onCheck }: { check: CarboneCheck | null; b
   );
 }
 
-/** The value of Spooldoc's public key, with a Copy button. */
-function PublicKey({ value }: { value: string }) {
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success('Copied the public key');
-    } catch {
-      toast.error('Could not copy. Select the text and copy it instead.');
-    }
-  }
-  return (
-    <div className="flex flex-col gap-1.5 sm:col-span-2">
-      <Label htmlFor="carbone-public-key">Spooldoc&apos;s public key</Label>
-      <pre id="carbone-public-key" tabIndex={0} className="max-h-24 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 font-mono text-xs">
-        {value}
-      </pre>
-      <div className="flex flex-wrap items-start gap-2">
-        <p className="flex-1 text-muted-foreground text-xs">
-          Set <code className="font-mono">CARBONE_AUTHENTICATION_PUBLIC_KEY</code> on the Carbone service to this value, with{' '}
-          <code className="font-mono">CARBONE_AUTHENTICATION=true</code>, and restart Carbone. Spooldoc signs each request with its private key,
-          which never leaves this server.
-        </p>
-        <Button type="button" variant="ghost" size="sm" onClick={() => void copy()}>
-          <CopyIcon />
-          Copy
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 /** Where documents are rendered: a Carbone server of the user's own, or Carbone Cloud. */
 function RenderingSection({
   saved,
@@ -481,7 +451,19 @@ function RenderingSection({
                 The Spooldoc server calls it, so it must be reachable from there. In the Compose file it is http://carbone:4000.
               </p>
             </div>
-            <PublicKey value={saved.publicKey} />
+            <PublicKey
+              id="carbone-public-key"
+              className="sm:col-span-2"
+              value={saved.publicKey}
+              label="Spooldoc's public key"
+              help={
+                <>
+                  Set <code className="font-mono">CARBONE_AUTHENTICATION_PUBLIC_KEY</code> on the Carbone service to this value, with{' '}
+                  <code className="font-mono">CARBONE_AUTHENTICATION=true</code>, and restart Carbone. Spooldoc signs each request with its private key,
+                  which never leaves this server.
+                </>
+              }
+            />
           </>
         ) : (
           <div className="flex flex-col gap-1.5 sm:col-span-2">

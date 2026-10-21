@@ -312,7 +312,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                   <RunStatusBadge status={open.status} />
                   {(open.status === 'failed' || open.status === 'warning' || open.status === 'skipped') && (
                     <Hint
-                      text={`Run this spooled file again with the job's active version, as a new run.${open.deliveryKind === 'email' ? ' Emails an earlier run sent are not sent again.' : open.deliveryKind === 'webhook' ? ' Documents an earlier run sent to the webhook are not sent again.' : ''} Its finish step runs too, if it has one.`}
+                      text={`Run this spooled file again with the job's active version, as a new run.${open.deliveryKind === 'email' ? ' Emails an earlier run sent are not sent again.' : open.deliveryKind === 'webhook' ? ' Documents an earlier run sent to the webhook are not sent again.' : open.deliveryKind === 'sftp' ? ' Uploads only the files that were not uploaded yet.' : ''} Its finish step runs too, if it has one.`}
                     >
                       <Button variant="outline" size="sm" onClick={() => retry(open)} disabled={retrying !== null}>
                         {retrying === open.id ? <Spinner /> : <RotateCcwIcon />}

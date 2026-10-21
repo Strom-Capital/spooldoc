@@ -332,7 +332,7 @@ export function sftpErrorText(err: unknown, ctx: SftpErrorContext): { message: s
   if (/No response from server|Not connected|closed/i.test(raw)) {
     return { message: `${host} closed the connection. Check that the server is up, then retry the run.`, detail };
   }
-  return { message: `Could not use ${host}: ${raw}`, detail };
+  return { message: `Could not use ${host}. The server's own text is under Details.`, detail };
 }
 
 // ---------------------------------------------------------------------------------------

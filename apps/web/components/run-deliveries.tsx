@@ -5,17 +5,43 @@ import { Fragment, useState } from 'react';
 import { ErrorNote } from '@/components/page';
 import { StatusPill, type StatusTone } from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
-import { duration } from '@/lib/client/format';
+import { bytes, duration } from '@/lib/client/format';
 import { shortUrl } from '@/lib/destination-config';
 import type { DeliveryKind, DeliveryView } from '@/lib/types';
 
 /** Deliveries shown at first and per Show more. */
 const PAGE = 50;
 
-/** The words of the deliveries table for each kind: its title, the plural for Show more, its empty text and where each went. */
-const KIND_TEXT: Record<DeliveryKind, { title: string; plural: string; none: string; to: string; noTarget: string; test: string }> = {
-  email: { title: 'Emails', plural: 'emails', none: 'This run sent no email.', to: 'To', noTarget: 'No address', test: 'Sent to the test address of the destination.' },
-  webhook: { title: 'Webhook calls', plural: 'calls', none: 'This run sent no webhook call.', to: 'Posted to', noTarget: 'No URL', test: 'Sent to the test URL of the destination.' },
+/**
+ * The words of the deliveries table for each kind: its title, the plural for Show more, its
+ * empty text, where each went, and the verb of a delivery that went, such as "Sent".
+ */
+const KIND_TEXT: Record<DeliveryKind, { title: string; plural: string; none: string; to: string; noTarget: string; test: string; verb: string }> = {
+  email: { title: 'Emails', plural: 'emails', none: 'This run sent no email.', to: 'To', noTarget: 'No address', test: 'Sent to the test address of the destination.', verb: 'Sent' },
+  webhook: {
+    title: 'Webhook calls',
+    plural: 'calls',
+    none: 'This run sent no webhook call.',
+    to: 'Posted to',
+    noTarget: 'No URL',
+    test: 'Sent to the test URL of the destination.',
+    verb: 'Sent',
+  },
+  sftp: {
+    title: 'Uploads',
+    plural: 'files',
+    none: 'This run uploaded no file.',
+    to: 'Uploaded to',
+    noTarget: 'Not uploaded',
+    test: 'Uploaded to the test folder of the destination.',
+    verb: 'Uploaded',
+  },
+};
+
+/** The path of an upload on the server, without the host: `sftp.example.com:/in/a.pdf` is `/in/a.pdf`. */
+const remotePath = (to: string): string => {
+  const at = to.indexOf(':/');
+  return at >= 0 ? to.slice(at + 1) : to;
 };
 
 /** The receiver's answer to a webhook call and the tries, such as "200 OK in 142 ms, 3 tries", "No answer after 3 tries" or "Not tried". */
@@ -54,14 +80,15 @@ const STATUS_TEXT: Record<number, string> = {
   504: 'Gateway Timeout',
 };
 
-/** How a delivery reads: Sent, Test, Sent in run #N or Failed. */
-function deliveryStatus(delivery: DeliveryView, testTitle: string): { tone: StatusTone; icon: typeof CheckCircle2Icon; label: string; title?: string } {
+/** How a delivery reads: Sent (or Uploaded), Test, Sent in run #N or Failed. */
+function deliveryStatus(delivery: DeliveryView, text: { test: string; verb: string }): { tone: StatusTone; icon: typeof CheckCircle2Icon; label: string; title?: string } {
   if (delivery.status === 'failed') return { tone: 'message', icon: XCircleIcon, label: 'Failed' };
   if (delivery.status === 'already_sent') {
-    return { tone: 'neutral', icon: HistoryIcon, label: `Sent in run #${delivery.sentInRun}`, title: 'An earlier run sent it, so it was not sent again.' };
+    const verb = text.verb.toLowerCase();
+    return { tone: 'neutral', icon: HistoryIcon, label: `${text.verb} in run #${delivery.sentInRun}`, title: `An earlier run ${verb} it, so it was not ${verb} again.` };
   }
-  if (delivery.test) return { tone: 'held', icon: FlaskConicalIcon, label: 'Test', title: testTitle };
-  return { tone: 'ready', icon: CheckCircle2Icon, label: 'Sent' };
+  if (delivery.test) return { tone: 'held', icon: FlaskConicalIcon, label: 'Test', title: text.test };
+  return { tone: 'ready', icon: CheckCircle2Icon, label: text.verb };
 }
 
 /** Addresses that may break only after an @ or between addresses, never inside a word. */
@@ -93,14 +120,15 @@ function failedDetail(delivery: DeliveryView): string | undefined {
 const time = (iso: string): string => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
 /**
- * The deliveries of a run, such as its emails or webhook calls, one row per document: the
- * document, where it went (and for a webhook call the answer and the tries), the status and
- * the time. A failed row opens to show what went wrong and the other system's own text. A
+ * The deliveries of a run, such as its emails, webhook calls or uploads, one row per
+ * document or file: what it was, where it went (for a webhook call the answer and the
+ * tries, for an upload the path, the size and how long it took), the status and the time. A failed row opens to show what went wrong and the other system's own text. A
  * long list shows the first deliveries and says how many more there are.
  */
 export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; deliveries: DeliveryView[] }) {
   const text = KIND_TEXT[kind];
   const webhook = kind === 'webhook';
+  const upload = kind === 'sftp';
   const [shown, setShown] = useState(PAGE);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const sent = deliveries.filter((delivery) => delivery.status !== 'failed').length;
@@ -117,7 +145,7 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
         {text.title}{' '}
         {deliveries.length > 0 && (
           <span className="font-normal text-muted-foreground">
-            ({sent} of {deliveries.length} sent)
+            ({sent} of {deliveries.length} {text.verb.toLowerCase()})
           </span>
         )}
       </h3>
@@ -135,7 +163,7 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
             </thead>
             <tbody>
               {deliveries.slice(0, shown).map((delivery) => {
-                const status = deliveryStatus(delivery, text.test);
+                const status = deliveryStatus(delivery, text);
                 const failed = delivery.status === 'failed';
                 const expanded = open.has(delivery.id);
                 return (
@@ -157,7 +185,11 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
                         )}
                         <div className="text-muted-foreground text-xs">
                           {!delivery.to ? (
-                            text.noTarget
+                            delivery.status === 'already_sent' && upload ? null : (
+                              text.noTarget
+                            )
+                          ) : upload ? (
+                            <span className="break-all font-mono">{remotePath(delivery.to)}</span>
                           ) : webhook ? (
                             // Without the scheme, and broken only where one word does not fit.
                             <span className="break-words">
@@ -170,6 +202,11 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
                           )}
                         </div>
                         {webhook && delivery.status !== 'already_sent' && <div className="tabular text-muted-foreground text-xs">{answerText(delivery)}</div>}
+                        {upload && delivery.status === 'sent' && (
+                          <div className="tabular text-muted-foreground text-xs">
+                            {[delivery.size !== null ? bytes(delivery.size) : null, delivery.ms !== null ? `in ${duration(delivery.ms)}` : null].filter(Boolean).join(' ')}
+                          </div>
+                        )}
                       </td>
                       <td className="w-px whitespace-nowrap px-3 py-2">
                         <StatusPill tone={status.tone} icon={status.icon} title={status.title}>

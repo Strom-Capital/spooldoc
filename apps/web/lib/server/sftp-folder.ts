@@ -124,7 +124,7 @@ function failure(err: unknown, secrets: SftpSecrets): Response {
   const hidden = sftpSecretValues(secrets);
   const message = err instanceof Error ? err.message : String(err);
   const detail = err instanceof SftpError ? err.detail : undefined;
-  return json({ error: redact(message, hidden), ...(detail ? { detail: redact(detail, hidden) } : {}) }, { status: 502 });
+  return json({ error: err instanceof SftpError ? message : redact(message, hidden), ...(detail ? { detail: redact(detail, hidden) } : {}) }, { status: 502 });
 }
 
 /**
@@ -266,7 +266,7 @@ export async function sftpUploadTest(job: JobRow, input: z.infer<typeof sftpFold
             finalName: own[at]!,
             size: file.content.byteLength,
             ms: Math.round(performance.now() - begun),
-            error: clean(err instanceof Error ? err.message : String(err)),
+            error: err instanceof SftpError ? err.message : clean(err instanceof Error ? err.message : String(err)),
             ...(detail ? { detail: clean(detail) } : {}),
           });
           if (session.closed) break;

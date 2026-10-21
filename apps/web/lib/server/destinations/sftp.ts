@@ -169,7 +169,8 @@ const notUploaded = (message: string) => `Not uploaded: ${message}`;
 /** A failure in plain words, without secrets. */
 function reasonOf(err: unknown, clean: (text: string) => string): { message: string; detail?: string; stops: boolean; taken: boolean } {
   if (err instanceof SftpError) {
-    return { message: clean(err.message), detail: err.detail === undefined ? undefined : clean(err.detail), stops: err.stops, taken: !!err.extra.taken };
+    // Spooldoc's own words name no secret, and a short password would garble them; the server's text is cleaned.
+    return { message: err.message, detail: err.detail === undefined ? undefined : clean(err.detail), stops: err.stops, taken: !!err.extra.taken };
   }
   return { message: clean(err instanceof Error ? err.message : String(err)), stops: true, taken: false };
 }

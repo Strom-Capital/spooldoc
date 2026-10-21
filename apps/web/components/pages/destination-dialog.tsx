@@ -28,9 +28,10 @@ import { CopyButton } from '@/components/workbench/json-view';
 import { api, shownError, type ShownError } from '@/lib/client/api';
 import { IF_EXISTS, IF_EXISTS_LABEL, type IfExists } from '@/lib/destination-config';
 import type { DestinationView } from '@/lib/types';
+import { SftpFields, sftpDraft, sftpPayload, type SftpDraft } from './sftp-fields';
 
-/** A destination a user adds and changes: an IFS folder, email or a webhook. */
-export type EditableDestination = Extract<DestinationView, { kind: 'ifs' | 'email' | 'webhook' }>;
+/** A destination a user adds and changes: an IFS folder, email, a webhook or an SFTP server. */
+export type EditableDestination = Extract<DestinationView, { kind: 'ifs' | 'email' | 'webhook' | 'sftp' }>;
 
 /** A saved destination, with the signing secret when it was just made. */
 type Saved = DestinationView & { revealedSecret?: string };
@@ -41,6 +42,7 @@ const DESCRIPTION: Record<Kind, string> = {
   ifs: 'Each run writes its files to a folder in the IFS. Spooldoc does not create the folder.',
   email: 'Each run sends one email per document, through the mail server in Settings. Each job sets To, Subject and the message.',
   webhook: 'Each run posts one call per document to a URL, as JSON with its data and files, signed so the receiver can check it came from Spooldoc.',
+  sftp: 'Each run uploads its files to a folder on an SFTP server, over SSH. Spooldoc does not create the folder.',
 };
 
 /** A header row of the dialog. A `saved` row has a value Spooldoc keeps; an empty field keeps it. */
@@ -279,7 +281,8 @@ function EmailFields({ destination }: { destination: Extract<DestinationView, { 
 }
 
 /**
- * Add a destination (`destination` null), an IFS folder, email or a webhook, or edit one.
+ * Add a destination (`destination` null), an IFS folder, email, a webhook or an SFTP
+ * server, or edit one.
  * The kind cannot be changed once saved. An IFS folder is on the server of each job that
  * uses the destination, so nothing is checked on the IBM i here. A new webhook, or one
  * whose secret is rotated, shows its signing secret once before the dialog closes.
@@ -302,6 +305,8 @@ export function DestinationDialog({
   // A secret to show once: after adding a webhook (with the destination to hand back on Done), or after rotating.
   const [revealed, setRevealed] = useState<{ secret: string; saved: DestinationView | null } | null>(null);
   const [confirmRotate, setConfirmRotate] = useState(false);
+  const [sftp, setSftp] = useState<SftpDraft>(() => sftpDraft(destination?.kind === 'sftp' ? destination : null));
+  const nameInput = useRef<HTMLInputElement>(null);
 
   async function rotate() {
     if (!destination) return;
@@ -335,6 +340,21 @@ export function DestinationDialog({
         : destination
           ? { headers: rows.map((row) => ({ name: row.name.trim(), value: row.saved && !row.value ? null : row.value })) }
           : { headers: rows.map((row) => ({ name: row.name.trim(), value: row.value })) };
+    if (kind === 'sftp') {
+      const { config: sftpConfig, ...rest } = sftpPayload(sftp);
+      setBusy(true);
+      setError(null);
+      try {
+        const saved = destination
+          ? await api<Saved>(`/api/destinations/${destination.id}`, { method: 'PATCH', body: { name: value('name'), config: sftpConfig, ...rest } })
+          : await api<Saved>('/api/destinations', { method: 'POST', body: { kind, name: value('name'), config: sftpConfig, ...rest } });
+        onSaved(saved);
+      } catch (err) {
+        setError(shownError(err));
+        setBusy(false);
+      }
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -378,14 +398,14 @@ export function DestinationDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && !busy && onClose()}>
-      <DialogContent className={kind === 'webhook' ? 'sm:max-w-xl' : 'sm:max-w-lg'}>
+      <DialogContent className={kind === 'sftp' ? 'max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl' : kind === 'webhook' ? 'sm:max-w-xl' : 'sm:max-w-lg'}>
         <DialogHeader>
           <DialogTitle>{destination ? `Edit ${destination.name}` : 'New destination'}</DialogTitle>
           <DialogDescription>{DESCRIPTION[kind]}</DialogDescription>
         </DialogHeader>
         <form id="destination-form" onSubmit={onSubmit} className="flex flex-col gap-4">
           {!destination && (
-            <div role="radiogroup" aria-label="Kind of destination" className="grid gap-3 sm:grid-cols-3">
+            <div role="radiogroup" aria-label="Kind of destination" className="grid gap-3 sm:grid-cols-2">
               <Choice selected={kind === 'ifs'} onSelect={() => setKind('ifs')} title="IFS folder">
                 Write the files to a folder on the IBM i.
               </Choice>
@@ -395,6 +415,9 @@ export function DestinationDialog({
               <Choice selected={kind === 'webhook'} onSelect={() => setKind('webhook')} title="Webhook">
                 Send each document to a URL as JSON.
               </Choice>
+              <Choice selected={kind === 'sftp'} onSelect={() => setKind('sftp')} title="SFTP">
+                Upload the files to a folder on an SFTP server.
+              </Choice>
             </div>
           )}
           <div className="flex flex-col gap-1.5">
@@ -403,8 +426,9 @@ export function DestinationDialog({
               id="destination-name"
               name="name"
               required
+              ref={nameInput}
               defaultValue={destination?.name ?? ''}
-              placeholder={kind === 'ifs' ? 'Invoice folder' : kind === 'email' ? 'Invoices by email' : 'Order system'}
+              placeholder={kind === 'ifs' ? 'Invoice folder' : kind === 'email' ? 'Invoices by email' : kind === 'sftp' ? 'Invoices to bank' : 'Order system'}
               autoComplete="off"
             />
           </div>
@@ -412,6 +436,14 @@ export function DestinationDialog({
             <IfsFields key="ifs" destination={destination?.kind === 'ifs' ? destination : null} />
           ) : kind === 'email' ? (
             <EmailFields key="email" destination={destination?.kind === 'email' ? destination : null} />
+          ) : kind === 'sftp' ? (
+            <SftpFields
+              key="sftp"
+              destination={destination?.kind === 'sftp' ? destination : null}
+              draft={sftp}
+              onDraft={setSftp}
+              nameOf={() => nameInput.current?.value ?? ''}
+            />
           ) : (
             <WebhookFields key="webhook" destination={destination?.kind === 'webhook' ? destination : null} headers={headers} onHeaders={setHeaders} />
           )}

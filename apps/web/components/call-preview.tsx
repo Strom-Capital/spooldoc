@@ -1,7 +1,8 @@
 'use client';
 
 import { FlaskConicalIcon, SendIcon } from 'lucide-react';
-import { Fragment, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
+import { BoxHeader, CodeLine, gutterWidth, plain, useReducedMotion, type Line, type Token } from '@/components/code-box';
 import { Hint } from '@/components/hint';
 import { ErrorNote } from '@/components/page';
 import { Button } from '@/components/ui/button';
@@ -11,29 +12,12 @@ import type { ShownError } from '@/lib/client/api';
 import { bytes, duration } from '@/lib/client/format';
 import { shortUrl } from '@/lib/destination-config';
 import type { WebhookPreviewView, WebhookTestView } from '@/lib/types';
-import { cn } from '@/lib/utils';
 
 /** Body lines shown before the rest folds away. */
 const FOLD_LINES = 40;
 /** The answer prints line by line, this fast, for its first lines; the rest prints at once. */
 const PRINT_MS = 60;
 const PRINT_LINES = 12;
-
-/** One token of a line, colored by what it is. */
-type Token = { text: string; kind?: 'key' | 'string' | 'number' | 'literal' | 'punct' | 'muted' | 'name' | 'ok' | 'bad' };
-type Line = { text: string; tokens: Token[]; title?: string; flashes?: boolean };
-
-const TOKEN_CLASS: Record<NonNullable<Token['kind']>, string> = {
-  key: 'text-[var(--syntax-property)]',
-  string: 'text-[var(--syntax-string)]',
-  number: 'text-[var(--syntax-number)]',
-  literal: 'text-[var(--syntax-keyword)]',
-  punct: 'opacity-60',
-  muted: 'italic opacity-60',
-  name: 'opacity-70',
-  ok: 'font-semibold text-emerald-700 dark:text-emerald-400',
-  bad: 'font-semibold text-destructive',
-};
 
 const JSON_TOKEN = /("(?:[^"\\]|\\.)*")(\s*:)?|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|\b(true|false|null)\b|([{}[\],])/g;
 
@@ -58,8 +42,6 @@ function jsonTokens(line: string): Token[] {
   if (at < line.length) tokens.push({ text: line.slice(at) });
   return tokens;
 }
-
-const plain = (text: string): Line => ({ text, tokens: [{ text }] });
 
 /** Lines whose text changes with every preview, so they never flash. */
 const VOLATILE = /^(webhook-id|webhook-timestamp|webhook-signature): |^\s*"timestamp": /;
@@ -102,59 +84,6 @@ function responseLines(result: WebhookTestView): Line[] {
   return [status, ...(body.length > 0 ? [plain(''), ...body] : []), ...cut];
 }
 
-
-/**
- * One line with its number in the gutter, 20 px high as in the app's code views. A long
- * line wraps at any character onto more 20 px rows, with a hanging indent so a wrapped
- * value stays under its key; the number shows on its first row only.
- */
-function CodeLine({ line, number, gutter, flash }: { line: Line; number: number; gutter: string; flash?: boolean }) {
-  const hang = `${(/^ */.exec(line.text)?.[0].length ?? 0) + 2}ch`;
-  return (
-    <div className="flex min-w-0">
-      <span aria-hidden className="shrink-0 select-none pr-3 pl-2 text-right text-muted-foreground opacity-70" style={{ width: gutter }}>
-        {number}
-      </span>
-      <div className="min-h-5 min-w-0 flex-1 whitespace-pre-wrap pr-3 [overflow-wrap:anywhere]" style={{ paddingLeft: hang, textIndent: `-${hang}` }} title={line.title}>
-        <span className={cn(flash && 'flash')}>
-          {line.tokens.map((token, index) => (
-            <span key={index} className={token.kind && TOKEN_CLASS[token.kind]}>
-              {token.text}
-            </span>
-          ))}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/** The width of a gutter that fits numbers up to `last`, with its padding. */
-const gutterWidth = (last: number) => `calc(${String(last).length}ch + 1.25rem)`;
-
-/** A header row of the box, in the chrome font: what is shown on the left, a size or a time on the right. */
-function BoxHeader({ left, right, className }: { left: ReactNode; right: ReactNode; className?: string }) {
-  return (
-    <div className={cn('tabular flex min-h-8 items-center justify-between gap-3 border-b bg-muted/40 px-3 py-1 font-sans text-muted-foreground text-xs', className)}>
-      <span className="min-w-0">{left}</span>
-      <span className="shrink-0">{right}</span>
-    </div>
-  );
-}
-
-const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
-
-/** True when the reader asked for less motion. */
-function useReducedMotion(): boolean {
-  return useSyncExternalStore(
-    (change) => {
-      const query = window.matchMedia(REDUCED_MOTION);
-      query.addEventListener('change', change);
-      return () => query.removeEventListener('change', change);
-    },
-    () => window.matchMedia(REDUCED_MOTION).matches,
-    () => false,
-  );
-}
 
 /** What the Send test of the preview is doing. `seq` counts the answers, so each one prints anew. */
 export interface SendTestState {

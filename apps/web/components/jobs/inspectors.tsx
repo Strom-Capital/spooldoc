@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { destinationText } from '@/lib/destination-config';
 import { emptyEmailSpec, emptyWebhookSpec, type FinishAction, type SourceFilter } from '@/lib/job-spec';
 import { EmailStep } from './email-step';
+import { SftpStep } from './sftp-step';
 import { WebhookStep } from './webhook-step';
 import { useJob } from './job-provider';
 import { QueueSelect } from './queue-select';
@@ -175,7 +176,7 @@ export function DestinationInspector() {
   const { spec, updateDraft, readOnly, destinations, destinationsError } = useJob();
   const picked = destinations.find((destination) => destination.id === spec.destination.destinationId);
   return (
-    <Panel title="Destination" description="Where the job delivers its documents." wide={picked?.kind === 'email' || picked?.kind === 'webhook'}>
+    <Panel title="Destination" description="Where the job delivers its documents." wide={picked?.kind === 'email' || picked?.kind === 'webhook' || picked?.kind === 'sftp'}>
       {destinationsError && <ErrorNote>Could not load the destinations. {destinationsError}</ErrorNote>}
       <div role="radiogroup" aria-label="Destination" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {destinations.map((destination) => (
@@ -203,7 +204,7 @@ export function DestinationInspector() {
         ))}
       </div>
       <p className="text-muted-foreground text-xs">
-        Add a folder in the IFS, an email or a webhook destination, or change one, on the{' '}
+        Add a folder in the IFS, an email, a webhook or an SFTP destination, or change one, on the{' '}
         <Link href="/destinations" className="text-primary hover:underline">
           Destinations
         </Link>{' '}
@@ -211,6 +212,7 @@ export function DestinationInspector() {
       </p>
       {picked?.kind === 'email' && <EmailStep destination={picked} />}
       {picked?.kind === 'webhook' && <WebhookStep destination={picked} />}
+      {picked?.kind === 'sftp' && <SftpStep destination={picked} />}
     </Panel>
   );
 }

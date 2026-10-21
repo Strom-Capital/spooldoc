@@ -208,9 +208,11 @@ function useSteps(): StepInfo[] {
       step: 'destination',
       title: STEP_TITLE.destination,
       icon: SendIcon,
-      // A destination in test mode says so, since its documents go to the test address or URL.
+      // A destination in test mode says so, since its documents go to the test address, URL or folder.
       detail: destination
-        ? (destination.kind === 'email' && destination.config.testAddress) || (destination.kind === 'webhook' && destination.config.testUrl)
+        ? (destination.kind === 'email' && destination.config.testAddress) ||
+          (destination.kind === 'webhook' && destination.config.testUrl) ||
+          (destination.kind === 'sftp' && destination.config.testFolder)
           ? `${destination.name} (test)`
           : destination.name
         : 'Pick a destination',

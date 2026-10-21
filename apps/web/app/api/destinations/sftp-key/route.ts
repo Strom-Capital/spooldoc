@@ -28,7 +28,7 @@ export async function POST(request: Request): Promise<Response> {
   if ('response' in body) {
     return body.response;
   }
-  const pair = makeKeyPair(body.data.type, body.data.name.trim() || 'destination');
+  const pair = makeKeyPair(body.data.type, body.data.name.trim());
   const view: SftpKeyView = { publicKey: pair.publicKey, key: pair.key, sealed: sealKey(pair.privateKey) };
   return json(view);
 }
