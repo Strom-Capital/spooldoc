@@ -227,36 +227,51 @@ describe("helpers", () => {
 });
 
 describe("long error texts", () => {
-  /** Runs `fn` and expects it to take less than 100 ms. */
-  const fast = (fn: () => unknown): void => {
-    const started = performance.now();
-    fn();
-    expect(performance.now() - started).toBeLessThan(100);
-  };
   const N = 50_000;
+  /** The shortest of a few runs, in ms, so a pause of the runner does not count. */
+  const time = (fn: () => unknown): number => {
+    let best = Infinity;
+    for (let run = 0; run < 3; run++) {
+      const started = performance.now();
+      fn();
+      best = Math.min(best, performance.now() - started);
+    }
+    return best;
+  };
+  /**
+   * Expects `fn` to take linear time in the length of its input, whatever the speed of
+   * the machine: four times the input may take at most eight times as long, where a
+   * quadratic search takes sixteen. Times under 1 ms count as 1 ms.
+   */
+  const linear = <T>(input: (n: number) => T, fn: (text: T) => unknown): void => {
+    const small = input(N / 4);
+    const large = input(N);
+    time(() => fn(small));
+    expect(time(() => fn(large)) / Math.max(time(() => fn(small)), 1)).toBeLessThan(8);
+  };
 
   it("reads an exception line with many spaces after the colon in linear time", () => {
-    fast(() => summarize(`a.AError:${" ".repeat(N)}`));
+    linear((n) => `a.AError:${" ".repeat(n)}`, summarize);
     expect(summarize("java.io.IOException:   inner text")).toBe("inner text");
   });
 
   it("looks for an object name in linear time", () => {
-    fast(() => guidance("notfound", "#".repeat(N)));
-    fast(() => guidance("authority", "#".repeat(N)));
+    linear((n) => "#".repeat(n), (text) => guidance("notfound", text));
+    linear((n) => "#".repeat(n), (text) => guidance("authority", text));
     expect(guidance("notfound", "CPF2105 Object MYOUTQ in MYLIB type *OUTQ not found.", undefined, {})).toMatch(/^Output queue MYLIB\/MYOUTQ does not exist/);
   });
 
   it("looks for a disabled profile in linear time", () => {
-    const text = "profile ".repeat(N);
-    fast(() => classifyError(text));
-    fast(() => classifyError(text, "IFS /home/docs/out"));
-    fast(() => guidance("auth", text));
+    const text = (n: number) => "profile ".repeat(n);
+    linear(text, (t) => classifyError(t));
+    linear(text, (t) => classifyError(t, "IFS /home/docs/out"));
+    linear(text, (t) => guidance("auth", t));
     expect(classifyError("User profile DEMOUSER is disabled.")).toBe("auth");
     expect(guidance("auth", "The profile DEMOUSER is disabled.", undefined, { user: "demouser" })).toMatch(/^The user profile DEMOUSER is disabled/);
   });
 
   it("looks for an unknown user profile in linear time", () => {
-    fast(() => guidance("auth", "user profile ".repeat(N)));
+    linear((n) => "user profile ".repeat(n), (text) => guidance("auth", text));
     expect(guidance("auth", "User profile DEMOUSER not found.", undefined, { user: "demouser", host: "ibmi.example.com" })).toBe(
       "There is no user profile DEMOUSER on ibmi.example.com. Check the user on the Servers page.",
     );
