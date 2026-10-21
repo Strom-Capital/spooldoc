@@ -4,6 +4,7 @@ import Base from '../../layouts/Base.astro';
 import { getPosts } from '../../lib/posts';
 import { docsUrl, formatDate, links, url } from '../../lib/links';
 import { postJsonLd } from '../../lib/structuredData';
+import { readChangelog, releasePostId } from '../../lib/changelog';
 
 export async function getStaticPaths() {
   const posts = await getPosts();
@@ -12,6 +13,8 @@ export async function getStaticPaths() {
 
 const { post } = Astro.props;
 const { Content } = await render(post);
+/** A release post ends with a link to its version in the changelog. */
+const release = readChangelog().find((entry) => releasePostId(entry.version) === post.id);
 ---
 <Base title={post.data.title} description={post.data.description} type="article" jsonLd={postJsonLd(post, Astro.site!)}>
   <article class="section">
@@ -22,7 +25,10 @@ const { Content } = await render(post);
         <h1>{post.data.title}</h1>
         <p class="lead">{post.data.description}</p>
       </header>
-      <div class="prose"><Content /></div>
+      <div class="prose">
+        <Content />
+        {release && <p>All changes in {release.version} are in the <a href={url(`/changelog/#${release.anchor}`)}>changelog</a>.</p>}
+      </div>
       <aside class="after" aria-label="Next steps">
         <p>Questions or ideas? Ask in <a href={links.discussions}>Discussions</a>, or open an <a href={links.issues}>issue</a>.</p>
         <div class="btn-row">

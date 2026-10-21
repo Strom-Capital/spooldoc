@@ -79,7 +79,7 @@ describe('blog posts', () => {
     }
   });
 
-  it('show no tags on the pages: tags are for RSS and the JSON-LD only', () => {
+  it('show no tags on the pages: tags are for the JSON-LD only', () => {
     for (const file of sources(path.join(process.cwd(), 'src')).filter((name) => name.endsWith('.astro'))) {
       expect(fs.readFileSync(file, 'utf8'), file).not.toMatch(/data\.tags/);
     }
@@ -127,8 +127,10 @@ describe('llms.txt', () => {
     }
   });
 
-  it('links to the features, the docs and the blog', () => {
+  it('links to the features, the docs, the blog and the changelog', () => {
     expect(text).toContain('(https://spooldoc.com/features/)');
+    expect(text).toContain('(https://spooldoc.com/changelog/)');
+    expect(text).not.toContain('rss');
     expect(text).toContain('(https://spooldoc.com/docs/)');
     expect(text).toContain('(https://spooldoc.com/blog/)');
     expect(text).toContain('(https://spooldoc.com/blog/spooldoc-1-2-3/)');
@@ -217,9 +219,9 @@ describe('site copy', () => {
     }
   });
 
-  it('shows the version in the footer, linked to its release notes', () => {
+  it('shows the version in the footer, linked to its entry in the changelog', () => {
     const base = fs.readFileSync(path.join(process.cwd(), 'src/layouts/Base.astro'), 'utf8');
-    expect(base).toContain('href={`${links.releases}/tag/v${version}`}>Version {version}</a>');
+    expect(base).toContain('href={url(`/changelog/#${releaseAnchor(version)}`)}>Version {version}</a>');
   });
 
   it('uses none of the banned words', () => {

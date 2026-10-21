@@ -1,0 +1,92 @@
+---
+import Base from '../layouts/Base.astro';
+import { issueUrl, pullUrl, readChangelog, releasePostId } from '../lib/changelog';
+import { formatDate, url } from '../lib/links';
+import { getPosts } from '../lib/posts';
+
+const releases = readChangelog();
+const posts = new Set((await getPosts()).map((post) => post.id));
+const postFor = (version: string) => (posts.has(releasePostId(version)) ? url(`/blog/${releasePostId(version)}/`) : undefined);
+---
+<Base title="Changelog" description="Every change in each Spooldoc release, newest first.">
+  <section class="section">
+    <div class="container">
+      <div class="section-head">
+        <h1>Changelog</h1>
+        <p class="lead">Every change in each Spooldoc release, newest first.</p>
+      </div>
+
+      {releases.length === 0 ? <p class="muted">No releases yet.</p> : (
+        <ol class="releases">
+          {releases.map((release) => {
+            const post = postFor(release.version);
+            return (
+              <li class="release">
+                <time class="date" datetime={release.date.toISOString().slice(0, 10)}>{formatDate(release.date)}</time>
+                <div class="body">
+                  <h2 id={release.anchor}><a href={`#${release.anchor}`}>Spooldoc {release.version}</a></h2>
+                  <p class="links">
+                    {post && <a href={post}>Read the post</a>}
+                    <a href={release.releaseUrl}>GitHub release</a>
+                  </p>
+                  {release.groups.map((group) => (
+                    <div class:list={['group', { breaking: group.breaking }]}>
+                      <h3>{group.title}</h3>
+                      <ul class="items">
+                        {group.items.map((item) => (
+                          <li>
+                            {item.text.map((piece) =>
+                              piece.type === 'code' ? <code>{piece.text}</code>
+                              : piece.type === 'strong' ? <strong>{piece.text}</strong>
+                              : piece.type === 'link' ? <a href={piece.href}>{piece.text}</a>
+                              : piece.text)}
+                            {(item.pr || item.closes.length > 0) && (
+                              <span class="refs">
+                                {item.pr && <a href={pullUrl(item.pr)}>#{item.pr}</a>}
+                                {item.closes.length > 0 && (
+                                  <span>closes {item.closes.map((n, i) => <>{i > 0 && ', '}<a href={issueUrl(n)}>#{n}</a></>)}</span>
+                                )}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
+  </section>
+</Base>
+
+<style>
+  .releases { list-style: none; margin: 0; padding: 0; max-width: 60rem; }
+  .release { display: grid; gap: var(--space-2) var(--space-6); padding-bottom: var(--space-7); container-type: inline-size; }
+  .release + .release { padding-top: var(--space-7); border-top: 1px solid var(--border); }
+  .date { font: 13px/1.5 var(--font-mono); color: var(--muted-foreground); }
+  @media (min-width: 800px) {
+    .release { grid-template-columns: 180px minmax(0, 1fr); }
+    .date { position: sticky; top: calc(var(--header) + var(--space-5)); align-self: start; padding-top: 0.55rem; }
+  }
+  .body { min-width: 0; }
+  h2 { font-size: 1.75rem; margin: 0 0 var(--space-2); scroll-margin-top: calc(var(--header) + var(--space-5)); }
+  h2 a { color: inherit; text-decoration: none; }
+  h2 a:hover { color: var(--primary); }
+  .links { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); margin: 0 0 var(--space-5); font-size: 0.925rem; }
+  .group { margin-top: var(--space-5); }
+  h3 { font-size: 1rem; margin: 0 0 var(--space-3); }
+  .items { list-style: disc; margin: 0; padding-left: 1.2em; display: grid; gap: var(--space-2); line-height: 1.6; }
+  .items li { max-width: 68ch; overflow-wrap: anywhere; }
+  .items li::marker { color: var(--muted-foreground); }
+  .refs { display: inline-flex; flex-wrap: wrap; gap: 0 var(--space-3); margin-left: var(--space-2); font: 0.8rem/1.5 var(--font-mono); color: var(--muted-foreground); }
+  .refs a { color: inherit; }
+  .refs a:hover { color: var(--primary); }
+  /* Breaking changes: set apart in a calm note, readable in both themes. */
+  .breaking { border: 1px solid var(--border); border-left: 3px solid var(--primary); border-radius: var(--radius); background: var(--card); padding: var(--space-4); }
+  @media (min-width: 800px) { .breaking { padding: var(--space-4) var(--space-5); } }
+  .breaking .items { gap: var(--space-3); }
+</style>
