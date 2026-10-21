@@ -3,6 +3,10 @@ title: "Getting started"
 description: "Install Spooldoc, create the first account, add an IBM i and build the first job."
 ---
 
+To see Spooldoc before you install it, watch the
+[90-second overview](https://youtu.be/WNuRqe9Do6o) or the
+[five-minute walkthrough](https://youtu.be/TK0a1nvhn1Q) on YouTube.
+
 ## What you need
 
 - An IBM i 7.4 or later, a user profile that can read the output queues you

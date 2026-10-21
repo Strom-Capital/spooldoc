@@ -9,6 +9,7 @@ export const links = {
   license: `${GITHUB}/blob/main/LICENSE`,
   changelog: `${GITHUB}/blob/main/CHANGELOG.md`,
   image: 'https://github.com/Strom-Capital/spooldoc/pkgs/container/spooldoc',
+  youtube: 'https://www.youtube.com/@spooldoc',
   carbone: 'https://carbone.io',
 } as const;
 

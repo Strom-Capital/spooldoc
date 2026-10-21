@@ -24,6 +24,13 @@
  *                           the quick start's (CodeBlock.astro, CodeCopy.astro)
  * - video_played            a video started for the first time on the page, with
  *                           { video, theme } (SiteVideo.astro, scripts/site-video.ts)
+ * - video_link_clicked      a link to a video on YouTube, with { video } for the poster
+ *                           and { video, chapter } for a chapter (VideoLink.astro,
+ *                           features.astro)
+ *
+ * A link or button with data-track sends that event on click. Its other
+ * data-track-* attributes are the event's properties: data-track-video="x" sends
+ * { video: 'x' }.
  */
 const key = import.meta.env.PUBLIC_POSTHOG_KEY;
 const host = import.meta.env.PUBLIC_POSTHOG_HOST || 'https://eu.i.posthog.com';
@@ -50,12 +57,17 @@ const host = import.meta.env.PUBLIC_POSTHOG_HOST || 'https://eu.i.posthog.com';
       if (document.readyState === 'complete') start();
       else addEventListener('load', start, { once: true });
 
-      // The one named event: copy buttons carry data-track.
+      // Elements with data-track send that event; their data-track-* attributes are its properties.
       document.addEventListener('click', (event) => {
         const target = event.target instanceof Element ? event.target : null;
         if (!target || !window.posthog) return;
         const tracked = target.closest('[data-track]');
-        if (tracked) window.posthog.capture(tracked.getAttribute('data-track'));
+        if (!tracked) return;
+        const properties = {};
+        for (const [key, value] of Object.entries(tracked.dataset)) {
+          if (key.startsWith('track') && key !== 'track') properties[key.charAt(5).toLowerCase() + key.slice(6)] = value;
+        }
+        window.posthog.capture(tracked.getAttribute('data-track'), properties);
       });
     </script>
   </>

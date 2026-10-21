@@ -30,6 +30,9 @@ agent proposes the definition and the template from a sample spooled
 file; you check the extracted fields next to the page and refine with the agent or
 by hand. Every run is logged.
 
+Watch the [90-second overview](https://youtu.be/WNuRqe9Do6o) or the
+[five-minute walkthrough](https://youtu.be/TK0a1nvhn1Q) on YouTube.
+
 ## Architecture
 
 Programs on the IBM i print to output queues as they always have. Spooldoc

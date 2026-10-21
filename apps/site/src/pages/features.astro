@@ -10,9 +10,11 @@ import Base from '../layouts/Base.astro';
 import Carousel from '../components/Carousel.astro';
 import CodeBlock from '../components/CodeBlock.astro';
 import Shot from '../components/Shot.astro';
+import VideoLink from '../components/VideoLink.astro';
 import { FEATURES, SHOTS } from '../lib/features';
 import { docsUrl } from '../lib/links';
 import { FEATURES_DESCRIPTION } from '../lib/structuredData';
+import { WALKTHROUGH_VIDEO, videoAt, videoTime } from '../lib/video';
 ---
 <Base title="Features" description={FEATURES_DESCRIPTION}>
   <section class="section intro">
@@ -32,6 +34,26 @@ import { FEATURES_DESCRIPTION } from '../lib/structuredData';
           {FEATURES.map((feature) => <li><a href={`#${feature.id}`}>{feature.title}</a></li>)}
         </ul>
       </nav>
+    </div>
+  </section>
+
+  <section class="walkthrough" aria-labelledby="walkthrough">
+    <div class="container">
+      <div class="section-head">
+        <h2 id="walkthrough">See it from start to finish</h2>
+        <p class="lead">The walkthrough goes from a sample page to a delivered file in about five minutes.</p>
+      </div>
+      <VideoLink name={WALKTHROUGH_VIDEO.name} href={WALKTHROUGH_VIDEO.url} label={WALKTHROUGH_VIDEO.label} length={WALKTHROUGH_VIDEO.length} />
+      <ol class="chapters" aria-label="Chapters">
+        {WALKTHROUGH_VIDEO.chapters.map((chapter) => (
+          <li>
+            <a href={videoAt(WALKTHROUGH_VIDEO.url, chapter.seconds)} data-track="video_link_clicked" data-track-video={WALKTHROUGH_VIDEO.name} data-track-chapter={chapter.title}>
+              <span class="time">{videoTime(chapter.seconds)}</span>
+              <span>{chapter.title}</span>
+            </a>
+          </li>
+        ))}
+      </ol>
     </div>
   </section>
 
@@ -75,6 +97,15 @@ import { FEATURES_DESCRIPTION } from '../lib/structuredData';
   .toc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
   .toc a { display: inline-flex; align-items: center; min-height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--foreground); text-decoration: none; font-size: 0.9rem; }
   .toc a:hover { background: var(--muted); }
+
+  .walkthrough { padding-top: var(--space-7); }
+  .walkthrough .section-head { margin-bottom: var(--space-5); }
+  .chapters { list-style: none; margin: var(--space-5) 0 0; padding: 0; display: grid; gap: var(--space-1) var(--space-5); }
+  @media (min-width: 640px) { .chapters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 1000px) { .chapters { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .chapters a { display: flex; gap: var(--space-3); align-items: baseline; padding: 6px 0; color: var(--foreground); text-decoration: none; }
+  .chapters a:hover span:last-child { color: var(--primary); text-decoration: underline; }
+  .chapters .time { flex: none; min-width: 2.5rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 
   .feature { padding-top: var(--space-8); }
   .feature-grid { display: grid; gap: var(--space-5); }
