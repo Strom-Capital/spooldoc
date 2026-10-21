@@ -18,8 +18,11 @@ export function useStepStatuses(): { statuses: Record<Step, StepStatus>; ready: 
   const { rendering } = useAppInfo();
   const serverError = servers.find((s) => s.id === spec.source.serverId)?.lastError ?? null;
   const destination = destinations.find((d) => d.id === spec.destination.destinationId);
-  // An email destination is set once the job says where each email goes.
-  const hasDestination = !!destination && (destination.kind !== 'email' || !!spec.destination.email?.to.trim());
+  // An email destination is set once the job says where each email goes; a webhook once it sends no files, or files a template makes.
+  const attach = spec.destination.webhook?.attach;
+  const webhookReady = !attach || attach.length === 0 || spec.render.templates.some((template) => template.formats.some((format) => attach.includes(format)));
+  const hasDestination =
+    !!destination && (destination.kind === 'email' ? !!spec.destination.email?.to.trim() : destination.kind === 'webhook' ? webhookReady : true);
   return useMemo(() => {
     const statuses = stepStatuses({ spec, job, serverError, hasDestination, render, rendering });
     return { statuses, ready: allReady(statuses) };

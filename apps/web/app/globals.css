@@ -205,14 +205,23 @@ img[data-theme-image='dark'] {
   outline: 1.5px solid var(--primary);
 }
 
-/* Email preview: a value that changed when stepping to another page group lights up once. */
+/* A value that changed in a preview, such as the email or the webhook call of another page group, lights up once. */
 @media (prefers-reduced-motion: no-preference) {
-  .email-flash {
-    animation: email-flash 1.2s ease-out;
+  .flash {
+    animation: flash 1.2s ease-out;
     border-radius: 2px;
   }
 }
-@keyframes email-flash {
+/* The webhook printout: the answer's paper feeds out below the perforation. */
+@keyframes paper-feed {
+  from {
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes flash {
   from {
     background: var(--hit-found-strong);
   }

@@ -125,7 +125,7 @@ describe('email destinations', () => {
     const save = async (email: unknown) => {
       await db()
         .update(jobs)
-        .set({ draft: { ...job!.draft, destination: { destinationId: destination.id, email: emailSpecSchema.parse(email) , webhook: null } } })
+        .set({ draft: { ...job!.draft, destination: { destinationId: destination.id, email: emailSpecSchema.parse(email), webhook: null } } })
         .where(eq(jobs.id, jobId));
       return versions.POST(appRequest(`/api/jobs/${jobId}/versions`, { method: 'POST', body: { note: '' }, headers: auth }), params({ id: jobId }));
     };

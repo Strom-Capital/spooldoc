@@ -1,20 +1,23 @@
 /**
  * A failed API call, with the server's `{ error }` text and the HTTP status. For an IBM i
  * error, `code` is its class (`host`, `auth`, `notfound`, `authority`, `exists` or `other`), `detail`
- * the system's own text and `messageId` its message, such as `CPF2204`.
+ * the system's own text and `messageId` its message, such as `CPF2204`. `body` is the whole
+ * JSON answer, for a route that says more than `{ error }`.
  */
 export class ApiError extends Error {
   readonly status: number;
   readonly code?: string;
   readonly detail?: string;
   readonly messageId?: string;
-  constructor(status: number, message: string, info: { code?: string; detail?: string; messageId?: string } = {}) {
+  readonly body?: unknown;
+  constructor(status: number, message: string, info: { code?: string; detail?: string; messageId?: string; body?: unknown } = {}) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     if (info.code) this.code = info.code;
     if (info.detail) this.detail = info.detail;
     if (info.messageId) this.messageId = info.messageId;
+    if (info.body !== undefined) this.body = info.body;
   }
 }
 
@@ -49,7 +52,7 @@ export async function api<T>(path: string, init: { method?: string; body?: unkno
   }
   const data = (await response.json().catch(() => ({}))) as { error?: string; code?: string; detail?: string; messageId?: string };
   if (!response.ok) {
-    throw new ApiError(response.status, data.error ?? `Request failed (HTTP ${response.status}).`, { code: data.code, detail: data.detail, messageId: data.messageId });
+    throw new ApiError(response.status, data.error ?? `Request failed (HTTP ${response.status}).`, { code: data.code, detail: data.detail, messageId: data.messageId, body: data });
   }
   return data as T;
 }

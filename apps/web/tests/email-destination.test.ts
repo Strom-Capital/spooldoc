@@ -168,7 +168,7 @@ describe('the email destination in a run', () => {
     const spec: JobSpec = {
       ...emptySpec({ serverId, library: 'MYLIB', queue: 'EMAIL', destinationId: destination!.id }),
       extract: { definition: fixtureText('invoice', 'definition.yaml') },
-      destination: { destinationId: destination!.id, email: emailSpecSchema.parse({ to: '{d.pg.customerNo}@example.com', subject: 'Invoice {d.pg.invoiceNo}' }) , webhook: null },
+      destination: { destinationId: destination!.id, email: emailSpecSchema.parse({ to: '{d.pg.customerNo}@example.com', subject: 'Invoice {d.pg.invoiceNo}' }), webhook: null },
     };
     const [job] = await db().insert(jobs).values({ name: 'Invoices', draft: spec, activeVersion: 1 }).returning();
     await db().insert(jobVersions).values({ jobId: job!.id, number: 1, spec });

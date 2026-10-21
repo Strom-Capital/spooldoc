@@ -208,7 +208,12 @@ function useSteps(): StepInfo[] {
       step: 'destination',
       title: STEP_TITLE.destination,
       icon: SendIcon,
-      detail: destination?.name ?? 'Pick a destination',
+      // A destination in test mode says so, since its documents go to the test address or URL.
+      detail: destination
+        ? (destination.kind === 'email' && destination.config.testAddress) || (destination.kind === 'webhook' && destination.config.testUrl)
+          ? `${destination.name} (test)`
+          : destination.name
+        : 'Pick a destination',
       status: statuses.destination,
     },
     {

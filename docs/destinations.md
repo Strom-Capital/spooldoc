@@ -236,6 +236,186 @@ throttling goes on, the email fails and says to retry later. The server's own te
 the sign-in or the connection fails, the run stops sending, and the
 emails it did not try say so.
 
+## Webhook
+
+A webhook destination posts one call per document to a URL: each
+invoice, with its data and its PDF, to the program that books it. The
+call is JSON, signed so the receiver can check that it comes from
+Spooldoc. Add one with **Add destination** on the Destinations page and
+pick **Webhook**. It has a name, a URL, an optional test URL and
+optional headers.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/destination-webhook-dark.png">
+    <img src="assets/destination-webhook-light.png" alt="The New destination dialog with Webhook picked is filled in with a name, the URL https://hooks.example.com/spooldoc and an Authorization header whose value is hidden." width="900">
+  </picture>
+</p>
+
+**The URL** starts with `https://` or `http://`, without a user name, a
+password or a `#` part. Credentials go in a header. An `http://` URL
+works, and the dialog warns that each call and its files then travel
+unencrypted. Spooldoc does not follow redirects: a receiver that answers
+with a redirect fails the call, and the message names where it points.
+It waits 30 seconds for an answer.
+
+**Headers** go with every call, such as `Authorization: Bearer ...` or
+an API key the receiver asks for. The values are stored encrypted and
+never shown again; leave a value empty to keep the saved one. Spooldoc
+sets `Host`, `Content-Type`, `Content-Length`, `User-Agent` and the
+`webhook-` headers itself, so a destination cannot set them.
+
+**The signing secret.** Adding a webhook destination makes a signing
+secret: `whsec_` and 44 characters of base64. The dialog
+shows it once, with a copy button: give it to the receiver then. To make
+a new one, open the destination and pick **Rotate secret**. The old
+secret stops working at once, so the receiver refuses calls until it has
+the new one.
+
+In the job's destination step, **Files to send** picks the formats of the
+document's files that go in each call: every format the templates make,
+by default. With none picked, each call holds the data only. Beside it,
+the step prints the call of one page group as Send test would make it,
+with the real values of the sample.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/webhook-step-dark.png">
+    <img src="assets/webhook-step-light.png" alt="The destination step of an invoice job sends PDF files. Beside it, the call of page group 1 of 6 is printed on fanfold paper: POST /spooldoc, the headers with the Authorization value masked and the signature, and the JSON body with the invoice's fields and the PDF shown by its size. Below the perforation, the receiver's answer HTTP/1.1 200 OK in 142 ms." width="900">
+  </picture>
+</p>
+
+### What each call holds
+
+Each call is a `POST` with `Content-Type: application/json` and this
+body:
+
+```json
+{
+  "type": "document.created",
+  "timestamp": "2026-10-21T09:14:03Z",
+  "data": {
+    "document": { "name": "invoice-260101", "pageGroup": 1, "pageGroups": 6 },
+    "job": { "id": "6f1c...", "name": "MYJOB", "version": 3 },
+    "run": { "id": "0b9e...", "number": 128 },
+    "spooledFile": {
+      "name": "QPRINT", "number": 4, "jobName": "MYJOB", "jobUser": "MYUSER",
+      "jobNumber": "123456", "outputQueue": "MYLIB/MYOUTQ", "userData": "INV", "pages": 6
+    },
+    "data": { "pg": { "invoiceNo": "260101" }, "splf": {} },
+    "files": [
+      { "name": "invoice-260101.pdf", "contentType": "application/pdf", "size": 49321, "template": "Invoice", "content": "JVBERi0xLjcK..." }
+    ]
+  }
+}
+```
+
+| Field | What it holds |
+|-------|---------------|
+| `type` | `document.created` for a run, `document.test` for Send test and for every call while a test URL is set. |
+| `timestamp` | When the call was made, in UTC. |
+| `data.document` | The document's name, as the [Spooldoc download](#spooldoc-download) names its files, its page group from 1 and how many the spooled file has. |
+| `data.job`, `data.run` | The job, its version, and the run with its number in the job log. A Send test runs nothing, so `run` and `version` are `null`. |
+| `data.spooledFile` | The spooled file and its output queue. |
+| `data.data` | What the templates get: `{ pg, splf }`, the fields of the page group and of the spooled file, as the [definition](definitions.md) reads them. |
+| `data.files` | The document's files in the formats the job picks, each with its size, the template it was made with, and its bytes in base64. |
+
+The files of an Excel template of the whole spooled file go in one call
+of their own, and only when Files to send picks their format. That call
+has `pageGroup` `null`, and `data.data` is `{ pgs, splf }` with every
+page group. A copy of every file is kept in Spooldoc, so the job log can
+show what was sent and the download works too.
+
+### Checking the signature
+
+Each call is signed the [Standard Webhooks](https://www.standardwebhooks.com/)
+way, with three headers:
+
+| Header | What it holds |
+|--------|---------------|
+| `webhook-id` | The call's id, such as `msg_2f8a...`. A document of a spooled file keeps its id on every Retry, so a receiver that keeps the ids it took can skip a call it already has. |
+| `webhook-timestamp` | When the call was signed, in seconds since 1970. |
+| `webhook-signature` | `v1,` and the base64 HMAC-SHA256 of `<id>.<timestamp>.<body>`, keyed with the bytes of the secret after `whsec_`. |
+
+The receiver checks the signature against the body exactly as it came,
+before it parses the JSON, and refuses a timestamp more than a few
+minutes off. In Node.js, the
+[`standardwebhooks`](https://www.npmjs.com/package/standardwebhooks)
+package does both:
+
+```js
+import { Webhook } from 'standardwebhooks';
+
+const webhook = new Webhook(process.env.SPOOLDOC_SECRET);
+// Throws when the signature or the timestamp is wrong.
+const call = webhook.verify(rawBody, request.headers);
+```
+
+The same check with `node:crypto` alone:
+
+```js
+import { createHmac, timingSafeEqual } from 'node:crypto';
+
+function verify(secret, headers, rawBody) {
+  const id = headers['webhook-id'];
+  const timestamp = headers['webhook-timestamp'];
+  if (Math.abs(Date.now() / 1000 - Number(timestamp)) > 300) return false;
+  const key = Buffer.from(secret.replace(/^whsec_/, ''), 'base64');
+  const expected = Buffer.from(createHmac('sha256', key).update(`${id}.${timestamp}.${rawBody}`).digest('base64'));
+  return headers['webhook-signature']
+    .split(' ')
+    .map((part) => Buffer.from(part.replace(/^v1,/, '')))
+    .some((given) => given.length === expected.length && timingSafeEqual(given, expected));
+}
+```
+
+The same packages exist for Python, Go, Java, C#, PHP and Ruby; the
+Standard Webhooks site lists them.
+
+### Sending a test
+
+**Send test** under the printed call renders that page group from the
+draft and posts it to the URL now, as `document.test`. It tries once,
+records nothing in the job log, and prints the receiver's answer below
+the call: the status, the time and the start of the body. A failed test
+prints the status in red and says why below it.
+
+**Test mode.** While **Send all calls to** is set on the destination,
+every call of every job that uses it goes there instead: runs and Send
+test alike. Each call is marked `document.test`, still signed, and goes
+without the header values, since those are often credentials. Spooldoc
+does not count a call in test mode as sent, so taking the test URL out
+sends every document again for real. A public request inspector, such as
+a page that shows each request it gets, shows the sample's values to
+anyone with its link; use one you control for real data. The
+Destinations page and the destination step say "Test" while it is set.
+
+### When a call fails
+
+A call that does not get a 2xx answer is tried again only when trying
+again can help:
+
+| What happens | Tries |
+|--------------|-------|
+| A 2xx answer | Sent. |
+| No answer within 30 seconds, a dropped connection, 408, 429 or 5xx | Up to 3 tries, 2 and then 10 seconds apart, or after the `Retry-After` the receiver asks for, up to a minute. |
+| Any other 4xx, or a redirect | Fails at once. |
+| The host is not found, refuses the connection, or its certificate is not trusted | Fails after 3 tries, and the run does not try the documents after it. |
+
+The other documents are still sent. Then the run fails with "Sent 5 of 6
+documents to hooks.example.com" and the first reason, and the spooled
+file is not held, moved or deleted. Each reason says what to check: the
+headers for 401 and 403, the URL for 404, and the size of the call for
+413, with the files the job could leave out. The receiver's answer is
+under Details. The [job log](job-log.md#webhook-calls) lists every call with
+its answer and its tries. After fixing the cause,
+[Retry](job-log.md#retry) sends only the documents that were not sent
+yet, with the same `webhook-id` as before.
+
+A receiver with a certificate from your own certificate authority needs
+that authority added to Spooldoc; see
+[Certificates](configuration.md#certificates).
+
 ## Writing a destination
 
 A destination is one small interface in

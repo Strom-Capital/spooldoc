@@ -94,7 +94,23 @@ export function JsonView() {
 }
 
 /** Copies the JSON; the icon turns into a check for two seconds. */
-function CopyButton({ text }: { text: string }) {
+/**
+ * Copies a text to the clipboard, and says so for two seconds.
+ *
+ * @param label - The button's accessible name, such as "Copy JSON"
+ * @param hint - What it copies, as its hint
+ */
+export function CopyButton({
+  text,
+  label = 'Copy JSON',
+  hint = 'Copy the JSON to the clipboard',
+  className = 'absolute top-1 right-1 bg-background/80',
+}: {
+  text: string;
+  label?: string;
+  hint?: string;
+  className?: string;
+}) {
   const [copied, setCopied] = useState(false);
   async function copy() {
     try {
@@ -106,8 +122,8 @@ function CopyButton({ text }: { text: string }) {
     }
   }
   return (
-    <Hint text={copied ? 'Copied' : 'Copy the JSON to the clipboard'}>
-      <Button variant="ghost" size="icon-sm" onClick={copy} aria-label="Copy JSON" className="absolute top-1 right-1 bg-background/80">
+    <Hint text={copied ? 'Copied' : hint}>
+      <Button type="button" variant="ghost" size="icon-sm" onClick={copy} aria-label={label} className={className}>
         {copied ? <CheckIcon /> : <CopyIcon />}
       </Button>
     </Hint>

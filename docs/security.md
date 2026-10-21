@@ -124,6 +124,32 @@ as any mailbox of the tenant unless you limit it: see
 only there. Every email a run sent, or tried to send, is listed on the run
 in the [job log](job-log.md#emails), with a copy of its files.
 
+## Webhook
+
+A [webhook destination](destinations.md#webhook) sends documents out of
+your network: each call, with the document's data and files, goes to the
+URL the destination sets. Whoever can add or change destinations chooses
+that URL, so an account that can sign in can send documents anywhere the
+Spooldoc server can reach.
+
+- The signing secret and the header values are stored encrypted with
+  `SPOOLDOC_SECRET_KEY`. The page never gets them back: the secret shows
+  once when it is made or rotated, and header values never show again.
+- Both are taken out of every error, log line and stored answer, and the
+  URL is stored and shown without its query string.
+- Redirects are not followed, so a call goes only to the URL you set.
+- An `http://` URL works, and the dialog warns that each call and its
+  files travel unencrypted. Use `https://` unless the receiver is on your
+  own network.
+- While a test URL is set, calls go there without the header values,
+  since those are often credentials. The signature is still sent; it
+  proves the call came from Spooldoc, and it does not give away the
+  secret.
+
+Every call a run made, or tried to make, is listed on the run in the
+[job log](job-log.md#webhook-calls), with the start of the receiver's
+answer and a copy of the files.
+
 ## Checklist
 
 - Generate `BETTER_AUTH_SECRET` and `SPOOLDOC_SECRET_KEY` once, keep them

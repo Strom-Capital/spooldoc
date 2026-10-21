@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { api, errorText, shownError, type ShownError } from '@/lib/client/api';
+import { shortUrl } from '@/lib/destination-config';
 import { deleteNotice, filterParams, splfKey, startsDeleting, triggerStatuses } from '@/lib/job-spec';
 import type { RunView, SpooledFileView } from '@/lib/types';
 import { useJob } from './job-provider';
@@ -203,7 +204,7 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
           : 'Files are left as they are.';
   // Writing to the IFS changes the IBM i, so it is named before it happens.
   const destination = destinations.find((d) => d.id === activeSpec?.destination.destinationId);
-  // Sending email reaches people outside, so it is named too, and where it goes while testing.
+  // Sending email or a webhook call reaches outside systems, so it is named too, and where it goes while testing.
   const deliverText =
     destination?.kind === 'ifs'
       ? `Documents will be written to ${destination.config.folder} on the IBM i. `
@@ -211,7 +212,11 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
         ? destination.config.testAddress
           ? `Each document will be emailed to the test address ${destination.config.testAddress}. `
           : 'Each document will be emailed to the addresses the job sets. '
-        : '';
+        : destination?.kind === 'webhook'
+          ? destination.config.testUrl
+            ? `Each document is sent to the test URL ${shortUrl(destination.config.testUrl)}. `
+            : `Each document is sent to ${shortUrl(destination.config.url)}. `
+          : '';
 
   async function onRun() {
     setBusy(true);
