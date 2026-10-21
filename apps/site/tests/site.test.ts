@@ -185,6 +185,25 @@ describe('site copy', () => {
     }
   });
 
+  // The brand guide's banned words and claims we never make (sections 5.6 and 6.3).
+  const banned =
+    /\b(seamless(ly)?|revolutioni[sz]e|unlock|leverage|cutting-edge|next-gen|robust|effortless(ly)?|easy|easier|game-changer|powerful|empower|supercharge|turbocharge|magic(ally)?|intelligent|solutions?|best-in-class|world-class|legacy|outdated|old-fashioned|finally|no more|out of the box|simply|obviously|enterprise-grade|production-ready|battle-tested|secure|compliant|free)\b/i;
+
+  it('uses none of the banned words', () => {
+    for (const file of files) {
+      expect(fs.readFileSync(file, 'utf8'), file).not.toMatch(banned);
+    }
+  });
+
+  it('uses American spelling and the words of the app', () => {
+    for (const file of files) {
+      const text = fs.readFileSync(file, 'utf8');
+      expect(text, file).not.toMatch(/\b(colours?|licence|behaviour|organis(e|ed|ation)|favourite|centre|catalogue|analyse)\b/i);
+      expect(text, file).not.toMatch(/\bspool files?\b/i);
+      expect(text, file).not.toMatch(/\bconver(t|ts|ted|ting|sion)\b/i);
+    }
+  });
+
   it('calls the chat feature the agent', () => {
     for (const file of files) {
       // The screenshot's file name and the provider's product name stay as they are.

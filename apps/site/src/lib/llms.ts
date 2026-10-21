@@ -2,6 +2,7 @@ import type { DocsGroup } from '@spooldoc/docs';
 import { FEATURES } from './features';
 import { docsUrl, links, url } from './links';
 import type { PostLike } from './sortPosts';
+import { LONG_DESCRIPTION } from './structuredData';
 
 /**
  * /llms.txt, per https://llmstxt.org: what Spooldoc is, with a link to every guide, the
@@ -19,12 +20,12 @@ export function llmsTxt({ site, nav, posts, version }: { site: URL; nav: DocsGro
 
   return `# Spooldoc
 
-> Spooled files into documents, for IBM i. Open output management. Spooldoc watches the output queues of an IBM i, splits each spooled file into page groups and reads each into JSON with a definition written in YAML, makes documents of them with HTML, Word or Excel templates, and delivers the files. Every run is logged.
+> Spooled files into documents, for IBM i. Open output management. ${LONG_DESCRIPTION}
 
 - Open source under the MIT license, by Ström Capital Oy. Source: ${links.github}
 - Latest release: ${version}. Release notes: ${links.releases}
 - Runs as a container image, \`ghcr.io/strom-capital/spooldoc\`, on amd64 and arm64, with Postgres and a Carbone server for rendering. One Compose file starts all three.
-- Connects to the IBM i through jt400 on the host server ports. Nothing is installed on the IBM i.
+- For IBM i (AS/400, iSeries). Connects through jt400 on the host server ports. Nothing is installed on the IBM i, and programs need no changes.
 - Output: PDF, HTML, DOCX and XLSX. Destinations: Spooldoc download and a folder in the IFS.
 - The agent in the job builder proposes the definition and the template from a sample spooled file, with Anthropic, Google, OpenAI, OpenRouter, Vercel AI Gateway or a local model. Spooldoc works without a model.
 

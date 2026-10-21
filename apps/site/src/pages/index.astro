@@ -7,7 +7,7 @@ import { FEATURES, QUICK_START } from '../lib/features';
 import { assetSize, siteVersion } from '../lib/docs';
 import { docsUrl, links, url } from '../lib/links';
 import { getPosts } from '../lib/posts';
-import { homeJsonLd, SITE_DESCRIPTION, SITE_NAME } from '../lib/structuredData';
+import { homeJsonLd, LONG_DESCRIPTION, SITE_DESCRIPTION, SITE_NAME } from '../lib/structuredData';
 
 const posts = (await getPosts()).slice(0, 3);
 const version = siteVersion();
@@ -27,12 +27,7 @@ const tour = [
         <p class="eyebrow">Open source, MIT license. Version {version}.</p>
         <h1>Spooled files into documents, for IBM i.</h1>
         <p class="tagline">Open output management.</p>
-        <p class="lead">
-          Spooldoc watches the output queues of your IBM i and reads each spooled file into JSON with a
-          definition you write in YAML. It makes documents with HTML, Word or Excel templates, and
-          delivers the files. The agent proposes the definition and the template from a sample. Every
-          run is logged.
-        </p>
+        <p class="lead">{LONG_DESCRIPTION.replace(/ MIT licensed\.$/, '')}</p>
         <div class="btn-row">
           <a class="btn btn--primary" href={docsUrl('getting-started')}>Get started</a>
           <a class="btn" href={docsUrl()}>Read the docs</a>
@@ -62,10 +57,11 @@ const tour = [
         <p class="eyebrow">How it works</p>
         <h2 id="how">Programs print as they always have</h2>
         <p class="lead">
-          Spooldoc connects through jt400 and runs a job for every new spooled file, in real time
-          through a data queue or by polling. A run reads the file, extracts the page groups, makes a
-          document of each with every template, delivers the files, then holds, moves, deletes or
-          leaves the spooled file. Nothing is installed on the IBM i.
+          Your programs on the IBM i (AS/400, iSeries) print to output queues, unchanged. Spooldoc
+          connects through jt400 and runs a job for every new spooled file, by polling or in real time
+          through a data queue. A run reads the file, extracts the page groups, makes a document of
+          each with every template, delivers the files, then holds, moves, deletes or leaves the
+          spooled file. Nothing is installed on the IBM i.
         </p>
       </div>
       <figure class="diagram">

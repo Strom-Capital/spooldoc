@@ -44,7 +44,7 @@ committed.
 
 - The website is `apps/site` (Astro). It deploys to GitHub Pages at
   [spooldoc.com](https://spooldoc.com) when a change merges to `main`.
-- Brand colours change together in `apps/web/app/globals.css` and
+- Brand colors change together in `apps/web/app/globals.css` and
   `apps/site/src/styles/tokens.css`.
 - The features page (`apps/site/src/lib/features.ts`) changes with the
   features.

@@ -44,12 +44,19 @@ text:
     - { name: customerName, anchor: { line: 9, column: 5, length: 40 } }
     - { name: netAmount, anchor: { after: "Net amount" }, page: last, type: number }`;
 
+
+/**
+ * In the order of the five messaging pillars: your programs print as they always have,
+ * reading and layout stay apart, templates in tools you already know, the agent drafts
+ * and you decide, every run is on the record. Then where the files go and how it runs.
+ */
 export const FEATURES: Feature[] = [
   {
     id: 'servers-and-queues',
     title: 'Servers and queues',
-    summary: 'Add your IBM i systems, pick the output queues that matter and hide the rest.',
+    summary: 'Your programs print as they always have. You add the IBM i and pick its output queues.',
     body: [
+      'Spooldoc reads what your programs already print. It connects through jt400 over the host server ports, so nothing is installed on the IBM i and no program changes.',
       'Add an IBM i with a host, a user profile and its password. Spooldoc signs on when you save, so a wrong host or password shows up at once. The password is stored encrypted.',
       'The Queues page lists the output queues of a server with their ready, held and total files. Search, sort and hide the queues you never need. Open a queue to list its spooled files, and look at any of them page by page.',
       'When a server cannot be reached, its status says why and what to check, and it shows under Needs attention on the Home page.',
@@ -62,26 +69,13 @@ export const FEATURES: Feature[] = [
     ],
   },
   {
-    id: 'jobs',
-    title: 'Jobs as pipelines',
-    summary: 'Source, trigger, extract, render, destination, finish. Saved as versions.',
-    body: [
-      'A job takes the spooled files of one output queue to a destination. The job builder shows it as six steps: source, trigger, extract, render, destination and finish. The draft saves as you type.',
-      'Saving a version takes a fixed copy of the draft, with a note of what changed. Runs use the active version, and every run is logged against the version it used. Restore an older version to go back.',
-      'Run a job on demand on the files you pick, or let it watch the queue: in real time through a data queue you set up from the trigger step, or by polling. When the documents are delivered, the finish step holds, moves, deletes or leaves the spooled file. Delete asks first.',
-    ],
-    shot: 'jobs',
-    alt: 'The Jobs page with five jobs: two watching, one of them with a watch error, one paused, and two run on demand, each with its server, queue, version and last run',
-    docs: [{ slug: 'jobs', title: 'Jobs' }],
-  },
-  {
     id: 'definitions',
     title: 'Definitions in YAML',
-    summary: 'Fields by label, pattern or position, tables and page groups, read into JSON.',
+    summary: 'A definition reads each page into JSON: fields, tables, records and page groups.',
     body: [
       'A definition is a short YAML document that reads the pages of a spooled file into JSON. Fields are found by label, pattern or position. Tables, multi-line records and split keys cover page groups printed back to back, such as one invoice each. XML in a spooled file is read too.',
-      'The JSON keeps reading the page and laying out the document apart. A template never deals with lines and columns, so a new look is just a new template.',
-      'The workbench checks the YAML as you type and highlights every field it finds on the page, so you check each value next to the line it came from.',
+      'Reading and layout stay apart. A template lays out the JSON and never sees lines and columns. A new look is a new template, and a moved column is one fix in the definition.',
+      'The workbench checks the YAML as you type and highlights every field it finds on the page. You check each value next to the line it came from, before anything is rendered.',
     ],
     shot: 'job-builder',
     alt: 'The job builder with the extract step open: six pipeline steps across the top, the sample page with field hits highlighted on the left and the definition editor on the right',
@@ -89,11 +83,11 @@ export const FEATURES: Feature[] = [
   },
   {
     id: 'templates',
-    title: 'HTML, Word and Excel templates',
-    summary: 'Carbone tags in HTML, Word or Excel, rendered to PDF, HTML, DOCX or XLSX.',
+    title: 'Templates you already know',
+    summary: 'HTML, Word or Excel with Carbone tags, rendered to PDF, HTML, DOCX or XLSX.',
     body: [
-      'A template is an ordinary HTML page, Word document or Excel workbook with <a href="https://carbone.io">Carbone</a> tags, such as <code>{d.pg.invoiceNo}</code>. Each page group becomes a document through every template of the job, in that template\'s formats.',
-      'Make a Word template in Word or an Excel template in Excel and upload it, or let the agent design one. An Excel template can make one sheet of the whole spooled file, a row per line, to sort, filter and sum.',
+      'A template is an HTML page, a Word document made in Word or an Excel workbook made in Excel, with <a href="https://carbone.io">Carbone</a> tags such as <code>{d.pg.invoiceNo}</code>. Each page group becomes a document through every template of the job, in that template\'s formats.',
+      'Upload a Word or Excel template, or let the agent design one. An Excel template can make one sheet of the whole spooled file, a row per line, to sort, filter and sum.',
       'Spooldoc checks every tag against the definition before it renders. A Carbone server of your own or Carbone Cloud renders the documents. Logos, images and fonts are uploaded once, as assets.',
     ],
     shot: 'word-template',
@@ -104,35 +98,35 @@ export const FEATURES: Feature[] = [
     ],
   },
   {
-    id: 'destinations',
-    title: 'Destinations',
-    summary: 'Keep the files in Spooldoc, or write them to a folder in the IFS.',
-    body: [
-      'The built-in destination keeps every file in Spooldoc, ready to download from the run in the job log.',
-      'An IFS destination writes each file to a folder on the job\'s IBM i, where programs can pick it up. Each file is tagged with the right CCSID and is never half written. When a file with the same name exists, the destination replaces it, adds a number or fails the run, as you choose.',
-      'The spooled file is held, moved or deleted only after every file was delivered.',
-    ],
-    shot: 'destinations',
-    alt: 'The Destinations page with two IFS folders, each with its folder and settings and the number of jobs that use it, and the built-in Spooldoc download',
-    docs: [{ slug: 'destinations', title: 'Destinations' }],
-  },
-  {
     id: 'agent',
     title: 'The agent',
-    summary: 'Proposes the definition and the template from a sample. You check and decide.',
+    summary: 'The agent drafts the definition and the template from a sample. You decide.',
     body: [
-      'The agent sits beside the job builder. Ask it for a definition and it reads the sample pages, writes the YAML, reads the extraction report and fixes what is missing. Then it writes a template and renders it: HTML, or a Word or Excel template it designs or edits.',
-      'It works with Anthropic, Google, OpenAI, OpenRouter, Vercel AI Gateway or a local model behind an OpenAI-compatible endpoint. Spooldoc works without a model: the agent saves time, it is not a requirement.',
-      'Nothing it writes goes live until you save and activate a version, and none of its tools reaches the IBM i. To keep values on your network, use a local model, or turn on masking so the model sees the layout and not the values.',
+      'The agent sits beside the job builder. From a sample spooled file it writes the definition, reads the extraction report and fixes what is missing. Then it writes a template and renders it: HTML, or a Word or Excel template it designs or edits, looking at every page it renders.',
+      'It works with Anthropic, Google, OpenAI, OpenRouter, Vercel AI Gateway or a local model behind an OpenAI-compatible endpoint. Spooldoc works without a model.',
+      'Nothing it writes goes live until you save and activate a version, and none of its tools reaches the IBM i. With masking on, the model sees the layout and not the values. A local model keeps the values on your network.',
     ],
     shot: 'ai-assistant',
     alt: 'The agent panel beside the workbench, with the suggested prompts and the message box',
     docs: [{ slug: 'agent', title: 'Agent' }],
   },
   {
+    id: 'jobs',
+    title: 'Jobs as pipelines',
+    summary: 'Source, trigger, extract, render, destination, finish. Saved as versions.',
+    body: [
+      'A job takes the spooled files of one output queue to a destination. The job builder shows it as six steps: source, trigger, extract, render, destination and finish. The draft saves as you type.',
+      'Saving a version takes a fixed copy of the draft, with a note of what changed. Runs use the active version, and every run is logged against the version it used. Restore an older version to go back.',
+      'Run a job on demand on the files you pick, or let it watch the queue. Watching works by polling, or in real time through a data queue that Spooldoc creates only when you turn real-time watching on. When the documents are delivered, the finish step holds, moves, deletes or leaves the spooled file. Delete asks first.',
+    ],
+    shot: 'jobs',
+    alt: 'The Jobs page with five jobs: two watching, one of them with a watch error, one paused, and two run on demand, each with its server, queue, version and last run',
+    docs: [{ slug: 'jobs', title: 'Jobs' }],
+  },
+  {
     id: 'job-log',
     title: 'Job log',
-    summary: 'Every run with its steps, errors and files, kept as long as you set.',
+    summary: 'Every run is on the record, with its steps, errors and files.',
     body: [
       'Every run of every job is in the job log: the version it used, the spooled file, what started it, its status and the files it delivered. Open a run to see its steps: capture, extract, render, deliver and finish.',
       'A failed run says which step failed and why, in IBM i terms: the object, the authority and the command that fixes it. The IBM i\'s own message is kept under Details. Failed runs show under Needs attention on the Home page.',
@@ -143,13 +137,26 @@ export const FEATURES: Feature[] = [
     docs: [{ slug: 'job-log', title: 'Job log' }],
   },
   {
+    id: 'destinations',
+    title: 'Download and IFS destinations',
+    summary: 'Files go to a download in Spooldoc or to a folder in the IFS.',
+    body: [
+      'The built-in destination keeps every file in Spooldoc, ready to download from the run in the job log.',
+      'An IFS destination writes each file to a folder on the job\'s IBM i, where programs can pick it up. Each file is tagged with the right CCSID and is never half written. When a file with the same name exists, the destination replaces it, adds a number or fails the run, as you choose.',
+      'The spooled file is held, moved or deleted only after every file was delivered.',
+    ],
+    shot: 'destinations',
+    alt: 'The Destinations page with two IFS folders, each with its folder and settings and the number of jobs that use it, and the built-in Spooldoc download',
+    docs: [{ slug: 'destinations', title: 'Destinations' }],
+  },
+  {
     id: 'compose',
     title: 'One Compose file',
     summary: 'The web app, Postgres and Carbone, on amd64 and arm64.',
     body: [
       'The Compose file starts the published image with a Postgres database and a Carbone server. The image holds the web app and the Java runtime for jt400, and runs on amd64 and arm64.',
       'Every release publishes the image to <code>ghcr.io/strom-capital/spooldoc</code>, tagged with its version. Pin a version in production, so an upgrade happens when you choose. The server applies its database migrations when it starts.',
-      'Nothing is installed on the IBM i. Spooldoc reaches it over the host server ports jt400 uses.',
+      'Spooldoc runs next to the IBM i, not on it. It needs a route to the host server ports, and nothing else on the IBM i.',
     ],
     shot: 'home',
     alt: 'The Home page: counts of servers, output queues, jobs and runs, and a chart of runs per day by status',
