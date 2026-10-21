@@ -30,8 +30,9 @@ export function sniffAssetType(bytes: Uint8Array): string | null {
   if (startsWith(bytes, [0x00, 0x01, 0x00, 0x00]) || startsWith(bytes, ascii('true'))) return 'font/ttf';
   if (startsWith(bytes, ascii('OTTO'))) return 'font/otf';
   // SVG is text: an optional BOM, XML declaration, comments or doctype, then <svg.
+  // A comment ends at its first -->, so the pattern cannot backtrack across comments.
   const head = new TextDecoder('utf-8', { fatal: false }).decode(bytes.subarray(0, 4096)).replace(/^﻿/, '');
-  if (/^\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*|<!DOCTYPE[^>]*>\s*)*<svg[\s>]/i.test(head)) return 'image/svg+xml';
+  if (/^\s*(<\?xml[^>]*>\s*)?(<!--(?:[^-]|-(?!->))*-->\s*|<!DOCTYPE[^>]*>\s*)*<svg[\s>]/i.test(head)) return 'image/svg+xml';
   return null;
 }
 

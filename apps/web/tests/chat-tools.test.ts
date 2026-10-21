@@ -320,6 +320,12 @@ describe('visibleText', () => {
     );
     expect(text).toBe('A & B\n1 | 2');
   });
+
+  it('drops the separators of empty cells at the end of a row, without backtracking on many empty cells', () => {
+    expect(visibleText('<table><tr><td>1</td><td></td><td> </td></tr></table>')).toBe('1');
+    const cells = '<td></td>'.repeat(200);
+    expect(visibleText(`<table><tr>${cells}<td>x</td></tr></table>`)).toBe(`${'| '.repeat(200)}x`);
+  });
 });
 
 describe('list_jobs', () => {
