@@ -3,7 +3,7 @@ import { parseEmailTag } from '@/lib/email-fields';
 import { carboneLocale, DEFAULT_FORMATS, formatC, formatD, formatN, formatPlainNumber, type Formats } from '@/lib/formats';
 import { emailSpecSchema } from '@/lib/job-spec';
 import { documentRenderer } from '@/lib/server/documents';
-import { emailSpecProblems, expandSegments, expandText, fieldTypes, type EmailFormatting } from '@/lib/server/email-message';
+import { composeEmail, emailSpecProblems, expandSegments, expandText, fieldTypes, type EmailFormatting } from '@/lib/server/email-message';
 import { getFormats, updateFormats } from '@/lib/server/formats';
 import type { SettingsView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
@@ -106,11 +106,11 @@ describe('formatters in email fields', () => {
   const say = (text: string, formats: Partial<Formats> = {}) => expandText(text, data, formatting(formats)).text;
 
   it('read formatN, formatC and formatD as templates do', () => {
-    expect(say('{d.pg.totalAmount:formatC(2)}', { numberFormat: 'de-de' })).toBe('1.374,50 €');
+    expect(say('{d.pg.totalAmount:formatC(2)}', { numberFormat: 'de-de' })).toBe('1.374,50\u00a0€');
     expect(say('{d.pg.totalAmount:formatC}', { currency: 'EUR' })).toBe('€1,374.50');
-    expect(say('{d.pg.totalAmount:formatN(2)} {d.pg.currency}', { numberFormat: 'sv-se' })).toBe('1 374,50 EUR');
+    expect(say('{d.pg.totalAmount:formatN(2)} {d.pg.currency}', { numberFormat: 'sv-se' })).toBe('1\u00a0374,50 EUR');
     expect(say("{d.pg.dueDate:formatD('DD.MM.YYYY')}")).toBe('29.10.2026');
-    expect(say("{d.pg.dueDate:formatD('D MMMM YYYY')}", { numberFormat: 'sv-se' })).toBe('29 oktober 2026');
+    expect(say("{d.pg.dueDate:formatD('D MMMM YYYY')}", { numberFormat: 'sv-se' })).toBe('29\u00a0oktober\u00a02026');
   });
 
   it('print a date field in the date format of Settings, and a number with its own decimals', () => {
@@ -125,6 +125,28 @@ describe('formatters in email fields', () => {
     expect(say('The total is {d.pg.totalAmount} {d.pg.currency}')).toBe('The total is 1,374.5 EUR');
     expect(say('{d.pg.totalAmount}', { numberFormat: 'de-ch' })).toBe('1’374.5');
     expect(say('Invoice {d.pg.invoiceNo}', { numberFormat: 'de-de' })).toBe('Invoice 260101');
+  });
+
+  it('keep a formatted value on one line with no-break spaces, in the subject, the text and the HTML', () => {
+    const swedishEuro = formatting({ numberFormat: 'sv-se', currency: 'EUR' });
+    const big = { ...data, pg: { ...data.pg, totalAmount: 1374.5 } };
+    expect(expandText('{d.pg.totalAmount:formatC(2)}', big, swedishEuro).text).toBe('1 374,50 €');
+    expect(expandText('{d.pg.totalAmount:formatC(2)}', big, formatting({ numberFormat: 'de-ch' })).text).toBe('CHF 1’374.50');
+    expect(expandText('{d.pg.totalAmount}', big, formatting({ numberFormat: 'sv-se' })).text).toBe('1 374,5');
+    // Templates keep Carbone's own spaces.
+    expect(formatC(1374.5, 2, { numberFormat: 'sv-se', currency: 'EUR' })).toBe('1 374,50 €');
+    const { email } = composeEmail({
+      spec: emailSpecSchema.parse({ to: 'buyer@example.com', subject: 'Invoice {d.pg.invoiceNo}, {d.pg.totalAmount:formatC(2)}', body: 'The total of {d.pg.totalAmount:formatC(2)} is due.' }),
+      data: big,
+      document: 'invoice-260101',
+      files: [],
+      from: 'invoices@example.com',
+      testAddress: null,
+      formatting: swedishEuro,
+    });
+    expect(email?.subject).toBe('Invoice 260101, 1 374,50 €');
+    expect(email?.message.text).toBe('The total of 1 374,50 € is due.');
+    expect(email?.html).toContain('The total of 1 374,50 € is due.');
   });
 
   it('print nothing for a missing value, and say so', () => {

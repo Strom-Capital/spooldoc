@@ -114,13 +114,20 @@ export function fieldTypes(def: Definition | null): Record<string, ValueType> {
 function printed(value: unknown, tag: Extract<EmailTag, { ok: true }>, formatting: EmailFormatting): string | null {
   const { formats } = formatting;
   const lang = formats.numberFormat;
-  if (tag.formatter === 'formatN') return formatN(value, tag.decimals ?? 3, lang);
-  if (tag.formatter === 'formatC') return formatC(value, tag.decimals ?? 2, formats);
-  if (tag.formatter === 'formatD') return formatD(value, tag.pattern, lang);
-  if (formatting.types[tag.path] === 'date') return formatD(value, formats.dateFormat, lang);
-  if (typeof value === 'number') return formatPlainNumber(value, lang);
+  if (tag.formatter === 'formatN') return unbroken(formatN(value, tag.decimals ?? 3, lang));
+  if (tag.formatter === 'formatC') return unbroken(formatC(value, tag.decimals ?? 2, formats));
+  if (tag.formatter === 'formatD') return unbroken(formatD(value, tag.pattern, lang));
+  if (formatting.types[tag.path] === 'date') return unbroken(formatD(value, formats.dateFormat, lang));
+  if (typeof value === 'number') return unbroken(formatPlainNumber(value, lang));
   return String(value).trim();
 }
+
+/**
+ * A formatted value with no-break spaces, so a mail program never breaks a line inside
+ * it: not between `1` and `374,50`, nor between `302,66` and `€`. Templates keep Carbone's
+ * own spaces.
+ */
+const unbroken = (text: string | null): string | null => text?.replace(/ /g, ' ') ?? null;
 
 /** A field's text in pieces, with each tag filled in from the document's data. A tag an email field cannot read prints nothing. */
 export function expandSegments(text: string, data: unknown, formatting: EmailFormatting = PLAIN_FORMATTING): EmailSegment[] {
@@ -249,7 +256,7 @@ export function formatOf(contentType: string): Format | undefined {
 
 /** The subject: the field with its tags filled in, or the document's name when it comes out empty; `[Test]` in front for a test send. */
 export function emailSubject(spec: Pick<EmailSpec, 'subject'>, data: unknown, document: string, test: boolean, formatting: EmailFormatting = PLAIN_FORMATTING): string {
-  const subject = expandText(spec.subject, data, formatting).text.replace(/\s+/g, ' ').trim() || document;
+  const subject = expandText(spec.subject, data, formatting).text.replace(/[^\S\u00a0]+/g, ' ').trim() || document;
   return test ? `[Test] ${subject}` : subject;
 }
 
