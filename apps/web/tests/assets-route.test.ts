@@ -53,6 +53,12 @@ describe('asset files', () => {
     expect(sniffAssetType(bytes)).toBe(type);
   });
 
+  it('reads comments before <svg> to their first -->, without backtracking on many comments', () => {
+    expect(sniffAssetType(Buffer.from('<?xml version="1.0"?>\n<!-- a - b -> c --->\n<!--x--><svg>'))).toBe('image/svg+xml');
+    expect(sniffAssetType(Buffer.from('<!-- a --> b --><svg>'))).toBeNull();
+    expect(sniffAssetType(Buffer.from(`<!--${'--><!--'.repeat(500)}x`))).toBeNull();
+  });
+
   it('finds literal asset names in templates', () => {
     expect(templateUsesAsset(`<img src="{asset('logo')}">`, 'logo')).toBe(true);
     expect(templateUsesAsset(`url("{asset( "logo" )}")`, 'logo')).toBe(true);

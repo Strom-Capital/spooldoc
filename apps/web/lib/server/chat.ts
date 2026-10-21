@@ -857,6 +857,13 @@ export function maskPageGroup(value: unknown): unknown {
 
 const ENTITIES: Record<string, string> = { lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', amp: '&' };
 
+/** A line without the spaces and cell separators it ends with. A loop, as a regular expression here backtracks exponentially. */
+function trimCellEnds(line: string): string {
+  let end = line.length;
+  while (end > 0 && (line[end - 1] === ' ' || line[end - 1] === '|')) end--;
+  return line.slice(0, end);
+}
+
 /**
  * The visible text of rendered HTML: no head, styles, scripts or tags; block ends
  * become line breaks and table cells are separated by ` | `.
@@ -878,7 +885,7 @@ export function visibleText(html: string): string {
       return ENTITIES[name.toLowerCase()] ?? entity;
     })
     .split('\n')
-    .map((line) => line.replace(/\s+/g, ' ').replace(/(\s*\|\s*)+$/, '').trim())
+    .map((line) => trimCellEnds(line.replace(/\s+/g, ' ')).trim())
     .filter((line) => line.length > 0)
     .join('\n');
 }
