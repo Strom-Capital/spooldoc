@@ -150,7 +150,10 @@ pnpm --filter @spooldoc/site preview
 
 Blog posts are Markdown files in `apps/site/src/content/blog`, named
 `YYYY-MM-DD-slug.md`, with a `title`, `description`, `date`, `tags` and
-`draft` header. A post about a release has the tag `release`. The share
+`draft` header. A post about a release has the tag `release`. Screenshots
+and diagrams on the site, in the guides and in posts open full size when
+clicked, if they have alt text; an image with an empty alt or inside a
+link is left as it is. The share
 image, `public/og.png`, is made by `pnpm --filter @spooldoc/site og`.
 
 The site deploys to GitHub Pages when a change to it, to `docs/` or to

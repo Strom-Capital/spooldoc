@@ -1,0 +1,266 @@
+---
+/**
+ * Opens a screenshot or diagram full page. Every image that should open sits in a link to
+ * its own file marked `data-zoom` (lib/imageLinks.ts); a click, Enter or Space on the
+ * link opens the file in a modal <dialog>, fitted to the window. Without this script the
+ * link opens the file itself. Included once, in Base.astro.
+ *
+ * - With a light and dark pair, the viewer shows the one the page shows, and follows the
+ *   theme while open.
+ * - With a mouse, a click on an image larger than the window shows it at its actual size,
+ *   to scroll or drag around, and a second click fits it again. Any other click closes.
+ * - On a touch screen a tap closes, and pinch zoom works as on any page.
+ * - Esc, the close button and a click beside the image close it. Focus goes back to the
+ *   image that opened it.
+ */
+---
+<dialog class="viewer" aria-label="Image" data-viewer>
+  <button type="button" class="close" aria-label="Close" data-viewer-close>
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  </button>
+  <div class="stage" data-viewer-stage>
+    <img alt="" decoding="async" data-viewer-image />
+  </div>
+</dialog>
+
+<script>
+  const dialog = document.querySelector<HTMLDialogElement>('[data-viewer]');
+  const stage = dialog?.querySelector<HTMLElement>('[data-viewer-stage]');
+  const image = dialog?.querySelector<HTMLImageElement>('[data-viewer-image]');
+
+  if (dialog && stage && image && typeof dialog.showModal === 'function') {
+    const root = document.documentElement;
+    const finePointer = matchMedia('(pointer: fine)');
+    const TRIGGER = 'a[data-zoom]';
+
+    /** The link that opened the viewer, or its partner once the theme changed. */
+    let trigger: HTMLAnchorElement | undefined;
+
+    for (const link of document.querySelectorAll<HTMLAnchorElement>(TRIGGER)) link.setAttribute('aria-haspopup', 'dialog');
+
+    /** The link of a light and dark pair that shows now: the theme CSS hides the other. */
+    const visible = (link: HTMLAnchorElement): HTMLAnchorElement => {
+      if (!link.dataset.themeImage || !link.parentElement) return link;
+      const pair = [...link.parentElement.querySelectorAll<HTMLAnchorElement>(`:scope > ${TRIGGER}[data-theme-image]`)];
+      return pair.find((each) => each.getClientRects().length > 0) ?? link;
+    };
+
+    const zoomed = () => dialog.hasAttribute('data-zoomed');
+
+    /** Larger than the window when fitted, so a click can show it at its actual size. */
+    const updateZoomable = () => {
+      const larger = !zoomed() && image.complete && (image.naturalWidth > image.clientWidth + 1 || image.naturalHeight > image.clientHeight + 1);
+      dialog.toggleAttribute('data-zoomable', finePointer.matches && larger);
+    };
+
+    const fit = () => {
+      dialog.removeAttribute('data-zoomed');
+      stage.scrollTo(0, 0);
+      updateZoomable();
+    };
+
+    /** Shows the image at its actual size, keeping the point under the pointer in place. */
+    const zoomAt = (x: number, y: number) => {
+      const before = image.getBoundingClientRect();
+      const fx = (x - before.left) / before.width;
+      const fy = (y - before.top) / before.height;
+      dialog.setAttribute('data-zoomed', '');
+      dialog.removeAttribute('data-zoomable');
+      const box = stage.getBoundingClientRect();
+      stage.scrollLeft = image.offsetLeft + fx * image.offsetWidth - (x - box.left);
+      stage.scrollTop = image.offsetTop + fy * image.offsetHeight - (y - box.top);
+    };
+
+    const show = (link: HTMLAnchorElement) => {
+      trigger = link;
+      const source = link.querySelector('img');
+      const alt = source?.alt ?? '';
+      dialog.setAttribute('aria-label', alt || 'Image');
+      image.alt = alt;
+      // The page image's size gives the aspect ratio before the file loads.
+      const width = Number(source?.getAttribute('width')) || source?.naturalWidth || 16;
+      const height = Number(source?.getAttribute('height')) || source?.naturalHeight || 10;
+      dialog.style.setProperty('--ratio', String(width / height));
+      if (image.src !== link.href) image.src = link.href;
+      fit();
+    };
+
+    const open = (link: HTMLAnchorElement) => {
+      show(visible(link));
+      // Lock the page behind, keeping the scrollbar's space so nothing moves.
+      if (innerWidth > root.clientWidth) root.style.scrollbarGutter = 'stable';
+      root.classList.add('viewer-open');
+      dialog.showModal();
+      updateZoomable();
+    };
+
+    image.addEventListener('load', () => {
+      if (image.naturalWidth && image.naturalHeight) dialog.style.setProperty('--ratio', String(image.naturalWidth / image.naturalHeight));
+      updateZoomable();
+    });
+
+    dialog.addEventListener('close', () => {
+      root.classList.remove('viewer-open');
+      root.style.removeProperty('scrollbar-gutter');
+      fit();
+      if (trigger) visible(trigger).focus({ preventScroll: true });
+    });
+
+    // Drag to move around an image at its actual size, with the mouse.
+    let drag: { x: number; y: number; left: number; top: number; moved: boolean } | undefined;
+    stage.addEventListener('pointerdown', (event) => {
+      if (!zoomed() || event.pointerType !== 'mouse' || event.button !== 0) return;
+      drag = { x: event.clientX, y: event.clientY, left: stage.scrollLeft, top: stage.scrollTop, moved: false };
+    });
+    stage.addEventListener('pointermove', (event) => {
+      if (!drag) return;
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+      if (!drag.moved) stage.setPointerCapture(event.pointerId);
+      drag.moved = true;
+      dialog.setAttribute('data-dragging', '');
+      stage.scrollLeft = drag.left - dx;
+      stage.scrollTop = drag.top - dy;
+    });
+    const endDrag = () => dialog.removeAttribute('data-dragging');
+    stage.addEventListener('pointerup', endDrag);
+    stage.addEventListener('pointercancel', () => {
+      endDrag();
+      drag = undefined;
+    });
+    // A drag stops pages behind from selecting the image.
+    image.addEventListener('dragstart', (event) => event.preventDefault());
+
+    dialog.addEventListener('click', (event) => {
+      const wasDrag = drag?.moved;
+      drag = undefined;
+      if (wasDrag) return;
+      // A click on the stage's own scrollbar is not a click beside the image.
+      const box = stage.getBoundingClientRect();
+      if (event.target === stage && (event.clientX - box.left >= stage.clientWidth || event.clientY - box.top >= stage.clientHeight)) return;
+      if (event.target === image && zoomed()) return fit();
+      if (event.target === image && dialog.hasAttribute('data-zoomable')) return zoomAt(event.clientX, event.clientY);
+      dialog.close();
+    });
+
+    addEventListener('resize', () => {
+      if (dialog.open) updateZoomable();
+    });
+
+    // Follow the theme while open: the header switch sets data-theme, the system its own.
+    const follow = () => {
+      if (!dialog.open || !trigger) return;
+      const link = visible(trigger);
+      if (link !== trigger) show(link);
+    };
+    new MutationObserver(follow).observe(root, { attributes: true, attributeFilter: ['data-theme'] });
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', follow);
+
+    // A click or Enter on the link opens the viewer. A click with a modifier key keeps
+    // the browser's own meaning, such as opening the file in a new tab.
+    document.addEventListener('click', (event) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const link = event.target instanceof Element ? event.target.closest<HTMLAnchorElement>(TRIGGER) : null;
+      if (!link) return;
+      event.preventDefault();
+      open(link);
+    });
+
+    // Space opens it too, as on a button. It opens on key up, so the same key press does
+    // not reach the close button that has focus once the viewer is open.
+    const spaceOnTrigger = (event: KeyboardEvent) =>
+      event.key === ' ' && event.target instanceof Element && event.target.matches(TRIGGER) ? (event.target as HTMLAnchorElement) : undefined;
+    document.addEventListener('keydown', (event) => {
+      if (spaceOnTrigger(event)) event.preventDefault();
+    });
+    document.addEventListener('keyup', (event) => {
+      const link = spaceOnTrigger(event);
+      if (!link) return;
+      event.preventDefault();
+      open(link);
+    });
+  }
+</script>
+
+<style>
+  .viewer {
+    --margin: 24px;
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #fff;
+    overflow: hidden;
+    cursor: zoom-out;
+  }
+  .viewer::backdrop { background: rgb(0 0 0 / 0.88); }
+
+  .stage {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    overflow: auto;
+    overscroll-behavior: contain;
+    container-type: size;
+    padding: var(--margin);
+  }
+  .stage img {
+    display: block;
+    /* Auto margins center it, and still let every side scroll into view when it is larger. */
+    margin: auto;
+    /* Fitted: as large as the stage allows, keeping the aspect ratio. */
+    width: min(100cqw, 100cqh * var(--ratio, 1.6));
+    height: auto;
+    max-width: none;
+    border-radius: var(--radius);
+    /* A diagram is transparent; it sits on the page's card color, as on the page. */
+    background: var(--card);
+    /* A faint edge, so a dark screenshot stands out from the dark backdrop. */
+    box-shadow: 0 0 0 1px rgb(255 255 255 / 0.12);
+    user-select: none;
+  }
+  .viewer[data-zoomable] .stage img { cursor: zoom-in; }
+  .viewer[data-zoomed] .stage img { width: auto; cursor: zoom-out; }
+  .viewer[data-dragging] .stage img { cursor: grabbing; }
+
+  .close {
+    position: absolute;
+    top: max(12px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid rgb(255 255 255 / 0.25);
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.6);
+    color: #fff;
+    cursor: pointer;
+  }
+  .close:hover { background: rgb(0 0 0 / 0.85); border-color: rgb(255 255 255 / 0.5); }
+  .close:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+  @media (max-width: 719px) {
+    .viewer { --margin: 8px; }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .viewer[open]::backdrop { animation: viewer-fade 0.18s ease-out; }
+    .viewer[open] .stage img { animation: viewer-in 0.18s ease-out; }
+  }
+  @keyframes viewer-fade { from { opacity: 0; } }
+  @keyframes viewer-in { from { opacity: 0; transform: scale(0.97); } }
+
+  :global(html.viewer-open) { overflow: hidden; }
+</style>

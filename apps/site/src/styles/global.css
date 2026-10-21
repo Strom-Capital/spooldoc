@@ -42,14 +42,18 @@ kbd { border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 
 .code pre.astro-code, .code pre { margin: 0 !important; border: 0; border-radius: 0; background: transparent !important; font-size: 0.85rem; }
 
 /* Screenshots with a light and a dark version that follow the page theme, including the header switch.
-   Shot.astro marks them with data-theme-image, as @spooldoc/docs does in the guides. */
-img[data-theme-image='dark'] { display: none; }
+   Shot.astro marks them with data-theme-image, as @spooldoc/docs does in the guides. The link around
+   each image (lib/imageLinks.ts) carries the same mark, so it hides with its image. */
+[data-theme-image='dark'] { display: none; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) img[data-theme-image='light'] { display: none; }
-  :root:not([data-theme='light']) img[data-theme-image='dark'] { display: inline; }
+  :root:not([data-theme='light']) [data-theme-image='light'] { display: none; }
+  :root:not([data-theme='light']) [data-theme-image='dark'] { display: inline; }
 }
-:root[data-theme='dark'] img[data-theme-image='light'] { display: none; }
-:root[data-theme='dark'] img[data-theme-image='dark'] { display: inline; }
+:root[data-theme='dark'] [data-theme-image='light'] { display: none; }
+:root[data-theme='dark'] [data-theme-image='dark'] { display: inline; }
+
+/* An image that opens full size when clicked (ImageViewer.astro) */
+a[data-zoom] { cursor: zoom-in; }
 
 /* Layout */
 .container { width: 100%; max-width: var(--max); margin: 0 auto; padding-inline: var(--gutter); }
@@ -77,14 +81,14 @@ img[data-theme-image='dark'] { display: none; }
 
 /* A framed screenshot */
 .frame { display: block; margin: 0; border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.8); background: var(--card); padding: 6px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 12px 32px -12px rgb(0 0 0 / 0.12); }
-.frame img { display: block; width: 100%; border-radius: var(--radius); }
-.frame img[data-theme-image='dark'] { display: none; }
+.frame img, .frame a { display: block; width: 100%; border-radius: var(--radius); }
+.frame [data-theme-image='dark'] { display: none; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) .frame img[data-theme-image='light'] { display: none; }
-  :root:not([data-theme='light']) .frame img[data-theme-image='dark'] { display: block; }
+  :root:not([data-theme='light']) .frame [data-theme-image='light'] { display: none; }
+  :root:not([data-theme='light']) .frame [data-theme-image='dark'] { display: block; }
 }
-:root[data-theme='dark'] .frame img[data-theme-image='light'] { display: none; }
-:root[data-theme='dark'] .frame img[data-theme-image='dark'] { display: block; }
+:root[data-theme='dark'] .frame [data-theme-image='light'] { display: none; }
+:root[data-theme='dark'] .frame [data-theme-image='dark'] { display: block; }
 
 /* Long-form text: guides and posts */
 .prose { font-size: 1rem; line-height: 1.75; min-width: 0; }

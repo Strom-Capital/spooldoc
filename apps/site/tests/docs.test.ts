@@ -78,6 +78,23 @@ describe('renderMarkdown', () => {
     expect(html).toContain('data-theme-image="dark" src="/docs/assets/jobs-dark.png"');
   });
 
+  it('puts each screenshot of a pair in its own link to its file, for the image viewer', async () => {
+    const html = await renderMarkdown(docsPage('jobs').markdown);
+    for (const theme of ['light', 'dark']) {
+      const link = new RegExp(`<a href="/docs/assets/jobs-${theme}.png" data-zoom="" aria-label="Open the image full size: [^"]+" data-theme-image="${theme}"><img data-theme-image="${theme}" src="/docs/assets/jobs-${theme}.png"`);
+      expect(html).toMatch(link);
+    }
+  });
+
+  it('links every image in every guide to the image viewer', async () => {
+    for (const slug of docsSlugs()) {
+      const html = await renderMarkdown(docsPage(slug).markdown);
+      const images = html.match(/<img\b/g)?.length ?? 0;
+      const links = html.match(/<a [^>]*data-zoom=""[^>]*><img\b/g)?.length ?? 0;
+      expect(links, slug).toBe(images);
+    }
+  });
+
   it('highlights code with both themes and leaves Mermaid as text', async () => {
     const html = await renderMarkdown('```yaml\ntype: invoice\n```\n\n```mermaid\nflowchart LR\n  a --> b\n```\n');
     expect(html).toContain('--shiki-light:');

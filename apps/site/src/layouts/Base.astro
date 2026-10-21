@@ -8,6 +8,7 @@ import faviconLight from '../../../web/public/brand/spooldoc-favicon-light.svg?r
 import faviconDark from '../../../web/public/brand/spooldoc-favicon-dark.svg?raw';
 import Logo from '../components/Logo.astro';
 import CodeCopy from '../components/CodeCopy.astro';
+import ImageViewer from '../components/ImageViewer.astro';
 import Analytics from '../components/Analytics.astro';
 import ThemeSwitch from '../components/ThemeSwitch.astro';
 import { svgDataUrl } from '../lib/brand';
@@ -127,6 +128,7 @@ const ogImage = new URL(url('/og.png'), Astro.site).href;
     </footer>
 
     <CodeCopy />
+    <ImageViewer />
     <script>
       // Phone menu: the button shows and hides the header nav.
       const toggle = document.querySelector<HTMLButtonElement>('[data-menu-toggle]');
