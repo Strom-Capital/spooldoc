@@ -73,8 +73,8 @@ describe("captureSample", () => {
   it("lists queues and files through the fake like the real connection", async () => {
     const conn = new FakeConnection();
     expect((await conn.listOutputQueues({ library: "mylib" })).map((q) => [q.name, q.files])).toEqual([
-      ["EMAIL", 1],
       ["FORMS", 2],
+      ["INVOICES", 1],
       ["REPORTS", 1],
     ]);
     const files = await conn.listSpooledFiles({ library: "MYLIB", name: "FORMS" });

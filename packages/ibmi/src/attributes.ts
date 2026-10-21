@@ -58,7 +58,7 @@ export function parseChrid(chrid: unknown, codePage?: unknown): SpooledFileAttri
   return { charset, codePage: page };
 }
 
-/** Splits an IFS output queue path such as `/QSYS.LIB/MYLIB.LIB/EMAIL.OUTQ`. Returns null for anything else. */
+/** Splits an IFS output queue path such as `/QSYS.LIB/MYLIB.LIB/INVOICES.OUTQ`. Returns null for anything else. */
 export function parseOutqPath(path: unknown): { library: string; name: string } | null {
   const text = toText(path).toUpperCase();
   let m = /^\/QSYS\.LIB\/([^/]+)\.LIB\/([^/]+)\.OUTQ$/.exec(text);

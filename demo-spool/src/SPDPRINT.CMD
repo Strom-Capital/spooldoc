@@ -5,7 +5,7 @@
              CMD        PROMPT('Print demo spooled files')
              PARM       KWD(QUEUE) TYPE(*CHAR) LEN(10) RSTD(*YES) +
                           DFT(*ALL) SPCVAL((*ALL)) +
-                          VALUES(FORMS EMAIL REPORTS) +
+                          VALUES(FORMS INVOICES REPORTS) +
                           PROMPT('Output queue')
              PARM       KWD(COUNT) TYPE(*DEC) LEN(3 0) DFT(1) +
                           RANGE(1 20) PROMPT('Number of runs')

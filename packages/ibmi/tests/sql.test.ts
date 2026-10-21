@@ -23,9 +23,9 @@ describe("outputQueuesQuery", () => {
   });
 
   it("filters library and name with upper-cased contains matches and parameter markers", () => {
-    const { sql, params } = outputQueuesQuery({ library: "mylib", name: " Email " });
+    const { sql, params } = outputQueuesQuery({ library: "mylib", name: " Invoices " });
     expect(sql).toContain("WHERE UPPER(OUTPUT_QUEUE_LIBRARY_NAME) LIKE ? ESCAPE '\\' AND UPPER(OUTPUT_QUEUE_NAME) LIKE ? ESCAPE '\\'");
-    expect(params).toEqual(["%MYLIB%", "%EMAIL%"]);
+    expect(params).toEqual(["%MYLIB%", "%INVOICES%"]);
     expect(sql).not.toContain("MYLIB");
   });
 
@@ -97,12 +97,12 @@ describe("containsPattern", () => {
 
 describe("spooledFilesQuery", () => {
   it("reads one queue through the table function, newest first, limit 200", () => {
-    const { sql, params } = spooledFilesQuery({ library: "mylib", name: "email" });
+    const { sql, params } = spooledFilesQuery({ library: "mylib", name: "invoices" });
     expect(sql).toContain("FROM TABLE(QSYS2.OUTPUT_QUEUE_ENTRIES(?, ?, 'YES')) X");
     expect(sql).toContain("ORDER BY CREATE_TIMESTAMP DESC");
     expect(sql).toMatch(/FETCH FIRST 200 ROWS ONLY$/);
     expect(sql).not.toContain("WHERE");
-    expect(params).toEqual(["MYLIB", "EMAIL"]);
+    expect(params).toEqual(["MYLIB", "INVOICES"]);
     for (const col of ["SPOOLED_FILE_NAME", "FILE_NUMBER", "JOB_NAME", "USER_DATA", "TOTAL_PAGES", "PAGE_WIDTH", "CREATE_TIMESTAMP"]) {
       expect(sql).toContain(col);
     }
@@ -174,8 +174,8 @@ describe("queueFileCountsQuery", () => {
 describe("row mapping", () => {
   it("maps a queue row with string numbers", () => {
     expect(
-      mapQueueRow({ OUTPUT_QUEUE_LIBRARY_NAME: "MYLIB", OUTPUT_QUEUE_NAME: "EMAIL", NUMBER_OF_FILES: "3", TEXT_DESCRIPTION: "Invoices " }),
-    ).toEqual({ library: "MYLIB", name: "EMAIL", files: 3, text: "Invoices", dataQueue: null });
+      mapQueueRow({ OUTPUT_QUEUE_LIBRARY_NAME: "MYLIB", OUTPUT_QUEUE_NAME: "INVOICES", NUMBER_OF_FILES: "3", TEXT_DESCRIPTION: "Invoices " }),
+    ).toEqual({ library: "MYLIB", name: "INVOICES", files: 3, text: "Invoices", dataQueue: null });
     expect(
       mapQueueRow({ OUTPUT_QUEUE_LIBRARY_NAME: "MYLIB", OUTPUT_QUEUE_NAME: "FORMS", NUMBER_OF_FILES: 1, DATA_QUEUE_LIBRARY: "MYLIB", DATA_QUEUE_NAME: "SPLFDTAQ" }).dataQueue,
     ).toEqual({ library: "MYLIB", name: "SPLFDTAQ" });
@@ -205,7 +205,7 @@ describe("row mapping", () => {
   };
 
   it("maps a spooled file row, splitting the qualified job name", () => {
-    expect(mapSpooledFileRow(row, { library: "mylib", name: "email" })).toEqual({
+    expect(mapSpooledFileRow(row, { library: "mylib", name: "invoices" })).toEqual({
       name: "SPDINVOICE",
       number: 34,
       jobNumber: "123456",
@@ -213,7 +213,7 @@ describe("row mapping", () => {
       jobName: "QPRTJOB",
       status: "HELD",
       attributes: {
-        queue: { library: "MYLIB", name: "EMAIL" },
+        queue: { library: "MYLIB", name: "INVOICES" },
         userData: "INVOICE",
         formType: "*STD",
         deviceType: "*SCS",
@@ -230,7 +230,7 @@ describe("row mapping", () => {
   });
 
   it("prefers the queue columns of the view over the queue argument", () => {
-    const entry = mapSpooledFileRow({ ...row, OUTPUT_QUEUE_LIBRARY_NAME: "OTHERLIB", OUTPUT_QUEUE_NAME: "FORMS" }, { library: "MYLIB", name: "EMAIL" });
+    const entry = mapSpooledFileRow({ ...row, OUTPUT_QUEUE_LIBRARY_NAME: "OTHERLIB", OUTPUT_QUEUE_NAME: "FORMS" }, { library: "MYLIB", name: "INVOICES" });
     expect(entry.attributes.queue).toEqual({ library: "OTHERLIB", name: "FORMS" });
   });
 

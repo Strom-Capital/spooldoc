@@ -18,7 +18,7 @@ All objects go into one library (`MYLIB` in the examples).
 | Object | Type | What it is |
 | --- | --- | --- |
 | `SPDSRC` | `*FILE` (source PF, record length 112, CCSID 37) | the sources below as members |
-| `FORMS`, `EMAIL`, `REPORTS` | `*OUTQ` | demo output queues |
+| `FORMS`, `INVOICES`, `REPORTS` | `*OUTQ` | demo output queues |
 | `SPLFDTAQ` | `*DTAQ` (max length 128) | attached to `FORMS`; gets an entry when a spooled file on `FORMS` becomes ready |
 | `SPDSETUP` | `*PGM` (CL) | creates the queues and the data queue; safe to run again |
 | `SPDCLEAN` | `*PGM` (CL) | removes the demo spooled files and objects |
@@ -34,7 +34,7 @@ One run of `SPDPRINT` leaves four held, saved spooled files:
 | Spooled file | Queue | User data | Size | Content |
 | --- | --- | --- | --- | --- |
 | `SPDORDERR` | `REPORTS` | `ORDERRPT` | 198 columns, 15 cpi, 51 lines, 4 pages | Operational report "Open order lines by customer". Page 1 is a parameter page (`Label....: value`). From page 2: a repeated page header (company, title, run date and time, program; `User:` and `Page n` on line two; a dashed rule), a column header, then 40 records of three lines each (values; type code; message). Ends with `*** End ***`. |
-| `SPDINVOICE` | `EMAIL` | `INVOICE` | 132 columns, 10 cpi, 66 lines, 8 pages | Six invoices back to back, each from a new page. Header block (invoice number and date, customer number, name, three address lines, payment terms), a line table of 3 to 25 lines (every fourth line has a delivery note row), totals (net, VAT 25.5 %, total) and a footer at line 60. Invoices 260102 and 260106 continue on a second page under an `INVOICE (CONTINUED)` header. The invoice number is the split key. Some names and descriptions contain ä, ö, Ä and Ö. |
+| `SPDINVOICE` | `INVOICES` | `INVOICE` | 132 columns, 10 cpi, 66 lines, 8 pages | Six invoices back to back, each from a new page. Header block (invoice number and date, customer number, name, three address lines, payment terms), a line table of 3 to 25 lines (every fourth line has a delivery note row), totals (net, VAT 25.5 %, total) and a footer at line 60. Invoices 260102 and 260106 continue on a second page under an `INVOICE (CONTINUED)` header. The invoice number is the split key. Some names and descriptions contain ä, ö, Ä and Ö. |
 | `SPDPICK` | `FORMS` | `PICKLIST` | 132 columns, 10 cpi, 66 lines, 5 pages | Five pick lists, each on its own page: pick list and order number, customer, delivery address, warehouse, route, ship date; a line table (line, item, description, bin, lot, quantity, unit); a `Picked by ____ Checked ____` footer at line 60. |
 | `SPDXML` | `FORMS` | `PICKXML` | 300 columns, 15 cpi, 66 lines, 5 pages | The same five pick lists as one XML document each (one per page), the kind a forms product reads from spool. |
 
@@ -175,7 +175,7 @@ MYLIB/SPDPRINT QUEUE(*ALL) COUNT(1) LIB(MYLIB)
 
 | Parameter | Values | Default |
 | --- | --- | --- |
-| `QUEUE` | `*ALL`, `FORMS`, `EMAIL`, `REPORTS` | `*ALL` |
+| `QUEUE` | `*ALL`, `FORMS`, `INVOICES`, `REPORTS` | `*ALL` |
 | `COUNT` | 1 to 20: how many times each document is printed | 1 |
 | `LIB` | library that holds the queues and programs | `*CURLIB` |
 
@@ -202,7 +202,7 @@ SELECT OUTPUT_QUEUE_NAME, SPOOLED_FILE_NAME, JOB_NAME, FILE_NUMBER,
        USER_DATA, STATUS, TOTAL_PAGES, DEVICE_TYPE
   FROM QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC
  WHERE OUTPUT_QUEUE_LIBRARY_NAME = 'MYLIB'
-   AND OUTPUT_QUEUE_NAME IN ('FORMS', 'EMAIL', 'REPORTS');
+   AND OUTPUT_QUEUE_NAME IN ('FORMS', 'INVOICES', 'REPORTS');
 
 -- the lines of one spooled file
 SELECT ORDINAL_POSITION, SPOOLED_DATA
@@ -246,7 +246,7 @@ never printed.
 CALL PGM(MYLIB/SPDCLEAN) PARM(MYLIB)
 ```
 
-**Warning:** `SPDCLEAN` clears the output queues `FORMS`, `EMAIL` and
+**Warning:** `SPDCLEAN` clears the output queues `FORMS`, `INVOICES` and
 `REPORTS` in the library, which deletes every spooled file on them, not only
 the demo files. Then it deletes the queues, the data queue, the printer
 programs, `SPDPRINTC`, `SPDSETUP` and the `SPDPRINT` command. It keeps

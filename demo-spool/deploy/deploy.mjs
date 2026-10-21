@@ -80,7 +80,7 @@ try {
     process.exitCode = 1;
   } else {
     await cl(conn, `CALL PGM(${lib}/SPDSETUP) PARM('${lib}')`);
-    console.log(`\nSetup done: output queues FORMS, EMAIL, REPORTS and data queue SPLFDTAQ in ${lib}.`);
+    console.log(`\nSetup done: output queues FORMS, INVOICES, REPORTS and data queue SPLFDTAQ in ${lib}.`);
     console.log("Next: npm run print");
   }
 } catch (err) {

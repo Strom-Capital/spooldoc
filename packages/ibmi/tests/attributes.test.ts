@@ -30,7 +30,7 @@ describe("parseChrid", () => {
 
 describe("parseOutqPath", () => {
   it("splits a library queue path", () => {
-    expect(parseOutqPath("/QSYS.LIB/MYLIB.LIB/EMAIL.OUTQ")).toEqual({ library: "MYLIB", name: "EMAIL" });
+    expect(parseOutqPath("/QSYS.LIB/MYLIB.LIB/INVOICES.OUTQ")).toEqual({ library: "MYLIB", name: "INVOICES" });
     expect(parseOutqPath(" /qsys.lib/mylib.lib/forms.outq ")).toEqual({ library: "MYLIB", name: "FORMS" });
   });
 
@@ -39,8 +39,8 @@ describe("parseOutqPath", () => {
   });
 
   it("gives null for anything else", () => {
-    expect(parseOutqPath("MYLIB/EMAIL")).toBeNull();
-    expect(parseOutqPath("/QSYS.LIB/MYLIB.LIB/EMAIL.FILE")).toBeNull();
+    expect(parseOutqPath("MYLIB/INVOICES")).toBeNull();
+    expect(parseOutqPath("/QSYS.LIB/MYLIB.LIB/INVOICES.FILE")).toBeNull();
     expect(parseOutqPath(null)).toBeNull();
   });
 });

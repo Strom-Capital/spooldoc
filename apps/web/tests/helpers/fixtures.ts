@@ -31,10 +31,10 @@ export async function insertServer(values: Partial<typeof servers.$inferInsert> 
   return row!.id;
 }
 
-/** A job row on the given server's MYLIB/EMAIL queue. */
+/** A job row on the given server's MYLIB/INVOICES queue. */
 export async function insertJob(serverId: string, spec: Partial<JobSpec> = {}): Promise<string> {
   const destinationId = await builtinDestination();
-  const draft = { ...emptySpec({ serverId, library: 'MYLIB', queue: 'EMAIL', destinationId }), ...spec };
+  const draft = { ...emptySpec({ serverId, library: 'MYLIB', queue: 'INVOICES', destinationId }), ...spec };
   const [row] = await db().insert(jobs).values({ name: 'Invoices', draft }).returning({ id: jobs.id });
   return row!.id;
 }

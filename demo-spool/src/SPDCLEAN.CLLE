@@ -1,6 +1,6 @@
 /* SPDCLEAN: remove the demo spooled files and objects.               */
 /*   CALL PGM(MYLIB/SPDCLEAN) PARM(MYLIB)                              */
-/* WARNING: clears output queues FORMS, EMAIL and REPORTS in &LIB,    */
+/* WARNING: clears output queues FORMS, INVOICES and REPORTS in &LIB, */
 /* which deletes every spooled file on them that you may delete, then */
 /* deletes the queues, the data queue SPLFDTAQ, the demo programs and */
 /* the SPDPRINT command. It keeps itself and source file SPDSRC.      */
@@ -10,7 +10,7 @@
 
              CLROUTQ    OUTQ(&LIB/FORMS)
              MONMSG     MSGID(CPF0000)
-             CLROUTQ    OUTQ(&LIB/EMAIL)
+             CLROUTQ    OUTQ(&LIB/INVOICES)
              MONMSG     MSGID(CPF0000)
              CLROUTQ    OUTQ(&LIB/REPORTS)
              MONMSG     MSGID(CPF0000)
@@ -20,7 +20,7 @@
 
              DLTOUTQ    OUTQ(&LIB/FORMS)
              MONMSG     MSGID(CPF0000)
-             DLTOUTQ    OUTQ(&LIB/EMAIL)
+             DLTOUTQ    OUTQ(&LIB/INVOICES)
              MONMSG     MSGID(CPF0000)
              DLTOUTQ    OUTQ(&LIB/REPORTS)
              MONMSG     MSGID(CPF0000)

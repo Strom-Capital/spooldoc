@@ -13,7 +13,7 @@
   "attributes": {
     "queue": {
       "library": "MYLIB",
-      "name": "EMAIL"
+      "name": "INVOICES"
     },
     "userData": "INVOICE",
     "formType": "*STD",

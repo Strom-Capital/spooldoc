@@ -1,10 +1,10 @@
 /* SPDPRINTC: processing program of the SPDPRINT command.             */
 /*   MYLIB/SPDPRINT QUEUE(*ALL) COUNT(1) LIB(MYLIB)                    */
 /* Prints the demo documents as held, saved spooled files:            */
-/*   REPORTS  SPDORDERR   198 col, 15 cpi, 51 lines  USRDTA ORDERRPT  */
-/*   EMAIL    SPDINVOICE  132 col, 10 cpi, 66 lines  USRDTA INVOICE   */
-/*   FORMS    SPDPICK     132 col, 10 cpi, 66 lines  USRDTA PICKLIST  */
-/*   FORMS    SPDXML      300 col, 15 cpi, 66 lines  USRDTA PICKXML   */
+/*   REPORTS   SPDORDERR   198 col, 15 cpi, 51 lines  USRDTA ORDERRPT */
+/*   INVOICES  SPDINVOICE  132 col, 10 cpi, 66 lines  USRDTA INVOICE  */
+/*   FORMS     SPDPICK     132 col, 10 cpi, 66 lines  USRDTA PICKLIST */
+/*   FORMS     SPDXML      300 col, 15 cpi, 66 lines  USRDTA PICKXML  */
 /* Each printer program writes to QSYSPRT; the override sets the      */
 /* queue, page size, spooled file name and user data. CHRID(*JOBCCSID)   */
 /* tags the data with the job CCSID, which is also the CCSID of SPDSRC. */
@@ -37,12 +37,12 @@
                 DLTOVR     FILE(QSYSPRT)
              ENDDO
 
-/* Invoices to EMAIL.                                                 */
+/* Invoices to INVOICES.                                              */
              IF         COND((&QUEUE *EQ '*ALL') *OR +
-                          (&QUEUE *EQ 'EMAIL')) THEN(DO)
+                          (&QUEUE *EQ 'INVOICES')) THEN(DO)
                 OVRPRTF    FILE(QSYSPRT) DEVTYPE(*SCS) PAGESIZE(66 132) +
                              LPI(6) CPI(10) OVRFLW(66) CHRID(*JOBCCSID) +
-                             OUTQ(&LIB/EMAIL) HOLD(*YES) SAVE(*YES) +
+                             OUTQ(&LIB/INVOICES) HOLD(*YES) SAVE(*YES) +
                              USRDTA(INVOICE) SPLFNAME(SPDINVOICE) +
                              OVRSCOPE(*CALLLVL)
                 CALL       PGM(&LIB/SPDINVOICE)
