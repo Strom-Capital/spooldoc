@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { namePatternProblems, tagProblems, templatePaths, valueAt, type Definition } from '@spooldoc/core';
+import { convert as convertHtml } from 'html-to-text';
 import juice from 'juice';
 import type { SendMailOptions } from 'nodemailer';
 import { isEmailAddress } from '@/lib/destination-config';
@@ -144,23 +145,22 @@ export function textToHtml(text: string): string {
   return `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a">\n${paragraphs}\n</body></html>`;
 }
 
-/** The text of an HTML body, for the plain-text part of the email. */
+/**
+ * The text of an HTML body, for the plain-text part of the email, read by an HTML parser:
+ * no line wrapping, tables kept as columns, headings as they are written, images left out
+ * (they are data URIs or inline attachments), and a link's address after its text unless
+ * it is the text itself.
+ */
 export function htmlToText(html: string): string {
-  return html
-    .replace(/<(style|script|head)[^>]*>[\s\S]*?<\/\1>/gi, '')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|h[1-6]|li|tr|table|section|header|footer)>/gi, '\n')
-    .replace(/<\/t[dh]>/gi, '\t')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+  return convertHtml(html, {
+    wordwrap: false,
+    selectors: [
+      { selector: 'img', format: 'skip' },
+      { selector: 'a', options: { hideLinkHrefIfSameAsText: true, ignoreHref: false, noAnchorUrl: true } },
+      { selector: 'table', format: 'dataTable' },
+      ...(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const).map((selector) => ({ selector, options: { uppercase: false } })),
+    ],
+  }).trim();
 }
 
 /**

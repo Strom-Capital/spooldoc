@@ -3,7 +3,7 @@ import nodemailer, { type SendMailOptions } from 'nodemailer';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emailSpecSchema, emptySpec, type EmailSpec, type JobSpec } from '@/lib/job-spec';
 import { destinations, jobs, jobVersions, runDeliveries, runs, settings } from '@/lib/server/db/schema';
-import { addressList, addressProblems, composeEmail, emailSpecProblems, inlineHtml } from '@/lib/server/email-message';
+import { addressList, addressProblems, composeEmail, emailSpecProblems, htmlToText, inlineHtml } from '@/lib/server/email-message';
 import { mailErrorText, setMailSender, stopsSending, updateMail } from '@/lib/server/mail';
 import { runJob } from '@/lib/server/runner';
 
@@ -92,6 +92,20 @@ describe('composing an email', () => {
     expect(image?.cid).toBeTruthy();
     expect(sent.html).toContain(`cid:${image!.cid}`);
     expect(sent.text).toContain('302.66');
+  });
+});
+
+describe('the plain text of an HTML body', () => {
+  it('shows escaped text as it reads, and drops styles and images', () => {
+    const html =
+      '<html><head><style>.note { color: red; }</style></head><body><h1>Invoice 260101</h1><p class="note">Write &lt;script&gt; as text.</p><img src="data:image/png;base64,iVBORw0KGgo=" alt="Logo"><table><tr><th>Item</th><th>Amount</th></tr><tr><td>A-1001</td><td>29.40</td></tr></table></body></html>';
+    const text = htmlToText(html);
+    expect(text).toContain('Write <script> as text.');
+    expect(text).not.toContain('color: red');
+    expect(text).not.toContain('.note');
+    expect(text).not.toContain('data:image');
+    expect(text).toContain('Invoice 260101');
+    expect(text).toMatch(/A-1001\s+29\.40/);
   });
 });
 
