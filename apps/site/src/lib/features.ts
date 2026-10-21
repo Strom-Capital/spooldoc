@@ -18,6 +18,11 @@ export interface Feature {
   alt: string;
   /** The guides this feature is described in, the first one linked from the section. */
   docs: { slug: string; title: string }[];
+  /**
+   * A code sample. `beside` puts it next to the text, with the screenshot full width
+   * below; `below` puts it full width under the text and the screenshot, for long lines.
+   */
+  code?: { code: string; lang: 'yaml' | 'sh'; title: string; place: 'beside' | 'below'; track?: 'install_command_copied' };
 }
 
 export const QUICK_START = [
@@ -26,23 +31,31 @@ export const QUICK_START = [
   'docker compose up -d',
 ].join('\n');
 
-export const DEFINITION_EXAMPLE = `type: invoice
+/**
+ * The start of the definition in the job builder screenshot (job-builder-*.png), in block
+ * style so no line runs past the column. The site's tests parse it with the real parser.
+ */
+export const DEFINITION_EXAMPLE = `type: sales-invoice
 version: 1
+source: text
 match:
   splf: SPDINVOICE
-  userData: INVOICE
-  page1: "^\\\\S.*\\\\bINVOICE$"
-source: text
+  page1: MYCO LTD
 text:
-  page: { width: 132, length: 66 }
-  header: { lines: 5 }
-  footer: { fromLine: 60 }
-  split: { field: invoiceNo }
+  page:
+    width: 132
+    length: 66
+  split:
+    field: invoiceNo
   fields:
-    - { name: invoiceNo, anchor: { after: "Invoice no.......:" } }
-    - { name: invoiceDate, anchor: { after: "Invoice date.....:" }, type: date }
-    - { name: customerName, anchor: { line: 9, column: 5, length: 40 } }
-    - { name: netAmount, anchor: { after: "Net amount" }, page: last, type: number }`;
+    - name: invoiceNo
+      anchor:
+        regex: 'Invoice no\\.+: (\\S+)'
+      page: all
+    - name: invoiceDate
+      anchor:
+        regex: 'Invoice date\\.+: (\\S+)'
+      type: date`;
 
 
 /**
@@ -80,6 +93,7 @@ export const FEATURES: Feature[] = [
     shot: 'job-builder',
     alt: 'The job builder with the extract step open: six pipeline steps across the top, the sample page with field hits highlighted on the left and the definition editor on the right',
     docs: [{ slug: 'definitions', title: 'Definitions' }],
+    code: { code: DEFINITION_EXAMPLE, lang: 'yaml', title: 'YAML, the start of the definition shown below', place: 'beside' },
   },
   {
     id: 'templates',
@@ -164,5 +178,6 @@ export const FEATURES: Feature[] = [
       { slug: 'deployment', title: 'Deployment' },
       { slug: 'getting-started', title: 'Getting started' },
     ],
+    code: { code: QUICK_START, lang: 'sh', title: 'Shell', place: 'below', track: 'install_command_copied' },
   },
 ];

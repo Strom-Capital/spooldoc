@@ -3,7 +3,8 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { inlineSvg } from '../src/lib/brand';
 import { docsAssets, docsNav, docsSlugs } from '../src/lib/docs';
-import { FEATURES } from '../src/lib/features';
+import { parseDefinition } from '@spooldoc/core';
+import { DEFINITION_EXAMPLE, FEATURES } from '../src/lib/features';
 import { docsUrl, formatDate, links, url } from '../src/lib/links';
 import { llmsTxt } from '../src/lib/llms';
 import { sortPosts, type PostLike } from '../src/lib/sortPosts';
@@ -153,6 +154,21 @@ describe('features', () => {
     for (const feature of FEATURES) {
       expect(assets, feature.shot).toContain(`${feature.shot}-light.png`);
       expect(assets, feature.shot).toContain(`${feature.shot}-dark.png`);
+    }
+  });
+
+  it('show a YAML sample the definition parser takes, the one in the screenshot', () => {
+    const definition = parseDefinition(DEFINITION_EXAMPLE);
+    expect(definition.type).toBe('sales-invoice');
+    expect(definition.source).toBe('text');
+  });
+
+  it('keep code samples narrow enough for their place', () => {
+    for (const feature of FEATURES) {
+      if (!feature.code) continue;
+      const longest = Math.max(...feature.code.code.split('\n').map((line) => line.length));
+      // Beside the text the column holds about 60 characters of code at desktop width.
+      if (feature.code.place === 'beside') expect(longest, feature.id).toBeLessThanOrEqual(60);
     }
   });
 
