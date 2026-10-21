@@ -3,10 +3,13 @@
 import {
   ArrowUpRightIcon,
   BookOpenIcon,
+  ChevronDownIcon,
+  CircleDotIcon,
   HomeIcon,
   ImageIcon,
   InboxIcon,
   LogOutIcon,
+  MessagesSquareIcon,
   PanelLeftIcon,
   ScrollTextIcon,
   SendIcon,
@@ -18,7 +21,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Sidebar,
   SidebarContent,
@@ -36,6 +41,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { authClient } from '@/lib/client/auth';
 import { shortcut } from '@/lib/client/keys';
+import { REPOSITORY } from '@/lib/repository';
 import { Logo } from './logo';
 
 /**
@@ -53,7 +59,8 @@ const PAGES = [
 ];
 
 /**
- * Wordmark, the pages, Settings, Profile and the docs (in a new tab), and Sign out at the bottom. On desktop it
+ * Wordmark, the pages, Settings and Profile, Support (the docs, and the repository's
+ * discussions and issues, each in a new tab), and Sign out at the bottom. On desktop it
  * collapses to an icon rail (Cmd/Ctrl+B or the toggle by the logo) so the job builder
  * gets the width. On phones it opens from the menu button at the top right.
  */
@@ -98,24 +105,15 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Settings</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <PageLink href="/settings" label="Settings" icon={SettingsIcon} active={pathname.startsWith('/settings')} onClick={close} />
-              <PageLink href="/profile" label="Profile" icon={UserIcon} active={pathname.startsWith('/profile')} onClick={close} />
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Docs">
-                  <a href="/docs" target="_blank" rel="noreferrer" onClick={close}>
-                    <BookOpenIcon />
-                    <span>Docs</span>
-                    <ArrowUpRightIcon className="ml-auto text-muted-foreground group-data-[collapsible=icon]:hidden" />
-                  </a>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <NavGroup label="Settings" collapsed={collapsed}>
+          <PageLink href="/settings" label="Settings" icon={SettingsIcon} active={pathname.startsWith('/settings')} onClick={close} />
+          <PageLink href="/profile" label="Profile" icon={UserIcon} active={pathname.startsWith('/profile')} onClick={close} />
+        </NavGroup>
+        <NavGroup label="Support" collapsed={collapsed}>
+          <ExternalLink href="/docs" label="Docs" icon={BookOpenIcon} onClick={close} />
+          <ExternalLink href={`${REPOSITORY}/discussions`} label="Discussions" icon={MessagesSquareIcon} onClick={close} />
+          <ExternalLink href={`${REPOSITORY}/issues`} label="Issues" icon={CircleDotIcon} onClick={close} />
+        </NavGroup>
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
@@ -140,6 +138,46 @@ function PageLink({ href, label, icon: Icon, active, onClick }: { href: string; 
           <Icon />
           <span>{label}</span>
         </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
+/**
+ * A labelled group that folds away from its label. Open by default, and always open on
+ * the icon rail, where the label is hidden.
+ */
+function NavGroup({ label, collapsed, children }: { label: string; collapsed: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <Collapsible open={open || collapsed} onOpenChange={setOpen} className="group/collapsible">
+      <SidebarGroup>
+        <SidebarGroupLabel asChild className="hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+          <CollapsibleTrigger>
+            {label}
+            <ChevronDownIcon className="ml-auto transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
+          </CollapsibleTrigger>
+        </SidebarGroupLabel>
+        <CollapsibleContent>
+          <SidebarGroupContent>
+            <SidebarMenu>{children}</SidebarMenu>
+          </SidebarGroupContent>
+        </CollapsibleContent>
+      </SidebarGroup>
+    </Collapsible>
+  );
+}
+
+/** A link that opens in a new tab, marked with an arrow. */
+function ExternalLink({ href, label, icon: Icon, onClick }: { href: string; label: string; icon: LucideIcon; onClick: () => void }) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild tooltip={label}>
+        <a href={href} target="_blank" rel="noreferrer" onClick={onClick}>
+          <Icon />
+          <span>{label}</span>
+          <ArrowUpRightIcon className="ml-auto text-muted-foreground group-data-[collapsible=icon]:hidden" />
+        </a>
       </SidebarMenuButton>
     </SidebarMenuItem>
   );

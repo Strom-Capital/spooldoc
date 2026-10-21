@@ -3,6 +3,9 @@
 These guides cover installing, using and deploying Spooldoc. For the
 overview and the architecture diagram, see the [project README](../README.md).
 
+In the app, Support in the sidebar opens these guides, and the
+discussions and issues on GitHub, each in a new tab.
+
 ## Get started
 
 | Guide | What it covers |
