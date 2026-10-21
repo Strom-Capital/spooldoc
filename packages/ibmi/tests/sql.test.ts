@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { decoderFor } from "@spooldoc/core";
 import { describe, expect, it } from "vitest";
 import * as root from "../src/index.js";
 import {
@@ -8,6 +9,7 @@ import {
   mapSpooledFileRow,
   outputQueuesQuery,
   queueFileCountsQuery,
+  queueTextCcsid,
   spooledFilesQuery,
 } from "../src/index.js";
 
@@ -39,6 +41,50 @@ describe("outputQueuesQuery", () => {
 
   it("reads the data queue columns", () => {
     expect(outputQueuesQuery().sql).toContain("DATA_QUEUE_LIBRARY, DATA_QUEUE_NAME");
+  });
+});
+
+describe("queue text CCSID", () => {
+  // "Tulosteen lähetys" as a job with CCSID 278 stores it: ä is 0xC0.
+  const bytes = Uint8Array.from([0xe3, 0xa4, 0x93, 0x96, 0xa2, 0xa3, 0x85, 0x85, 0x95, 0x40, 0x93, 0xc0, 0x88, 0x85, 0xa3, 0xa8, 0xa2]);
+
+  it("reads text tagged as CCSID 37 wrong, and right as CCSID 278", () => {
+    expect(decoderFor(37)(bytes)).toBe("Tulosteen l{hetys");
+    expect(decoderFor(278)(bytes)).toBe("Tulosteen lähetys");
+  });
+
+  it("re-tags the text with the system's default CCSID and leaves the names alone", () => {
+    const { sql, params } = outputQueuesQuery({ library: "mylib" }, queueTextCcsid(278));
+    expect(sql).toContain(
+      "SELECT OUTPUT_QUEUE_LIBRARY_NAME, OUTPUT_QUEUE_NAME, NUMBER_OF_FILES, CAST(CAST(TEXT_DESCRIPTION AS VARCHAR(50) CCSID 65535) AS VARCHAR(50) CCSID 278) AS TEXT_DESCRIPTION, DATA_QUEUE_LIBRARY",
+    );
+    expect(params).toEqual(["%MYLIB%"]);
+  });
+
+  it("keeps the text as the view tags it on a CCSID 37 system", () => {
+    expect(queueTextCcsid(37)).toBeNull();
+    expect(queueTextCcsid(37, 278)).toBeNull();
+    expect(outputQueuesQuery({}, queueTextCcsid(37)).sql).toContain("NUMBER_OF_FILES, TEXT_DESCRIPTION, DATA_QUEUE_LIBRARY");
+  });
+
+  it("falls back to SPOOLDOC_DEFAULT_CCSID when the default CCSID is 65535 or unknown", () => {
+    expect(queueTextCcsid(65535, 278)).toBe(278);
+    expect(queueTextCcsid(0, 1143)).toBe(1143);
+    expect(queueTextCcsid(65535, 37)).toBeNull();
+  });
+
+  it("keeps today's text when there is neither", () => {
+    expect(queueTextCcsid(65535)).toBeNull();
+    expect(queueTextCcsid(0)).toBeNull();
+    expect(queueTextCcsid(0, 65535)).toBeNull();
+    expect(outputQueuesQuery({}, null).sql).toContain("NUMBER_OF_FILES, TEXT_DESCRIPTION, DATA_QUEUE_LIBRARY");
+  });
+
+  it("writes only a whole CCSID into the statement", () => {
+    for (const bad of [Number.NaN, 2.5, -1, 0, 65535, 70000]) {
+      expect(outputQueuesQuery({}, bad).sql).not.toContain("CAST");
+      expect(queueTextCcsid(bad, bad)).toBeNull();
+    }
   });
 });
 

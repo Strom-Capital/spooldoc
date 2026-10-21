@@ -28,6 +28,7 @@ import {
   mapSpooledFileRow,
   outputQueuesQuery,
   queueFileCountsQuery,
+  queueTextCcsid,
   spooledFilesQuery,
   type Row,
 } from "./sql.js";
@@ -118,13 +119,14 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
   const describe = (): Promise<SystemInfo> => {
     info ??= (async () => {
       const [ccsid] = await query(
-        "SELECT CCSID FROM TABLE(QSYS2.ACTIVE_JOB_INFO(JOB_NAME_FILTER => '*', DETAILED_INFO => 'ALL')) X",
+        "SELECT CCSID, DEFAULT_CCSID FROM TABLE(QSYS2.ACTIVE_JOB_INFO(JOB_NAME_FILTER => '*', DETAILED_INFO => 'ALL')) X",
       );
       const [os] = await query("SELECT OS_VERSION, OS_RELEASE FROM SYSIBMADM.ENV_SYS_INFO");
       return {
         host: creds.host,
         user: creds.user.toUpperCase(),
         jobCcsid: toNumber(ccsid?.CCSID) ?? 0,
+        defaultCcsid: toNumber(ccsid?.DEFAULT_CCSID) ?? 0,
         vrm: os ? `V${toText(os.OS_VERSION)}R${toText(os.OS_RELEASE)}` : "",
       };
     })();
@@ -257,7 +259,8 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
   return {
     describe,
     async listOutputQueues(filter) {
-      const { sql, params } = outputQueuesQuery(filter);
+      const { defaultCcsid } = await describe();
+      const { sql, params } = outputQueuesQuery(filter, queueTextCcsid(defaultCcsid, filter?.fallbackCcsid));
       return (await query(sql, params)).map(mapQueueRow);
     },
     async listSpooledFiles(queue, filter) {

@@ -32,8 +32,32 @@ export function containsPattern(value: string): string {
 
 const likeClause = (column: string): string => `UPPER(${column}) LIKE ? ESCAPE '${LIKE_ESCAPE}'`;
 
-/** Output queues from QSYS2.OUTPUT_QUEUE_INFO, ordered by library and name. */
-export function outputQueuesQuery(filter: OutputQueueFilter = {}): SqlQuery {
+/** True for a CCSID that names a code page: a whole number from 1 to 65533, not 65535. */
+function isTextCcsid(ccsid: number | undefined): ccsid is number {
+  return typeof ccsid === "number" && Number.isInteger(ccsid) && ccsid >= 1 && ccsid <= 65533;
+}
+
+/**
+ * The CCSID to read queue text with. QSYS2.OUTPUT_QUEUE_INFO tags TEXT_DESCRIPTION as
+ * CCSID 37, but the bytes are in the CCSID of the job that set the text, which is the
+ * system's language CCSID. That is the server job's default CCSID; when it is unknown or
+ * 65535, `fallback` (SPOOLDOC_DEFAULT_CCSID). Null keeps the text as the view tags it, and
+ * so does 37, which is the tag already.
+ *
+ * @param defaultCcsid - The server job's DEFAULT_CCSID, 0 when unknown
+ * @param fallback - The CCSID to use when the default is unknown or 65535
+ */
+export function queueTextCcsid(defaultCcsid: number, fallback?: number): number | null {
+  const ccsid = isTextCcsid(defaultCcsid) ? defaultCcsid : isTextCcsid(fallback) ? fallback : null;
+  return ccsid === 37 ? null : ccsid;
+}
+
+/**
+ * Output queues from QSYS2.OUTPUT_QUEUE_INFO, ordered by library and name. With
+ * `textCcsid`, the text is read as raw bytes and tagged with that CCSID (see
+ * `queueTextCcsid`). It is a validated integer written into the statement.
+ */
+export function outputQueuesQuery(filter: OutputQueueFilter = {}, textCcsid: number | null = null): SqlQuery {
   const where: string[] = [];
   const params: string[] = [];
   if (filter.library?.trim()) {
@@ -49,8 +73,11 @@ export function outputQueuesQuery(filter: OutputQueueFilter = {}): SqlQuery {
     where.push(`OUTPUT_QUEUE_LIBRARY_NAME IN (${libraries.map(() => "?").join(", ")})`);
     params.push(...libraries);
   }
+  const text = isTextCcsid(textCcsid ?? undefined)
+    ? `CAST(CAST(TEXT_DESCRIPTION AS VARCHAR(50) CCSID 65535) AS VARCHAR(50) CCSID ${textCcsid}) AS TEXT_DESCRIPTION`
+    : "TEXT_DESCRIPTION";
   const sql = [
-    "SELECT OUTPUT_QUEUE_LIBRARY_NAME, OUTPUT_QUEUE_NAME, NUMBER_OF_FILES, TEXT_DESCRIPTION, DATA_QUEUE_LIBRARY, DATA_QUEUE_NAME",
+    `SELECT OUTPUT_QUEUE_LIBRARY_NAME, OUTPUT_QUEUE_NAME, NUMBER_OF_FILES, ${text}, DATA_QUEUE_LIBRARY, DATA_QUEUE_NAME`,
     "FROM QSYS2.OUTPUT_QUEUE_INFO",
     ...(where.length ? [`WHERE ${where.join(" AND ")}`] : []),
     "ORDER BY OUTPUT_QUEUE_LIBRARY_NAME, OUTPUT_QUEUE_NAME",

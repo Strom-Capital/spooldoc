@@ -36,6 +36,11 @@ export interface SystemInfo {
   host: string;
   user: string;
   jobCcsid: number;
+  /**
+   * The default CCSID of the signed-on job, from the system's language: 0 when unknown.
+   * Object text such as a queue's description is in this CCSID.
+   */
+  defaultCcsid: number;
   vrm: string;
 }
 
@@ -45,6 +50,8 @@ export interface OutputQueueFilter {
   name?: string;
   /** Only queues in these libraries (exact names). Empty or missing means every library. */
   libraries?: string[];
+  /** The CCSID to read the queue text with when the job's default CCSID is unknown or 65535. */
+  fallbackCcsid?: number;
 }
 
 /** Filter for `listSpooledFiles`. The text filters are case-insensitive "contains" matches. */

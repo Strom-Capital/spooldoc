@@ -7,6 +7,10 @@ The Queues page shows the output queues of one server: library, name,
 description and how many spooled files each holds. With more than one
 server, pick the server at the start of the search row.
 
+The description is read in the default CCSID of the system's language, so
+letters such as ä, ö and å show as they do on the 5250 screen. When the
+system has no default CCSID, Spooldoc uses `SPOOLDOC_DEFAULT_CCSID`.
+
 Three columns count the files:
 
 | Column | Counts |
