@@ -2,7 +2,7 @@
 
 import type { SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
 import type { AiProviderId, Effort } from './ai-providers';
-import type { EmailConfig, IfsConfig } from './destination-config';
+import type { EmailConfig, IfsConfig, WebhookConfigView } from './destination-config';
 import type { Formats } from './formats';
 import type { Format, JobSpec } from './job-spec';
 import type { MailSenderKind, SmtpSecurity } from './mail-config';
@@ -76,7 +76,7 @@ export type DestinationView = {
   builtin: boolean;
   /** The jobs whose draft or any version delivers here. */
   jobs: QueueView['jobs'];
-} & ({ kind: 'spooldoc'; config: Record<string, never> } | { kind: 'ifs'; config: IfsConfig } | { kind: 'email'; config: EmailConfig });
+} & ({ kind: 'spooldoc'; config: Record<string, never> } | { kind: 'ifs'; config: IfsConfig } | { kind: 'email'; config: EmailConfig } | { kind: 'webhook'; config: WebhookConfigView });
 
 /** An uploaded image or font, without its bytes. */
 export interface AssetView {
@@ -181,7 +181,7 @@ export interface RunView {
 }
 
 /** The destination kinds that record a delivery per document. */
-export type DeliveryKind = 'email';
+export type DeliveryKind = 'email' | 'webhook';
 
 /** One delivery of a run, for one document, such as one email. */
 export interface DeliveryView {
@@ -197,6 +197,14 @@ export interface DeliveryView {
   sentInRun: number | null;
   error: string | null;
   detail: string | null;
+  /** For a webhook call: the receiver's HTTP status, the tries made and how long the last one took. */
+  httpStatus: number | null;
+  attempts: number | null;
+  ms: number | null;
+  /** For a webhook call: the start of the receiver's answer, at most 2 KB. */
+  response: string | null;
+  /** The answer was longer than `response`. */
+  responseTruncated: boolean;
   sentAt: string;
 }
 
@@ -352,6 +360,38 @@ export interface EmailPreviewView {
   unknownTags: string[];
   /** The fields an email can read, such as `pg.invoiceNo`, with their value in this page group, for Insert field. */
   fields: { path: string; value: string }[];
+}
+
+/** The webhook call of one document of the preview spooled file, as Send test would make it. Nothing is sent. */
+export interface WebhookPreviewView {
+  /** The page group shown, 0-based, and how many there are. */
+  pageGroup: number;
+  pageGroups: number;
+  document: string;
+  method: 'POST';
+  /** The URL the call goes to: the test URL while one is set. */
+  url: string;
+  /** The destination has a test URL, so calls go there without the custom headers. */
+  testMode: boolean;
+  /** The headers in order; custom header values are masked. */
+  headers: { name: string; value: string }[];
+  /** The body as pretty JSON, each file's base64 replaced by its size. */
+  body: string;
+  /** The size of the body as it is sent, with the files in base64. */
+  bodyBytes: number;
+}
+
+/** What the receiver answered a Send test. `error` is set when the call failed. */
+export interface WebhookTestView {
+  /** Null when the receiver never answered. */
+  status: number | null;
+  statusText: string;
+  ms: number;
+  /** The start of the answer, at most 2 KB. */
+  body: string;
+  truncated: boolean;
+  error?: string;
+  detail?: string;
 }
 
 /** An item of Needs attention on Home, to dismiss or bring back. */

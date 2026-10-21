@@ -173,10 +173,15 @@ export const destinations = pgTable(
     kind: text('kind').notNull(),
     name: text('name').notNull(),
     config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
+    /**
+     * Secrets of the destination, encrypted with `encryptSecret`, never sent to the page.
+     * For a webhook: JSON `{ signingSecret, headers: { [name]: value } }`.
+     */
+    secretsEnc: text('secrets_enc'),
     builtin: boolean('builtin').notNull().default(false),
     ...timestamps,
   },
-  (t) => [check('destinations_kind_check', sql`${t.kind} in ('spooldoc', 'ifs', 'email')`)],
+  (t) => [check('destinations_kind_check', sql`${t.kind} in ('spooldoc', 'ifs', 'email', 'webhook')`)],
 );
 
 /** A pipeline from an output queue to a destination. `draft` is the spec being edited. */
@@ -361,8 +366,14 @@ export const runDeliveries = pgTable(
     sentInRun: bigint('sent_in_run', { mode: 'number' }),
     messageId: text('message_id'),
     error: text('error'),
-    /** The mail server's own text behind `error`. */
+    /** The mail server's own text behind `error`, or the receiver's answer for a webhook call. */
     detail: text('detail'),
+    /** For a webhook call: the receiver's HTTP status, the tries made and how long the last took. */
+    httpStatus: integer('http_status'),
+    attempts: integer('attempts'),
+    ms: integer('ms'),
+    /** For a webhook call: the start of the receiver's answer, at most 2 KB and one more character to tell it was cut. */
+    response: text('response'),
     sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

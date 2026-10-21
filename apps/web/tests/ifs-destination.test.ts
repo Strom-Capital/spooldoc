@@ -3,11 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import type { IfExists } from '@/lib/destination-config';
 import { ifsDestination } from '@/lib/server/destinations/ifs';
 import type { RunFile } from '@/lib/server/destinations/store';
-import { FakeConnection } from './helpers/fake-connection';
+import { FakeConnection, loadSample } from './helpers/fake-connection';
 
 const FOLDER = '/home/docs/out';
 const HOST = 'ibmi.example.com';
 const OLD = new Uint8Array([1]);
+const sample = loadSample('invoice');
 
 const file = (name: string, byte = 9): RunFile => ({
   pageGroupIndex: 0,
@@ -22,7 +23,15 @@ function setup(ifExists: IfExists, existing: string[] = []) {
   const conn = new FakeConnection();
   conn.folders.add(FOLDER);
   for (const name of existing) conn.ifs.set(`${FOLDER}/${name}`, { bytes: OLD, ccsid: 65535 });
-  const deliver = (files: RunFile[]) => ifsDestination({ folder: FOLDER, ifExists, keepCopy: false }).deliver({ runId: 'run-1', files, documents: [], job: { id: 'job-1', splfKey: 'key' }, destinationId: 'destination-1', email: null, valueTypes: {}, conn, host: HOST, addSecret: () => undefined });
+  const deliver = (files: RunFile[]) => ifsDestination({ folder: FOLDER, ifExists, keepCopy: false }).deliver({ runId: 'run-1', files, documents: [], job: { id: 'job-1', splfKey: 'key' }, destinationId: 'destination-1',
+      email: null,
+      webhook: null,
+      context: { job: { id: 'job-1', name: 'MYJOB', version: 1 }, run: { id: 'run-1', seq: 1 }, splf: sample.splf, attributes: sample.attributes },
+      valueTypes: {},
+      conn,
+      host: HOST,
+      addSecret: () => undefined,
+    });
   const names = () => [...conn.ifs.keys()].map((path) => path.slice(FOLDER.length + 1)).sort();
   const writes = () => conn.calls.filter((call) => call.method === 'writeIfsFile').map((call) => call.args);
   return { conn, deliver, names, writes };

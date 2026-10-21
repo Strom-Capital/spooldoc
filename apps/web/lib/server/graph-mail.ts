@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import type { SendMailOptions } from 'nodemailer';
 import type { Address } from 'nodemailer/lib/mailer';
 import addressparser from 'nodemailer/lib/addressparser';
+import { retryAfterSeconds } from './http';
 import { log } from './log';
 
 /** What Spooldoc signs in to Microsoft 365 with, and the mailbox it sends from. */
@@ -271,15 +272,6 @@ export function graphMessage(message: SendMailOptions): { message: Record<string
 }
 
 const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-
-/** The seconds a Retry-After header asks for: a number of seconds, or a date. */
-function retryAfterSeconds(value: string | null): number | undefined {
-  if (!value) return undefined;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds)) return Math.max(0, seconds);
-  const at = Date.parse(value);
-  return Number.isNaN(at) ? undefined : Math.max(0, Math.ceil((at - Date.now()) / 1000));
-}
 
 /** The kind of a Graph error, from its status and code. */
 function sendProblem(status: number, code: string, text: string, roles: string[] | null): GraphProblem {

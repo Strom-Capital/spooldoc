@@ -1,4 +1,4 @@
-import { extract, parseDefinition, templatePaths, type Definition } from '@spooldoc/core';
+import { templatePaths, type Definition } from '@spooldoc/core';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { emailConfigSchema } from '@/lib/destination-config';
@@ -21,7 +21,7 @@ import {
 } from '@/lib/server/email-message';
 import { getFormats } from '@/lib/server/formats';
 import { errorResponse, json, readJson } from '@/lib/server/http';
-import { draftAndSample } from '@/lib/server/job-preview';
+import { draftPageGroup } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
 import { getMailView } from '@/lib/server/mail';
 import { renderSample } from '@/lib/server/render';
@@ -65,26 +65,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return body.response;
   }
   const { email } = body.data;
-  const { draft, sample } = await draftAndSample(job, body.data.sampleId);
-  if (!sample) {
-    return errorResponse(404, 'Pick a spooled file to preview first.');
+  const picked = await draftPageGroup(job, body.data, 'the email');
+  if ('response' in picked) {
+    return picked.response;
   }
-  let def: Definition;
-  try {
-    def = parseDefinition(draft.extract.definition);
-  } catch {
-    return errorResponse(422, 'The definition has errors. Fix it in the Extract step to see the email.');
-  }
-  let groups: Record<string, unknown>[];
-  try {
-    groups = extract(def, sample).pageGroups;
-  } catch (error) {
-    return errorResponse(422, `The extraction failed, so there is no email to show: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  if (groups.length === 0) {
-    return errorResponse(422, 'The definition finds no page groups in this spooled file, so there is no email to show.');
-  }
-  const index = Math.min(body.data.pageGroup ?? 0, groups.length - 1);
+  const { draft, sample, def, groups, index } = picked;
   const data = { pg: groups[index]!, splf: sample.splf };
   const document = fileNameFor(def, groups[index]!, index, sample.splf.name.toLowerCase());
 

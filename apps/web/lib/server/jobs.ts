@@ -6,6 +6,7 @@ import type { ZodError } from 'zod';
 import {
   deleteNotice,
   emptyEmailSpec,
+  emptyWebhookSpec,
   emptySpec,
   isFileTemplate,
   jobSpecSchema,
@@ -227,10 +228,19 @@ async function templateFileProblems(spec: JobSpec): Promise<string[]> {
   return problems;
 }
 
-/** What is wrong with the email part of a spec whose destination is an email destination, one line each. */
+/** What is wrong with the files a webhook job sends: a pick that matches none of the files its templates make. */
+export function webhookSpecProblems(spec: JobSpec): string[] {
+  const attach = (spec.destination.webhook ?? emptyWebhookSpec()).attach;
+  const made = new Set(spec.render.templates.flatMap((template) => template.formats));
+  if (attach.length === 0 || attach.some((format) => made.has(format))) return [];
+  return ['Files to send picks none of the files the templates make, so each call would hold the data only. Pick a format the templates make, or clear Files to send.'];
+}
+
+/** What is wrong with the destination part of a spec: the email part for an email destination, the files for a webhook, one line each. */
 export async function destinationProblems(spec: JobSpec): Promise<string[]> {
   if (!spec.destination.destinationId) return [];
   const [row] = await getDb().select({ kind: destinations.kind }).from(destinations).where(eq(destinations.id, spec.destination.destinationId));
+  if (row?.kind === 'webhook') return webhookSpecProblems(spec).map((problem) => `Destination: ${problem}`);
   if (row?.kind !== 'email') return [];
   const email = spec.destination.email ?? emptyEmailSpec();
   let def: Definition | null = null;

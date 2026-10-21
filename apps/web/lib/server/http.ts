@@ -131,3 +131,12 @@ export function invalidResponse(message: string, path: readonly PropertyKey[]): 
   const error = GENERIC.test(message) && field ? `${field}: ${sentence}` : sentence;
   return json(field ? { error, field } : { error }, { status: 400 });
 }
+
+/** The seconds a Retry-After header asks for: a number of seconds, or a date. */
+export function retryAfterSeconds(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds);
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? undefined : Math.max(0, Math.ceil((at - Date.now()) / 1000));
+}
