@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { docsFolder, docsHeadings, docsHref, docsNav, docsPage, docsSections, rewriteDocsMarkdown } from '@/lib/server/docs';
+import { docsFolder, docsHeadings, docsHref, docsImageSize, docsNav, docsPage, docsSections, rewriteDocsMarkdown } from '@/lib/server/docs';
 
 const files = fs.readdirSync(docsFolder()).filter((file) => file.endsWith('.md') && file !== 'README.md');
 const slugs = files.map((file) => file.slice(0, -'.md'.length));
@@ -111,11 +111,22 @@ describe('docs', () => {
       '</p>',
     ].join('\n');
     expect(rewriteDocsMarkdown(picture, '1.2.3')).toBe(
-      '<p align="center"><img class="dark:hidden" src="/docs/assets/home-light.png" alt="The Home page" width="900">' +
-        '<img class="hidden dark:inline" src="/docs/assets/home-dark.png" alt="The Home page" width="900"></p>',
+      '<p align="center"><img class="dark:hidden" src="/docs/assets/home-light.png" alt="The Home page" width="900" height="563">' +
+        '<img class="hidden dark:inline" src="/docs/assets/home-dark.png" alt="The Home page" width="900" height="563"></p>',
     );
     for (const slug of slugs) {
       expect(docsPage(slug).markdown, slug).not.toContain('<picture');
+    }
+  });
+
+  it('gives every image its size, so anchors land before the images load', () => {
+    expect(docsImageSize('assets/home-light.png')).toEqual({ width: 2880, height: 1800 });
+    expect(docsImageSize('assets/home-light.png', 900)).toEqual({ width: 900, height: 563 });
+    expect(docsImageSize('assets/architecture-light.svg')).toEqual({ width: 1200, height: 660 });
+    for (const slug of slugs) {
+      for (const [image] of docsPage(slug).markdown.matchAll(/<img\b[^>]*src="\/docs\/assets\/[^>]*>/g)) {
+        expect(image, slug).toMatch(/ width="\d+" height="\d+"/);
+      }
     }
   });
 

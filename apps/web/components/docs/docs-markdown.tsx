@@ -20,7 +20,7 @@ const [sanitize, schema] = defaultRehypePlugins.sanitize as [unknown, { attribut
  */
 const rehypePlugins: Pluggable[] = [
   defaultRehypePlugins.raw!,
-  [sanitize, { ...schema, attributes: { ...schema.attributes, img: [...(schema.attributes.img ?? []), 'className', 'width'] } }] as Pluggable,
+  [sanitize, { ...schema, attributes: { ...schema.attributes, img: [...(schema.attributes.img ?? []), 'className', 'width', 'height'] } }] as Pluggable,
   defaultRehypePlugins.harden!,
   rehypeSlug,
 ];

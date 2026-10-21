@@ -166,12 +166,48 @@ export function rewriteDocsMarkdown(markdown: string, version: string): string {
   return mapProse(markdown, (text) =>
     text
       .replace(PICTURE, (_, dark: string, light: string, alt: string, width?: string) => {
-        const size = width ? ` width="${width}"` : '';
-        const image = (src: string, className: string) => `<img class="${className}" src="${docsHref(src, version)}" alt="${alt}"${size}>`;
+        const image = (src: string, className: string) => {
+          const size = docsImageSize(src, width ? Number(width) : undefined);
+          return `<img class="${className}" src="${docsHref(src, version)}" alt="${alt}" width="${size.width}" height="${size.height}">`;
+        };
         return `<p align="center">${image(light, 'dark:hidden')}${image(dark, 'hidden dark:inline')}</p>`;
       })
       .replace(/(\]\()([^)\s]+)(\))/g, (_, open: string, target: string, end: string) => `${open}${docsHref(target, version)}${end}`),
   );
+}
+
+/**
+ * The size an image in docs/ shows at, so the browser keeps its space before it loads and
+ * an anchor lands where it should. Read from the PNG header or the SVG's own size.
+ *
+ * @param src - The image as written in docs/, such as `assets/home-light.png`
+ * @param width - The width the guide asks for; the height is scaled to keep the aspect ratio
+ */
+export function docsImageSize(src: string, width?: number): { width: number; height: number } {
+  const natural = naturalSize(path.join(docsFolder(), src));
+  if (!natural) {
+    throw new Error(`Can't read the size of ${src} in docs/. Use a PNG, or an SVG with a viewBox or a width and height.`);
+  }
+  return width ? { width, height: Math.round((natural.height * width) / natural.width) } : natural;
+}
+
+function naturalSize(file: string): { width: number; height: number } | undefined {
+  const data = fs.readFileSync(file);
+  if (file.endsWith('.png')) {
+    // The IHDR chunk comes first: width and height are the big-endian words at bytes 16 to 23.
+    return data.length >= 24 && data.toString('latin1', 12, 16) === 'IHDR'
+      ? { width: data.readUInt32BE(16), height: data.readUInt32BE(20) }
+      : undefined;
+  }
+  if (file.endsWith('.svg')) {
+    const tag = /<svg\b[^>]*>/.exec(data.toString('utf8'))?.[0] ?? '';
+    const attribute = (name: string) => new RegExp(`\\s${name}="([^"]+)"`).exec(tag)?.[1];
+    const box = attribute('viewBox')?.trim().split(/[\s,]+/).map(Number);
+    const width = Number.parseFloat(attribute('width') ?? '') || box?.[2];
+    const height = Number.parseFloat(attribute('height') ?? '') || box?.[3];
+    return width && height ? { width: Math.round(width), height: Math.round(height) } : undefined;
+  }
+  return undefined;
 }
 
 /** The light and dark screenshot block the guides use, which GitHub switches by the system theme. */

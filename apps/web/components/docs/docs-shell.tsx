@@ -42,10 +42,11 @@ export function DocsShell({ nav, children }: { nav: DocsGroup[]; children: React
 
 function DocsSidebar({ nav }: { nav: DocsGroup[] }) {
   const pathname = usePathname();
-  const { setOpenMobile } = useSidebar();
+  const { setOpenMobile, isMobile } = useSidebar();
   const close = () => setOpenMobile(false);
   return (
-    <Sidebar>
+    // On a phone the sheet opens from the right, next to the menu button, as the app's does.
+    <Sidebar side={isMobile ? 'right' : 'left'}>
       <SidebarHeader className="gap-3 px-3 pt-4 pb-2">
         <Link href="/docs" onClick={close} className="flex items-center gap-2 px-1" aria-label="Spooldoc docs">
           <Logo className="h-8" />
