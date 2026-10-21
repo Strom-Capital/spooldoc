@@ -189,7 +189,21 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
                               text.noTarget
                             )
                           ) : upload ? (
-                            <span className="break-all font-mono">{remotePath(delivery.to)}</span>
+                            // Broken only after a slash, so a file name stays whole.
+                            <span className="font-mono [overflow-wrap:anywhere]">
+                              {remotePath(delivery.to)
+                                .split('/')
+                                .map((part, index, parts) => (
+                                  <Fragment key={index}>
+                                    {part}
+                                    {index < parts.length - 1 && (
+                                      <>
+                                        /<wbr />
+                                      </>
+                                    )}
+                                  </Fragment>
+                                ))}
+                            </span>
                           ) : webhook ? (
                             // Without the scheme, and broken only where one word does not fit.
                             <span className="break-words">

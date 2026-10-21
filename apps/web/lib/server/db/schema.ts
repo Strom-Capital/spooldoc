@@ -369,7 +369,7 @@ export const runDeliveries = pgTable(
     error: text('error'),
     /** The mail server's own text behind `error`, or the receiver's answer for a webhook call. */
     detail: text('detail'),
-    /** For a webhook call: the receiver's HTTP status, the tries made and how long the last took. */
+    /** For a webhook call: the receiver's HTTP status, the tries made and how long the last took. For an upload, `ms` is how long it took. */
     httpStatus: integer('http_status'),
     attempts: integer('attempts'),
     ms: integer('ms'),

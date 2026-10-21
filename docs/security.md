@@ -150,6 +150,31 @@ Every call a run made, or tried to make, is listed on the run in the
 [job log](job-log.md#webhook-calls), with the start of the receiver's
 answer and a copy of the files.
 
+## SFTP
+
+An [SFTP destination](destinations.md#sftp) uploads files to a server
+outside Spooldoc, signed in with a key or a password.
+
+- The private key, its passphrase and the password are stored encrypted
+  with `SPOOLDOC_SECRET_KEY`. No key or password is sent to the browser:
+  a key Spooldoc makes stays sealed on its way through the dialog, and
+  the page shows only the public key line and its fingerprint.
+- They are taken out of every error, log line and stored detail.
+- The host key is pinned. Spooldoc trusts one host key per destination,
+  only after you compare its fingerprint and pick Trust this key, and it
+  never takes a key on its own. A connection offers only the trusted
+  key's type, and a key that differs fails the run with both
+  fingerprints. A check stops at a key it does not trust, before the
+  sign-in, so a password is never sent to an unknown server. The page
+  cannot make up a trusted key: it saves only one a check signed.
+- A saved password is sent only to the server, port and user it was
+  entered for.
+- Check connection reads the folders and writes nothing. Upload test
+  writes only to the test folder.
+
+Every file a run uploaded, or tried to, is listed on the run in the
+[job log](job-log.md#uploads).
+
 ## Checklist
 
 - Generate `BETTER_AUTH_SECRET` and `SPOOLDOC_SECRET_KEY` once, keep them

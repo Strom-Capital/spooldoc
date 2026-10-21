@@ -112,6 +112,31 @@ tries" or "No answer after 3 tries", then its status and the time.
 
 A run that sent nothing says "This run sent no webhook call."
 
+## Uploads
+
+A run of a job that delivers to an [SFTP destination](destinations.md#sftp)
+has an Uploads section under its files, with a count such as "Uploads (5
+of 6 uploaded)". It lists one row per file: the file, the path it got on
+the server, such as `/in/invoices/invoice-260101-2.pdf` when a number was
+added, its size and how long the upload took, then its status and the
+time.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/job-log-uploads-dark.png">
+    <img src="assets/job-log-uploads-light.png" alt="A run of an invoice job opened from the job log lists its PDF files, then Uploads (6 of 6 uploaded): each invoice with its path in /in/invoices on the server, one with a number added, its size and upload time, Uploaded, and the time." width="900">
+  </picture>
+</p>
+
+| Status | Meaning |
+|--------|---------|
+| Uploaded | The file is in the folder on the server. |
+| Test | Uploaded to the destination's test folder instead. |
+| Uploaded in run #N | An earlier run of the job uploaded it for the same spooled file, so it was not uploaded again. |
+| Failed | Open the row to see why, with the server's own text under Details. A file the run did not try says "Not uploaded" and why. |
+
+A run that uploaded nothing says "This run uploaded no file."
+
 ## Retry
 
 Retry runs the same spooled file again with the job's active version, as
@@ -126,6 +151,11 @@ Deliver step says so: "Sent 1 email, 42 were sent in run #12".
 With a webhook destination, Retry sends only the documents that were not
 sent yet, each with the same `webhook-id` as before: "Sent 1 document to
 hooks.example.com, 5 were sent in run #12".
+
+With an SFTP destination, Retry uploads only the files that were not
+uploaded yet: "Uploaded 1 file to /in/invoices on sftp.example.com, 5
+were uploaded in run #12". So a setting of Add a number never makes a
+second copy of a file on retry.
 
 ## Retention
 
