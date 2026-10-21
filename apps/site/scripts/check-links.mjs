@@ -4,13 +4,15 @@
  * exists, and so does the `#anchor` on that page. Links to other sites are not fetched.
  * It also finds a word glued to a link or inline code, which the HTML compression makes
  * of a line break before the tag.
- * Run after `astro build`: `pnpm --filter @spooldoc/site check:links`.
+ * Run after `astro build`: `pnpm --filter @spooldoc/site check:links`, or
+ * `node scripts/check-links.mjs <folder>` for another folder.
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const dist = fileURLToPath(new URL('../dist/', import.meta.url));
+// The built site, or another folder given as the first argument.
+const dist = process.argv[2] ? path.resolve(process.argv[2]) : fileURLToPath(new URL('../dist/', import.meta.url));
 
 if (!fs.existsSync(dist)) {
   console.error('There is no dist/ folder. Run `pnpm --filter @spooldoc/site build` first.');
@@ -46,6 +48,19 @@ function resolve(pathname) {
   return undefined;
 }
 
+/** Where the code blocks, scripts and styles of a page start and end, as [start, end) offsets. */
+function blocks(html) {
+  const ranges = [];
+  for (const name of ['pre', 'script', 'style']) {
+    const open = new RegExp(`<${name}\\b`, 'g');
+    for (const match of html.matchAll(open)) {
+      const close = html.indexOf(`</${name}>`, match.index);
+      ranges.push([match.index, close === -1 ? html.length : close + name.length + 3]);
+    }
+  }
+  return ranges;
+}
+
 const problems = [];
 let checked = 0;
 
@@ -54,16 +69,24 @@ for (const page of pages) {
   const pageUrl = new URL(`https://spooldoc.com/${page.replace(/index\.html$/, '')}`);
   // A word glued to an inline element, such as "therelease notes": Astro's HTML compression
   // drops a line break in the source between a word and a tag. Code blocks are left out.
-  const prose = html.replace(/<pre\b[\s\S]*?<\/pre>/g, '').replace(/<(script|style)\b[\s\S]*?<\/\1>/g, '');
-  for (const [glued] of prose.matchAll(/[A-Za-z,]<(?:a|code|strong|em)[ >]/g)) {
+  const skipped = blocks(html);
+  for (const match of html.matchAll(/[A-Za-z,]<(?:a|code|strong|em)[ >]/g)) {
+    if (skipped.some(([start, end]) => match.index >= start && match.index < end)) continue;
+    const glued = match[0];
     problems.push(`${page}: a word runs into an inline element at "${glued}". Keep the space before the tag on the same line, or write {' '}.`);
   }
 
   // Attributes of real tags only: a tag shown as code is escaped (`&#x3C;img src=...>`).
   const attributes = [...html.matchAll(/<[a-zA-Z][^<>]*>/g)].flatMap(([tag]) => [...tag.matchAll(/\s(href|src)="([^"]*)"/g)]);
   for (const [, attribute, value] of attributes) {
-    if (!value || (/^[a-z][a-z\d+.-]*:/i.test(value) && !value.startsWith("https://spooldoc.com"))) continue;
-    const target = new URL(value.replaceAll('&amp;', '&'), pageUrl);
+    if (!value) continue;
+    let target;
+    try {
+      target = new URL(value.replaceAll('&amp;', '&'), pageUrl);
+    } catch {
+      continue;
+    }
+    // Other sites, and mailto: or data: links (origin "null"), are not checked.
     if (target.origin !== pageUrl.origin) continue;
     checked++;
     const file = resolve(target.pathname);
