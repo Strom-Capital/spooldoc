@@ -18,6 +18,6 @@ export function proxy(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  // Everything but the login page, the API, Next.js assets and public files.
-  matcher: ['/((?!login|api/|_next/|brand/|favicon).*)'],
+  // Everything but the login page, the docs, the API, Next.js assets and public files.
+  matcher: ['/((?!login|docs(?:/|$)|api/|_next/|brand/|favicon).*)'],
 };

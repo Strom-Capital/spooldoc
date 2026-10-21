@@ -2,6 +2,7 @@
 
 import { FilePenLineIcon, RotateCcwIcon } from 'lucide-react';
 import { useState } from 'react';
+import { DocsLink } from '@/components/docs-link';
 import { Hint } from '@/components/hint';
 import { Button } from '@/components/ui/button';
 import { CodeEditor } from './code-editor';
@@ -51,6 +52,9 @@ function HtmlTemplateEditor() {
         {!readOnly && (
           <StartFromJobButton onClick={() => setStartFrom(true)} />
         )}
+        <DocsLink page="templates" anchor="the-data" className="ml-auto px-2">
+          Tags and formatters
+        </DocsLink>
       </EditorBar>
       {startFrom && <StartFromJobDialog onClose={() => setStartFrom(false)} />}
       {html === null && (

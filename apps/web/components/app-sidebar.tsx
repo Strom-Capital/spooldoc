@@ -1,6 +1,8 @@
 'use client';
 
 import {
+  ArrowUpRightIcon,
+  BookOpenIcon,
   HomeIcon,
   ImageIcon,
   InboxIcon,
@@ -51,7 +53,7 @@ const PAGES = [
 ];
 
 /**
- * Wordmark, the pages, Settings and Profile, and Sign out at the bottom. On desktop it
+ * Wordmark, the pages, Settings, Profile and the docs (in a new tab), and Sign out at the bottom. On desktop it
  * collapses to an icon rail (Cmd/Ctrl+B or the toggle by the logo) so the job builder
  * gets the width. On phones it opens from the menu button at the top right.
  */
@@ -102,6 +104,15 @@ export function AppSidebar() {
             <SidebarMenu>
               <PageLink href="/settings" label="Settings" icon={SettingsIcon} active={pathname.startsWith('/settings')} onClick={close} />
               <PageLink href="/profile" label="Profile" icon={UserIcon} active={pathname.startsWith('/profile')} onClick={close} />
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Docs">
+                  <a href="/docs" target="_blank" rel="noreferrer" onClick={close}>
+                    <BookOpenIcon />
+                    <span>Docs</span>
+                    <ArrowUpRightIcon className="ml-auto text-muted-foreground group-data-[collapsible=icon]:hidden" />
+                  </a>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

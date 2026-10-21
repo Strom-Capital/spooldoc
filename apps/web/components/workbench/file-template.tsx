@@ -3,6 +3,7 @@
 import { DownloadIcon, FileSpreadsheetIcon, FileTextIcon, MousePointerClickIcon, Undo2Icon, UploadIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { DocsLink } from '@/components/docs-link';
 import { Hint } from '@/components/hint';
 import { ErrorNote } from '@/components/page';
 import { Button } from '@/components/ui/button';
@@ -235,6 +236,9 @@ function WordTips() {
           <li>Insert a logo as a picture, set to In line with text. It is the same in every document.</li>
           <li>Page numbers are Word&apos;s own fields: Insert, Page Number.</li>
       </ul>
+      <DocsLink page="templates" anchor="tags-in-word" className="mt-3">
+        More about tags in Word
+      </DocsLink>
     </>
   );
 }
@@ -277,6 +281,9 @@ function ExcelTips({ scope }: { scope: 'splf' | 'pageGroup' }) {
         <li>Merge no cells in or below a loop. Put filters and conditional formatting on whole columns, such as A:G.</li>
         <li>The PDF follows the page setup of each sheet: Page Layout, Size, Orientation, Scale to Fit and Print Titles.</li>
       </ul>
+      <DocsLink page="templates" anchor="tags-in-excel" className="mt-3">
+        More about tags in Excel
+      </DocsLink>
     </>
   );
 }
