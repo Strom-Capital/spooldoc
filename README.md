@@ -40,7 +40,7 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.svg">
-    <img src="docs/assets/architecture-light.svg" alt="Architecture: programs on the IBM i print to an output queue, optionally with a data queue; Spooldoc's watcher picks up new spooled files by polling or in real time, and a run captures, extracts, renders, delivers and finishes each one, reading and then holding, moving or deleting the file through jt400; the job builder and the agent, which sends page text to a model provider, write to the same Postgres database that holds servers, jobs, versions, samples, runs, files and assets; delivered files go to a destination" width="1000">
+    <img src="docs/assets/architecture-light.svg" alt="Architecture: on the IBM i, programs print to an output queue, which can also send entries to a data queue for real-time watching; Spooldoc reaches the IBM i only through jt400, which the job builder uses to list queues, capture samples and set up real-time watching, the watcher uses to find new spooled files, and a run uses to read the spooled file, write files to an IFS folder and then hold, move or delete the file; a run captures, extracts, renders with Carbone, its own container, delivers and finishes; the job builder previews with Carbone and saves jobs, samples and assets in Postgres, its own container, where runs, files and the files the watcher has seen are stored too; the agent works with the job builder and sends page text, masked if on, to a model provider" width="1000">
   </picture>
 </p>
 

@@ -128,7 +128,7 @@ describe('docs', () => {
   it('gives every image its size, so anchors land before the images load', () => {
     expect(docsImageSize('assets/home-light.png', options)).toEqual({ width: 2880, height: 1800 });
     expect(docsImageSize('assets/home-light.png', options, 900)).toEqual({ width: 900, height: 563 });
-    expect(docsImageSize('assets/architecture-light.svg', options)).toEqual({ width: 1200, height: 660 });
+    expect(docsImageSize('assets/architecture-light.svg', options)).toEqual({ width: 1200, height: 740 });
     for (const slug of slugs) {
       for (const [image] of docsPage(slug, options).markdown.matchAll(/<img\b[^>]*src="\/docs\/assets\/[^>]*>/g)) {
         expect(image, slug).toMatch(/ width="\d+" height="\d+"/);
