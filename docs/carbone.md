@@ -64,8 +64,8 @@ to be rendered, and each document counts toward your Carbone plan. See
 Carbone's Community Edition is free to run on-prem and renders everything
 the [starter template](templates.md) and the template docs use: tags,
 loops, conditions, `formatN`, `formatD` and the other formatters, `:set`,
-PDF headers and footers, and Word and Excel templates. Carbone's team said running it as a service
-that Spooldoc calls appears consistent with the Carbone Community License.
+PDF headers and footers, and Word and Excel templates.
+Carbone runs under its own license.
 
 A license for Carbone Enterprise adds, among others:
 
