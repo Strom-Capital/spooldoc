@@ -6,12 +6,15 @@ import Shot from '../components/Shot.astro';
 import { FEATURES, QUICK_START } from '../lib/features';
 import { assetSize, siteVersion } from '../lib/docs';
 import { docsUrl, links, url } from '../lib/links';
+import { zoomLabel } from '../lib/imageLinks';
 import { getPosts } from '../lib/posts';
 import { homeJsonLd, LONG_DESCRIPTION, SITE_DESCRIPTION, SITE_NAME } from '../lib/structuredData';
 
 const posts = (await getPosts()).slice(0, 3);
 const version = siteVersion();
 const architecture = assetSize('architecture-light.svg', 1000);
+const architectureAlt =
+  "Architecture: programs on the IBM i print to an output queue, optionally with a data queue; Spooldoc's watcher picks up new spooled files by polling or in real time, and a run captures, extracts, renders, delivers and finishes each one; the job builder and the agent write to the same Postgres database; delivered files go to a destination";
 
 const tour = [
   { name: 'home', title: 'Home', text: 'Servers, output queues, jobs and runs at a glance, with a chart of runs per day.', alt: 'The Home page: counts of servers, output queues, jobs and runs, and a chart of runs per day by status' },
@@ -63,8 +66,14 @@ const tour = [
         </p>
       </div>
       <figure class="diagram">
-        <img data-theme-image="light" src={url('/docs/assets/architecture-light.svg')} width={architecture.width} height={architecture.height} loading="lazy" alt="Architecture: programs on the IBM i print to an output queue, optionally with a data queue; Spooldoc's watcher picks up new spooled files by polling or in real time, and a run captures, extracts, renders, delivers and finishes each one; the job builder and the agent write to the same Postgres database; delivered files go to a destination" />
-        <img data-theme-image="dark" src={url('/docs/assets/architecture-dark.svg')} width={architecture.width} height={architecture.height} loading="lazy" alt="Architecture: programs on the IBM i print to an output queue, optionally with a data queue; Spooldoc's watcher picks up new spooled files by polling or in real time, and a run captures, extracts, renders, delivers and finishes each one; the job builder and the agent write to the same Postgres database; delivered files go to a destination" />
+        {(['light', 'dark'] as const).map((theme) => {
+          const src = url(`/docs/assets/architecture-${theme}.svg`);
+          return (
+            <a href={src} data-zoom data-theme-image={theme} aria-label={zoomLabel(architectureAlt)}>
+              <img data-theme-image={theme} src={src} width={architecture.width} height={architecture.height} loading="lazy" alt={architectureAlt} />
+            </a>
+          );
+        })}
       </figure>
     </div>
   </section>

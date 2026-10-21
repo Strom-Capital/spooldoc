@@ -148,6 +148,9 @@ importers:
       minisearch:
         specifier: ^7.2.0
         version: 7.2.0
+      rehype-raw:
+        specifier: ^7.0.0
+        version: 7.0.0
       shiki:
         specifier: ^4.5.0
         version: 4.5.0

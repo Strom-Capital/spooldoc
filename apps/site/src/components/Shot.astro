@@ -1,9 +1,11 @@
 ---
 /**
  * A screenshot from docs/assets in a frame, light and dark, following the page theme.
- * The images are the ones the guides use, served at /docs/assets.
+ * The images are the ones the guides use, served at /docs/assets. Each sits in a link to
+ * its file, which ImageViewer.astro opens full size (lib/imageLinks.ts).
  */
 import { assetSize } from '../lib/docs';
+import { zoomLabel } from '../lib/imageLinks';
 import { url } from '../lib/links';
 
 interface Props {
@@ -17,8 +19,15 @@ interface Props {
 const { name, alt, eager = false, class: className } = Astro.props;
 const size = assetSize(`${name}-light.png`);
 const loading = eager ? 'eager' : 'lazy';
+const themes = ['light', 'dark'] as const;
 ---
 <figure class:list={['frame', className]}>
-  <img data-theme-image="light" src={url(`/docs/assets/${name}-light.png`)} alt={alt} width={size.width} height={size.height} loading={loading} decoding="async" />
-  <img data-theme-image="dark" src={url(`/docs/assets/${name}-dark.png`)} alt={alt} width={size.width} height={size.height} loading={loading} decoding="async" />
+  {themes.map((theme) => {
+    const src = url(`/docs/assets/${name}-${theme}.png`);
+    return (
+      <a href={src} data-zoom data-theme-image={theme} aria-label={zoomLabel(alt)}>
+        <img data-theme-image={theme} src={src} alt={alt} width={size.width} height={size.height} loading={loading} decoding="async" />
+      </a>
+    );
+  })}
 </figure>

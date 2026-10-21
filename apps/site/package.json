@@ -33,6 +33,7 @@
     "@spooldoc/docs": "workspace:*",
     "astro": "^7.4.1",
     "minisearch": "^7.2.0",
+    "rehype-raw": "^7.0.0",
     "shiki": "^4.5.0"
   },
   "devDependencies": {
