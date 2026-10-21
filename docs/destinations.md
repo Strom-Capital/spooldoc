@@ -120,10 +120,9 @@ Use Replace for jobs you may retry.
 A destination that a job's draft or any saved version delivers to cannot
 be deleted. Deleting one never touches the folder or its files.
 
-## More destinations
+## Writing a destination
 
-SFTP, S3, email and webhooks are planned, each in its own
-[issue](https://github.com/Strom-Capital/spooldoc/issues?q=is%3Aissue+is%3Aopen+destination).
 A destination is one small interface in
 `apps/web/lib/server/destinations`: a kind and a `deliver` call that
 receives the run's files. See [Contributing](contributing.md#adding-a-destination).
+Planned destinations are listed in the [README](../README.md#status).

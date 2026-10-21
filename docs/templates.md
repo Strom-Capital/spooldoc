@@ -214,7 +214,7 @@ file with these parts of the library only:
 | The document | Named paragraph styles, the default font and spacing, the title and heading styles, different headers and footers on even pages. |
 | A section | Page size and orientation (A4 unless set), margins, a different first page, headers and footers. |
 | `Paragraph` | Text, a style or heading, a bullet, alignment, spacing, indents, borders, shading, tab stops, keep with next, keep lines together, a page break before. |
-| `TextRun` | Font, size, colour, bold, italics, underline, caps, small caps, letter spacing, superscript, subscript, highlight, shading, line breaks. |
+| `TextRun` | Font, size, color, bold, italics, underline, caps, small caps, letter spacing, superscript, subscript, highlight, shading, line breaks. |
 | `Tab`, `PageNumber` | A tab, and the PAGE and NUMPAGES fields, written the way Word writes them so the PDF prints them. |
 | `Table`, `TableRow`, `TableCell` | Widths, column widths, fixed layout, alignment, borders, cell padding, shading, vertical alignment, cells across columns and rows, header rows repeated on each page, rows kept on one page. |
 | `ImageRun` | A PNG or JPEG uploaded under Assets, by name, with a size in pixels. |
@@ -313,8 +313,8 @@ sheet of its own.
 - **Pictures**, such as a logo, are inserted in Excel, above the header
   row. A picture over the rows repeated at the top prints on every page.
   `{asset('name')}` is for HTML templates only.
-- **In the PDF**, data bars and colour scales print, icon sets do not,
-  and a gradient fill prints as one colour.
+- **In the PDF**, data bars and color scales print, icon sets do not,
+  and a gradient fill prints as one color.
 - **Functions.** LibreOffice works out the formulas. It has the
   long-standing functions and XLOOKUP, XMATCH, IFS, SWITCH, TEXTJOIN,
   CONCAT, MAXIFS, MINIFS and IFNA. Avoid LET and the functions that spill
@@ -357,14 +357,14 @@ parts only:
 | Part | What it can set |
 |------|-----------------|
 | The workbook | Its sheets, the default font (Arial 10 unless set), named ranges, the sheet that opens first. |
-| A sheet | Name, tab colour, frozen rows and columns, zoom, grid lines, column widths, hidden and grouped columns and rows, row heights, merged cells, a filter. |
+| A sheet | Name, tab color, frozen rows and columns, zoom, grid lines, column widths, hidden and grouped columns and rows, row heights, merged cells, a filter. |
 | A cell | Text with tags, a number, true or false, a date, rich text, a formula, a link, a note. |
-| A style, on a cell or a column | Number format, font, size, colour, bold, italics, underline, strikethrough, a solid or gradient fill, borders, alignment, wrapping, indent, rotation. |
-| Conditional formatting | Rules on a value, a formula, text, duplicates, the top or bottom values and the average, colour scales, data bars, icon sets. |
+| A style, on a cell or a column | Number format, font, size, color, bold, italics, underline, strikethrough, a solid or gradient fill, borders, alignment, wrapping, indent, rotation. |
+| Conditional formatting | Rules on a value, a formula, text, duplicates, the top or bottom values and the average, color scales, data bars, icon sets. |
 | Data validation | A list, whole or decimal numbers, dates, text length or a formula, with its prompt and error message. |
 | Images | A PNG or JPEG uploaded under Assets, by name, at a cell with a size in pixels, or over a range. |
-| Page setup | Paper size, orientation, fit to pages or a scale, margins, centring, grid lines, the print area, rows and columns repeated on each page. |
-| Header and footer | Left, centre and right parts with the page number, the number of pages, the date and the sheet name; a different first page, and different even pages. |
+| Page setup | Paper size, orientation, fit to pages or a scale, margins, centering, grid lines, the print area, rows and columns repeated on each page. |
+| Header and footer | Left, center and right parts with the page number, the number of pages, the date and the sheet name; a different first page, and different even pages. |
 
 Anything else in a design is refused with where it is, and nothing is
 saved. Excel tables, charts, sparklines, protection and macros are not

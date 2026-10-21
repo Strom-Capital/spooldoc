@@ -67,7 +67,7 @@ loops, conditions, `formatN`, `formatD` and the other formatters, `:set`,
 PDF headers and footers, and Word and Excel templates. Carbone's team said running it as a service
 that Spooldoc calls appears consistent with the Carbone Community License.
 
-A licence for Carbone Enterprise adds, among others:
+A license for Carbone Enterprise adds, among others:
 
 | Feature | Example |
 |---------|---------|
@@ -90,13 +90,13 @@ Enterprise features on Community. Carbone Cloud is not probed, since each
 probe there counts as a document. A template that uses an Enterprise
 feature on Community fails with a message that names the feature.
 
-To run Enterprise on-prem, put the licence in `CARBONE_LICENSE` in `.env`
-and restart Carbone. A licence Carbone does not accept, and one that
-expired, look exactly like no licence: Carbone starts as Community and
+To run Enterprise on-prem, put the license in `CARBONE_LICENSE` in `.env`
+and restart Carbone. A license Carbone does not accept, and one that
+expired, look exactly like no license: Carbone starts as Community and
 only its startup log says why. So when Settings shows Community Edition
-and you have a licence, check Carbone's log with
+and you have a license, check Carbone's log with
 `docker compose logs carbone`. Don't paste that log into an issue: with a
-licence, it prints the licensee's name and email.
+license, it prints the licensee's name and email.
 
 ## Converters
 
@@ -147,7 +147,7 @@ Only the render that first finds Carbone down fails. Retry it from the
 | Carbone refused Spooldoc's token ... | Set `CARBONE_AUTHENTICATION_PUBLIC_KEY` to the public key under Rendering and restart Carbone. |
 | Carbone Cloud refused the API key ... | Check the key under Rendering. |
 | Carbone at ... did not answer within 30 s | The server is down or overloaded. A render waits 30 seconds at most. |
-| The template uses :aggSum, which needs Carbone Enterprise ... | Remove the feature, or use a server with an Enterprise licence. |
+| The template uses :aggSum, which needs Carbone Enterprise ... | Remove the feature, or use a server with an Enterprise license. |
 
 Template errors, such as a loop without its `[i+1]` row, are on the
 [Templates](templates.md#the-check-before-each-render) page. Carbone's own
