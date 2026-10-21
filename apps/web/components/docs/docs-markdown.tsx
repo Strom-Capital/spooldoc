@@ -66,7 +66,8 @@ export function DocsMarkdown({ children, className }: { children: string; classN
     <Streamdown
       mode="static"
       className={cn(
-        'text-[15px] leading-7 [&_:is(h2,h3,h4)]:scroll-mt-20 [&_h2]:mt-10 [&_h3]:mt-8 [&_p]:my-3',
+        // Inline code wraps anywhere, so a long tag never widens a phone screen; code blocks scroll in themselves.
+        'text-[15px] leading-7 [&_:not(pre)>code]:wrap-anywhere [&_:is(h2,h3,h4)]:scroll-mt-20 [&_h2]:mt-10 [&_h3]:mt-8 [&_p]:my-3',
         className,
       )}
       plugins={plugins}

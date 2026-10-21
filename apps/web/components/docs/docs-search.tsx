@@ -3,7 +3,7 @@
 import MiniSearch, { type SearchResult } from 'minisearch';
 import { SearchIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { ErrorNote } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
@@ -70,15 +70,31 @@ export function DocsSearch({ children }: { children: ReactNode }) {
 
   const groups = useMemo(() => (loaded.state === 'ready' && query.trim() ? groupByPage(loaded.index.search(query)) : []), [loaded, query]);
 
+  // Where to go once the dialog has closed. Going while its scroll lock still hides the
+  // scrollbar would scroll to a layout that rewraps when the scrollbar comes back.
+  const target = useRef<string | null>(null);
+
   function go(page: string, anchor: string) {
+    target.current = `/docs/${page}${anchor ? `#${anchor}` : ''}`;
     setOpen(false);
-    router.push(`/docs/${page}${anchor ? `#${anchor}` : ''}`);
+  }
+
+  function onClosed(event: Event) {
+    const href = target.current;
+    target.current = null;
+    if (href) {
+      // Focus stays with the page we go to, not the button that opened the search.
+      event.preventDefault();
+      router.push(href);
+    }
   }
 
   return (
     <OpenSearch.Provider value={show}>
       {children}
-      <CommandDialog open={open} onOpenChange={setOpen} title="Search the docs" description="Find a guide or a section by its words.">
+      <CommandDialog open={open} onOpenChange={setOpen} title="Search the docs" description="Find a guide or a section by its words."
+        onCloseAutoFocus={onClosed}
+      >
         <Command shouldFilter={false}>
           <CommandInput value={query} onValueChange={setQuery} placeholder="Search the docs" />
           <CommandList className="max-h-[min(28rem,60svh)]">
