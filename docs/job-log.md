@@ -56,6 +56,13 @@ kept. When the job has more than one template, the run's files are
 grouped by template. The log's Page groups column counts what the
 definition found.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/job-log-failed-dark.png">
+    <img src="assets/job-log-failed-light.png" alt="A failed run opened from the job log: the error says which authority the user profile needs on the folder and the command that grants it, Details holds the IBM i message, and the steps show that Deliver failed" width="900">
+  </picture>
+</p>
+
 ## Retry
 
 Retry runs the same spooled file again with the job's active version, as

@@ -70,6 +70,13 @@ Under Settings, for the whole app:
 | Keep runs for | 90 days | How long runs are kept, 1 to 3650 days. See [Retention](job-log.md#retention). |
 | Agent | None | The provider, key, model and effort of the agent. See [Agent](agent.md#choosing-a-model). The section also shows the agent's [usage](agent.md#usage) this month and last month. |
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/settings-dark.png">
+    <img src="assets/settings-light.png" alt="The Settings page: Rendering with Carbone connected, its URL and Spooldoc's public key, the Agent with its provider, model and effort, the usage this month and last month, and the other settings" width="900">
+  </picture>
+</p>
+
 ## Per server and per job
 
 The libraries a server lists queues from are on the server; see

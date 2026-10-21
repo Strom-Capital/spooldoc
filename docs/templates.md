@@ -141,6 +141,13 @@ makes DOCX only, and so does a template that turns into one. Pick Make it
 a Word template in the template's menu on the render step, or ask the
 agent for one.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/word-template-dark.png">
+    <img src="assets/word-template-light.png" alt="The render step of a job with a Word template: the uploaded .docx and the tips for tags in Word on the left, and the PDF preview of the open order lines on the right" width="900">
+  </picture>
+</p>
+
 Until you upload one, the preview uses a Word starter template made from
 the definition, with the same layout as the HTML one and "Page 1 of 2" in
 the footer. To make your own:
@@ -224,6 +231,13 @@ formulas and page setup, and type the tags into its cells. It makes XLSX
 files, PDFs or both; a new Excel template makes XLSX only, and so does a
 template that turns into one. Pick Make it an Excel template in the
 template's menu on the render step, or ask the agent for one.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/excel-template-dark.png">
+    <img src="assets/excel-template-light.png" alt="The render step of a job with an Excel template of the whole spooled file: the uploaded .xlsx and the tips for tags in Excel on the left, and the PDF preview with a row per order line on the right" width="900">
+  </picture>
+</p>
 
 Until you upload one, the preview uses an Excel starter template made
 from the definition. To make your own:
@@ -402,6 +416,13 @@ render carries the asset as base64, so keep logos and fonts small. The
 Assets page shows which jobs print each asset, and an unknown name is a
 problem the check reports. The fonts the Carbone container has depend on
 its image; the `full-...-fonts` image in the Compose file has a wide set.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/assets-dark.png">
+    <img src="assets/assets-light.png" alt="The Assets page with a font, shown as a sample of its letters, and a logo, each with the code to print it and the jobs that use it" width="900">
+  </picture>
+</p>
 
 ## PDF layout
 

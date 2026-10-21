@@ -16,6 +16,13 @@ of the server. Hover over the count, or click, tap or press Enter on it, to
 list them, each with a link to the job and its state, as on the
 [Queues](queues.md) page.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/servers-dark.png">
+    <img src="assets/servers-light.png" alt="The Servers page with two servers: one connected, with its OS version and CCSID, and one that cannot be reached, with the reason and what to check" width="900">
+  </picture>
+</p>
+
 ## Adding a server
 
 | Field | What it is |
