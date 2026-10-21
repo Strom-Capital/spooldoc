@@ -1,0 +1,97 @@
+WEBVTT
+
+1
+00:00.960 --> 00:03.790
+Your IBM i programs print invoices,
+
+2
+00:03.840 --> 00:05.850
+pick lists and reports.
+
+3
+00:06.000 --> 00:09.530
+Spooldoc turns those spooled files into documents.
+
+4
+00:10.460 --> 00:15.210
+Your programs don't change, and nothing is installed on the IBM i.
+
+5
+00:15.260 --> 00:19.670
+Spooldoc connects over the host servers and watches your output queues.
+
+6
+00:20.400 --> 00:25.190
+A definition, written in YAML, reads each page into data.
+
+7
+00:25.240 --> 00:28.430
+Fields by label or position, tables of lines,
+
+8
+00:28.480 --> 00:30.890
+and one document per invoice.
+
+9
+00:30.960 --> 00:34.750
+It reads plain text spooled files in any code page,
+
+10
+00:34.800 --> 00:37.850
+and XML printed into a spooled file.
+
+11
+00:38.400 --> 00:40.910
+A template lays out that data.
+
+12
+00:40.960 --> 00:43.690
+It never sees lines and columns.
+
+13
+00:44.620 --> 00:48.810
+Write it in HTML, or make it in Word or Excel.
+
+14
+00:48.860 --> 00:51.877
+Each one makes its own file, a PDF,
+
+15
+00:51.927 --> 00:55.590
+or both, and you see the document as you edit.
+
+16
+00:56.520 --> 01:01.730
+From a sample spooled file, the agent proposes the definition and the template.
+
+17
+01:01.800 --> 01:04.610
+You check every value next to the page.
+
+18
+01:07.607 --> 01:10.330
+Each new spooled file becomes a run.
+
+19
+01:10.380 --> 01:17.290
+Spooldoc reads it, makes the documents, and delivers the files to a download or a folder in the IFS.
+
+20
+01:17.340 --> 01:19.670
+Every run is in the job log.
+
+21
+01:21.246 --> 01:22.616
+Spooldoc.
+
+22
+01:22.766 --> 01:26.476
+Spooled files into documents, for IBM i.
+
+23
+01:26.526 --> 01:29.316
+Open source, MIT licensed.
+
+24
+01:29.366 --> 01:31.176
+spooldoc.com.

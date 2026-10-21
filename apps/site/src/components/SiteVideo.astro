@@ -1,0 +1,45 @@
+---
+/**
+ * A narrated video with captions, in a light and a dark version that follow the page theme
+ * like the screenshots (the .frame and data-theme-image rules in global.css). Files live in
+ * public/video: <name>-light.mp4, <name>-dark.mp4, the matching .jpg posters and <name>.vtt.
+ * preload="none" means a visitor only downloads the version they play. The theme handover
+ * and the play event are in scripts/site-video.ts.
+ */
+import { url } from '../lib/links';
+
+interface Props {
+  /** File name stem in public/video, such as `overview`. */
+  name: string;
+  /** Accessible name for the video. */
+  label: string;
+}
+
+const { name, label } = Astro.props;
+const themes = ['light', 'dark'] as const;
+---
+<figure class="frame site-video" data-video={name}>
+  {themes.map((theme) => (
+    <video
+      data-theme-image={theme}
+      controls
+      playsinline
+      preload="none"
+      width="1920"
+      height="1080"
+      poster={url(`/video/${name}-${theme}.jpg`)}
+      aria-label={label}
+    >
+      <source src={url(`/video/${name}-${theme}.mp4`)} type="video/mp4" />
+      <track kind="captions" srclang="en" label="English" src={url(`/video/${name}.vtt`)} default />
+    </video>
+  ))}
+</figure>
+
+<style>
+  .site-video video { width: 100%; height: auto; aspect-ratio: 16 / 9; vertical-align: top; border-radius: var(--radius); background: var(--muted); }
+</style>
+
+<script>
+  import '../scripts/site-video';
+</script>
