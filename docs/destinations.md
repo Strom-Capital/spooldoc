@@ -10,7 +10,7 @@ each, and adds, edits and deletes the ones you made.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/destinations-dark.png">
-    <img src="assets/destinations-light.png" alt="The Destinations page with two IFS folders, each with its folder and settings and the number of jobs that use it, and the built-in Spooldoc download" width="900">
+    <img src="assets/destinations-light.png" alt="The Destinations page lists two IFS folders, each with its folder, its settings and the number of jobs that use it, and the built-in Spooldoc download." width="900">
   </picture>
 </p>
 
@@ -38,7 +38,7 @@ and two settings.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/destination-ifs-dark.png">
-    <img src="assets/destination-ifs-light.png" alt="The New IFS destination dialog filled in: a name, the folder /home/docs/delivery-notes, Add a number when a file with the same name exists, and Keep a copy in Spooldoc on" width="900">
+    <img src="assets/destination-ifs-light.png" alt="The New IFS destination dialog is filled in with a name, the folder /home/docs/delivery-notes, Add a number when a file with the same name exists, and Keep a copy in Spooldoc on." width="900">
   </picture>
 </p>
 

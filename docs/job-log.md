@@ -13,7 +13,7 @@ the path opens the log without filters.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/job-log-dark.png">
-    <img src="assets/job-log-light.png" alt="A run opened from the job log: status, the spooled file, the five steps with their timings, and the five delivered PDFs" width="900">
+    <img src="assets/job-log-light.png" alt="A run opened from the job log shows its status, the spooled file, the five steps with their timings, and the five pick list PDFs it delivered." width="900">
   </picture>
 </p>
 
@@ -59,7 +59,7 @@ definition found.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/job-log-failed-dark.png">
-    <img src="assets/job-log-failed-light.png" alt="A failed run opened from the job log: the error says which authority the user profile needs on the folder and the command that grants it, Details holds the IBM i message, and the steps show that Deliver failed" width="900">
+    <img src="assets/job-log-failed-light.png" alt="A failed run opened from the job log says which authority the user profile needs on the folder and the CHGAUT command that grants it, keeps the IBM i message under Details, and shows that the Deliver step failed." width="900">
   </picture>
 </p>
 

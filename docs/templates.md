@@ -22,7 +22,7 @@ Cloud. See [Carbone](carbone.md) to set one up.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/template-preview-dark.png">
-    <img src="assets/template-preview-light.png" alt="The render step of a job with two templates: the Document template picked at the end of the path above the panes, its HTML in an editor on the left and the rendered invoice preview on the right" width="900">
+    <img src="assets/template-preview-light.png" alt="The render step of a job with two templates shows the Document template picked at the end of the path above the panes, its HTML in an editor on the left, and the rendered invoice preview on the right." width="900">
   </picture>
 </p>
 
@@ -144,7 +144,7 @@ agent for one.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/word-template-dark.png">
-    <img src="assets/word-template-light.png" alt="The render step of a job with a Word template: the uploaded .docx and the tips for tags in Word on the left, and the PDF preview of the open order lines on the right" width="900">
+    <img src="assets/word-template-light.png" alt="The render step of a job with a Word template shows the uploaded .docx and the tips for tags in Word on the left, and the PDF preview of the open order lines on the right." width="900">
   </picture>
 </p>
 
@@ -235,7 +235,7 @@ template's menu on the render step, or ask the agent for one.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/excel-template-dark.png">
-    <img src="assets/excel-template-light.png" alt="The render step of a job with an Excel template of the whole spooled file: the uploaded .xlsx and the tips for tags in Excel on the left, and the PDF preview with a row per order line on the right" width="900">
+    <img src="assets/excel-template-light.png" alt="The render step of a job with an Excel template of the whole spooled file shows the uploaded .xlsx and the tips for tags in Excel on the left, and the PDF preview with a row per order line on the right." width="900">
   </picture>
 </p>
 
@@ -420,7 +420,7 @@ its image; the `full-...-fonts` image in the Compose file has a wide set.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/assets-dark.png">
-    <img src="assets/assets-light.png" alt="The Assets page with a font, shown as a sample of its letters, and a logo, each with the code to print it and the jobs that use it" width="900">
+    <img src="assets/assets-light.png" alt="The Assets page shows a font as a sample of its letters and a logo, each with the code to print it and the jobs that use it." width="900">
   </picture>
 </p>
 

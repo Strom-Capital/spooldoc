@@ -73,7 +73,7 @@ Under Settings, for the whole app:
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/settings-dark.png">
-    <img src="assets/settings-light.png" alt="The Settings page: Rendering with Carbone connected, its URL and Spooldoc's public key, the Agent with its provider, model and effort, the usage this month and last month, and the other settings" width="900">
+    <img src="assets/settings-light.png" alt="The Settings page shows Rendering with Carbone connected, its URL and Spooldoc's public key, the Agent with its provider, model, effort and usage, and the Watching and Retention settings." width="900">
   </picture>
 </p>
 

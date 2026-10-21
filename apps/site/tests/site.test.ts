@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { inlineSvg } from '../src/lib/brand';
 import { docsAssets, docsNav, docsSlugs } from '../src/lib/docs';
 import { parseDefinition } from '@spooldoc/core';
-import { DEFINITION_EXAMPLE, FEATURES } from '../src/lib/features';
+import { DEFINITION_EXAMPLE, FEATURES, SHOTS } from '../src/lib/features';
 import { docsUrl, formatDate, links, url } from '../src/lib/links';
 import { llmsTxt } from '../src/lib/llms';
 import { sortPosts, type PostLike } from '../src/lib/sortPosts';
@@ -155,8 +155,21 @@ describe('features', () => {
   it('show screenshots that exist, light and dark', () => {
     const assets = docsAssets();
     for (const feature of FEATURES) {
-      expect(assets, feature.shot).toContain(`${feature.shot}-light.png`);
-      expect(assets, feature.shot).toContain(`${feature.shot}-dark.png`);
+      expect(feature.shots.length, feature.id).toBeGreaterThan(0);
+      expect(new Set(feature.shots).size, feature.id).toBe(feature.shots.length);
+      for (const shot of feature.shots) {
+        expect(assets, shot).toContain(`${shot}-light.png`);
+        expect(assets, shot).toContain(`${shot}-dark.png`);
+      }
+    }
+  });
+
+  it('describe every screenshot in a full sentence', () => {
+    const assets = docsAssets();
+    for (const [name, alt] of Object.entries(SHOTS)) {
+      expect(assets, name).toContain(`${name}-light.png`);
+      expect(assets, name).toContain(`${name}-dark.png`);
+      expect(alt, name).toMatch(/^[A-Z].*\.$/);
     }
   });
 

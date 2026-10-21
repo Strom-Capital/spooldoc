@@ -19,7 +19,7 @@ list them, each with a link to the job and its state, as on the
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/servers-dark.png">
-    <img src="assets/servers-light.png" alt="The Servers page with two servers: one connected, with its OS version and CCSID, and one that cannot be reached, with the reason and what to check" width="900">
+    <img src="assets/servers-light.png" alt="The Servers page lists two servers: one connected, with its OS version and CCSID, and one that cannot be reached, with the reason and the ports to check." width="900">
   </picture>
 </p>
 

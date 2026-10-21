@@ -4,7 +4,7 @@ import CodeBlock from '../components/CodeBlock.astro';
 import PostList from '../components/PostList.astro';
 import Shot from '../components/Shot.astro';
 import SiteVideo from '../components/SiteVideo.astro';
-import { FEATURES, QUICK_START } from '../lib/features';
+import { FEATURES, QUICK_START, SHOTS } from '../lib/features';
 import { assetSize, siteVersion } from '../lib/docs';
 import { docsUrl, links, url } from '../lib/links';
 import { zoomLabel } from '../lib/imageLinks';
@@ -19,10 +19,10 @@ const architectureAlt =
   "Architecture: programs on the IBM i print to an output queue, optionally with a data queue; Spooldoc's watcher picks up new spooled files by polling or in real time, and a run captures, extracts, renders, delivers and finishes each one; the job builder and the agent write to the same Postgres database; delivered files go to a destination";
 
 const tour = [
-  { name: 'home', title: 'Home', text: 'Servers, output queues, jobs and runs at a glance, with a chart of runs per day.', alt: 'The Home page: counts of servers, output queues, jobs and runs, and a chart of runs per day by status' },
-  { name: 'job-builder', title: 'Job builder', text: 'The sample page with every field it found highlighted, next to the YAML that found it.', alt: 'The job builder with the extract step open: six pipeline steps across the top, the sample page with field hits highlighted on the left and the definition editor on the right' },
-  { name: 'template-preview', title: 'Templates', text: 'An HTML template beside the document it makes, rendered by Carbone as you edit.', alt: 'The render step of a job with two templates: the template\'s HTML in an editor on the left and the rendered invoice preview on the right' },
-  { name: 'job-log', title: 'Job log', text: 'Every run with its steps, their timings and the files it delivered.', alt: 'A run opened from the job log: status, the spooled file, the five steps with their timings, and the five delivered PDFs' },
+  { name: 'home', title: 'Home', text: 'Servers, output queues, jobs and runs at a glance, with a chart of runs per day.', alt: SHOTS.home },
+  { name: 'job-builder', title: 'Job builder', text: 'The sample page with every field it found highlighted, next to the YAML that found it.', alt: SHOTS['job-builder'] },
+  { name: 'template-preview', title: 'Templates', text: 'An HTML template beside the document it makes, rendered by Carbone as you edit.', alt: SHOTS['template-preview'] },
+  { name: 'job-log', title: 'Job log', text: 'Every run with its steps, their timings and the files it delivered.', alt: SHOTS['job-log'] },
 ];
 ---
 <Base title={HOME_TITLE} description={SITE_DESCRIPTION} jsonLd={homeJsonLd(Astro.site!, version)}>
@@ -51,7 +51,7 @@ const tour = [
       </div>
     </div>
     <div class="container">
-      <Shot name="ai-assistant" eager class="hero-shot" alt="The job builder: the sample invoice page with every extracted field highlighted, the YAML definition beside it, and the agent panel on the right" />
+      <Shot name="ai-assistant" eager class="hero-shot" alt="The job builder shows the sample invoice page with every extracted field highlighted, the YAML definition beside it, and the agent panel on the right." />
     </div>
   </section>
 

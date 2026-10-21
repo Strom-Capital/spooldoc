@@ -185,6 +185,13 @@ xml:
 | `fields` | Field name to a slash path from the root, as a string or `{ path, type }`. |
 | `groups` | Repeating elements: `path` from the root, and `map` from item field name to a path under each element. |
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/xml-definition-dark.png">
+    <img src="assets/xml-definition-light.png" alt="The extract step of a job whose spooled file holds XML: the page with its elements highlighted on the left, and the definition with source: xml, the page group element FORM, its fields and its repeating lines on the right." width="900">
+  </picture>
+</p>
+
 ## Checking a definition
 
 The workbench shows every hit on the page and the JSON beside it. The
