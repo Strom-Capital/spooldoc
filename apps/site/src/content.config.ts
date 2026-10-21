@@ -10,7 +10,7 @@ const blog = defineCollection({
   loader: glob({
     pattern: '**/[^_]*.md',
     base: './src/content/blog',
-    // Drop the date prefix from the URL: 2026-10-21-introducing-spooldoc.md -> /blog/introducing-spooldoc
+    // Drop the date prefix from the URL: 2026-10-21-spooldoc-0-3-0.md -> /blog/spooldoc-0-3-0
     generateId: ({ entry }) => entry.replace(/\.md$/, '').replace(/^\d{4}-\d{2}-\d{2}-/, ''),
   }),
   schema: z.object({
@@ -18,6 +18,8 @@ const blog = defineCollection({
     description: z.string(),
     date: z.coerce.date(),
     tags: z.array(z.string()).default([]),
+    /** Where the post first appeared, such as a release's announcement in Discussions. */
+    originalUrl: z.url().optional(),
     draft: z.boolean().default(false),
   }),
 });

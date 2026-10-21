@@ -11,8 +11,14 @@ import { homeJsonLd, postJsonLd, serializeJsonLd } from '../src/lib/structuredDa
 
 const site = new URL('https://spooldoc.com');
 const post: PostLike = {
-  id: 'introducing-spooldoc',
-  data: { title: 'A post', description: 'What it says.', date: new Date('2026-10-21'), tags: ['release'] },
+  id: 'spooldoc-1-2-3',
+  data: {
+    title: 'A post',
+    description: 'What it says.',
+    date: new Date('2026-10-21'),
+    tags: ['release'],
+    originalUrl: 'https://github.com/Strom-Capital/spooldoc/discussions/1',
+  },
 };
 
 describe('links', () => {
@@ -35,7 +41,47 @@ describe('links', () => {
 describe('posts', () => {
   it('sorts the newest first', () => {
     const older = { ...post, id: 'older', data: { ...post.data, date: new Date('2026-01-01') } };
-    expect(sortPosts([older, post]).map((p) => p.id)).toEqual(['introducing-spooldoc', 'older']);
+    expect(sortPosts([older, post]).map((p) => p.id)).toEqual(['spooldoc-1-2-3', 'older']);
+  });
+
+  it('puts two posts of one day in file name order, newest first', () => {
+    const day = new Date('2026-10-19');
+    const a = { id: 'spooldoc-0-1-0', filePath: 'src/content/blog/2026-10-19-spooldoc-0-1-0.md', data: { ...post.data, date: day } };
+    const b = { id: 'spooldoc-0-2-0', filePath: 'src/content/blog/2026-10-19-spooldoc-0-2-0.md', data: { ...post.data, date: day } };
+    expect(sortPosts([a, b]).map((p) => p.id)).toEqual(['spooldoc-0-2-0', 'spooldoc-0-1-0']);
+  });
+});
+
+describe('blog posts', () => {
+  const folder = path.join(process.cwd(), 'src/content/blog');
+  const files = fs.readdirSync(folder).filter((file) => file.endsWith('.md'));
+  const read = (file: string) => fs.readFileSync(path.join(folder, file), 'utf8');
+
+  it('are named by the date in their header', () => {
+    expect(files.length).toBeGreaterThan(0);
+    for (const file of files) {
+      const day = /^(\d{4}-\d{2}-\d{2})-[a-z0-9-]+\.md$/.exec(file)?.[1];
+      expect(day, file).toBeDefined();
+      expect(read(file), file).toMatch(new RegExp(`^date: ${day}$`, 'm'));
+    }
+  });
+
+  it('link a release post to its release and its announcement', () => {
+    const releases = files.filter((file) => /^tags: \[.*\brelease\b.*\]$/m.test(read(file)));
+    expect(releases.length).toBeGreaterThan(0);
+    for (const file of releases) {
+      const text = read(file);
+      const version = /^title: "Spooldoc (\d+\.\d+\.\d+)/m.exec(text)?.[1];
+      expect(version, file).toBeDefined();
+      expect(text, file).toContain(`https://github.com/Strom-Capital/spooldoc/releases/tag/v${version}`);
+      expect(text, file).toMatch(/^originalUrl: "https:\/\/github\.com\/Strom-Capital\/spooldoc\/discussions\/\d+"$/m);
+    }
+  });
+
+  it('use no images hosted on GitHub', () => {
+    for (const file of files) {
+      expect(read(file), file).not.toMatch(/user-attachments|githubusercontent/);
+    }
   });
 });
 
@@ -53,10 +99,11 @@ describe('structured data', () => {
   it('describes a post', () => {
     const data = postJsonLd(post, site);
     expect(data['@type']).toBe('BlogPosting');
-    expect(data.url).toBe('https://spooldoc.com/blog/introducing-spooldoc/');
+    expect(data.url).toBe('https://spooldoc.com/blog/spooldoc-1-2-3/');
     expect(data.headline).toBe('A post');
     expect(data.datePublished).toBe('2026-10-21T00:00:00.000Z');
     expect(data.keywords).toBe('release');
+    expect(data.sameAs).toBe('https://github.com/Strom-Capital/spooldoc/discussions/1');
   });
 
   it('cannot close its script tag', () => {
@@ -77,7 +124,7 @@ describe('llms.txt', () => {
     expect(text).toContain('(https://spooldoc.com/features/)');
     expect(text).toContain('(https://spooldoc.com/docs/)');
     expect(text).toContain('(https://spooldoc.com/blog/)');
-    expect(text).toContain('(https://spooldoc.com/blog/introducing-spooldoc/)');
+    expect(text).toContain('(https://spooldoc.com/blog/spooldoc-1-2-3/)');
     for (const feature of FEATURES) {
       expect(text).toContain(`(https://spooldoc.com/features/#${feature.id})`);
     }

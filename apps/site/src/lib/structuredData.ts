@@ -62,6 +62,7 @@ export function postJsonLd(post: PostLike, site: URL): JsonLd {
     inLanguage: 'en',
     author: organization(),
     publisher: organization(),
+    sameAs: post.data.originalUrl,
     isPartOf: { '@type': 'Blog', name: `${SITE_NAME} blog`, url: abs('/blog/', site) },
   };
 }

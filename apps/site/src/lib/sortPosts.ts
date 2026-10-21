@@ -2,7 +2,7 @@
 export interface PostLike {
   id: string;
   filePath?: string;
-  data: { title: string; description: string; date: Date; tags: string[] };
+  data: { title: string; description: string; date: Date; tags: string[]; originalUrl?: string };
 }
 
 /** Newest first. Posts on the same day are ordered by the time in `date`, then by file name. */
