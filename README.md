@@ -70,7 +70,11 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
   the extraction report and fixes what is missing. It designs and edits Word
   and Excel templates too, looking at every page it renders. Use a local model, or
   turn on masking, to keep values on your network.
-- **Job log**: every run with its steps, errors and files; retention you set.
+- **Destinations**: a download in Spooldoc, a folder in the IFS, or email:
+  one email per document, to the address printed in it, through your SMTP
+  server. A test address sends every email to you first.
+- **Job log**: every run with its steps, errors, files and emails;
+  retention you set.
 - **One Compose file**: the web app with its Java runtime, Postgres and
   Carbone, amd64 and arm64.
 
@@ -141,8 +145,9 @@ The guides are also on the website, with search, at
 Spooldoc is young. The web app, the *SCS parser, text and XML extraction,
 HTML, PDF, DOCX and XLSX output and the Spooldoc download destination
 work and are tested against demo spooled files captured from PUB400. Jobs
-can also write their files to a folder in the IFS. Next: SFTP, S3, email
-and webhook destinations, and more users and roles.
+can also write their files to a folder in the IFS, or email each document
+through an SMTP server. Next: email through Microsoft 365, SFTP, S3 and
+webhook destinations, and more users and roles.
 
 Until 1.0, a minor release (0.1 to 0.2) can include breaking changes. Read
 the [release notes](https://github.com/Strom-Capital/spooldoc/releases)

@@ -3,9 +3,21 @@ import { docxConverter, readDocx } from "./docx.js";
 import { pdfLandscape, prepareHtml, type AssetResolver, type DocumentData, type TemplateData } from "./template.js";
 import { readXlsx, xlsxHardRefresh } from "./xlsx.js";
 
+/**
+ * How Carbone prints numbers, amounts and dates: `lang` sets the separators of `formatN`
+ * and `formatC` and the names in `formatD`; `currencySource` and `currencyTarget` the
+ * currency of `formatC`. Without it, `en-us` and the currency of `lang`.
+ */
+export interface CarboneLocale {
+  lang?: string;
+  currencySource?: string;
+  currencyTarget?: string;
+}
+
 /** One document to render from an HTML template: its data and the format to make. */
 export interface HtmlRender {
   kind?: "html";
+  locale?: CarboneLocale;
   template: string;
   data: TemplateData;
   format: "html" | "pdf";
@@ -21,6 +33,7 @@ export interface HtmlRender {
  */
 export interface DocxRender {
   kind: "docx";
+  locale?: CarboneLocale;
   template: Uint8Array;
   data: TemplateData;
   format: "docx" | "pdf" | "png";
@@ -34,6 +47,7 @@ export interface DocxRender {
  */
 export interface XlsxRender {
   kind: "xlsx";
+  locale?: CarboneLocale;
   template: Uint8Array;
   data: DocumentData;
   format: "xlsx" | "pdf";
@@ -60,23 +74,23 @@ export async function renderDocument(server: CarboneServer, input: DocumentRende
   if (input.kind === "xlsx") {
     if (input.format === "xlsx") {
       const hardRefresh = input.hardRefresh ?? xlsxHardRefresh(readXlsx(input.template));
-      return carboneRender(server, { template: input.template, data: input.data, convertTo: "xlsx", hardRefresh });
+      return carboneRender(server, { ...input.locale, template: input.template, data: input.data, convertTo: "xlsx", hardRefresh });
     }
-    return carboneRender(server, { template: input.template, data: input.data, convertTo: "pdf", converter: "L" });
+    return carboneRender(server, { ...input.locale, template: input.template, data: input.data, convertTo: "pdf", converter: "L" });
   }
   if (input.kind === "docx") {
     if (input.format === "docx") {
-      return carboneRender(server, { template: input.template, data: input.data, convertTo: "docx", hardRefresh: false });
+      return carboneRender(server, { ...input.locale, template: input.template, data: input.data, convertTo: "docx", hardRefresh: false });
     }
     if (input.format === "png") {
-      return carboneRender(server, { template: input.template, data: input.data, convertTo: "png" });
+      return carboneRender(server, { ...input.locale, template: input.template, data: input.data, convertTo: "png" });
     }
     const converter = input.converter ?? docxConverter(readDocx(input.template));
-    return carboneRender(server, { template: input.template, data: input.data, convertTo: "pdf", converter });
+    return carboneRender(server, { ...input.locale, template: input.template, data: input.data, convertTo: "pdf", converter });
   }
   const pdf = input.format === "pdf";
   const template = prepareHtml(input.template, { asset: input.asset, landscape: pdf && pdfLandscape(input.template, input.pageWidth) });
-  return carboneRender(server, { template, data: input.data, convertTo: input.format, ...(pdf ? { converter: "C" as const } : {}) });
+  return carboneRender(server, { ...input.locale, template, data: input.data, convertTo: input.format, ...(pdf ? { converter: "C" as const } : {}) });
 }
 
 /** How far from a `/Count` its dictionary's `<<` and `>>` are looked for. A page tree's is far shorter. */

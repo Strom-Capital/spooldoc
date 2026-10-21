@@ -89,14 +89,29 @@ Formatters follow the path, each after a colon:
 | Formatter | Example | Result |
 |-----------|---------|--------|
 | `formatN` | `{d.pg.total:formatN(2)}` | `1,234.50` |
-| `formatD` | `{d.pg.invoiceDate:formatD('DD.MM.YYYY')}`, `{d.pg.invoiceDate:formatD('YYYY-MM-DD')}` | `01.10.2026`, `2026-10-01` |
+| `formatC` | `{d.pg.total:formatC(2)}` | `$1,234.50` |
+| `formatD` | `{d.pg.invoiceDate:formatD('DD.MM.YYYY')}`, `{d.pg.invoiceDate:formatD('D MMMM YYYY')}` | `01.10.2026`, `1 October 2026` |
 | `padl`, `padr` | `{d.pg.no:padl(8)}`, `{d.pg.no:padr(8, '.')}` | Padded to eight characters on the left, or on the right with dots |
 | `upperCase`, `lowerCase` | `{d.pg.city:upperCase}` | `HELSINKI` |
 
-Numbers use English separators. Write a currency after the tag, as in
-`{d.pg.total:formatN(2)} EUR`, or from the data:
-`{d.pg.total:formatN(2)} {d.pg.currency}`. `formatN` without a number
-shows three decimals.
+The separators of `formatN` and `formatC`, the currency of `formatC`
+and the month and day names of `formatD` follow
+[Formats](configuration.md#formats) in Settings. The results above are
+the defaults: `1,234.50`, the dollar and English names. With `1.234,56`
+and the euro, `{d.pg.total:formatC(2)}` prints `1.234,50 €`. `formatN`
+without a number shows three decimals, `formatC` two.
+
+To print the currency of each document from the data, write it after the
+number: `{d.pg.total:formatN(2)} {d.pg.currency}`. The same way prints a
+code in place of the sign, which `formatC` cannot: `{d.pg.total:formatN(2)} EUR`
+or `EUR {d.pg.total:formatN(2)}`.
+
+**`formatC` with a second currency converts the amount.** Carbone changes
+it at exchange rates built into Carbone, which are not today's rates.
+With the euro in Settings, `{d.pg.total:formatC(2, 'USD')}` prints
+`$1,407.70` for 1,234.50, and nothing says the amount was converted. To
+print an amount in another currency, use `formatN` and write the code
+after it, as above. Email fields do not take the second currency.
 
 Inside a tag, quote text with straight single quotes. Carbone prints
 double quotes and curly quotes as text, so the check below refuses them.

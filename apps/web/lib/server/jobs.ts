@@ -1,9 +1,21 @@
 import 'server-only';
 
-import { parseDefinition } from '@spooldoc/core';
+import { parseDefinition, type Definition } from '@spooldoc/core';
 import { and, desc, eq, isNotNull, max, sql } from 'drizzle-orm';
 import type { ZodError } from 'zod';
-import { deleteNotice, emptySpec, isFileTemplate, jobSpecSchema, KIND_NAMES, missingParts, startsDeleting, versionSpec, type JobSpec } from '@/lib/job-spec';
+import {
+  deleteNotice,
+  emptyEmailSpec,
+  emptySpec,
+  isFileTemplate,
+  jobSpecSchema,
+  KIND_NAMES,
+  missingParts,
+  startsDeleting,
+  versionSpec,
+  type JobSpec,
+} from '@/lib/job-spec';
+import { emailSpecProblems } from './email-message';
 import type { JobDetail, JobSummary, RunStatus } from '@/lib/types';
 import { getDb, type Db, type Tx } from './db';
 import { destinations, jobs, jobVersions, queueHealth, runs, servers } from './db/schema';
@@ -215,6 +227,21 @@ async function templateFileProblems(spec: JobSpec): Promise<string[]> {
   return problems;
 }
 
+/** What is wrong with the email part of a spec whose destination is an email destination, one line each. */
+export async function destinationProblems(spec: JobSpec): Promise<string[]> {
+  if (!spec.destination.destinationId) return [];
+  const [row] = await getDb().select({ kind: destinations.kind }).from(destinations).where(eq(destinations.id, spec.destination.destinationId));
+  if (row?.kind !== 'email') return [];
+  const email = spec.destination.email ?? emptyEmailSpec();
+  let def: Definition | null = null;
+  try {
+    def = parseDefinition(spec.extract.definition);
+  } catch {
+    // The definition's own errors are reported by `versionProblems`.
+  }
+  return emailSpecProblems(email, def, spec.render.templates).map((problem) => `Destination: ${problem}`);
+}
+
 /**
  * Save a job's draft as the next version.
  *
@@ -227,7 +254,7 @@ export async function saveVersion(
   input: { note: string; activate: boolean; userId: string; confirmDelete?: boolean },
 ): Promise<number> {
   const spec = versionSpec(jobSpecSchema.parse(job.draft));
-  const problems = [...versionProblems(spec), ...(await templateFileProblems(spec))];
+  const problems = [...versionProblems(spec), ...(await templateFileProblems(spec)), ...(await destinationProblems(spec))];
   if (problems.length > 0) {
     throw new IncompleteJobError(problems);
   }

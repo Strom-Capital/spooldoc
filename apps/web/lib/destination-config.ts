@@ -42,8 +42,45 @@ export const IF_EXISTS_TEXT: Record<IfExists, string> = {
   suffix: 'A file with the same name gets a number added, such as invoice-1001-2.pdf.',
 };
 
+/**
+ * One email address, such as buyer@example.com: something before and after one @, a dot
+ * in the domain, and no spaces, commas or angle brackets.
+ */
+const EMAIL_ADDRESS = /^[^\s@<>(),;:"[\]]+@[^\s@<>(),;:"[\]]+\.[^\s@<>(),;:"[\].]{2,}$/;
+
+/** True for one valid email address. */
+export const isEmailAddress = (value: string): boolean => EMAIL_ADDRESS.test(value) && !value.includes('..');
+
+/**
+ * The settings of an email destination. While `testAddress` is set, every email goes only
+ * there. To, Subject and the message are set per job, in `spec.destination.email`.
+ */
+export const emailConfigSchema = z.object({
+  testAddress: z
+    .string()
+    .trim()
+    .max(320, 'Use an address of at most 320 characters')
+    .refine((value) => value === '' || isEmailAddress(value), 'Enter one address, such as you@example.com')
+    .nullable()
+    .default(null)
+    .transform((value) => value || null),
+});
+export type EmailConfig = z.infer<typeof emailConfigSchema>;
+
+/** The settings schema of each kind a user can add. */
+export const CONFIG_SCHEMAS = { ifs: ifsConfigSchema, email: emailConfigSchema } as const;
+
 /** Where a destination puts the files, and how: for the Destinations page and the job editor. */
-export function destinationText(destination: { kind: 'spooldoc' } | { kind: 'ifs'; config: IfsConfig }): { where: string; how: string } {
+export function destinationText(
+  destination: { kind: 'spooldoc' } | { kind: 'ifs'; config: IfsConfig } | { kind: 'email'; config: EmailConfig },
+): { where: string; how: string } {
+  if (destination.kind === 'email') {
+    const { testAddress } = destination.config;
+    return {
+      where: 'Sent by email, one email per document.',
+      how: testAddress ? `Test: all email goes to ${testAddress}.` : 'Each job sets To, Subject and the message.',
+    };
+  }
   if (destination.kind === 'ifs') {
     const { folder, ifExists, keepCopy } = destination.config;
     return {
@@ -60,7 +97,8 @@ export const destinationName = z.string().trim().min(1, 'Enter a name').max(80, 
 /** The kinds a user can add. The built-in `spooldoc` destination cannot be added. */
 export const createDestinationSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('ifs'), name: destinationName, config: ifsConfigSchema }),
+  z.object({ kind: z.literal('email'), name: destinationName, config: emailConfigSchema }),
 ]);
 
-/** A change to a destination: its name and settings. The kind stays. */
-export const updateDestinationSchema = z.object({ name: destinationName, config: ifsConfigSchema }).partial();
+/** A change to a destination: its name and settings. The kind stays, so the route checks the settings against it. */
+export const updateDestinationSchema = z.object({ name: destinationName, config: z.record(z.string(), z.unknown()) }).partial();

@@ -60,7 +60,9 @@ export const SHOTS = {
   'job-log-failed':
     'A failed run opened from the job log says which authority the user profile needs on the folder and the CHGAUT command that grants it, keeps the IBM i message under Details, and shows that the Deliver step failed.',
   destinations:
-    'The Destinations page lists two IFS folders, each with its folder, its settings and the number of jobs that use it, and the built-in Spooldoc download.',
+    'The Destinations page lists an email destination, two IFS folders with their folders and settings, and the built-in Spooldoc download, each with the number of jobs that use it.',
+  'email-step':
+    'The destination step of an invoice job sends to {d.pg.customerEmail} with a Bcc to an archive mailbox, a Reply-To and the subject Invoice {d.pg.invoiceNo} from MyCo Ltd. Beside the fields, the preview of page group 1 of 6 shows the email to invoices@northernsupply.example with invoice-260101.pdf attached and the message filled in, its total formatted as 302,66 € and its due date as 29.10.2026.',
   'destination-ifs':
     'The New IFS destination dialog is filled in with a name, the folder /home/docs/delivery-notes, Add a number when a file with the same name exists, and Keep a copy in Spooldoc on.',
   home: 'The Home page shows counts of servers, output queues, jobs and runs, a chart of runs per day by status, and two items under Needs attention: a server that cannot be reached and a failed run.',
@@ -194,14 +196,15 @@ export const FEATURES: Feature[] = [
   },
   {
     id: 'destinations',
-    title: 'Download and IFS destinations',
-    summary: 'Files go to a download in Spooldoc or to a folder in the IFS.',
+    title: 'Download, IFS and email',
+    summary: 'Files go to a download in Spooldoc, a folder in the IFS, or by email to the address printed in each document.',
     body: [
       'The built-in destination keeps every file in Spooldoc, ready to download from the run in the job log.',
       'An IFS destination writes each file to a folder on the job\'s IBM i, where programs can pick it up. Each file is tagged with the right CCSID and is never half written. When a file with the same name exists, the destination replaces it, adds a number or fails the run, as you choose.',
-      'The spooled file is held, moved or deleted only after every file was delivered.',
+      'An email destination sends one email per document through your SMTP server. To, Subject and the message take fields such as <code>{d.pg.email}</code>, so each invoice goes to the customer on it, with its PDF attached. The message can be the document itself, from an HTML template. The job builder shows the email of each page group before anything is sent, and a test address sends every email to you first.',
+      'The spooled file is held, moved or deleted only after every file was delivered. When an email fails, the job log lists each email with its status, and Retry sends only the ones not sent yet.',
     ],
-    shots: ['destinations', 'destination-ifs'],
+    shots: ['email-step', 'destinations', 'destination-ifs'],
     docs: [{ slug: 'destinations', title: 'Destinations' }],
   },
   {

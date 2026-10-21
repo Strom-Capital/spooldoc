@@ -43,8 +43,9 @@ where a run stopped.
    DOCX or XLSX. See
    [Templates](templates.md).
 4. **Deliver.** Every file goes to the job's destination: kept in
-   Spooldoc's database, or written to a folder in the IFS of the job's
-   server. See [Destinations](destinations.md).
+   Spooldoc's database, written to a folder in the IFS of the job's
+   server, or emailed, one email per document, through the mail server
+   in Settings. See [Destinations](destinations.md).
 5. **Finish.** Only after every document was delivered, the spooled file
    is held, moved, deleted or left as it is. A finish that fails gives the
    run the status warning: the documents are out, the file is still there.
@@ -110,12 +111,13 @@ backup:
 | `jobs`, `job_versions` | Each job's editable draft and its saved versions |
 | `job_chats` | The agent's conversation for each job |
 | `samples` | Captured spooled files: raw bytes, attributes and parsed pages, for previews and runs |
-| `runs`, `run_files` | Every run with its steps, and the files kept in Spooldoc: by the Spooldoc download destination, or by an IFS destination with Keep a copy in Spooldoc |
+| `runs`, `run_files` | Every run with its steps, and the files kept in Spooldoc: by the Spooldoc download destination, by an IFS destination with Keep a copy in Spooldoc, or by an email destination |
+| `run_deliveries` | Every email a run sent or tried to send, one per document, so Retry sends only the rest |
 | `watch_seen` | Which spooled files each job has processed |
 | `destinations` | Where jobs deliver |
 | `assets` | Logos, images and fonts for templates |
 | `template_files` | Uploaded Word and Excel templates. A row never changes, so a version keeps the file it was saved with |
-| `settings`, `ai_providers` | Intervals, retention, and the agent's model per provider with its key encrypted |
+| `settings`, `ai_providers` | Intervals, retention, number, date and currency formats, the mail server with its password encrypted, and the agent's model per provider with its key encrypted |
 | `agent_usage` | The agent's tokens per model step, and the cost when the provider reported one |
 
 The server applies migrations when it starts (`SPOOLDOC_MIGRATE=off` to

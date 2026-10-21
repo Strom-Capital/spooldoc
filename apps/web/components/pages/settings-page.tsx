@@ -1,9 +1,10 @@
 'use client';
 
-import { CopyIcon, MousePointerClickIcon, RefreshCwIcon, SaveIcon } from 'lucide-react';
+import { CheckIcon, CopyIcon, MousePointerClickIcon, RefreshCwIcon, SaveIcon, SendIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
+import { useAppInfo } from '@/components/app-info';
 import { Hint } from '@/components/hint';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
@@ -15,9 +16,22 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { AI_PROVIDERS, aiProvider, DEFAULT_LOCAL_BASE_URL, EFFORTS, type AiProviderId, type Effort } from '@/lib/ai-providers';
-import { api, errorText, isAbort } from '@/lib/client/api';
+import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
 import { usageText } from '@/lib/client/format';
-import type { AgentUsageView, AiSettingsView, CarboneCheck, RenderingView, SettingsView, UsageMonth } from '@/lib/types';
+import {
+  COMMON_CURRENCIES,
+  CURRENCIES,
+  DATE_FORMATS,
+  EXAMPLE_DATE,
+  formatC,
+  formatD,
+  NUMBER_FORMATS,
+  type DateFormat,
+  type Formats,
+  type NumberLang,
+} from '@/lib/formats';
+import { SMTP_DEFAULT_PORT, SMTP_SECURITY, SMTP_SECURITY_LABEL, type SmtpSecurity } from '@/lib/mail-config';
+import type { AgentUsageView, AiSettingsView, CarboneCheck, MailView, RenderingView, SettingsView, UsageMonth } from '@/lib/types';
 
 type Unit = 's' | 'min';
 
@@ -501,6 +515,314 @@ function RenderingSection({
   );
 }
 
+/** The mail server as edited. The password field starts empty: a saved password is never sent to the page. */
+interface MailDraft {
+  host: string;
+  port: string;
+  security: SmtpSecurity;
+  user: string;
+  password: string;
+  removePassword: boolean;
+  from: string;
+  fromName: string;
+}
+
+const mailDraft = (saved: MailView): MailDraft => ({
+  host: saved.host,
+  port: String(saved.port),
+  security: saved.security,
+  user: saved.user,
+  password: '',
+  removePassword: false,
+  from: saved.from,
+  fromName: saved.fromName,
+});
+
+/** The `mail` part of a settings change, or undefined when nothing changed. */
+function mailChange(saved: MailView, draft: MailDraft) {
+  const port = draft.port.trim() === '' ? null : Number(draft.port);
+  const same =
+    draft.host.trim() === saved.host &&
+    port === saved.port &&
+    draft.security === saved.security &&
+    draft.user.trim() === saved.user &&
+    draft.from.trim() === saved.from &&
+    draft.fromName.trim() === saved.fromName &&
+    draft.password === '' &&
+    !draft.removePassword;
+  if (same) return undefined;
+  return {
+    host: draft.host.trim(),
+    port,
+    security: draft.security,
+    user: draft.user.trim(),
+    password: draft.removePassword ? null : draft.password || undefined,
+    from: draft.from.trim(),
+    fromName: draft.fromName.trim(),
+  };
+}
+
+/** The SMTP server email destinations send through, the From address, and a test email to yourself. */
+function MailSection({ saved, draft, onChange }: { saved: MailView; draft: MailDraft; onChange(draft: MailDraft): void }) {
+  const { user } = useAppInfo();
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ ok: true; to: string } | { ok: false; error: ShownError } | null>(null);
+  const changed = mailChange(saved, draft) !== undefined;
+
+  async function onTest() {
+    setSending(true);
+    setResult(null);
+    try {
+      const sent = await api<{ to: string }>('/api/settings/mail', { method: 'POST' });
+      setResult({ ok: true, to: sent.to });
+    } catch (err) {
+      setResult({ ok: false, error: shownError(err) });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <section id="mail" className="scroll-mt-4 rounded-lg border p-5">
+      <h2 className="font-semibold">Mail server</h2>
+      <p className="mt-0.5 mb-5 text-muted-foreground text-sm">
+        Email destinations send through this SMTP server, such as your own mail server or a sending service. Every email comes from the address below.
+      </p>
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5 sm:col-span-2">
+          <Label htmlFor="mail-host">Host</Label>
+          <Input
+            id="mail-host"
+            value={draft.host}
+            onChange={(event) => onChange({ ...draft, host: event.target.value })}
+            placeholder="smtp.example.com"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <p className="text-muted-foreground text-xs">The Spooldoc server connects to it, so it must be reachable from there. Empty turns email off.</p>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="mail-security">Security</Label>
+          <Select
+            value={draft.security}
+            onValueChange={(next) => {
+              const security = next as SmtpSecurity;
+              // A port that was the old choice's usual one follows the new choice.
+              const usual = Object.values(SMTP_DEFAULT_PORT).map(String).includes(draft.port) || draft.port === '';
+              onChange({ ...draft, security, port: usual ? String(SMTP_DEFAULT_PORT[security]) : draft.port });
+            }}
+          >
+            <SelectTrigger id="mail-security" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SMTP_SECURITY.map((security) => (
+                <SelectItem key={security} value={security}>
+                  {SMTP_SECURITY_LABEL[security]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground text-xs">
+            {draft.security === 'none'
+              ? 'Email goes over the network unencrypted. Use it only for a relay on your own network.'
+              : draft.security === 'tls'
+                ? 'Encrypted from the start, usually on port 465.'
+                : 'Encrypted after the server greets, usually on port 587.'}
+          </p>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="mail-port">Port</Label>
+          <Input
+            id="mail-port"
+            type="number"
+            min={1}
+            max={65535}
+            value={draft.port}
+            onChange={(event) => onChange({ ...draft, port: event.target.value })}
+            className="w-28"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="mail-user">
+            User name <span className="font-normal text-muted-foreground">(optional)</span>
+          </Label>
+          <Input
+            id="mail-user"
+            value={draft.user}
+            onChange={(event) => onChange({ ...draft, user: event.target.value })}
+            autoComplete="off"
+            spellCheck={false}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="mail-password">Password</Label>
+          <Input
+            id="mail-password"
+            type="password"
+            value={draft.password}
+            onChange={(event) => onChange({ ...draft, password: event.target.value, removePassword: false })}
+            placeholder={saved.hasPassword && !draft.removePassword ? 'Saved. Leave empty to keep it.' : undefined}
+            autoComplete="new-password"
+            disabled={!draft.user.trim()}
+          />
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-muted-foreground text-xs">
+              {draft.removePassword
+                ? 'The saved password is removed when you save.'
+                : !draft.user.trim()
+                  ? 'Enter the user name first. A server that takes email without a sign-in needs neither.'
+                  : 'Stored encrypted on the server and never shown again. Some services want an app password here.'}
+            </p>
+            {saved.hasPassword && (
+              <Hint text={draft.removePassword ? 'Keep the saved password after all.' : 'Remove the saved password when you save. Nothing changes until then.'}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => onChange({ ...draft, password: '', removePassword: !draft.removePassword })}
+                >
+                  {draft.removePassword ? 'Keep password' : 'Remove password'}
+                </Button>
+              </Hint>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="mail-from">From address</Label>
+          <Input
+            id="mail-from"
+            type="email"
+            value={draft.from}
+            onChange={(event) => onChange({ ...draft, from: event.target.value })}
+            placeholder="invoices@example.com"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <p className="text-muted-foreground text-xs">An address the mail server lets this user send from.</p>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="mail-from-name">
+            From name <span className="font-normal text-muted-foreground">(optional)</span>
+          </Label>
+          <Input id="mail-from-name" value={draft.fromName} onChange={(event) => onChange({ ...draft, fromName: event.target.value })} placeholder="Example Co" />
+        </div>
+      </div>
+      <div className="mt-5 flex flex-col gap-2 border-t pt-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <Hint
+            text={
+              changed
+                ? 'Save your changes first: the test email uses the saved mail server.'
+                : !saved.configured
+                  ? 'Set the host and the From address, and save, first.'
+                  : `Send an email to ${user.email} with the saved mail server, to check that it works.`
+            }
+          >
+            <Button type="button" variant="outline" size="sm" onClick={() => void onTest()} disabled={sending || changed || !saved.configured}>
+              {sending ? <Spinner /> : <SendIcon />}
+              Send test email
+            </Button>
+          </Hint>
+          {result?.ok && (
+            <span className="flex items-center gap-1.5 text-emerald-700 text-sm dark:text-emerald-400" role="status">
+              <CheckIcon className="size-4" aria-hidden />
+              Test email sent to {result.to}.
+            </span>
+          )}
+        </div>
+        {result && !result.ok && <ErrorNote detail={result.error.detail}>{result.error.message}</ErrorNote>}
+      </div>
+    </section>
+  );
+}
+
+/** The formats as edited. An empty currency is the number format's own. */
+interface FormatsDraft {
+  numberFormat: NumberLang;
+  dateFormat: DateFormat;
+  currency: string;
+}
+
+const formatsDraft = (saved: Formats): FormatsDraft => ({ ...saved, currency: saved.currency ?? '' });
+
+/** How numbers, amounts and dates print in documents and email fields. */
+function FormatsSection({ draft, onChange }: { draft: FormatsDraft; onChange(draft: FormatsDraft): void }) {
+  const own = NUMBER_FORMATS.find((format) => format.lang === draft.numberFormat)?.currency ?? 'USD';
+  const code = draft.currency.trim().toUpperCase();
+  const known = code === '' || code in CURRENCIES;
+  const example = formatC(1234.5, 2, { numberFormat: draft.numberFormat, currency: code && known ? code : null });
+  return (
+    <section id="formats" className="scroll-mt-4 rounded-lg border p-5">
+      <h2 className="font-semibold">Formats</h2>
+      <p className="mt-0.5 mb-5 text-muted-foreground text-sm">
+        How numbers, amounts and dates print: in documents, through formatN, formatC and formatD in templates, and in email fields.
+      </p>
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="formats-number">Number format</Label>
+          <Select value={draft.numberFormat} onValueChange={(next) => onChange({ ...draft, numberFormat: next as NumberLang })}>
+            <SelectTrigger id="formats-number" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {NUMBER_FORMATS.map((format) => (
+                <SelectItem key={format.lang} value={format.lang}>
+                  <span className="tabular">{format.example}</span>
+                  <span className="text-muted-foreground">{format.language} month names</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground text-xs">The separators of numbers and amounts, and the language of month and day names in formatD.</p>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="formats-date">Date format</Label>
+          <Select value={draft.dateFormat} onValueChange={(next) => onChange({ ...draft, dateFormat: next as DateFormat })}>
+            <SelectTrigger id="formats-date" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DATE_FORMATS.map((pattern) => (
+                <SelectItem key={pattern} value={pattern}>
+                  <span className="tabular">{formatD(EXAMPLE_DATE, pattern)}</span>
+                  <span className="text-muted-foreground">{pattern}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground text-xs">A date field in an email, without formatD. In a template, formatD sets the pattern.</p>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="formats-currency">Currency</Label>
+          <Input
+            id="formats-currency"
+            list="formats-currencies"
+            value={draft.currency}
+            onChange={(event) => onChange({ ...draft, currency: event.target.value.toUpperCase().slice(0, 3) })}
+            placeholder={`${own}, the number format's own`}
+            aria-invalid={!known || undefined}
+            autoComplete="off"
+            spellCheck={false}
+            className="w-56 uppercase placeholder:normal-case"
+          />
+          <datalist id="formats-currencies">
+            {[...COMMON_CURRENCIES, ...Object.keys(CURRENCIES).filter((c) => !(COMMON_CURRENCIES as readonly string[]).includes(c))].map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+          <p className="text-muted-foreground text-xs">
+            {known
+              ? `The currency formatC prints, such as ${example}. Empty is ${own}, the currency of the number format.`
+              : `Carbone does not know ${code}. Pick one of ${Object.keys(CURRENCIES).join(', ')}.`}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /** What the last cleanup did, in a sentence. */
 function cleanupText(cleanup: NonNullable<SettingsView['cleanup']>): string {
   const at = new Date(cleanup.at).toLocaleString();
@@ -523,6 +845,8 @@ export function SettingsPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [ai, setAi] = useState<AiDraft | null>(null);
   const [rendering, setRendering] = useState<RenderingDraft | null>(null);
+  const [mail, setMail] = useState<MailDraft | null>(null);
+  const [formats, setFormats] = useState<FormatsDraft | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -534,6 +858,9 @@ export function SettingsPage() {
         setDraft({ pollSeconds: data.pollSeconds, safetyCheckSeconds: data.safetyCheckSeconds, retentionDays: data.retentionDays });
         setAi(aiDraft(data.ai, data.ai.provider));
         setRendering(renderingDraft(data.rendering));
+        setMail(mailDraft(data.mail));
+      setFormats(formatsDraft(data.formats));
+        setFormats(formatsDraft(data.formats));
       },
       (err) => setError(errorText(err)),
     );
@@ -558,15 +885,21 @@ export function SettingsPage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!draft || !ai || !rendering || !settings) return;
+    if (!draft || !ai || !rendering || !mail || !formats || !settings) return;
     setBusy(true);
     setError(null);
     try {
       const change = renderingChange(settings.rendering, rendering);
-      const data = await api<SettingsView>('/api/settings', { method: 'PUT', body: { ...draft, ai: aiChange(ai), ...(change ? { rendering: change } : {}) } });
+      const mailPart = mailChange(settings.mail, mail);
+      const data = await api<SettingsView>('/api/settings', {
+        method: 'PUT',
+        body: { ...draft, ai: aiChange(ai), ...(change ? { rendering: change } : {}), ...(mailPart ? { mail: mailPart } : {}), formats },
+      });
       setSettings(data);
       setAi(aiDraft(data.ai, data.ai.provider));
       setRendering(renderingDraft(data.rendering));
+      setMail(mailDraft(data.mail));
+      setFormats(formatsDraft(data.formats));
       if (change && !data.rendering.check?.ok) {
         toast.error('Saved the settings, but Carbone does not work yet', { description: data.rendering.check?.error });
       } else {
@@ -587,9 +920,11 @@ export function SettingsPage() {
       {!draft && !error && (
         <Loading>Loading settings...</Loading>
       )}
-      {draft && ai && rendering && settings && (
+      {draft && ai && rendering && mail && formats && settings && (
         <form onSubmit={onSubmit} className="flex flex-col gap-6">
           <RenderingSection saved={settings.rendering} draft={rendering} busy={checking} onChange={setRendering} onCheck={() => void onCheck()} />
+          <FormatsSection draft={formats} onChange={setFormats} />
+          <MailSection saved={settings.mail} draft={mail} onChange={setMail} />
           <AiSection saved={settings.ai} ai={ai} onChange={setAi} />
           <section className="rounded-lg border p-5">
             <h2 className="font-semibold">Watching</h2>

@@ -1,10 +1,10 @@
 import { eq } from 'drizzle-orm';
-import { updateDestinationSchema } from '@/lib/destination-config';
+import { CONFIG_SCHEMAS, updateDestinationSchema } from '@/lib/destination-config';
 import { guard } from '@/lib/server/auth';
 import { getDb } from '@/lib/server/db';
 import { destinations } from '@/lib/server/db/schema';
 import { destinationView } from '@/lib/server/destinations';
-import { errorResponse, json, readJson } from '@/lib/server/http';
+import { errorResponse, invalidResponse, json, readJson } from '@/lib/server/http';
 import { destinationJobs, jobsUsingDestination } from '@/lib/server/jobs-using';
 import { UUID } from '@/lib/server/servers';
 
@@ -41,7 +41,15 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
   const { name, config } = body.data;
   const values: Partial<typeof destinations.$inferInsert> = {};
   if (name !== undefined) values.name = name;
-  if (config !== undefined) values.config = config;
+  if (config !== undefined) {
+    const schema = CONFIG_SCHEMAS[found.row.kind as keyof typeof CONFIG_SCHEMAS];
+    const parsed = schema.safeParse(config);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      return invalidResponse(issue?.message ?? 'The settings are not valid.', ['config', ...(issue?.path ?? [])]);
+    }
+    values.config = parsed.data;
+  }
   const db = getDb();
   const [row] = Object.keys(values).length === 0 ? [found.row] : await db.update(destinations).set(values).where(eq(destinations.id, found.row.id)).returning();
   return json(destinationView(row!, (await destinationJobs()).get(found.row.id) ?? []));

@@ -1,9 +1,9 @@
 import 'server-only';
 
-import { and, desc, eq, gte, inArray, lt, lte, type SQL } from 'drizzle-orm';
-import type { RunStatus, RunView } from '@/lib/types';
+import { and, desc, eq, gte, inArray, lt, lte, sql, type SQL } from 'drizzle-orm';
+import type { DeliveryView, RunStatus, RunView } from '@/lib/types';
 import { getDb } from './db';
-import { jobs, runFiles, runs } from './db/schema';
+import { destinations, jobs, jobVersions, runDeliveries, runFiles, runs } from './db/schema';
 import { UUID } from './servers';
 
 type RunRow = typeof runs.$inferSelect;
@@ -20,12 +20,36 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
     .from(runFiles)
     .where(inArray(runFiles.runId, ids))
     .orderBy(runFiles.templateIndex, runFiles.pageGroupIndex);
+  const deliveries = await db
+    .select({
+      id: runDeliveries.id,
+      runId: runDeliveries.runId,
+      document: runDeliveries.document,
+      to: runDeliveries.to,
+      test: runDeliveries.test,
+      status: runDeliveries.status,
+      sentInRun: runDeliveries.sentInRun,
+      error: runDeliveries.error,
+      detail: runDeliveries.detail,
+      sentAt: runDeliveries.sentAt,
+    })
+    .from(runDeliveries)
+    .where(inArray(runDeliveries.runId, ids))
+    .orderBy(sql`${runDeliveries.pageGroupIndex} asc nulls last`, runDeliveries.sentAt);
   const jobRows = await db
     .select({ id: jobs.id, name: jobs.name })
     .from(jobs)
     .where(inArray(jobs.id, [...new Set(rows.map((row) => row.jobId))]));
   const jobName = new Map(jobRows.map((job) => [job.id, job.name]));
+  // The job versions of these runs whose destination sends email.
+  const emailVersions = await db
+    .select({ jobId: jobVersions.jobId, number: jobVersions.number })
+    .from(jobVersions)
+    .innerJoin(destinations, sql`${destinations.id}::text = ${jobVersions.spec} -> 'destination' ->> 'destinationId'`)
+    .where(and(inArray(jobVersions.jobId, [...new Set(rows.map((row) => row.jobId))]), eq(destinations.kind, 'email')));
+  const sendsEmail = new Set(emailVersions.map((version) => `${version.jobId}/${version.number}`));
   return rows.map((row) => ({
+    sendsEmail: sendsEmail.has(`${row.jobId}/${row.version}`),
     id: row.id,
     seq: row.seq,
     jobId: row.jobId,
@@ -38,6 +62,9 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
     error: row.error,
     steps: row.steps,
     files: files.filter((f) => f.runId === row.id).map(({ id, name, size, contentType, template }) => ({ id, name, size, contentType, template })),
+    deliveries: deliveries
+      .filter((d) => d.runId === row.id)
+      .map((d) => ({ id: d.id, document: d.document, to: d.to, test: d.test, status: d.status as DeliveryView['status'], sentInRun: d.sentInRun, error: d.error, detail: d.detail, sentAt: d.sentAt.toISOString() })),
     startedAt: row.startedAt.toISOString(),
     finishedAt: row.finishedAt?.toISOString() ?? null,
   }));

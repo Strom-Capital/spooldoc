@@ -1,26 +1,51 @@
 import 'server-only';
 
+import type { DocumentData, ValueType } from '@spooldoc/core';
 import type { Connection } from '@spooldoc/ibmi';
 import { eq } from 'drizzle-orm';
-import { ifsConfigSchema } from '@/lib/destination-config';
+import { emailConfigSchema, ifsConfigSchema } from '@/lib/destination-config';
+import type { EmailSpec } from '@/lib/job-spec';
 import type { DestinationView } from '@/lib/types';
 import { getDb } from '../db';
 import { destinations } from '../db/schema';
+import { emailDestination } from './email';
 import { ifsDestination } from './ifs';
 import { nFiles, storeRunFiles, type RunFile } from './store';
 
 export { storeRunFiles, type RunFile } from './store';
 
+/** A document of a run: its data, for a destination that fills in fields, such as email. */
+export interface RunDocument {
+  /** The page group; null for the document of the whole spooled file. */
+  pageGroupIndex: number | null;
+  /** The document's file name without extension, such as `invoice-260101`. */
+  name: string;
+  data: DocumentData;
+  /** The HTML of the job's email body template for this document, when the email's message is one. */
+  html?: string | null;
+}
+
 /** What a destination gets to deliver a run. */
 export interface DeliverInput {
   runId: string;
   files: RunFile[];
+  /** Every document of the run, in page group order; the whole spooled file's document last. */
+  documents: RunDocument[];
+  /** The job and the spooled file, for a destination that remembers what it delivered. */
+  job: { id: string; splfKey: string };
+  destinationId: string;
+  /** The job's email part, for an email destination. */
+  email: EmailSpec | null;
+  /** The type of each typed field of the definition, by path such as `pg.dueDate`, for fields an email prints. */
+  valueTypes: Record<string, ValueType>;
   /** The open connection of the job's server, and its host. */
   conn: Connection;
   host: string;
+  /** Keep a secret, such as a password, out of the run's errors. */
+  addSecret(secret: string): void;
 }
 
-/** Where a run's documents go. New kinds (SFTP, S3, email, webhook) implement this. */
+/** Where a run's documents go. New kinds (SFTP, S3, webhook) implement this. */
 export interface Destination {
   kind: string;
   /**
@@ -45,6 +70,7 @@ export const spooldocDestination: Destination = {
 const KINDS: Record<string, (config: unknown) => Destination> = {
   spooldoc: () => spooldocDestination,
   ifs: (config) => ifsDestination(ifsConfigSchema.parse(config)),
+  email: (config) => emailDestination(emailConfigSchema.parse(config)),
 };
 
 /**
@@ -78,6 +104,10 @@ export function destinationView(row: typeof destinations.$inferSelect, jobs: Des
     const parsed = ifsConfigSchema.safeParse(row.config);
     const config = parsed.success ? parsed.data : { folder: String(row.config.folder ?? ''), ifExists: 'replace' as const, keepCopy: true };
     return { ...base, kind: 'ifs', config };
+  }
+  if (row.kind === 'email') {
+    const parsed = emailConfigSchema.safeParse(row.config);
+    return { ...base, kind: 'email', config: parsed.success ? parsed.data : { testAddress: null } };
   }
   return { ...base, kind: 'spooldoc', config: {} };
 }

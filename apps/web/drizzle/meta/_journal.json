@@ -162,6 +162,20 @@
       "when": 1792555682459,
       "tag": "0022_upgrade_from_0_2_0",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792588674621,
+      "tag": "0023_email_destination",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792595880863,
+      "tag": "0024_formats",
+      "breakpoints": true
     }
   ]
 }

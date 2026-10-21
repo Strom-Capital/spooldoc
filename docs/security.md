@@ -47,6 +47,8 @@ Everything is in Postgres:
 - **Model keys** are stored the same way and decrypted only to call the
   provider. Any signed-in user can set or replace a key, but no request
   can read one back, and keys are removed from error messages.
+- **The mail server password** is stored the same way, decrypted only to
+  send, never returned by the API, and removed from error messages.
 - **Captured spooled files** and **delivered files** are in clear text,
   for previews, runs and downloads. Protect the database like the spooled
   files themselves: access, backups and the volume included. Retention
@@ -102,6 +104,16 @@ The Cloud API key is stored encrypted and never sent to the browser.
 
 Carbone's startup log names the licensee of an Enterprise license.
 Spooldoc never reads or copies that log.
+
+## Email
+
+An [email destination](destinations.md#email) sends documents out of your
+network: each email, with its files and the values in its fields and
+message, goes to the mail server in Settings and on to the addresses the
+job sets. Use STARTTLS or TLS unless the server is a relay on your own
+network. While an email destination has a test address, every email goes
+only there. Every email a run sent, or tried to send, is listed on the run
+in the [job log](job-log.md#emails), with a copy of its files.
 
 ## Checklist
 

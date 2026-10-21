@@ -141,6 +141,20 @@ describe("renderDocument", () => {
     expect(sent(1).converter).toBeUndefined();
   });
 
+  it("sends the lang and the currency with every kind of render, and en-us without a currency by default", async () => {
+    fetchMock.mockImplementation(async () => fileResponse("x"));
+    const locale = { lang: "de-de", currencySource: "EUR", currencyTarget: "EUR" };
+    const bytes = new Uint8Array([0x50, 0x4b, 3, 4]);
+    await renderDocument(server, { template: "<p>{d.pg.a:formatC(2)}</p>", data: { pg: { a: 1 }, splf: {} }, format: "html", locale });
+    await renderDocument(server, { kind: "docx", template: bytes, data: { pg: {}, splf: {} }, format: "pdf", converter: "L", locale });
+    await renderDocument(server, { kind: "xlsx", template: bytes, data: { pgs: [], splf: {} }, format: "pdf", locale });
+    for (const n of [0, 1, 2]) expect(sent(n)).toMatchObject(locale);
+    await renderDocument(server, { template: "<p>x</p>", data: { pg: {}, splf: {} }, format: "html" });
+    expect(sent(3).lang).toBe("en-us");
+    expect(sent(3)).not.toHaveProperty("currencySource");
+    expect(sent(3)).not.toHaveProperty("currencyTarget");
+  });
+
   it("sends a Word template's bytes: DOCX with hardRefresh false, PDF with ICE, or LibreOffice for PAGEREF fields", async () => {
     fetchMock.mockImplementation(async () => fileResponse("PK"));
     const template = new Uint8Array([0x50, 0x4b, 3, 4, 0xff]);

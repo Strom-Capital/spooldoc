@@ -197,8 +197,12 @@ export interface CarboneRenderRequest {
    * Excel output: `true` has LibreOffice compute the formulas and store their values.
    */
   hardRefresh?: boolean;
-  /** Separators for `:formatN` and names in `:formatD`. Default `en-us`. */
+  /** Separators for `:formatN` and `:formatC`, and names in `:formatD`. Default `en-us`. */
   lang?: string;
+  /** The currency of the amounts, an ISO 4217 code such as `EUR`, for `:formatC`. Without it, Carbone takes the currency of `lang`. */
+  currencySource?: string;
+  /** The currency `:formatC` prints. Without it, `currencySource`. */
+  currencyTarget?: string;
 }
 
 /**
@@ -219,6 +223,8 @@ export async function carboneRender(server: CarboneServer, input: CarboneRenderR
       ...(input.converter ? { converter: input.converter } : {}),
       ...(input.hardRefresh !== undefined ? { hardRefresh: input.hardRefresh } : {}),
       lang: input.lang ?? "en-us",
+      ...(input.currencySource ? { currencySource: input.currencySource } : {}),
+      ...(input.currencyTarget ? { currencyTarget: input.currencyTarget } : {}),
     },
   });
   const body = await jsonOf(response);

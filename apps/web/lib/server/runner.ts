@@ -35,8 +35,9 @@ import { FORMAT_FILES, jobSpecSchema, perSpooledFile, spooledFileName, templateF
 import { assetNames, assetResolver } from './assets';
 import { getDb } from './db';
 import { jobVersions, runs, watchSeen, type RunStep } from './db/schema';
-import { destinationFor, type RunFile } from './destinations';
+import { destinationFor, type RunDocument, type RunFile } from './destinations';
 import { documentRenderer, fileNameFor, templateHtml } from './documents';
+import { fieldTypes } from './email-message';
 import { redact } from './http';
 import { connectServer, isConnectionError } from './ibmi';
 import { log } from './log';
@@ -174,7 +175,13 @@ export async function executeRun(runId: string, request: RunRequest, connection?
     const { def, groups } = extracted;
     pageGroups = groups.length;
 
-    const files: RunFile[] = await step(
+    // Looked up before the render, so an email destination's message template is rendered with the documents.
+    const destinationLookup = destinationFor(spec.destination.destinationId);
+    destinationLookup.catch(() => undefined);
+    const emailSpec = spec.destination.email;
+    const bodyTemplateId = emailSpec?.bodyTemplateId && (await destinationLookup.catch(() => null))?.kind === 'email' ? emailSpec.bodyTemplateId : null;
+
+    const { files, bodies } = await step(
       'render',
       async () => {
         const render = await documentRenderer();
@@ -188,6 +195,12 @@ export async function executeRun(runId: string, request: RunRequest, connection?
           return name;
         };
         const out: RunFile[] = [];
+        // The email message of each page group, from the job's email body template.
+        const bodies = new Map<number, string>();
+        const bodyTemplate = bodyTemplateId ? spec.render.templates.find((t) => t.id === bodyTemplateId) : undefined;
+        if (bodyTemplateId && bodyTemplate?.kind !== 'html') {
+          throw new StepError('render', "The email's message template is not an HTML template of the job. Pick another one in the Destination step.");
+        }
         for (const [templateIndex, template] of spec.render.templates.entries()) {
           // Checked once per template: Carbone prints some mistakes without an error.
           const prepared = await prepareTemplate(template, def, assets);
@@ -203,31 +216,68 @@ export async function executeRun(runId: string, request: RunRequest, connection?
           for (const document of documents) {
             const base = templateFileName(document.base, spec.render.templates, template);
             const file = { pageGroupIndex: document.index, template: template.name, templateIndex };
-            for (const format of template.formats) {
-              let content: Uint8Array;
+            const renderTo = async (format: Format): Promise<Uint8Array> => {
               try {
-                content = await render(prepared.input(document.data, format, sample.attributes.pageWidth, asset));
+                return await render(prepared.input(document.data, format, sample.attributes.pageWidth, asset));
               } catch (err) {
                 if (isCarboneError(err) && SERVER_KINDS.includes(err.kind)) throw err;
                 const text = err instanceof Error ? err.message : String(err);
                 throw new StepError('render', `The "${template.name}" template, ${document.where}: ${text}`, isCarboneError(err) ? err.detail : undefined);
               }
+            };
+            for (const format of template.formats) {
+              const content = await renderTo(format);
               const { extension, contentType } = FORMAT_FILES[format];
               out.push({ ...file, name: unique(base, extension), contentType, content });
+              if (format === 'html' && template.id === bodyTemplateId && document.index !== null) bodies.set(document.index, new TextDecoder().decode(content));
+            }
+            // The message template makes no HTML file of its own: its HTML is rendered for the email only.
+            if (template.id === bodyTemplateId && document.index !== null && !bodies.has(document.index)) {
+              bodies.set(document.index, new TextDecoder().decode(await renderTo('html')));
             }
           }
         }
-        return out;
+        return { files: out, bodies };
       },
-      (out) => fileCount(out),
+      ({ files: out }) => fileCount(out),
     );
+
+    // Each document's name and data, for a destination that fills in fields. Two page groups
+    // with the same name get a number, as their files do.
+    const taken = new Set<string>();
+    const documentName = (base: string) => {
+      let name = base;
+      for (let n = 2; taken.has(name); n++) name = `${base}-${n}`;
+      taken.add(name);
+      return name;
+    };
+    const documents: RunDocument[] = groups.map((group, index) => ({
+      pageGroupIndex: index,
+      name: documentName(fileNameFor(def, group, index, sample.splf.name.toLowerCase())),
+      data: { pg: group, splf: sample.splf },
+      html: bodies.get(index) ?? null,
+    }));
+    if (spec.render.templates.some(perSpooledFile)) {
+      documents.push({ pageGroupIndex: null, name: documentName(spooledFileName(sample)), data: spooledFileData(groups, sample) });
+    }
 
     await step(
       'deliver',
       async () => {
-        const destination = await destinationFor(spec.destination.destinationId);
+        const destination = await destinationLookup;
         if (!destination) throw new Error('The destination is gone.');
-        return destination.deliver({ runId, files, conn, host });
+        return destination.deliver({
+          runId,
+          files,
+          documents,
+          job: { id: request.jobId, splfKey: splfKey(request.splf) },
+          destinationId: spec.destination.destinationId!,
+          email: spec.destination.email,
+          valueTypes: fieldTypes(def),
+          conn,
+          host,
+          addSecret: (secret) => secrets.push(secret),
+        });
       },
       (note) => note,
     );

@@ -63,12 +63,40 @@ definition found.
   </picture>
 </p>
 
+## Emails
+
+A run of a job that delivers to an [email destination](destinations.md#email)
+has an Emails section under its files, with a count such as "Emails (42
+of 43 sent)". It lists one email per document: the document, the
+addresses it was for, its status and the time.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/job-log-emails-dark.png">
+    <img src="assets/job-log-emails-light.png" alt="A run of an invoice job opened from the job log lists its PDF and HTML files, then Emails (6 of 6 sent): each invoice with the customer address it went to, Sent, and the time." width="900">
+  </picture>
+</p>
+
+| Status | Meaning |
+|--------|---------|
+| Sent | The mail server took the email. |
+| Test | Sent to the destination's test address instead. |
+| Sent in run #N | An earlier run of the job sent it for the same spooled file, so it was not sent again. |
+| Failed | Open the row to see why, with the mail server's own text under Details. |
+
+A long list shows the first 50 emails and says how many more there are.
+A run that sent nothing says "This run sent no email."
+
 ## Retry
 
 Retry runs the same spooled file again with the job's active version, as
 a new run. Use it after fixing a definition or a template, or after a
 finish step failed. Spooldoc remembers which spooled files a job has
 processed, so the watcher never runs a file a second time on its own.
+
+With an email destination, Retry sends only the emails that were not sent
+yet. The ones an earlier run sent show as "Sent in run #N", and the
+Deliver step says so: "Sent 1 email, 42 were sent in run #12".
 
 ## Retention
 
