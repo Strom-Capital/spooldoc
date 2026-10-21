@@ -3,14 +3,13 @@ import 'server-only';
 import fs from 'node:fs';
 import path from 'node:path';
 import GithubSlugger from 'github-slugger';
+import { REPOSITORY } from '@/lib/repository';
 
 /**
  * The guides in docs/, served at /docs. The folder is read only while `next build`
  * prerenders the docs routes: the Docker image has no docs/ folder at runtime.
  * docs/README.md is the one source of the order and the groups, on GitHub and here.
  */
-
-const REPOSITORY = 'https://github.com/Strom-Capital/spooldoc';
 
 /** A page in the sidebar. */
 export interface DocsNavPage {
