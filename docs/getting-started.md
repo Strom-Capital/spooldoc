@@ -83,7 +83,8 @@ Rendering. See [Contributing](contributing.md) for the tools and the tests.
    [Definitions](definitions.md) and [Templates](templates.md).
 7. **Pick a destination.** Spooldoc download keeps the files in Spooldoc.
    An IFS folder, added on the Destinations page, writes them to the IBM i.
-   See [Destinations](destinations.md).
+   An email destination sends each document by email. See
+   [Destinations](destinations.md).
 8. **Save a version and run it.** Runs use the active version. Run now
    takes one spooled file from the queue; Watch the queue runs every new
    one, in real time through a data queue or by polling. See [Jobs](jobs.md).

@@ -17,7 +17,9 @@ export function useStepStatuses(): { statuses: Record<Step, StepStatus>; ready: 
   const { render } = useWorkbench();
   const { rendering } = useAppInfo();
   const serverError = servers.find((s) => s.id === spec.source.serverId)?.lastError ?? null;
-  const hasDestination = destinations.some((d) => d.id === spec.destination.destinationId);
+  const destination = destinations.find((d) => d.id === spec.destination.destinationId);
+  // An email destination is set once the job says where each email goes.
+  const hasDestination = !!destination && (destination.kind !== 'email' || !!spec.destination.email?.to.trim());
   return useMemo(() => {
     const statuses = stepStatuses({ spec, job, serverError, hasDestination, render, rendering });
     return { statuses, ready: allReady(statuses) };

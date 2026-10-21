@@ -203,7 +203,15 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
           : 'Files are left as they are.';
   // Writing to the IFS changes the IBM i, so it is named before it happens.
   const destination = destinations.find((d) => d.id === activeSpec?.destination.destinationId);
-  const deliverText = destination?.kind === 'ifs' ? `Documents will be written to ${destination.config.folder} on the IBM i. ` : '';
+  // Sending email reaches people outside, so it is named too, and where it goes while testing.
+  const deliverText =
+    destination?.kind === 'ifs'
+      ? `Documents will be written to ${destination.config.folder} on the IBM i. `
+      : destination?.kind === 'email'
+        ? destination.config.testAddress
+          ? `Each document will be emailed to the test address ${destination.config.testAddress}. `
+          : 'Each document will be emailed to the addresses the job sets. '
+        : '';
 
   async function onRun() {
     setBusy(true);

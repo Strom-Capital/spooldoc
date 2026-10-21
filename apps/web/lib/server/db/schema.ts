@@ -176,7 +176,7 @@ export const destinations = pgTable(
     builtin: boolean('builtin').notNull().default(false),
     ...timestamps,
   },
-  (t) => [check('destinations_kind_check', sql`${t.kind} in ('spooldoc', 'ifs')`)],
+  (t) => [check('destinations_kind_check', sql`${t.kind} in ('spooldoc', 'ifs', 'email')`)],
 );
 
 /** A pipeline from an output queue to a destination. `draft` is the spec being edited. */
@@ -324,6 +324,49 @@ export const runFiles = pgTable(
   (t) => [uniqueIndex('run_files_name_idx').on(t.runId, t.name)],
 );
 
+/**
+ * One email a run sent, or tried to send, for one document. Retry reads the deliveries of
+ * the same job and spooled file, so a document already sent is not sent again. Deleted
+ * with its run.
+ */
+export const runDeliveries = pgTable(
+  'run_deliveries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => runs.id, { onDelete: 'cascade' }),
+    jobId: uuid('job_id')
+      .notNull()
+      .references(() => jobs.id, { onDelete: 'cascade' }),
+    /** The spooled file, as `splfKey` in `lib/job-spec` writes it. */
+    splfKey: text('splf_key').notNull(),
+    destinationId: uuid('destination_id').references(() => destinations.id, { onDelete: 'set null' }),
+    /** The page group of the document; null for the document of the whole spooled file. */
+    pageGroupIndex: integer('page_group_index'),
+    /** The document's file name without extension, such as `invoice-260101`. */
+    document: text('document').notNull(),
+    /** The addresses the email was for, as the job's To field gave them, comma separated. */
+    to: text('to').notNull().default(''),
+    /** Sent to the destination's test address instead of `to`. */
+    test: boolean('test').notNull().default(false),
+    /** `sent`, `failed`, or `already_sent` when an earlier run sent it. */
+    status: text('status').notNull(),
+    /** The run that sent it, for `already_sent`. */
+    sentInRun: bigint('sent_in_run', { mode: 'number' }),
+    messageId: text('message_id'),
+    error: text('error'),
+    /** The mail server's own text behind `error`. */
+    detail: text('detail'),
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('run_deliveries_document_idx').on(t.jobId, t.splfKey, t.document),
+    index('run_deliveries_run_idx').on(t.runId),
+    check('run_deliveries_status_check', sql`${t.status} in ('sent', 'failed', 'already_sent')`),
+  ],
+);
+
 const providerList = sql.raw(AI_PROVIDER_IDS.map((id) => `'${id}'`).join(', '));
 
 /** App-wide settings: a single row with id 1. */
@@ -351,11 +394,24 @@ export const settings = pgTable(
     carbonePublicKey: text('carbone_public_key'),
     /** The last connection check: version, edition, or what went wrong. */
     carboneCheck: jsonb('carbone_check').$type<CarboneCheck>(),
+    /** The SMTP server email destinations send through. Null host: no mail server set. */
+    smtpHost: text('smtp_host'),
+    smtpPort: integer('smtp_port'),
+    /** `tls` (implicit TLS, usually port 465), `starttls` (usually 587) or `none`. */
+    smtpSecurity: text('smtp_security').notNull().default('starttls'),
+    smtpUser: text('smtp_user'),
+    /** The SMTP password, encrypted with SPOOLDOC_SECRET_KEY. */
+    smtpPasswordEnc: text('smtp_password_enc'),
+    /** The From address and name of every email. */
+    mailFrom: text('mail_from'),
+    mailFromName: text('mail_from_name'),
     ...timestamps,
   },
   (t) => [
     check('settings_single_row', sql`${t.id} = 1`),
     check('settings_carbone_mode_check', sql`${t.carboneMode} in ('onprem', 'cloud')`),
+    check('settings_smtp_security_check', sql`${t.smtpSecurity} in ('tls', 'starttls', 'none')`),
+    check('settings_smtp_port_check', sql`${t.smtpPort} between 1 and 65535`),
     check('settings_ai_provider_check', sql`${t.aiProvider} in (${providerList})`),
     check('settings_poll_check', sql`${t.pollSeconds} between 5 and 3600`),
     check('settings_safety_check', sql`${t.safetyCheckSeconds} between 60 and 86400`),

@@ -94,7 +94,8 @@ Schema changes go in `apps/web/lib/server/db/schema.ts`; then run
 
 A destination is a `kind` and a `deliver` call in
 `apps/web/lib/server/destinations`. `deliver` receives the run id, the
-files, and the open connection and host of the job's server, and returns
+files, the data of each document, the job and the spooled file, and the
+open connection and host of the job's server, and returns
 the note the Deliver step shows, such as "Wrote 6 files to
 /home/docs/out on ibmi.example.com". It runs outside any database
 transaction, since it may wait on another system. To keep the files in

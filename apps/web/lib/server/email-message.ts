@@ -1,0 +1,289 @@
+import 'server-only';
+
+import { namePatternProblems, tagProblems, templatePaths, valueAt, type Definition } from '@spooldoc/core';
+import juice from 'juice';
+import type { SendMailOptions } from 'nodemailer';
+import { isEmailAddress } from '@/lib/destination-config';
+import { EMAIL_FIELDS, EMAIL_TAG, type EmailField } from '@/lib/email-fields';
+import { FORMAT_FILES, formatList, perSpooledFile, type EmailSpec, type Format, type JobTemplate } from '@/lib/job-spec';
+import type { EmailSegment, EmailValueState } from '@/lib/types';
+
+/**
+ * What is wrong with a job's email part before it runs, one line each: tags that are not
+ * fields of the definition, tags with formatters, a message template that is gone or not
+ * HTML, formats under Attach that no template makes, and `{d.pg...}` tags in the email of
+ * the whole spooled file, which has no page group.
+ */
+export function emailSpecProblems(spec: EmailSpec, def: Definition | null, templates: JobTemplate[]): string[] {
+  const problems: string[] = [];
+  if (!spec.to.trim()) problems.push('Enter To, the address each email goes to.');
+  const known = def ? templatePaths(def) : undefined;
+  const fields = (Object.keys(EMAIL_FIELDS) as EmailField[]).filter((field) => field !== 'body' || spec.bodyTemplateId === null);
+  for (const field of fields) {
+    const text = spec[field];
+    const label = EMAIL_FIELDS[field];
+    const seen = new Set<string>();
+    for (const problem of [...namePatternProblems(text).map((p) => p.replace('file names take', 'email fields take')), ...tagProblems(text, known).map((p) => p.message)]) {
+      if (!seen.has(problem)) problems.push(`${label}: ${problem}`);
+      seen.add(problem);
+    }
+  }
+  if (spec.bodyTemplateId !== null) {
+    const template = templates.find((t) => t.id === spec.bodyTemplateId);
+    if (!template) problems.push('The message template is not a template of the job any more. Pick another one, or write the message.');
+    else if (template.kind !== 'html') problems.push(`The message template ${template.name} is not an HTML template. Pick an HTML template, or write the message.`);
+  }
+  const made = new Set(templates.flatMap((template) => template.formats));
+  const missing = spec.attach.filter((format) => !made.has(format));
+  if (missing.length > 0) problems.push(`Attach picks ${formatList(missing)}, which no template of the job makes.`);
+  const wholeFile = templates.some((template) => perSpooledFile(template) && template.formats.some((format) => spec.attach.includes(format)));
+  if (wholeFile) {
+    const pgFields = fields.filter((field) => /\{d\.pg[.[]/.test(spec[field])).map((field) => EMAIL_FIELDS[field]);
+    if (pgFields.length > 0) {
+      problems.push(
+        `${pgFields.join(', ')} ${pgFields.length === 1 ? 'reads' : 'read'} {d.pg...}, but the email of the whole spooled file has no page group. Use {d.splf...} there, or attach no file of the whole spooled file.`,
+      );
+    }
+  }
+  return problems;
+}
+
+/** A file that goes with an email. */
+export interface EmailFile {
+  name: string;
+  contentType: string;
+  content: Uint8Array;
+}
+
+/** The state of a value: `missing` when the data has no such path, `empty` when it has nothing to print. */
+function stateOf(value: unknown, present: boolean): EmailValueState {
+  if (!present) return 'missing';
+  if (value === null || value === undefined || typeof value === 'object' || String(value).trim() === '') return 'empty';
+  return 'found';
+}
+
+/** True when the data has the path, even with an empty value. */
+function hasPath(data: unknown, path: string): boolean {
+  const cut = path.lastIndexOf('.');
+  const parent = cut === -1 ? data : valueAt(data, path.slice(0, cut));
+  const key = path.slice(cut + 1).replace(/\[\d+\]$/, '');
+  return parent !== null && typeof parent === 'object' && key in parent;
+}
+
+/** A field's text in pieces, with each `{d.path}` tag filled in from the document's data. */
+export function expandSegments(text: string, data: unknown): EmailSegment[] {
+  const segments: EmailSegment[] = [];
+  let last = 0;
+  for (const match of text.matchAll(EMAIL_TAG)) {
+    if (match.index > last) segments.push({ text: text.slice(last, match.index) });
+    const path = match[1]!;
+    const value = valueAt(data, path);
+    const state = stateOf(value, hasPath(data, path));
+    segments.push({ text: state === 'found' ? String(value).trim() : '', tag: match[0], state });
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) segments.push({ text: text.slice(last) });
+  return segments;
+}
+
+/** A field with its tags filled in, and the tags that had no value: empty ones, and ones not in the data. */
+export function expandText(text: string, data: unknown): { text: string; empty: string[]; missing: string[] } {
+  const segments = expandSegments(text, data);
+  const tags = (state: EmailValueState) => [...new Set(segments.filter((segment) => segment.tag && segment.state === state).map((segment) => segment.tag!))];
+  return { text: segments.map((segment) => segment.text).join(''), empty: tags('empty'), missing: tags('missing') };
+}
+
+/** Why tags have no value, for a message: "{d.pg.email} is empty", "{d.pg.emial} is not in the data". */
+function emptyText(expanded: { empty: string[]; missing: string[] }): string {
+  const say = (tags: string[], what: string) => (tags.length === 0 ? [] : [`${tags.join(' and ')} ${tags.length === 1 ? 'is' : 'are'} ${what}`]);
+  return [...say(expanded.empty, 'empty'), ...say(expanded.missing, 'not in the data')].join(', and ');
+}
+
+/**
+ * The addresses of To, Cc, Bcc or Reply-To: the field with its tags filled in, split at
+ * commas and semicolons, with the tags that had no value and the text that is not an
+ * address.
+ */
+export function addressList(text: string, data: unknown): { addresses: string[]; empty: string[]; missing: string[]; invalid: string[] } {
+  const expanded = expandText(text, data);
+  const parts = expanded.text
+    .split(/[,;]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return { addresses: parts.filter(isEmailAddress), empty: expanded.empty, missing: expanded.missing, invalid: parts.filter((part) => !isEmailAddress(part)) };
+}
+
+/**
+ * What keeps the email from being sent, from its address fields. To must have an address
+ * and every tag in it a value: a customer whose address is empty would not get the
+ * document. Cc, Bcc and Reply-To are optional, so a tag with no value there is left out.
+ * Text that is not an address fails in every field.
+ */
+export function addressProblems(spec: Pick<EmailSpec, 'to' | 'cc' | 'bcc' | 'replyTo'>, data: unknown): string[] {
+  const to = addressList(spec.to, data);
+  const problems: string[] = [];
+  if (to.empty.length > 0 || to.missing.length > 0) problems.push(emptyText(to));
+  else if (to.addresses.length === 0 && to.invalid.length === 0) problems.push('To has no address');
+  const fields = [['To', to], ['Cc', addressList(spec.cc, data)], ['Bcc', addressList(spec.bcc, data)], ['Reply-To', addressList(spec.replyTo, data)]] as const;
+  for (const [label, list] of fields) {
+    for (const part of list.invalid) problems.push(`"${part}" in ${label} is not an email address`);
+  }
+  if (fields[3][1].addresses.length > 1) problems.push('Reply-To takes one address');
+  return problems;
+}
+
+const escapeHtml = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** The plain message as HTML: paragraphs at blank lines, line breaks kept. */
+export function textToHtml(text: string): string {
+  const paragraphs = text
+    .trim()
+    .split(/\n\s*\n/)
+    .map((paragraph) => `<p style="margin:0 0 1em">${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
+    .join('\n');
+  return `<!doctype html><html><head><meta charset="utf-8"></head><body style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.5;color:#1a1a1a">\n${paragraphs}\n</body></html>`;
+}
+
+/** The text of an HTML body, for the plain-text part of the email. */
+export function htmlToText(html: string): string {
+  return html
+    .replace(/<(style|script|head)[^>]*>[\s\S]*?<\/\1>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|h[1-6]|li|tr|table|section|header|footer)>/gi, '\n')
+    .replace(/<\/t[dh]>/gi, '\t')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/**
+ * An HTML template's output as an email body: its CSS inlined, since many mail programs
+ * drop `<style>`. Images stay data URIs here; `attachDataUrls` turns them into inline
+ * CID attachments when the email is sent, since Gmail blocks data URIs.
+ */
+export function inlineHtml(html: string): string {
+  return juice(html, { removeStyleTags: true, preserveMediaQueries: true, preserveFontFaces: false });
+}
+
+/** The line at the top of a test email: where it would have gone. */
+function testLine(wouldGoTo: string[]): string {
+  return `Test email from Spooldoc. Without the test address it would go to ${wouldGoTo.join(', ') || 'no address'}.`;
+}
+
+/** Puts a block right after `<body>`, or in front when there is none. */
+function afterBody(html: string, block: string): string {
+  const open = /<body[^>]*>/i.exec(html);
+  if (!open) return block + html;
+  const at = open.index + open[0].length;
+  return html.slice(0, at) + block + html.slice(at);
+}
+
+/** The formats a job's files can be attached in, from their content type. */
+export function formatOf(contentType: string): Format | undefined {
+  return (Object.keys(FORMAT_FILES) as Format[]).find((format) => FORMAT_FILES[format].contentType === contentType);
+}
+
+/** The subject: the field with its tags filled in, or the document's name when it comes out empty; `[Test]` in front for a test send. */
+export function emailSubject(spec: Pick<EmailSpec, 'subject'>, data: unknown, document: string, test: boolean): string {
+  const subject = expandText(spec.subject, data).text.replace(/\s+/g, ' ').trim() || document;
+  return test ? `[Test] ${subject}` : subject;
+}
+
+/**
+ * The message as HTML and as plain text: the job's text with its tags filled in, or the
+ * HTML of its message template with the CSS inlined. With `wouldGoTo` (a test send), a
+ * line at the top names the addresses it would have gone to.
+ */
+export function messageBody(input: { spec: Pick<EmailSpec, 'body'>; data: unknown; templateHtml?: string | null; wouldGoTo: string[] | null }): { html: string; text: string } {
+  let html: string;
+  let text: string;
+  if (input.templateHtml) {
+    html = inlineHtml(input.templateHtml);
+    text = htmlToText(html);
+  } else {
+    const body = expandText(input.spec.body, input.data).text;
+    html = textToHtml(body);
+    text = body.trim();
+  }
+  if (input.wouldGoTo) {
+    const line = testLine(input.wouldGoTo);
+    html = afterBody(
+      html,
+      `<p style="margin:0 0 16px;padding:8px 12px;background:#fff4d6;color:#5c4400;font-family:Arial,Helvetica,sans-serif;font-size:13px;border-radius:4px">${escapeHtml(line)}</p>`,
+    );
+    text = `${line}\n\n${text}`;
+  }
+  return { html, text };
+}
+
+/** What `composeEmail` needs for one document. */
+export interface ComposeInput {
+  spec: EmailSpec;
+  /** The document's data: `{ pg, splf }` for a page group, `{ pgs, splf }` for the whole spooled file. */
+  data: unknown;
+  /** The document's file name without extension, the subject when the job sets none. */
+  document: string;
+  /** Every file of the document; the ones in `spec.attach` go with the email. */
+  files: EmailFile[];
+  from: SendMailOptions['from'];
+  testAddress: string | null;
+  /** The HTML output of the job's body template for this document, when the message is a template. */
+  templateHtml?: string | null;
+}
+
+/** An email ready to send, and what the job log keeps of it. */
+export interface ComposedEmail {
+  message: SendMailOptions;
+  /** The addresses it is for, from To, before a test address. */
+  to: string[];
+  subject: string;
+  html: string;
+  attachments: EmailFile[];
+}
+
+/**
+ * The email of one document: To, Cc, Bcc and Reply-To with their tags filled in, the
+ * subject, the message (the plain text with fields, or a template's HTML with its CSS
+ * inlined), a plain-text version, and the document's files in the formats picked under
+ * Attach. With a test address, it goes only there, without Cc and Bcc, with `[Test]`
+ * in front of the subject and a line at the top that says where it would have gone.
+ *
+ * @returns The email, or the problems that keep it from being sent, such as an empty To
+ */
+export function composeEmail(input: ComposeInput): { email: ComposedEmail; problems: [] } | { email: null; problems: string[] } {
+  const { spec, data } = input;
+  const problems = addressProblems(spec, data);
+  if (problems.length > 0) return { email: null, problems };
+  const to = addressList(spec.to, data);
+  const cc = addressList(spec.cc, data);
+  const bcc = addressList(spec.bcc, data);
+  const replyTo = addressList(spec.replyTo, data);
+
+  const test = input.testAddress;
+  const subject = emailSubject(spec, data, input.document, test !== null);
+  const { html, text } = messageBody({ spec, data, templateHtml: input.templateHtml, wouldGoTo: test ? to.addresses : null });
+  const attachments = input.files.filter((file) => {
+    const format = formatOf(file.contentType);
+    return format !== undefined && spec.attach.includes(format);
+  });
+  const message: SendMailOptions = {
+    from: input.from,
+    to: test ? [test] : to.addresses,
+    ...(!test && cc.addresses.length > 0 ? { cc: cc.addresses } : {}),
+    ...(!test && bcc.addresses.length > 0 ? { bcc: bcc.addresses } : {}),
+    ...(replyTo.addresses[0] ? { replyTo: replyTo.addresses[0] } : {}),
+    subject,
+    html,
+    text,
+    attachDataUrls: true,
+    attachments: attachments.map((file) => ({ filename: file.name, content: Buffer.from(file.content), contentType: file.contentType })),
+  };
+  return { email: { message, to: to.addresses, subject, html, attachments }, problems: [] };
+}

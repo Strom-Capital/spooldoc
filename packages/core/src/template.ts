@@ -106,7 +106,7 @@ export function pdfLandscape(template: string, pageWidth?: number | null): boole
 }
 
 /** A value at a path such as `pg.lines[0].item`, or undefined. */
-function valueAt(data: unknown, path: string): unknown {
+export function valueAt(data: unknown, path: string): unknown {
   let current: unknown = data;
   for (const part of path.split(/\.|\[(\d+)\]/).filter((p) => p !== undefined && p !== "")) {
     if (current === null || typeof current !== "object") return undefined;

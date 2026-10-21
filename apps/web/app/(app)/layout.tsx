@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { AppInfoProvider } from '@/components/app-info';
 import { AppShell } from '@/components/app-shell';
 import { currentUser } from '@/lib/server/auth';
+import { getMailView } from '@/lib/server/mail';
 import { describeModel } from '@/lib/server/models';
 import { renderingReady } from '@/lib/server/rendering';
 import { maskingOn } from '@/lib/server/settings';
@@ -18,7 +19,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }
   // The sidebar starts as an icon rail until the user expands it (the sidebar keeps the choice in this cookie).
   const sidebarOpen = (await cookies()).get('sidebar_state')?.value === 'true';
-  const info = { user, model: await describeModel(), masking: await maskingOn(), rendering: await renderingReady() };
+  const info = { user, model: await describeModel(), masking: await maskingOn(), rendering: await renderingReady(), mail: (await getMailView()).configured };
   return (
     <AppInfoProvider value={info}>
       <AppShell sidebarOpen={sidebarOpen}>{children}</AppShell>

@@ -286,6 +286,36 @@ export function newTemplate(templates: JobTemplate[], name?: string, formats: Fo
 export const FINISH_ACTIONS = ['hold', 'move', 'delete', 'none'] as const;
 export type FinishAction = (typeof FINISH_ACTIONS)[number];
 
+/** The message of a new email destination step: a short text the user changes. */
+export const DEFAULT_EMAIL_BODY = 'Hello,\n\nYour document is attached.\n';
+
+/**
+ * The email a job sends for each document, when its destination is an email destination.
+ * To, Cc, Bcc, Reply-To, Subject and Body take `{d.pg.field}` tags. To, Cc and Bcc take
+ * several addresses, separated by commas. `bodyTemplateId` makes the message the HTML of
+ * one of the job's HTML templates instead of `body`. `attach` picks the formats of the
+ * document's files that go with it.
+ */
+export const emailSpecSchema = z.object({
+  to: z.string().max(2000, 'Use at most 2000 characters for To').default(''),
+  cc: z.string().max(2000, 'Use at most 2000 characters for Cc').default(''),
+  bcc: z.string().max(2000, 'Use at most 2000 characters for Bcc').default(''),
+  replyTo: z.string().max(500, 'Use at most 500 characters for Reply-To').default(''),
+  subject: z.string().max(500, 'Use at most 500 characters for Subject').default(''),
+  body: z.string().max(20_000, 'Use at most 20000 characters for the message').default(DEFAULT_EMAIL_BODY),
+  bodyTemplateId: z.string().regex(TEMPLATE_ID).nullable().default(null),
+  attach: z
+    .array(z.enum(FORMATS))
+    .default(['pdf'])
+    .transform((formats) => FORMATS.filter((f) => formats.includes(f))),
+});
+export type EmailSpec = z.infer<typeof emailSpecSchema>;
+
+/** The email part of a job that has none yet. */
+export function emptyEmailSpec(): EmailSpec {
+  return emailSpecSchema.parse({});
+}
+
 /** The parts of a job. A draft may be incomplete; a version must be complete (`completeSpec`). */
 export const jobSpecSchema = z.object({
   source: z
@@ -309,7 +339,13 @@ export const jobSpecSchema = z.object({
   render: z
     .object({ templates: z.array(templateSchema).min(1, 'Add at least one template') })
     .default(() => ({ templates: [firstTemplate()] })),
-  destination: z.object({ destinationId: z.string().uuid().nullable().default(null) }).default({ destinationId: null }),
+  destination: z
+    .object({
+      destinationId: z.string().uuid().nullable().default(null),
+      /** What each email holds, when the destination is an email destination. Kept when another destination is picked. */
+      email: emailSpecSchema.nullable().default(null),
+    })
+    .default({ destinationId: null, email: null }),
   finish: z
     .object({ action: z.enum(FINISH_ACTIONS).default('hold'), queue: queueRefSchema.nullable().default(null) })
     .default({ action: 'hold', queue: null }),
@@ -324,7 +360,7 @@ export function emptySpec(overrides: { serverId?: string; library?: string; queu
   return {
     ...spec,
     source: { ...spec.source, serverId: overrides.serverId ?? null, library: overrides.library ?? '', queue: overrides.queue ?? '' },
-    destination: { destinationId: overrides.destinationId ?? null },
+    destination: { destinationId: overrides.destinationId ?? null, email: null },
   };
 }
 

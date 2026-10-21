@@ -69,6 +69,7 @@ Under Settings, for the whole app:
 | Safety check | 5 minutes | How often a real-time queue is listed anyway, in case a data queue entry was missed. |
 | Keep runs for | 90 days | How long runs are kept, 1 to 3650 days. See [Retention](job-log.md#retention). |
 | Agent | None | The provider, key, model and effort of the agent. See [Agent](agent.md#choosing-a-model). The section also shows the agent's [usage](agent.md#usage) this month and last month. |
+| Mail server | None | The SMTP server email destinations send through. See [Mail server](#mail-server). |
 
 <p align="center">
   <picture>
@@ -76,6 +77,26 @@ Under Settings, for the whole app:
     <img src="assets/settings-light.png" alt="The Settings page shows Rendering with Carbone connected, its URL and Spooldoc's public key, the Agent with its provider, model, effort and usage, and the Watching and Retention settings." width="900">
   </picture>
 </p>
+
+## Mail server
+
+[Email destinations](destinations.md#email) send through one SMTP server,
+set under Settings, **Mail server**, for the whole app. It can be your
+own mail server or a sending service.
+
+| Setting | What it is |
+|---------|------------|
+| Host | The SMTP server, such as `smtp.example.com`. The Spooldoc server connects to it, so it must be reachable from there. Empty turns email off. |
+| Security | STARTTLS (usually port 587), TLS (usually port 465), or None, for a relay on your own network. |
+| Port | Follows Security unless you change it. |
+| User name and password | Optional: a server that takes email without a sign-in needs neither. The password is stored encrypted and never shown again. Some services want an app password here. |
+| From address and From name | Every email comes from this address. Use one the server lets the user send from. |
+
+Save, then **Send test email** sends one to your own address with the
+saved settings and says what happened: "Test email sent to
+you@example.com", or what to check, such as "The mail server refused the
+sign-in. Check the user name and password in Settings, under Mail server,
+or use an app password." The server's own text is under Details.
 
 ## Per server and per job
 

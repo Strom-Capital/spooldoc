@@ -2,8 +2,9 @@
 
 import type { SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
 import type { AiProviderId, Effort } from './ai-providers';
-import type { IfsConfig } from './destination-config';
-import type { JobSpec } from './job-spec';
+import type { EmailConfig, IfsConfig } from './destination-config';
+import type { Format, JobSpec } from './job-spec';
+import type { SmtpSecurity } from './mail-config';
 
 /**
  * Why a server cannot be used: `host` it cannot be reached (Spooldoc tries again by
@@ -74,7 +75,7 @@ export type DestinationView = {
   builtin: boolean;
   /** The jobs whose draft or any version delivers here. */
   jobs: QueueView['jobs'];
-} & ({ kind: 'spooldoc'; config: Record<string, never> } | { kind: 'ifs'; config: IfsConfig });
+} & ({ kind: 'spooldoc'; config: Record<string, never> } | { kind: 'ifs'; config: IfsConfig } | { kind: 'email'; config: EmailConfig });
 
 /** An uploaded image or font, without its bytes. */
 export interface AssetView {
@@ -170,8 +171,28 @@ export interface RunView {
   steps: RunStepView[];
   /** The delivered files, with the name of the job template each was rendered with. */
   files: { id: string; name: string; size: number; contentType: string; template: string }[];
+  /** The emails the run sent or tried to send, one per document; empty when its destination sends no email. */
+  deliveries: DeliveryView[];
+  /** The run's job version delivers to an email destination. */
+  sendsEmail: boolean;
   startedAt: string;
   finishedAt: string | null;
+}
+
+/** One email of a run, for one document. */
+export interface DeliveryView {
+  id: string;
+  document: string;
+  /** The addresses the email was for, as the job's To gave them. */
+  to: string;
+  /** Sent to the destination's test address instead of `to`. */
+  test: boolean;
+  status: 'sent' | 'failed' | 'already_sent';
+  /** The run that sent it, for `already_sent`. */
+  sentInRun: number | null;
+  error: string | null;
+  detail: string | null;
+  sentAt: string;
 }
 
 /** One chat model provider's saved settings. The key itself is never sent. */
@@ -262,6 +283,61 @@ export interface SettingsView {
   cleanup: { at: string; runs: number; samples: number; templateFiles: number; agentUsage: number; error?: string } | null;
   ai: AiSettingsView;
   rendering: RenderingView;
+  mail: MailView;
+}
+
+/** The mail server email destinations send through, as Settings shows it. Never carries the password. */
+export interface MailView {
+  host: string;
+  port: number;
+  security: SmtpSecurity;
+  user: string;
+  hasPassword: boolean;
+  from: string;
+  fromName: string;
+  /** A host and a From address are set, so email can be sent. */
+  configured: boolean;
+}
+
+/** A value an email field reads, and whether it has one: as the extraction report colors fields. */
+export type EmailValueState = 'found' | 'empty' | 'missing';
+
+/** A piece of an email field after its tags are filled in: plain text, or a tag with its value. */
+export interface EmailSegment {
+  text: string;
+  /** The tag, such as `{d.pg.email}`, when this piece is one. */
+  tag?: string;
+  state?: EmailValueState;
+}
+
+/** The email of one document of the preview spooled file, as the job's destination step shows it. Nothing is sent. */
+export interface EmailPreviewView {
+  /** The page group shown, 0-based, and how many there are. */
+  pageGroup: number;
+  pageGroups: number;
+  /** The document's file name without extension. */
+  document: string;
+  /** The From of every email, from Settings; null when no mail server is set. */
+  from: { address: string; name: string | null } | null;
+  to: EmailSegment[];
+  cc: EmailSegment[];
+  bcc: EmailSegment[];
+  replyTo: EmailSegment[];
+  subject: EmailSegment[];
+  /** The message as HTML, as it will be sent. */
+  html: string;
+  /** The files that go with it, by name and format. */
+  attachments: { name: string; format: Format }[];
+  /** Why the message template could not be shown, such as Carbone not being connected. */
+  bodyError: string | null;
+  /** The destination's test address, while it is set. */
+  testAddress: string | null;
+  /** Why this email would not be sent, such as an empty address. */
+  problems: string[];
+  /** Tags of any field that are not fields of the definition, with a hint. */
+  unknownTags: string[];
+  /** The fields an email can read, such as `pg.invoiceNo`, with their value in this page group, for Insert field. */
+  fields: { path: string; value: string }[];
 }
 
 /** An item of Needs attention on Home, to dismiss or bring back. */

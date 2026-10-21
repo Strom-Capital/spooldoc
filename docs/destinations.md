@@ -120,6 +120,88 @@ Use Replace for jobs you may retry.
 A destination that a job's draft or any saved version delivers to cannot
 be deleted. Deleting one never touches the folder or its files.
 
+## Email
+
+An email destination sends one email per document: each invoice to the
+customer on it, each delivery note to the address printed in it. Emails
+go through the mail server set in [Settings](configuration.md#mail-server).
+Add one with **Add destination** on the Destinations page and pick
+**Email**. It has a name and a test address.
+
+**The test address.** While **Send all email to** is set, every email of
+every job that uses the destination goes only there. Cc and Bcc are
+dropped, the subject starts with `[Test]`, and a line at the top of the
+message names the addresses it would have gone to. A new email
+destination starts with your own address there, so you can try a job
+before any customer gets an email. The Destinations page shows
+"Test: all email goes to you@example.com" while it is set. Empty it to
+send to the addresses each job sets.
+
+### What each email holds
+
+The job's destination step sets the email. Each field takes the same
+`{d.pg.field}` tags as `output.name` in the [definition](definitions.md),
+filled in from the page group of each document:
+
+| Field | What it holds |
+|-------|---------------|
+| To | One or more addresses, separated by commas: `{d.pg.email}, orders@example.com`. Required. |
+| Cc, Bcc | Optional. Bcc to an archive mailbox is one fixed address. |
+| Reply-To | Optional, one address. |
+| Subject | Such as `Invoice {d.pg.invoiceNo}`. Empty, the subject is the document's name. |
+| Message from | Text written here, or one of the job's HTML templates. |
+| Message | The text of the email, with fields, when the message is text. |
+| Attach | The formats of the document's files that go with the email: PDF by default. |
+
+Tags are plain paths, without formatters. **Insert field** lists the
+fields of the definition with their values in the page group shown, and
+puts the one you pick at the cursor. A tag that is not a field of the
+definition is listed under the fields, and a version cannot be saved with
+one. From is always the address in Settings.
+
+Beside the fields, the step shows the email of one page group as it will
+be sent: From, To, Subject, the files and the message. Previous and Next
+step through the page groups, so you can watch To and Subject change from
+customer to customer. Nothing is sent from the preview.
+
+**The email can be the document.** With **Message from** set to an HTML
+template, the message is the HTML the template makes for the page group.
+Its CSS is moved into the elements, since many mail programs drop
+`<style>`, and its [images](templates.md#logos-images-and-fonts) go into the email as inline
+attachments, since some mail programs block images written into the HTML.
+A plain-text version goes with it.
+
+**Files.** Each email carries its own document's files, in the formats
+under Attach, named as the [Spooldoc download](#spooldoc-download) names
+them. The files of an Excel template of the whole spooled file go in one
+email of their own, and only when Attach picks their format. That email
+has no page group, so its fields can read only `{d.splf...}`. A copy of
+every file is kept in Spooldoc, so the job log can show what was mailed.
+
+### When an email fails
+
+A missing or wrong address fails that document with what to fix:
+"invoice-260101: {d.pg.email} is empty", or
+'"J. SMITH" in To is not an email address'. In To, every tag needs a
+value, so a customer whose address is empty is never left out without a
+word. An empty Cc, Bcc or Reply-To is left out.
+
+The other documents are still sent. Then the run fails with "Sent 42 of
+43 emails" and the first reason, and the spooled file is not held, moved
+or deleted. The [job log](job-log.md#emails) lists every email with its
+status. After fixing the cause, [Retry](job-log.md#retry) sends only the
+emails that were not sent yet: a document an earlier run of the same job
+sent for the same spooled file is not sent again. An email sent to the
+test address does not count as sent, so taking the test address out sends
+every email for real.
+
+Errors of the mail server say what to check: a refused sign-in, a host
+or port that cannot be reached, a TLS setting that does not match the
+port, an email too large for the server, or an address the server
+refused. The server's own text is under Details. When the server or the
+connection fails, the run stops sending, and the emails it did not try
+say so.
+
 ## Writing a destination
 
 A destination is one small interface in

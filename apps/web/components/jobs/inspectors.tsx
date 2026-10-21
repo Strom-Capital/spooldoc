@@ -11,18 +11,19 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { destinationText } from '@/lib/destination-config';
-import type { FinishAction, SourceFilter } from '@/lib/job-spec';
+import { emptyEmailSpec, type FinishAction, type SourceFilter } from '@/lib/job-spec';
+import { EmailStep } from './email-step';
 import { useJob } from './job-provider';
 import { QueueSelect } from './queue-select';
 import { StepFooter, useFocusOnArrival } from './step-nav';
 
 /** A padded, scrollable inspector panel with a heading, and Back and Next at the end. */
-export function Panel({ title, description, children }: { title: string; description: ReactNode; children: ReactNode }) {
+export function Panel({ title, description, wide, children }: { title: string; description: ReactNode; wide?: boolean; children: ReactNode }) {
   const heading = useRef<HTMLHeadingElement>(null);
   useFocusOnArrival(heading);
   return (
     <div className="h-full overflow-auto">
-      <div className="mx-auto flex max-w-3xl flex-col gap-5 px-4 py-5 sm:px-6">
+      <div className={cn('mx-auto flex flex-col gap-5 px-4 py-5 sm:px-6', wide ? 'max-w-6xl' : 'max-w-3xl')}>
         <div>
           <h2 ref={heading} tabIndex={-1} className="font-semibold text-lg outline-none">
             {title}
@@ -171,16 +172,28 @@ export function SourceInspector() {
 /** Destination: where the documents go. */
 export function DestinationInspector() {
   const { spec, updateDraft, readOnly, destinations, destinationsError } = useJob();
+  const picked = destinations.find((destination) => destination.id === spec.destination.destinationId);
   return (
-    <Panel title="Destination" description="Where the job delivers its documents.">
+    <Panel title="Destination" description="Where the job delivers its documents." wide={picked?.kind === 'email'}>
       {destinationsError && <ErrorNote>Could not load the destinations. {destinationsError}</ErrorNote>}
-      <div role="radiogroup" aria-label="Destination" className="grid gap-3 sm:grid-cols-2">
+      <div role="radiogroup" aria-label="Destination" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {destinations.map((destination) => (
           <Choice
             key={destination.id}
             selected={spec.destination.destinationId === destination.id}
             disabled={readOnly}
-            onSelect={() => updateDraft({ destination: { destinationId: destination.id } }, { debounce: false })}
+            onSelect={() =>
+              updateDraft(
+                {
+                  destination: {
+                    destinationId: destination.id,
+                    // An email destination needs the email part; another destination keeps it, for coming back.
+                    email: spec.destination.email ?? (destination.kind === 'email' ? emptyEmailSpec() : null),
+                  },
+                },
+                { debounce: false },
+              )
+            }
             title={destination.name}
           >
             {Object.values(destinationText(destination)).join(' ')}
@@ -188,12 +201,13 @@ export function DestinationInspector() {
         ))}
       </div>
       <p className="text-muted-foreground text-xs">
-        Add a folder in the IFS, or change one, on the{' '}
+        Add a folder in the IFS or an email destination, or change one, on the{' '}
         <Link href="/destinations" className="text-primary hover:underline">
           Destinations
         </Link>{' '}
         page.
       </p>
+      {picked?.kind === 'email' && <EmailStep destination={picked} />}
     </Panel>
   );
 }

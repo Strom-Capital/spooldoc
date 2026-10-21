@@ -11,6 +11,8 @@ export interface AppInfo {
   masking: boolean;
   /** The last check found a working Carbone server, so documents can be rendered. */
   rendering: boolean;
+  /** A mail server is set in Settings, so email destinations can send. */
+  mail: boolean;
 }
 
 const AppInfoContext = createContext<AppInfo | null>(null);

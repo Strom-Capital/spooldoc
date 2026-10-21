@@ -22,7 +22,7 @@ function setup(ifExists: IfExists, existing: string[] = []) {
   const conn = new FakeConnection();
   conn.folders.add(FOLDER);
   for (const name of existing) conn.ifs.set(`${FOLDER}/${name}`, { bytes: OLD, ccsid: 65535 });
-  const deliver = (files: RunFile[]) => ifsDestination({ folder: FOLDER, ifExists, keepCopy: false }).deliver({ runId: 'run-1', files, conn, host: HOST });
+  const deliver = (files: RunFile[]) => ifsDestination({ folder: FOLDER, ifExists, keepCopy: false }).deliver({ runId: 'run-1', files, documents: [], job: { id: 'job-1', splfKey: 'key' }, destinationId: 'destination-1', email: null, conn, host: HOST, addSecret: () => undefined });
   const names = () => [...conn.ifs.keys()].map((path) => path.slice(FOLDER.length + 1)).sort();
   const writes = () => conn.calls.filter((call) => call.method === 'writeIfsFile').map((call) => call.args);
   return { conn, deliver, names, writes };

@@ -204,3 +204,19 @@ img[data-theme-image='dark'] {
   background: var(--hit-found-strong);
   outline: 1.5px solid var(--primary);
 }
+
+/* Email preview: a value that changed when stepping to another page group lights up once. */
+@media (prefers-reduced-motion: no-preference) {
+  .email-flash {
+    animation: email-flash 1.2s ease-out;
+    border-radius: 2px;
+  }
+}
+@keyframes email-flash {
+  from {
+    background: var(--hit-found-strong);
+  }
+  to {
+    background: transparent;
+  }
+}
