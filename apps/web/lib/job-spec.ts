@@ -316,6 +316,24 @@ export function emptyEmailSpec(): EmailSpec {
   return emailSpecSchema.parse({});
 }
 
+/**
+ * What a job sends with each webhook call, when its destination is a webhook destination:
+ * the formats of the document's files that go in the call. Every format by default; an
+ * empty list sends the data only.
+ */
+export const webhookSpecSchema = z.object({
+  attach: z
+    .array(z.enum(FORMATS))
+    .default([...FORMATS])
+    .transform((formats) => FORMATS.filter((f) => formats.includes(f))),
+});
+export type WebhookSpec = z.infer<typeof webhookSpecSchema>;
+
+/** The webhook part of a job that has none yet: every file goes. */
+export function emptyWebhookSpec(): WebhookSpec {
+  return webhookSpecSchema.parse({});
+}
+
 /** The parts of a job. A draft may be incomplete; a version must be complete (`completeSpec`). */
 export const jobSpecSchema = z.object({
   source: z
@@ -344,8 +362,10 @@ export const jobSpecSchema = z.object({
       destinationId: z.string().uuid().nullable().default(null),
       /** What each email holds, when the destination is an email destination. Kept when another destination is picked. */
       email: emailSpecSchema.nullable().default(null),
+      /** What each webhook call holds, when the destination is a webhook destination. Kept when another destination is picked. */
+      webhook: webhookSpecSchema.nullable().default(null),
     })
-    .default({ destinationId: null, email: null }),
+    .default({ destinationId: null, email: null, webhook: null }),
   finish: z
     .object({ action: z.enum(FINISH_ACTIONS).default('hold'), queue: queueRefSchema.nullable().default(null) })
     .default({ action: 'hold', queue: null }),
@@ -360,7 +380,7 @@ export function emptySpec(overrides: { serverId?: string; library?: string; queu
   return {
     ...spec,
     source: { ...spec.source, serverId: overrides.serverId ?? null, library: overrides.library ?? '', queue: overrides.queue ?? '' },
-    destination: { destinationId: overrides.destinationId ?? null, email: null },
+    destination: { destinationId: overrides.destinationId ?? null, email: null, webhook: null },
   };
 }
 

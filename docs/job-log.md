@@ -87,6 +87,31 @@ addresses it was for, its status and the time.
 A long list shows the first 50 emails and says how many more there are.
 A run that sent nothing says "This run sent no email."
 
+## Webhook calls
+
+A run of a job that delivers to a [webhook destination](destinations.md#webhook)
+has a Webhook calls section under its files, with a count such as
+"Webhook calls (5 of 6 sent)". It lists one call per document: the
+document with the URL it was posted to, without its scheme and query string, and
+the receiver's answer with the tries, such as "200 OK in 142 ms, 3
+tries" or "No answer after 3 tries", then its status and the time.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/job-log-webhooks-dark.png">
+    <img src="assets/job-log-webhooks-light.png" alt="A run of an invoice job opened from the job log lists its PDF files, then Webhook calls (6 of 6 sent): each invoice posted to hooks.example.com/spooldoc with the answer 200 OK, the time it took and 3 tries, Sent, and the time." width="900">
+  </picture>
+</p>
+
+| Status | Meaning |
+|--------|---------|
+| Sent | The receiver answered with a 2xx status. |
+| Test | Sent to the destination's test URL instead. |
+| Sent in run #N | An earlier run of the job sent it for the same spooled file, so it was not sent again. |
+| Failed | Open the row to see why, with the receiver's answer, its first 2 KB, under Details. |
+
+A run that sent nothing says "This run sent no webhook call."
+
 ## Retry
 
 Retry runs the same spooled file again with the job's active version, as
@@ -97,6 +122,10 @@ processed, so the watcher never runs a file a second time on its own.
 With an email destination, Retry sends only the emails that were not sent
 yet. The ones an earlier run sent show as "Sent in run #N", and the
 Deliver step says so: "Sent 1 email, 42 were sent in run #12".
+
+With a webhook destination, Retry sends only the documents that were not
+sent yet, each with the same `webhook-id` as before: "Sent 1 document to
+hooks.example.com, 5 were sent in run #12".
 
 ## Retention
 

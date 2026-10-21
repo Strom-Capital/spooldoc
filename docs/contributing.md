@@ -85,6 +85,19 @@ purpose, such as the client secret `expired` or a From address that
 starts with `blocked@`; the script lists them. The variable is a test
 aid: leave it unset in production.
 
+The webhook destination is tested with `fetch` mocked too. To see calls
+arrive in the app, start the stand-in receiver and add a webhook
+destination with its URL. Give it the signing secret the dialog shows,
+and it checks the signature of each call:
+
+```sh
+node apps/web/scripts/webhook-stand-in.mjs 3406 whsec_...
+```
+
+It prints each call's headers and a short summary of its body, and
+answers 200. URLs such as `http://localhost:3406/spooldoc?fail=2` or
+`?status=401` fail on purpose; the script lists them.
+
 Add a fixture by printing the document with demo-spool, capturing it with
 the capture command (which scrubs the job user and number) and writing
 its definition, template and expected JSON next to the sample.
@@ -110,8 +123,11 @@ Schema changes go in `apps/web/lib/server/db/schema.ts`; then run
 
 A destination is a `kind` and a `deliver` call in
 `apps/web/lib/server/destinations`. `deliver` receives the run id, the
-files, the data of each document, the job and the spooled file, and the
-open connection and host of the job's server, and returns
+files, the data of each document, the job and the spooled file, the
+job's part for its kind (such as `email` or `webhook`), a `context` with
+the job's name and version, the run's number and the spooled file's
+attributes, and the open connection and host of the job's server, and
+returns
 the note the Deliver step shows, such as "Wrote 6 files to
 /home/docs/out on ibmi.example.com". It runs outside any database
 transaction, since it may wait on another system. To keep the files in
@@ -127,7 +143,13 @@ Then:
   and the Destinations page share, and register the kind in the `KINDS`
   map.
 - Add its fields to the destination dialog and its text to
-  `destinationText`.
+  `destinationText`. Secrets, such as a webhook's signing secret and
+  header values, go encrypted in `destinations.secrets_enc` and never in
+  the view.
+- A kind that records one delivery per document, as email and webhook
+  do, writes `run_deliveries` rows with its `kind`, is listed in
+  `DELIVERY_KINDS` and `DeliveryKind`, and gets its words in `KIND_TEXT`
+  of `components/run-deliveries.tsx`.
 - A call that changes the IBM i goes on the `Connection` interface, in
   both fake connections, and in the wrappers in `jt400/jvm.ts` (as a
   change, not retried) and `lib/server/ibmi.ts`.

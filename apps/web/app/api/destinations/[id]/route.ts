@@ -4,9 +4,11 @@ import { guard } from '@/lib/server/auth';
 import { getDb } from '@/lib/server/db';
 import { destinations } from '@/lib/server/db/schema';
 import { destinationView } from '@/lib/server/destinations';
+import { openWebhookSecrets, sealWebhookSecrets, type WebhookSecrets } from '@/lib/server/destinations/webhook';
 import { errorResponse, invalidResponse, json, readJson } from '@/lib/server/http';
 import { destinationJobs, jobsUsingDestination } from '@/lib/server/jobs-using';
 import { UUID } from '@/lib/server/servers';
+import { newSigningSecret } from '@/lib/server/webhook-payload';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +26,12 @@ async function changeable(id: string): Promise<{ row: typeof destinations.$infer
   return { row };
 }
 
-/** Change a destination's name or settings. */
+/**
+ * Change a destination's name or settings. A webhook also takes `headers`: each header it
+ * keeps, with a new value or null to keep the saved one; a header left out is removed.
+ * `rotateSecret` gives it a new signing secret, which the answer holds as
+ * `revealedSecret` this once.
+ */
 export async function PATCH(request: Request, { params }: Context): Promise<Response> {
   const auth = await guard(request);
   if ('response' in auth) {
@@ -38,8 +45,34 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
   if ('response' in body) {
     return body.response;
   }
-  const { name, config } = body.data;
+  const { name, config, headers, rotateSecret } = body.data;
   const values: Partial<typeof destinations.$inferInsert> = {};
+  let revealedSecret: string | undefined;
+  if (found.row.kind === 'webhook' && (headers !== undefined || rotateSecret)) {
+    let saved: WebhookSecrets;
+    try {
+      saved = openWebhookSecrets(found.row.secretsEnc);
+    } catch (error) {
+      // Secrets sealed with another key: start again with what the request gives.
+      if (!rotateSecret || headers?.some((header) => header.value === null)) {
+        return errorResponse(409, `${error instanceof Error ? error.message : String(error)} Rotate the secret and enter every header value again.`);
+      }
+      saved = { signingSecret: null, headers: [] };
+    }
+    const next = { ...saved };
+    if (headers !== undefined) {
+      const known = new Map(saved.headers.map((header) => [header.name.toLowerCase(), header.value]));
+      const kept: { name: string; value: string }[] = [];
+      for (const [index, header] of headers.entries()) {
+        const value = header.value ?? known.get(header.name.toLowerCase());
+        if (value === undefined || !value.trim()) return invalidResponse('Enter the header value', ['headers', index, 'value']);
+        kept.push({ name: header.name, value });
+      }
+      next.headers = kept;
+    }
+    if (rotateSecret) next.signingSecret = revealedSecret = newSigningSecret();
+    values.secretsEnc = sealWebhookSecrets(next);
+  }
   if (name !== undefined) values.name = name;
   if (config !== undefined) {
     const schema = CONFIG_SCHEMAS[found.row.kind as keyof typeof CONFIG_SCHEMAS];
@@ -52,7 +85,8 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
   }
   const db = getDb();
   const [row] = Object.keys(values).length === 0 ? [found.row] : await db.update(destinations).set(values).where(eq(destinations.id, found.row.id)).returning();
-  return json(destinationView(row!, (await destinationJobs()).get(found.row.id) ?? []));
+  const view = destinationView(row!, (await destinationJobs()).get(found.row.id) ?? []);
+  return json(revealedSecret ? { ...view, revealedSecret } : view);
 }
 
 /** Remove a destination. Refused while a job's draft or any version delivers to it. */

@@ -15,7 +15,7 @@ to `apps/web/.env.local` for development, or put the same variables in the
 |----------|----------|---------|------------|
 | `DATABASE_URL` | Yes | | The Postgres connection string. `docker compose up -d db` starts one at `postgres://spooldoc:spooldoc@localhost:5433/spooldoc`. |
 | `BETTER_AUTH_SECRET` | Yes | | Signs the login sessions. At least 32 characters; `openssl rand -base64 32` makes one. |
-| `SPOOLDOC_SECRET_KEY` | Yes | | Encrypts the IBM i passwords of saved servers, the model keys, the Carbone Cloud key, the mail server password, the Microsoft 365 client secret and Spooldoc's private key for Carbone (AES-256-GCM). 32 bytes in base64; `openssl rand -base64 32` makes one. Keep it: with another key the saved passwords cannot be read and must be entered again. |
+| `SPOOLDOC_SECRET_KEY` | Yes | | Encrypts the IBM i passwords of saved servers, the model keys, the Carbone Cloud key, the mail server password, the Microsoft 365 client secret, the signing secrets and header values of webhook destinations, and Spooldoc's private key for Carbone (AES-256-GCM). 32 bytes in base64; `openssl rand -base64 32` makes one. Keep it: with another key the saved passwords cannot be read and must be entered again. |
 | `PORT` | No | `3000` | The port the server listens on. |
 | `APP_URL` | No | | The address users reach the app at, such as `https://spooldoc.example.com`. Origin checks accept it and the request's own host, and cookies are marked secure when it is https. Set it behind a reverse proxy. |
 | `SPOOLDOC_WATCHER` | No | `on` | Run the queue watcher in this process. Turn it off on every instance but one; the watcher also takes database locks, so two instances never read the same data queue or run the same job at once. |
@@ -23,6 +23,7 @@ to `apps/web/.env.local` for development, or put the same variables in the
 | `SPOOLDOC_DEFAULT_CCSID` | No | | The code page for spooled files that have no CHRID when the job CCSID is not supported, for example `273` or `37`. Also the CCSID of queue descriptions when the system has no default CCSID. |
 | `SPOOLDOC_ALLOWED_HOSTS` | No | | Comma-separated hosts servers may use. When set, the server form shows a list instead of a free text field. |
 | `SPOOLDOC_LOG_LEVEL` | No | `info` | How much the server logs: `off`, `error`, `warn`, `info` or `debug`. See [Server log](#server-log). |
+| `NODE_EXTRA_CA_CERTS` | No | | A PEM file of more certificate authorities to trust, for a webhook receiver or a Carbone server with a certificate from your own authority. See [Certificates](#certificates). |
 
 The server refuses to start with a missing or malformed required variable
 and says which one. The agent's model, its key and effort, and the Carbone
@@ -198,6 +199,30 @@ it may not, the message says so, such as "Microsoft 365 does not let the
 app send as invoices@contoso.example", with Microsoft's own text under
 Details. A wrong tenant ID, client ID or secret, a missing permission
 and a mailbox that does not exist each get their own message.
+
+## Certificates
+
+Spooldoc trusts the certificate authorities Node.js knows, the same as a
+browser. A [webhook](destinations.md#webhook) receiver, a Carbone server
+or a mail server with a certificate from your own authority fails with
+"its certificate is signed by an authority Spooldoc does not know". Add
+the authority with `NODE_EXTRA_CA_CERTS`, the path of a PEM file with one
+or more certificates. Node.js reads it when the server starts.
+
+With Docker, mount the file and point the variable at it, in a
+`compose.override.yaml` next to `compose.yaml`:
+
+```yaml
+services:
+  spooldoc:
+    volumes:
+      - ./my-ca.pem:/etc/spooldoc/my-ca.pem:ro
+    environment:
+      NODE_EXTRA_CA_CERTS: /etc/spooldoc/my-ca.pem
+```
+
+Then run `docker compose up -d` again. A certificate that has expired, or
+that is for another host name, still fails: fix it on the receiver.
 
 ## Per server and per job
 

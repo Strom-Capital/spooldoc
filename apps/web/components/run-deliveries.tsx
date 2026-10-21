@@ -5,23 +5,62 @@ import { Fragment, useState } from 'react';
 import { ErrorNote } from '@/components/page';
 import { StatusPill, type StatusTone } from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
+import { duration } from '@/lib/client/format';
+import { shortUrl } from '@/lib/destination-config';
 import type { DeliveryKind, DeliveryView } from '@/lib/types';
 
 /** Deliveries shown at first and per Show more. */
 const PAGE = 50;
 
 /** The words of the deliveries table for each kind: its title, the plural for Show more, its empty text and where each went. */
-const KIND_TEXT: Record<DeliveryKind, { title: string; plural: string; none: string; to: string; noTarget: string }> = {
-  email: { title: 'Emails', plural: 'emails', none: 'This run sent no email.', to: 'To', noTarget: 'No address' },
+const KIND_TEXT: Record<DeliveryKind, { title: string; plural: string; none: string; to: string; noTarget: string; test: string }> = {
+  email: { title: 'Emails', plural: 'emails', none: 'This run sent no email.', to: 'To', noTarget: 'No address', test: 'Sent to the test address of the destination.' },
+  webhook: { title: 'Webhook calls', plural: 'calls', none: 'This run sent no webhook call.', to: 'Posted to', noTarget: 'No URL', test: 'Sent to the test URL of the destination.' },
+};
+
+/** The receiver's answer to a webhook call and the tries, such as "200 OK in 142 ms, 3 tries", "No answer after 3 tries" or "Not tried". */
+function answerText(delivery: DeliveryView): string {
+  const { attempts } = delivery;
+  if (attempts === 0) return 'Not tried';
+  const tries = attempts === null ? null : attempts === 1 ? '1 try' : `${attempts} tries`;
+  if (delivery.httpStatus === null) return tries ? `No answer after ${tries}` : 'No answer';
+  const status = `${delivery.httpStatus} ${STATUS_TEXT[delivery.httpStatus] ?? ''}`.trim();
+  const answer = delivery.ms === null ? status : `${status} in ${duration(delivery.ms)}`;
+  return attempts !== null && attempts > 1 ? `${answer}, ${tries}` : answer;
+}
+
+/** The words of the HTTP statuses a receiver answers most. */
+const STATUS_TEXT: Record<number, string> = {
+  200: 'OK',
+  201: 'Created',
+  202: 'Accepted',
+  204: 'No Content',
+  301: 'Moved Permanently',
+  302: 'Found',
+  307: 'Temporary Redirect',
+  308: 'Permanent Redirect',
+  400: 'Bad Request',
+  401: 'Unauthorized',
+  403: 'Forbidden',
+  404: 'Not Found',
+  408: 'Request Timeout',
+  409: 'Conflict',
+  413: 'Payload Too Large',
+  422: 'Unprocessable Content',
+  429: 'Too Many Requests',
+  500: 'Internal Server Error',
+  502: 'Bad Gateway',
+  503: 'Service Unavailable',
+  504: 'Gateway Timeout',
 };
 
 /** How a delivery reads: Sent, Test, Sent in run #N or Failed. */
-function deliveryStatus(delivery: DeliveryView): { tone: StatusTone; icon: typeof CheckCircle2Icon; label: string; title?: string } {
+function deliveryStatus(delivery: DeliveryView, testTitle: string): { tone: StatusTone; icon: typeof CheckCircle2Icon; label: string; title?: string } {
   if (delivery.status === 'failed') return { tone: 'message', icon: XCircleIcon, label: 'Failed' };
   if (delivery.status === 'already_sent') {
     return { tone: 'neutral', icon: HistoryIcon, label: `Sent in run #${delivery.sentInRun}`, title: 'An earlier run sent it, so it was not sent again.' };
   }
-  if (delivery.test) return { tone: 'held', icon: FlaskConicalIcon, label: 'Test', title: 'Sent to the test address of the destination.' };
+  if (delivery.test) return { tone: 'held', icon: FlaskConicalIcon, label: 'Test', title: testTitle };
   return { tone: 'ready', icon: CheckCircle2Icon, label: 'Sent' };
 }
 
@@ -44,15 +83,24 @@ function Addresses({ text }: { text: string }) {
   );
 }
 
+/** The other system's own text for a failed delivery: the mail server's, or the receiver's answer to a webhook call. */
+function failedDetail(delivery: DeliveryView): string | undefined {
+  const text = delivery.detail ?? delivery.response;
+  if (!text) return undefined;
+  return delivery.responseTruncated && text === delivery.response ? `${text}\n(The answer is longer; this is its first 2 KB.)` : text;
+}
+
 const time = (iso: string): string => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
 /**
- * The deliveries of a run, such as its emails, one row per document: the document, where it
- * went, the status and the time. A failed row opens to show what went wrong and the other
- * system's own text. A long list shows the first deliveries and says how many more there are.
+ * The deliveries of a run, such as its emails or webhook calls, one row per document: the
+ * document, where it went (and for a webhook call the answer and the tries), the status and
+ * the time. A failed row opens to show what went wrong and the other system's own text. A
+ * long list shows the first deliveries and says how many more there are.
  */
 export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; deliveries: DeliveryView[] }) {
   const text = KIND_TEXT[kind];
+  const webhook = kind === 'webhook';
   const [shown, setShown] = useState(PAGE);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const sent = deliveries.filter((delivery) => delivery.status !== 'failed').length;
@@ -87,7 +135,7 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
             </thead>
             <tbody>
               {deliveries.slice(0, shown).map((delivery) => {
-                const status = deliveryStatus(delivery);
+                const status = deliveryStatus(delivery, text.test);
                 const failed = delivery.status === 'failed';
                 const expanded = open.has(delivery.id);
                 return (
@@ -107,7 +155,21 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
                         ) : (
                           <div className="break-words">{delivery.document}</div>
                         )}
-                        <div className="text-muted-foreground text-xs">{delivery.to ? <>{text.to} <Addresses text={delivery.to} /></> : text.noTarget}</div>
+                        <div className="text-muted-foreground text-xs">
+                          {!delivery.to ? (
+                            text.noTarget
+                          ) : webhook ? (
+                            // Without the scheme, and broken only where one word does not fit.
+                            <span className="break-words">
+                              {text.to} {shortUrl(delivery.to)}
+                            </span>
+                          ) : (
+                            <>
+                              {text.to} <Addresses text={delivery.to} />
+                            </>
+                          )}
+                        </div>
+                        {webhook && delivery.status !== 'already_sent' && <div className="tabular text-muted-foreground text-xs">{answerText(delivery)}</div>}
                       </td>
                       <td className="w-px whitespace-nowrap px-3 py-2">
                         <StatusPill tone={status.tone} icon={status.icon} title={status.title}>
@@ -118,8 +180,9 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
                     </tr>
                     {failed && expanded && (
                       <tr>
-                        <td colSpan={3} className="px-3 pb-3">
-                          <ErrorNote detail={delivery.detail ?? undefined}>{delivery.error}</ErrorNote>
+                        {/* Any text breaks anywhere here, so the error and the answer wrap inside the table. */}
+                        <td colSpan={3} className="px-3 pb-3 [&_*]:[overflow-wrap:anywhere]">
+                          <ErrorNote detail={failedDetail(delivery)}>{delivery.error}</ErrorNote>
                         </td>
                       </tr>
                     )}

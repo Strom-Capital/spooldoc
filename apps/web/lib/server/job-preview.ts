@@ -1,9 +1,10 @@
 import 'server-only';
 
-import type { Sample } from '@spooldoc/core';
+import { extract, parseDefinition, type Definition, type Sample } from '@spooldoc/core';
 import { z } from 'zod';
 import { findTemplate, jobSpecSchema, XLSX_SCOPES, type JobTemplate, type JobSpec, type TemplateContent, type XlsxScope } from '@/lib/job-spec';
 import { sampleTemplate } from './documents';
+import { errorResponse } from './http';
 import type { JobRow } from './jobs';
 import type { SampleTemplate } from './render';
 import { getSample } from './samples';
@@ -14,6 +15,46 @@ export async function draftAndSample(job: JobRow, sampleId?: string): Promise<{ 
   const draft = jobSpecSchema.parse(job.draft);
   const id = sampleId ?? draft.preview.sampleId;
   return { draft, sample: id ? await getSample(id) : null };
+}
+
+/** A page group of the draft's preview sample, read with the draft's definition. */
+export interface DraftPageGroup {
+  draft: JobSpec;
+  sample: Sample;
+  def: Definition;
+  groups: Record<string, unknown>[];
+  /** The page group asked for, or the last when there are fewer. */
+  index: number;
+}
+
+/**
+ * One page group of the preview sample, read with the draft's definition, for a preview
+ * of what a destination sends. A 404 when no sample is picked, a 422 when the definition
+ * or the extraction fails or finds no page groups.
+ *
+ * @param what - What the preview shows, for the messages, such as `the email`
+ */
+export async function draftPageGroup(job: JobRow, input: { sampleId?: string; pageGroup?: number }, what: string): Promise<DraftPageGroup | { response: Response }> {
+  const { draft, sample } = await draftAndSample(job, input.sampleId);
+  if (!sample) {
+    return { response: errorResponse(404, 'Pick a spooled file to preview first.') };
+  }
+  let def: Definition;
+  try {
+    def = parseDefinition(draft.extract.definition);
+  } catch {
+    return { response: errorResponse(422, `The definition has errors. Fix it in the Extract step to see ${what}.`) };
+  }
+  let groups: Record<string, unknown>[];
+  try {
+    groups = extract(def, sample).pageGroups;
+  } catch (error) {
+    return { response: errorResponse(422, `The extraction failed, so there is no ${what.replace(/^the /, '')} to show: ${error instanceof Error ? error.message : String(error)}`) };
+  }
+  if (groups.length === 0) {
+    return { response: errorResponse(422, `The definition finds no page groups in this spooled file, so there is no ${what.replace(/^the /, '')} to show.`) };
+  }
+  return { draft, sample, def, groups, index: Math.min(input.pageGroup ?? 0, groups.length - 1) };
 }
 
 const MAX_TEXT = 2_000_000;

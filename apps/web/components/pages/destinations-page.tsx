@@ -1,6 +1,6 @@
 'use client';
 
-import { DownloadIcon, FlaskConicalIcon, FolderIcon, MailIcon, PencilIcon, PlusIcon, SendIcon, Trash2Icon } from 'lucide-react';
+import { DownloadIcon, FlaskConicalIcon, FolderIcon, MailIcon, PencilIcon, PlusIcon, SendIcon, Trash2Icon, WebhookIcon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { EmptyState, Loading } from '@/components/empty-state';
@@ -25,7 +25,7 @@ import { destinationText } from '@/lib/destination-config';
 import type { DestinationView } from '@/lib/types';
 import { DestinationDialog, type EditableDestination } from './destination-dialog';
 
-const KIND_ICON = { spooldoc: DownloadIcon, ifs: FolderIcon, email: MailIcon };
+const KIND_ICON = { spooldoc: DownloadIcon, ifs: FolderIcon, email: MailIcon, webhook: WebhookIcon };
 
 /** The destinations jobs can deliver to, with the jobs that use each, and add, edit and delete. */
 export function DestinationsPage() {
@@ -77,7 +77,7 @@ export function DestinationsPage() {
       {error && <ErrorNote className="mb-4">{error}</ErrorNote>}
       {destinations === null && !error && <Loading>Loading destinations...</Loading>}
       {destinations?.length === 0 && (
-        <EmptyState icon={SendIcon} title="No destinations yet" description="Add a folder in the IFS, or email, for jobs to deliver their documents to.">
+        <EmptyState icon={SendIcon} title="No destinations yet" description="Add a folder in the IFS, email or a webhook, for jobs to deliver their documents to.">
           <Button onClick={() => setEditing('new')}>
             <PlusIcon />
             Add destination
@@ -100,7 +100,7 @@ export function DestinationsPage() {
                 const Icon = KIND_ICON[destination.kind];
                 const text = destinationText(destination);
                 // Every destination but the built-in one can be edited.
-                const editable = destination.kind === 'ifs' || destination.kind === 'email' ? destination : null;
+                const editable = destination.builtin || destination.kind === 'spooldoc' ? null : destination;
                 return (
                   <tr key={destination.id} {...(editable ? rowOpen(() => setEditing(editable), 'border-t align-top') : { className: 'border-t align-top' })}>
                     <td className="px-3 py-2.5">
@@ -116,7 +116,7 @@ export function DestinationsPage() {
                           <div className="font-mono text-xs">{destination.config.folder}</div>
                           <div className="text-muted-foreground text-xs">On the job&apos;s server. {text.how}</div>
                         </>
-                      ) : destination.kind === 'email' && destination.config.testAddress ? (
+                      ) : (destination.kind === 'email' && destination.config.testAddress) || (destination.kind === 'webhook' && destination.config.testUrl) ? (
                         <>
                           <div>{text.where}</div>
                           <div className="flex items-center gap-1 text-amber-700 text-xs dark:text-amber-400">
@@ -186,7 +186,9 @@ export function DestinationsPage() {
             <AlertDialogDescription>
               {deleting?.kind === 'email'
                 ? 'Spooldoc forgets the destination. Emails already sent stay sent. A destination that jobs deliver to cannot be deleted.'
-                : 'Spooldoc forgets the destination. The folder and the files in it stay on the IBM i. A destination that jobs deliver to cannot be deleted.'}
+                : deleting?.kind === 'webhook'
+                  ? 'Spooldoc forgets the destination, its signing secret and its headers. A destination that jobs deliver to cannot be deleted.'
+                  : 'Spooldoc forgets the destination. The folder and the files in it stay on the IBM i. A destination that jobs deliver to cannot be deleted.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

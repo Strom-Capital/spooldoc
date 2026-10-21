@@ -4,8 +4,10 @@ import { guard } from '@/lib/server/auth';
 import { getDb } from '@/lib/server/db';
 import { destinations } from '@/lib/server/db/schema';
 import { destinationView } from '@/lib/server/destinations';
+import { sealWebhookSecrets } from '@/lib/server/destinations/webhook';
 import { json, readJson } from '@/lib/server/http';
 import { destinationJobs } from '@/lib/server/jobs-using';
+import { newSigningSecret } from '@/lib/server/webhook-payload';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +21,11 @@ export async function GET(request: Request): Promise<Response> {
   return json({ destinations: rows.map((row) => destinationView(row, jobs.get(row.id) ?? [])) });
 }
 
-/** Add a destination. Only an IFS folder can be added; nothing is checked on the IBM i yet. */
+/**
+ * Add an IFS folder, an email or a webhook destination. Nothing is checked on the IBM i
+ * or at the URL yet. A webhook gets a new signing secret, which the answer holds as
+ * `revealedSecret` this once; its header values are stored encrypted with it.
+ */
 export async function POST(request: Request): Promise<Response> {
   const auth = await guard(request);
   if ('response' in auth) {
@@ -29,7 +35,15 @@ export async function POST(request: Request): Promise<Response> {
   if ('response' in body) {
     return body.response;
   }
-  const { kind, name, config } = body.data;
-  const [row] = await getDb().insert(destinations).values({ kind, name, config }).returning();
+  const input = body.data;
+  if (input.kind === 'webhook') {
+    const signingSecret = newSigningSecret();
+    const [row] = await getDb()
+      .insert(destinations)
+      .values({ kind: input.kind, name: input.name, config: input.config, secretsEnc: sealWebhookSecrets({ signingSecret, headers: input.headers }) })
+      .returning();
+    return json({ ...destinationView(row!, []), revealedSecret: signingSecret }, { status: 201 });
+  }
+  const [row] = await getDb().insert(destinations).values({ kind: input.kind, name: input.name, config: input.config }).returning();
   return json(destinationView(row!, []), { status: 201 });
 }

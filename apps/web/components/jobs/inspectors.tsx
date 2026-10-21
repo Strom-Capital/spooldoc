@@ -11,8 +11,9 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { destinationText } from '@/lib/destination-config';
-import { emptyEmailSpec, type FinishAction, type SourceFilter } from '@/lib/job-spec';
+import { emptyEmailSpec, emptyWebhookSpec, type FinishAction, type SourceFilter } from '@/lib/job-spec';
 import { EmailStep } from './email-step';
+import { WebhookStep } from './webhook-step';
 import { useJob } from './job-provider';
 import { QueueSelect } from './queue-select';
 import { StepFooter, useFocusOnArrival } from './step-nav';
@@ -174,7 +175,7 @@ export function DestinationInspector() {
   const { spec, updateDraft, readOnly, destinations, destinationsError } = useJob();
   const picked = destinations.find((destination) => destination.id === spec.destination.destinationId);
   return (
-    <Panel title="Destination" description="Where the job delivers its documents." wide={picked?.kind === 'email'}>
+    <Panel title="Destination" description="Where the job delivers its documents." wide={picked?.kind === 'email' || picked?.kind === 'webhook'}>
       {destinationsError && <ErrorNote>Could not load the destinations. {destinationsError}</ErrorNote>}
       <div role="radiogroup" aria-label="Destination" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {destinations.map((destination) => (
@@ -187,8 +188,9 @@ export function DestinationInspector() {
                 {
                   destination: {
                     destinationId: destination.id,
-                    // An email destination needs the email part; another destination keeps it, for coming back.
+                    // An email or webhook destination needs its part; another destination keeps it, for coming back.
                     email: spec.destination.email ?? (destination.kind === 'email' ? emptyEmailSpec() : null),
+                    webhook: spec.destination.webhook ?? (destination.kind === 'webhook' ? emptyWebhookSpec() : null),
                   },
                 },
                 { debounce: false },
@@ -201,13 +203,14 @@ export function DestinationInspector() {
         ))}
       </div>
       <p className="text-muted-foreground text-xs">
-        Add a folder in the IFS or an email destination, or change one, on the{' '}
+        Add a folder in the IFS, an email or a webhook destination, or change one, on the{' '}
         <Link href="/destinations" className="text-primary hover:underline">
           Destinations
         </Link>{' '}
         page.
       </p>
       {picked?.kind === 'email' && <EmailStep destination={picked} />}
+      {picked?.kind === 'webhook' && <WebhookStep destination={picked} />}
     </Panel>
   );
 }

@@ -164,7 +164,7 @@ function InsertField({ fields, disabled, onPick }: { fields: EmailPreviewView['f
 function Filled({ segments, flash }: { segments: EmailSegment[]; flash: boolean }) {
   if (segments.length === 0) return <span className="text-muted-foreground">None</span>;
   return (
-    <span className={cn('min-w-0 break-words', flash && 'email-flash')}>
+    <span className={cn('min-w-0 break-words', flash && 'flash')}>
       {segments.map((segment, index) =>
         !segment.tag ? (
           <span key={index}>{segment.text}</span>

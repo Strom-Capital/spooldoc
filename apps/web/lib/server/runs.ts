@@ -9,7 +9,10 @@ import { UUID } from './servers';
 type RunRow = typeof runs.$inferSelect;
 
 /** The destination kinds that record a delivery per document in `run_deliveries`. */
-const DELIVERY_KINDS: readonly DeliveryKind[] = ['email'];
+const DELIVERY_KINDS: readonly DeliveryKind[] = ['email', 'webhook'];
+
+/** The most of a receiver's answer the Job log shows. One more character is stored, to tell it was cut. */
+export const RESPONSE_LIMIT = 2048;
 
 /** Runs as the API returns them, with job names and delivered files (without their bytes). */
 export async function runViews(rows: RunRow[]): Promise<RunView[]> {
@@ -35,6 +38,10 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
       sentInRun: runDeliveries.sentInRun,
       error: runDeliveries.error,
       detail: runDeliveries.detail,
+      httpStatus: runDeliveries.httpStatus,
+      attempts: runDeliveries.attempts,
+      ms: runDeliveries.ms,
+      response: runDeliveries.response,
       sentAt: runDeliveries.sentAt,
     })
     .from(runDeliveries)
@@ -68,7 +75,23 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
     files: files.filter((f) => f.runId === row.id).map(({ id, name, size, contentType, template }) => ({ id, name, size, contentType, template })),
     deliveries: deliveries
       .filter((d) => d.runId === row.id)
-      .map((d) => ({ id: d.id, kind: d.kind as DeliveryKind, document: d.document, to: d.to, test: d.test, status: d.status as DeliveryView['status'], sentInRun: d.sentInRun, error: d.error, detail: d.detail, sentAt: d.sentAt.toISOString() })),
+      .map((d) => ({
+        id: d.id,
+        kind: d.kind as DeliveryKind,
+        document: d.document,
+        to: d.to,
+        test: d.test,
+        status: d.status as DeliveryView['status'],
+        sentInRun: d.sentInRun,
+        error: d.error,
+        detail: d.detail,
+        httpStatus: d.httpStatus,
+        attempts: d.attempts,
+        ms: d.ms,
+        response: d.response === null ? null : d.response.slice(0, RESPONSE_LIMIT),
+        responseTruncated: d.response !== null && d.response.length > RESPONSE_LIMIT,
+        sentAt: d.sentAt.toISOString(),
+      })),
     startedAt: row.startedAt.toISOString(),
     finishedAt: row.finishedAt?.toISOString() ?? null,
   }));
