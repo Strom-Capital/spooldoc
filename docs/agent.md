@@ -121,12 +121,12 @@ the other kind when you ask for one.
 
 Ask for a Word template ("make a Word invoice with our logo, in dark
 blue") and the agent designs one: page size and margins, headers and
-footers, a different first page, named styles, fonts, colours, spacing,
+footers, a different first page, named styles, fonts, colors, spacing,
 borders, shaded table rows, merged cells, page numbers and the PNG and
 JPEG images uploaded under Assets. It then renders the first document and
 looks at the result, and changes the design until it reads well.
 Its instructions include guidance on document design: a clear order of
-importance, whitespace, one accent colour, right-aligned amounts, and
+importance, whitespace, one accent color, right-aligned amounts, and
 layouts that still read when printed in black and white.
 
 It writes the design as data, in the shape of the

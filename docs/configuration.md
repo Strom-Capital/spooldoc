@@ -37,7 +37,7 @@ service:
 | Variable | What it is |
 |----------|------------|
 | `CARBONE_AUTHENTICATION_PUBLIC_KEY` | Spooldoc's public key, as Settings shows it under Rendering: one line, with `\n` for each newline. |
-| `CARBONE_LICENSE` | A Carbone Enterprise licence. Without it Carbone runs as the Community Edition. |
+| `CARBONE_LICENSE` | A Carbone Enterprise license. Without it Carbone runs as the Community Edition. |
 
 ## Server log
 

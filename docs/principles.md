@@ -14,7 +14,8 @@ this page and says why.
 Spooldoc reads what programs already print. It installs nothing and asks
 for no program changes. It creates a data queue only when the user turns
 on real-time watching, and it holds, moves or deletes a spooled file only
-as the job's finish step says.
+as the job's finish step says. It writes files to the IFS only through an
+IFS destination the user set up, and only in the folder chosen there.
 
 In practice:
 
@@ -25,12 +26,26 @@ In practice:
 - When Spooldoc lacks an authority, it says which one and gives the
   command an operator can run. It does not ask for more authority than
   the job needs.
+- An IFS destination never creates the folder. It writes each file under
+  a temporary name and renames it when it is complete, so a program that
+  watches the folder sees whole files only. A file with the same name is
+  replaced, kept with a new number, or fails the run, as the destination
+  says. To replace one, the old file is renamed aside to a name that ends
+  in `.old`, and deleted once the new one is in place, so a failed write
+  never loses both. See [IFS folder](destinations.md#ifs-folder).
 
 ## Reading and layout stay apart
 
 A definition reads pages into JSON. A template lays out that JSON. A
 template never sees lines and columns, and a definition never knows what
 the document looks like.
+
+The one exception is the Excel template of the whole spooled file. Every
+other template lays out one page group at a time; this one gets every
+page group at once and makes one workbook with a row per table line, the
+flat sheet people filter and sum. It still reads the JSON, not the
+printed lines and columns. See
+[What each file holds](templates.md#what-each-file-holds).
 
 In practice:
 
@@ -57,8 +72,8 @@ In practice:
 ## Speak IBM i, in the user's terms
 
 The people who run Spooldoc know their system. Messages use their words:
-output queue, spooled file, user profile, library. Everything else is
-plain English.
+output queue, spooled file, user profile, library. IBM i terms are not
+jargon to them. Everything else is plain English.
 
 In practice:
 
@@ -94,13 +109,15 @@ In practice:
 
 ## Show only what works
 
-The app shows what it can do today. Plans live in the README and the
-issues.
+The app and the guides under `docs/` describe what Spooldoc does today.
+Plans live only in the [README](../README.md#status) Status section and in
+the issues.
 
 In practice:
 
 - No "coming later" lists, disabled placeholders or settings that do
-  nothing yet.
+  nothing yet. A guide says what works, not what is planned; at most it
+  links to the README Status section.
 - A message never points to something that does not exist, such as an
   administrator page that is not there.
 
@@ -150,9 +167,21 @@ In practice:
 
 The UI and the docs are written the same way:
 
-- Short sentences and plain words. No jargon where a plain word does.
+- Short sentences and plain words. One idea per sentence.
 - Sentence case for headings, buttons and menu items.
 - No middle dot (`·`) as a separator. Use a comma, a line break or a
   separate element.
+- No em or en dashes in prose, not even in ranges: write "2025 to 2028".
+  Use a period, a comma, a colon or parentheses instead. Hyphens inside
+  words, such as read-only, are fine.
+- American spelling: license, color, behavior, organize.
+- IBM i terms are not jargon to our readers. Write `*SCS`, CCSID and user
+  profile. In prose, write output queue, not OUTQ, and spooled file, not
+  splf.
+- One word for each thing: spooled file, output queue, definition,
+  template, page group, job, run, destination, job log.
+- The feature is "the agent", never "assistant" or "copilot", and it has
+  no sparkle icon. "AI" is a plain fact, such as "the agent uses an AI
+  model you choose", at most once or twice on a page and never a label.
 - Invented names only: `MYLIB`, `MYOUTQ`, `ibmi.example.com`. See
   [No real names](contributing.md#no-real-names).

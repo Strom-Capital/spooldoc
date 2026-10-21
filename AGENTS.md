@@ -2,9 +2,10 @@
 
 Spooldoc turns IBM i spooled files into documents: it watches output
 queues, reads each spooled file into JSON with a YAML definition, renders
-it with an HTML template to PDF or HTML, and delivers the files. A pnpm
-workspace in TypeScript: `packages/core`, `packages/ibmi` and the Next.js
-app in `apps/web`. The layout is in
+each page group with HTML, Word or Excel templates through Carbone to PDF,
+HTML, DOCX or XLSX, and delivers the files to a download or an IFS folder.
+A pnpm workspace in TypeScript: `packages/core`, `packages/ibmi`,
+`packages/docs` and the Next.js app in `apps/web`. The layout is in
 [docs/contributing.md](docs/contributing.md#layout).
 
 ## Before you change anything
@@ -21,7 +22,8 @@ The short version:
 - Every spooled file becomes a document, or the user can see why not. No
   error is caught and dropped; no list is cut off silently.
 - IBM i errors say what went wrong and what to do next.
-- Show only what works. No "coming later" in the app.
+- Show only what works. No "coming later" in the app or the guides;
+  plans live in the README Status section and the issues.
 - One component and one word for each thing. Reuse before adding.
 - A feature is done when its empty, loading and error states, docs and
   tests are done.
@@ -61,7 +63,9 @@ committed.
   (`fix(web): ...`). Pull requests are squash merged, so the title is the
   commit message on `main`.
 - **One change per pull request**, branched from `main`.
-- **Docs change with behaviour.** A change users can see updates the page
+- **Docs change with behavior.** A change users can see updates the page
   under `docs/` that describes it.
-- **Writing:** short sentences, plain words, sentence case. No middle dot
-  (`·`) as a separator.
+- **Writing:** short sentences, plain words, sentence case, American
+  spelling. No middle dot (`·`) as a separator, no em or en dashes in
+  prose. The feature is "the agent". See
+  [Writing](docs/principles.md#writing).

@@ -18,14 +18,14 @@ keeping them apart makes both easier:
 
 - **The template never sees lines and columns.** The definition knows that
   the invoice number follows `Invoice no.......:` and that the lines start
-  under a header at column 7. The template only knows `doc.invoiceNo` and
-  `{% for line in doc.lines %}`. It is ordinary HTML with named values,
-  not column arithmetic.
+  under a header at column 7. The template only knows `{d.pg.invoiceNo}`
+  and `{d.pg.lines[i].item}`. It is HTML, a Word document or an Excel
+  workbook with Carbone tags for named values, not column arithmetic.
 - **Each side changes on its own.** A new look needs a new template, not a
   new definition. A program change that moves a column needs one fix in
   the definition, and every template still works.
 - **Values are typed once.** Numbers and dates are converted in the
-  definition, so templates format them with filters and can sum them, and
+  definition, so templates format them with formatters and can sum them, and
   a value that does not convert is reported where it was read.
 - **You can check the reading before the rendering.** The workbench shows
   the JSON next to the page with every hit highlighted, and the extraction
@@ -34,11 +34,11 @@ keeping them apart makes both easier:
 - **One spooled file, many documents.** Six invoices printed back to back
   are six page groups, split on the invoice number: six JSON objects and
   six documents.
-- **Same JSON for every template.** PDF, HTML, DOCX and XLSX today, and
-  destinations such as webhooks can carry the JSON itself.
+- **Same JSON for every template.** An HTML, Word or Excel template reads
+  the same page groups and makes PDF, HTML, DOCX or XLSX files.
 
 See [Definitions](definitions.md) for the YAML that does the reading and
-[Templates](templates.md) for the HTML that does the layout.
+[Templates](templates.md) for the templates that do the layout.
 
 ## Does Spooldoc install anything on the IBM i?
 
@@ -52,7 +52,7 @@ queue, only when you ask. See [Security](security.md#on-the-ibm-i).
 Plain *SCS text, which is what most operational reports and
 program-described printer files produce, in any EBCDIC code page the file
 declares. XML printed into a spooled file works too. AFPDS and *USERASCII
-are not supported yet.
+are not supported.
 
 ## Do I need a model?
 
@@ -122,8 +122,8 @@ server to render documents. See [Contributing](contributing.md).
 
 ## What is coming?
 
-SFTP, S3, email and webhook destinations, and more users and roles.
-See the roadmap in the [README](../README.md#status).
+Plans are in the [README](../README.md#status) and the
+[issues](https://github.com/Strom-Capital/spooldoc/issues).
 
 ## Where do I ask a question?
 
