@@ -3,15 +3,17 @@ import 'server-only';
 import { redact } from '@spooldoc/ibmi';
 import { eq } from 'drizzle-orm';
 import nodemailer, { type NodemailerError, type SendMailOptions } from 'nodemailer';
-import { SMTP_DEFAULT_PORT, type MailSettingsInput, type SmtpSecurity } from '../mail-config';
+import { mailSettingsSchema, SMTP_DEFAULT_PORT, type MailSenderKind, type MailSettingsInput, type SmtpSecurity } from '../mail-config';
 import type { MailView } from '../types';
 import { getDb } from './db';
 import { settings } from './db/schema';
+import { GraphMailError, graphErrorMessage, graphSendMail } from './graph-mail';
 import { decryptSecret, encryptSecret } from './secrets';
 import { DEFAULT_SETTINGS } from './settings';
 
-/** The mail server set in Settings, with the password decrypted. */
-export interface MailServer {
+/** The SMTP server set in Settings, with the password decrypted. */
+export interface SmtpServer {
+  sender: 'smtp';
   host: string;
   port: number;
   security: SmtpSecurity;
@@ -21,7 +23,20 @@ export interface MailServer {
   fromName: string | null;
 }
 
-/** What sends a message: Nodemailer's SMTP transport, or a stand-in in tests. */
+/** Microsoft 365 as set in Settings, with the client secret decrypted. `from` is the mailbox it sends from. */
+export interface M365Server {
+  sender: 'm365';
+  tenantId: string;
+  clientId: string;
+  clientSecret: string;
+  from: string;
+  fromName: string | null;
+}
+
+/** How email is sent, as set in Settings. */
+export type MailServer = SmtpServer | M365Server;
+
+/** What sends a message: Nodemailer's SMTP transport, Microsoft Graph, or a stand-in in tests. */
 export interface MailSender {
   sendMail(message: SendMailOptions): Promise<{ messageId?: string }>;
   close?(): void;
@@ -29,54 +44,114 @@ export interface MailSender {
 
 let override: ((server: MailServer) => MailSender) | null = null;
 
-/** Send with something else than SMTP, for tests (Nodemailer's `jsonTransport`). Null goes back to SMTP. */
+/** Send with something else than SMTP or Graph, for tests (Nodemailer's `jsonTransport`). Null goes back to the real senders. */
 export function setMailSender(next: ((server: MailServer) => MailSender) | null): void {
   override = next;
 }
 
 const columns = {
+  mailSender: settings.mailSender,
   smtpHost: settings.smtpHost,
   smtpPort: settings.smtpPort,
   smtpSecurity: settings.smtpSecurity,
   smtpUser: settings.smtpUser,
   smtpPasswordEnc: settings.smtpPasswordEnc,
+  m365TenantId: settings.m365TenantId,
+  m365ClientId: settings.m365ClientId,
+  m365SecretEnc: settings.m365SecretEnc,
   mailFrom: settings.mailFrom,
   mailFromName: settings.mailFromName,
 };
 
-async function readRow() {
-  const [row] = await getDb().select(columns).from(settings).where(eq(settings.id, 1));
-  return row ?? { smtpHost: null, smtpPort: null, smtpSecurity: 'starttls', smtpUser: null, smtpPasswordEnc: null, mailFrom: null, mailFromName: null };
+interface MailRow {
+  mailSender: string;
+  smtpHost: string | null;
+  smtpPort: number | null;
+  smtpSecurity: string;
+  smtpUser: string | null;
+  smtpPasswordEnc: string | null;
+  m365TenantId: string | null;
+  m365ClientId: string | null;
+  m365SecretEnc: string | null;
+  mailFrom: string | null;
+  mailFromName: string | null;
 }
 
-/** The mail server as Settings shows it, never with the password. */
+const EMPTY_ROW: MailRow = {
+  mailSender: 'smtp',
+  smtpHost: null,
+  smtpPort: null,
+  smtpSecurity: 'starttls',
+  smtpUser: null,
+  smtpPasswordEnc: null,
+  m365TenantId: null,
+  m365ClientId: null,
+  m365SecretEnc: null,
+  mailFrom: null,
+  mailFromName: null,
+};
+
+async function readRow(): Promise<MailRow> {
+  const [row] = await getDb().select(columns).from(settings).where(eq(settings.id, 1));
+  return row ?? EMPTY_ROW;
+}
+
+/** True when the row has what its sender needs to send. */
+function isConfigured(row: MailRow): boolean {
+  if (!row.mailFrom) return false;
+  if (row.mailSender === 'm365') return !!row.m365TenantId && !!row.m365ClientId && row.m365SecretEnc !== null;
+  return !!row.smtpHost;
+}
+
+/** The mail server as Settings shows it, never with the password or the client secret. */
 export async function getMailView(): Promise<MailView> {
   const row = await readRow();
   const security = row.smtpSecurity as SmtpSecurity;
   return {
+    sender: row.mailSender as MailSenderKind,
     host: row.smtpHost ?? '',
     port: row.smtpPort ?? SMTP_DEFAULT_PORT[security],
     security,
     user: row.smtpUser ?? '',
     hasPassword: row.smtpPasswordEnc !== null,
+    tenantId: row.m365TenantId ?? '',
+    clientId: row.m365ClientId ?? '',
+    hasClientSecret: row.m365SecretEnc !== null,
     from: row.mailFrom ?? '',
     fromName: row.mailFromName ?? '',
-    configured: !!row.smtpHost && !!row.mailFrom,
+    configured: isConfigured(row),
   };
 }
 
-/** Save the mail server. An empty host removes it; the password is stored encrypted. */
-export async function updateMail(change: MailSettingsInput): Promise<void> {
-  const values: Partial<typeof settings.$inferInsert> = {
-    smtpHost: change.host || null,
-    smtpPort: change.host ? (change.port ?? SMTP_DEFAULT_PORT[change.security]) : null,
-    smtpSecurity: change.security,
-    smtpUser: change.user || null,
-    mailFrom: change.from || null,
-    mailFromName: change.fromName || null,
-  };
-  if (change.password === null || !change.user) values.smtpPasswordEnc = null;
-  else if (change.password) values.smtpPasswordEnc = encryptSecret(change.password);
+/** Why the change cannot be saved: Microsoft 365 with a tenant and no client secret, given or saved. Null when it can. */
+export async function mailChangeProblem(input: MailSettingsInput): Promise<string | null> {
+  const change = mailSettingsSchema.parse(input);
+  if (change.sender !== 'm365' || !change.tenantId || change.clientSecret) return null;
+  const row = await readRow();
+  return row.m365SecretEnc === null || change.clientSecret === null ? 'Enter the client secret, the value from Certificates & secrets in the app registration.' : null;
+}
+
+/**
+ * Save the mail server. Only the picked sender's fields change, so the other's stay for
+ * when it is picked again. An empty host, or an empty tenant ID, turns email off. The
+ * password and the client secret are stored encrypted.
+ */
+export async function updateMail(input: MailSettingsInput): Promise<void> {
+  const change = mailSettingsSchema.parse(input);
+  const values: Partial<typeof settings.$inferInsert> = { mailSender: change.sender, mailFrom: change.from || null, mailFromName: change.fromName || null };
+  if (change.sender === 'smtp') {
+    values.smtpHost = change.host || null;
+    values.smtpPort = change.host ? (change.port ?? SMTP_DEFAULT_PORT[change.security]) : null;
+    values.smtpSecurity = change.security;
+    values.smtpUser = change.user || null;
+    if (change.password === null || !change.user) values.smtpPasswordEnc = null;
+    else if (change.password) values.smtpPasswordEnc = encryptSecret(change.password);
+  } else {
+    values.m365TenantId = change.tenantId || null;
+    values.m365ClientId = change.tenantId ? change.clientId || null : null;
+    if (change.clientSecret === null || !change.tenantId) values.m365SecretEnc = null;
+    else if (change.clientSecret) values.m365SecretEnc = encryptSecret(change.clientSecret);
+  }
   await getDb()
     .insert(settings)
     .values({ id: 1, ...DEFAULT_SETTINGS, ...values })
@@ -84,23 +159,40 @@ export async function updateMail(change: MailSettingsInput): Promise<void> {
 }
 
 /**
- * The mail server set in Settings, or null when none is set.
+ * How email is sent, as set in Settings, or null when it is not set.
  *
- * @throws Error when the saved password cannot be decrypted
+ * @throws Error when the saved password or client secret cannot be decrypted
  */
 export async function mailServer(): Promise<MailServer | null> {
   const row = await readRow();
-  if (!row.smtpHost || !row.mailFrom) return null;
+  if (!isConfigured(row)) return null;
+  if (row.mailSender === 'm365') {
+    return {
+      sender: 'm365',
+      tenantId: row.m365TenantId!,
+      clientId: row.m365ClientId!,
+      clientSecret: decryptSecret(row.m365SecretEnc!, 'Microsoft 365 client secret'),
+      from: row.mailFrom!,
+      fromName: row.mailFromName,
+    };
+  }
   const security = row.smtpSecurity as SmtpSecurity;
   return {
-    host: row.smtpHost,
+    sender: 'smtp',
+    host: row.smtpHost!,
     port: row.smtpPort ?? SMTP_DEFAULT_PORT[security],
     security,
     user: row.smtpUser,
     password: row.smtpPasswordEnc ? decryptSecret(row.smtpPasswordEnc, 'mail server password') : null,
-    from: row.mailFrom,
+    from: row.mailFrom!,
     fromName: row.mailFromName,
   };
+}
+
+/** The secret of the mail server, the password or the client secret, to keep out of every error and log. */
+export function mailSecrets(server: MailServer): string[] {
+  const secret = server.sender === 'm365' ? server.clientSecret : server.password;
+  return secret ? [secret] : [];
 }
 
 /** The From header: the name and the address. */
@@ -111,9 +203,16 @@ export function fromHeader(server: Pick<MailServer, 'from' | 'fromName'>): SendM
 /** Why no email can be sent: no mail server in Settings. */
 export const NO_MAIL_SERVER = 'No mail server is set. Set one in Settings, under Mail server.';
 
-/** A sender for the mail server: one SMTP connection per run or test, closed by `close`. */
+/**
+ * A sender for the mail server: one SMTP connection per run or test, closed by `close`,
+ * or Microsoft Graph as the mailbox in From, with a cached token.
+ */
 export function mailSender(server: MailServer): MailSender {
   if (override) return override(server);
+  if (server.sender === 'm365') {
+    const account = { tenantId: server.tenantId, clientId: server.clientId, clientSecret: server.clientSecret, mailbox: server.from };
+    return { sendMail: (message) => graphSendMail(account, message) };
+  }
   return nodemailer.createTransport({
     host: server.host,
     port: server.port,
@@ -129,8 +228,9 @@ export function mailSender(server: MailServer): MailSender {
 
 const CONNECTION_CODES = new Set(['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'ETLS', 'EREQUIRETLS', 'EAUTH', 'ENOAUTH', 'EPROXY', 'ECONFIG']);
 
-/** True when the error is the mail server or the connection, not this one email: the next email would fail too. */
+/** True when the error is the mail server, the sign-in or the connection, not this one email: the next email would fail too. */
 export function stopsSending(error: unknown): boolean {
+  if (error instanceof GraphMailError) return error.stops;
   const code = (error as NodemailerError | undefined)?.code;
   return typeof code === 'string' && CONNECTION_CODES.has(code);
 }
@@ -138,9 +238,29 @@ export function stopsSending(error: unknown): boolean {
 /**
  * A mail error in plain words, with what to do next, and the server's own text as the
  * detail. Bad sign-in, a refused connection, a TLS mismatch, a message that is too large
- * and a rejected recipient each say what to check.
+ * and a rejected recipient each say what to check, and so does each Microsoft 365 error,
+ * from a wrong tenant ID to throttling. The password or client secret never shows.
  */
-export function mailErrorText(error: unknown, server: Pick<MailServer, 'host' | 'port'> & { password?: string | null }): { message: string; detail?: string } {
+export function mailErrorText(error: unknown, server: MailServer): { message: string; detail?: string } {
+  const secrets = mailSecrets(server);
+  const clean = (text: string) => redact(text, secrets);
+  let message: string;
+  let detail: string | undefined;
+  if (server.sender === 'm365') {
+    if (error instanceof GraphMailError) {
+      message = graphErrorMessage(error, { tenantId: server.tenantId, clientId: server.clientId, mailbox: server.from });
+      detail = error.detail;
+    } else {
+      message = `Microsoft 365 did not take the email: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  } else {
+    ({ message, detail } = smtpErrorText(error, server));
+  }
+  // The server's text could echo the secret back; it never leaves here.
+  return { message: clean(message), ...(detail && detail !== message ? { detail: clean(detail) } : {}) };
+}
+
+function smtpErrorText(error: unknown, server: SmtpServer): { message: string; detail?: string } {
   const err = (error ?? {}) as NodemailerError & { errno?: string | number };
   const raw = err instanceof Error ? err.message : String(error);
   const detail = (err.response ?? raw).split('\n')[0]?.trim() || undefined;
@@ -169,16 +289,13 @@ export function mailErrorText(error: unknown, server: Pick<MailServer, 'host' | 
   } else {
     message = `The mail server did not take the email: ${(err.response ?? raw).split('\n')[0]}`;
   }
-  // The server's text could echo the password back; it never leaves here.
-  const secrets = server.password ? [server.password] : [];
-  const clean = (text: string) => redact(text, secrets);
-  return { message: clean(message), ...(detail && detail !== message ? { detail: clean(detail) } : {}) };
+  return { message, ...(detail ? { detail } : {}) };
 }
 
 /**
- * Send a test email to `to` with the saved mail server.
+ * Send a test email to `to` with the saved mail server or Microsoft 365.
  *
- * @throws Error with the reason in plain words when it cannot be sent, and the server's text as `detail`
+ * @throws Error with the reason in plain words when it cannot be sent, and the service's text as `detail`
  */
 export async function sendTestEmail(to: string): Promise<void> {
   const server = await mailServer();
@@ -189,7 +306,10 @@ export async function sendTestEmail(to: string): Promise<void> {
       from: fromHeader(server),
       to,
       subject: 'Test email from Spooldoc',
-      text: 'This test email shows that Spooldoc can send email through the mail server in Settings.\n',
+      text:
+        server.sender === 'm365'
+          ? 'This test email shows that Spooldoc can send email through Microsoft 365 with the settings under Mail server.\n'
+          : 'This test email shows that Spooldoc can send email through the mail server in Settings.\n',
     });
   } catch (error) {
     const { message, detail } = mailErrorText(error, server);

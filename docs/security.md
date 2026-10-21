@@ -47,8 +47,10 @@ Everything is in Postgres:
 - **Model keys** are stored the same way and decrypted only to call the
   provider. Any signed-in user can set or replace a key, but no request
   can read one back, and keys are removed from error messages.
-- **The mail server password** is stored the same way, decrypted only to
-  send, never returned by the API, and removed from error messages.
+- **The mail server password** and **the Microsoft 365 client secret**
+  are stored the same way, decrypted only to send, never returned by the
+  API, and removed from error messages. The Microsoft 365 access token
+  is kept in memory only, until shortly before it expires.
 - **Captured spooled files** and **delivered files** are in clear text,
   for previews, runs and downloads. Protect the database like the spooled
   files themselves: access, backups and the volume included. Retention
@@ -111,7 +113,14 @@ An [email destination](destinations.md#email) sends documents out of your
 network: each email, with its files and the values in its fields and
 message, goes to the mail server in Settings and on to the addresses the
 job sets. Use STARTTLS or TLS unless the server is a relay on your own
-network. While an email destination has a test address, every email goes
+network.
+
+With Microsoft 365, the Spooldoc server sends the tenant ID, the client
+ID and the client secret to `login.microsoftonline.com` for a token, and
+each email to `graph.microsoft.com`, both over HTTPS. Each email is kept
+in the mailbox's Sent Items. The Mail.Send permission lets the app send
+as any mailbox of the tenant unless you limit it: see
+[Limit the app to one mailbox](configuration.md#microsoft-365). While an email destination has a test address, every email goes
 only there. Every email a run sent, or tried to send, is listed on the run
 in the [job log](job-log.md#emails), with a copy of its files.
 

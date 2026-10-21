@@ -394,6 +394,8 @@ export const settings = pgTable(
     carbonePublicKey: text('carbone_public_key'),
     /** The last connection check: version, edition, or what went wrong. */
     carboneCheck: jsonb('carbone_check').$type<CarboneCheck>(),
+    /** How email destinations send: through the SMTP server (`smtp`) or Microsoft 365 through Microsoft Graph (`m365`). */
+    mailSender: text('mail_sender').notNull().default('smtp'),
     /** The SMTP server email destinations send through. Null host: no mail server set. */
     smtpHost: text('smtp_host'),
     smtpPort: integer('smtp_port'),
@@ -402,7 +404,12 @@ export const settings = pgTable(
     smtpUser: text('smtp_user'),
     /** The SMTP password, encrypted with SPOOLDOC_SECRET_KEY. */
     smtpPasswordEnc: text('smtp_password_enc'),
-    /** The From address and name of every email. */
+    /** The Microsoft Entra ID tenant (a GUID or a domain) and the application (client) ID Spooldoc signs in to Microsoft 365 with. */
+    m365TenantId: text('m365_tenant_id'),
+    m365ClientId: text('m365_client_id'),
+    /** The application's client secret, encrypted with SPOOLDOC_SECRET_KEY. */
+    m365SecretEnc: text('m365_secret_enc'),
+    /** The From address and name of every email. With Microsoft 365, the address is the mailbox it sends from. */
     mailFrom: text('mail_from'),
     mailFromName: text('mail_from_name'),
     /** The Carbone `lang` of numbers, amounts and month names, such as `en-us`. */
@@ -417,6 +424,7 @@ export const settings = pgTable(
     check('settings_single_row', sql`${t.id} = 1`),
     check('settings_carbone_mode_check', sql`${t.carboneMode} in ('onprem', 'cloud')`),
     check('settings_smtp_security_check', sql`${t.smtpSecurity} in ('tls', 'starttls', 'none')`),
+    check('settings_mail_sender_check', sql`${t.mailSender} in ('smtp', 'm365')`),
     check('settings_smtp_port_check', sql`${t.smtpPort} between 1 and 65535`),
     check('settings_currency_check', sql`${t.currency} ~ '^[A-Z]{3}$'`),
     check('settings_ai_provider_check', sql`${t.aiProvider} in (${providerList})`),

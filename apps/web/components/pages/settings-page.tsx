@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { toast } from 'sonner';
 import { useAppInfo } from '@/components/app-info';
+import { DocsLink } from '@/components/docs-link';
 import { Hint } from '@/components/hint';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
@@ -30,7 +31,7 @@ import {
   type Formats,
   type NumberLang,
 } from '@/lib/formats';
-import { SMTP_DEFAULT_PORT, SMTP_SECURITY, SMTP_SECURITY_LABEL, type SmtpSecurity } from '@/lib/mail-config';
+import { MAIL_SENDER_LABEL, MAIL_SENDERS, SMTP_DEFAULT_PORT, SMTP_SECURITY, SMTP_SECURITY_LABEL, type MailSenderKind, type SmtpSecurity } from '@/lib/mail-config';
 import type { AgentUsageView, AiSettingsView, CarboneCheck, MailView, RenderingView, SettingsView, UsageMonth } from '@/lib/types';
 
 type Unit = 's' | 'min';
@@ -515,25 +516,33 @@ function RenderingSection({
   );
 }
 
-/** The mail server as edited. The password field starts empty: a saved password is never sent to the page. */
+/** The mail server as edited. The password and secret fields start empty: a saved one is never sent to the page. */
 interface MailDraft {
+  sender: MailSenderKind;
   host: string;
   port: string;
   security: SmtpSecurity;
   user: string;
   password: string;
   removePassword: boolean;
+  tenantId: string;
+  clientId: string;
+  clientSecret: string;
   from: string;
   fromName: string;
 }
 
 const mailDraft = (saved: MailView): MailDraft => ({
+  sender: saved.sender,
   host: saved.host,
   port: String(saved.port),
   security: saved.security,
   user: saved.user,
   password: '',
   removePassword: false,
+  tenantId: saved.tenantId,
+  clientId: saved.clientId,
+  clientSecret: '',
   from: saved.from,
   fromName: saved.fromName,
 });
@@ -542,6 +551,10 @@ const mailDraft = (saved: MailView): MailDraft => ({
 function mailChange(saved: MailView, draft: MailDraft) {
   const port = draft.port.trim() === '' ? null : Number(draft.port);
   const same =
+    draft.sender === saved.sender &&
+    draft.tenantId.trim() === saved.tenantId &&
+    draft.clientId.trim() === saved.clientId &&
+    draft.clientSecret === '' &&
     draft.host.trim() === saved.host &&
     port === saved.port &&
     draft.security === saved.security &&
@@ -552,22 +565,184 @@ function mailChange(saved: MailView, draft: MailDraft) {
     !draft.removePassword;
   if (same) return undefined;
   return {
+    sender: draft.sender,
     host: draft.host.trim(),
     port,
     security: draft.security,
     user: draft.user.trim(),
     password: draft.removePassword ? null : draft.password || undefined,
+    tenantId: draft.tenantId.trim(),
+    clientId: draft.clientId.trim(),
+    clientSecret: draft.clientSecret.trim() || undefined,
     from: draft.from.trim(),
     fromName: draft.fromName.trim(),
   };
 }
 
-/** The SMTP server email destinations send through, the From address, and a test email to yourself. */
+type MailFieldsProps = { saved: MailView; draft: MailDraft; onChange(draft: MailDraft): void };
+
+/** The SMTP server: host, security, port, and the sign-in. */
+function SmtpFields({ saved, draft, onChange }: MailFieldsProps) {
+  return (
+    <>
+      <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <Label htmlFor="mail-host">Host</Label>
+        <Input
+          id="mail-host"
+          value={draft.host}
+          onChange={(event) => onChange({ ...draft, host: event.target.value })}
+          placeholder="smtp.example.com"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <p className="text-muted-foreground text-xs">The Spooldoc server connects to it, so it must be reachable from there. Empty turns email off.</p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="mail-security">Security</Label>
+        <Select
+          value={draft.security}
+          onValueChange={(next) => {
+            const security = next as SmtpSecurity;
+            // A port that was the old choice's usual one follows the new choice.
+            const usual = Object.values(SMTP_DEFAULT_PORT).map(String).includes(draft.port) || draft.port === '';
+            onChange({ ...draft, security, port: usual ? String(SMTP_DEFAULT_PORT[security]) : draft.port });
+          }}
+        >
+          <SelectTrigger id="mail-security" className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {SMTP_SECURITY.map((security) => (
+              <SelectItem key={security} value={security}>
+                {SMTP_SECURITY_LABEL[security]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-muted-foreground text-xs">
+          {draft.security === 'none'
+            ? 'Email goes over the network unencrypted. Use it only for a relay on your own network.'
+            : draft.security === 'tls'
+              ? 'Encrypted from the start, usually on port 465.'
+              : 'Encrypted after the server greets, usually on port 587.'}
+        </p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="mail-port">Port</Label>
+        <Input
+          id="mail-port"
+          type="number"
+          min={1}
+          max={65535}
+          value={draft.port}
+          onChange={(event) => onChange({ ...draft, port: event.target.value })}
+          className="w-28"
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="mail-user">
+          User name <span className="font-normal text-muted-foreground">(optional)</span>
+        </Label>
+        <Input
+          id="mail-user"
+          value={draft.user}
+          onChange={(event) => onChange({ ...draft, user: event.target.value })}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="mail-password">Password</Label>
+        <Input
+          id="mail-password"
+          type="password"
+          value={draft.password}
+          onChange={(event) => onChange({ ...draft, password: event.target.value, removePassword: false })}
+          placeholder={saved.hasPassword && !draft.removePassword ? 'Saved. Leave empty to keep it.' : undefined}
+          autoComplete="new-password"
+          disabled={!draft.user.trim()}
+        />
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-muted-foreground text-xs">
+            {draft.removePassword
+              ? 'The saved password is removed when you save.'
+              : !draft.user.trim()
+                ? 'Enter the user name first. A server that takes email without a sign-in needs neither.'
+                : 'Stored encrypted on the server and never shown again. Some services want an app password here.'}
+          </p>
+          {saved.hasPassword && (
+            <Hint text={draft.removePassword ? 'Keep the saved password after all.' : 'Remove the saved password when you save. Nothing changes until then.'}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => onChange({ ...draft, password: '', removePassword: !draft.removePassword })}
+              >
+                {draft.removePassword ? 'Keep password' : 'Remove password'}
+              </Button>
+            </Hint>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Microsoft 365: the app registration Spooldoc signs in as, by the client credentials flow. */
+function M365Fields({ saved, draft, onChange }: MailFieldsProps) {
+  return (
+    <>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="mail-tenant">Directory (tenant) ID</Label>
+        <Input
+          id="mail-tenant"
+          value={draft.tenantId}
+          onChange={(event) => onChange({ ...draft, tenantId: event.target.value })}
+          placeholder="00000000-0000-0000-0000-000000000000"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <p className="text-muted-foreground text-xs">A GUID, or a domain such as contoso.onmicrosoft.com. Empty turns email off.</p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="mail-client">Application (client) ID</Label>
+        <Input
+          id="mail-client"
+          value={draft.clientId}
+          onChange={(event) => onChange({ ...draft, clientId: event.target.value })}
+          placeholder="00000000-0000-0000-0000-000000000000"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <p className="text-muted-foreground text-xs">Both IDs are on the Overview page of the app registration in Microsoft Entra ID.</p>
+      </div>
+      <div className="flex flex-col gap-1.5 sm:col-span-2">
+        <Label htmlFor="mail-secret">Client secret</Label>
+        <Input
+          id="mail-secret"
+          type="password"
+          value={draft.clientSecret}
+          onChange={(event) => onChange({ ...draft, clientSecret: event.target.value })}
+          placeholder={saved.hasClientSecret ? 'Saved. Leave empty to keep it.' : undefined}
+          autoComplete="new-password"
+          spellCheck={false}
+        />
+        <p className="text-muted-foreground text-xs">
+          The secret&apos;s value, not its ID, from Certificates &amp; secrets. Stored encrypted on the server and never shown again. Make a new one before it expires.
+        </p>
+      </div>
+    </>
+  );
+}
+
+/** How email destinations send (an SMTP server or Microsoft 365), the From address, and a test email to yourself. */
 function MailSection({ saved, draft, onChange }: { saved: MailView; draft: MailDraft; onChange(draft: MailDraft): void }) {
   const { user } = useAppInfo();
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<{ ok: true; to: string } | { ok: false; error: ShownError } | null>(null);
   const changed = mailChange(saved, draft) !== undefined;
+  const m365 = draft.sender === 'm365';
 
   async function onTest() {
     setSending(true);
@@ -586,109 +761,35 @@ function MailSection({ saved, draft, onChange }: { saved: MailView; draft: MailD
     <section id="mail" className="scroll-mt-4 rounded-lg border p-5">
       <h2 className="font-semibold">Mail server</h2>
       <p className="mt-0.5 mb-5 text-muted-foreground text-sm">
-        Email destinations send through this SMTP server, such as your own mail server or a sending service. Every email comes from the address below.
+        {m365 ? (
+          <>
+            Email destinations send through Microsoft 365 with Microsoft Graph, as the mailbox below. Spooldoc signs in as an app registered in Microsoft
+            Entra ID.{' '}
+            <DocsLink page="configuration" anchor="microsoft-365">
+              How to register the app
+            </DocsLink>
+          </>
+        ) : (
+          'Email destinations send through this SMTP server, such as your own mail server or a sending service. Every email comes from the address below.'
+        )}
       </p>
       <div className="grid gap-6 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5 sm:col-span-2">
-          <Label htmlFor="mail-host">Host</Label>
-          <Input
-            id="mail-host"
-            value={draft.host}
-            onChange={(event) => onChange({ ...draft, host: event.target.value })}
-            placeholder="smtp.example.com"
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <p className="text-muted-foreground text-xs">The Spooldoc server connects to it, so it must be reachable from there. Empty turns email off.</p>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="mail-security">Security</Label>
-          <Select
-            value={draft.security}
-            onValueChange={(next) => {
-              const security = next as SmtpSecurity;
-              // A port that was the old choice's usual one follows the new choice.
-              const usual = Object.values(SMTP_DEFAULT_PORT).map(String).includes(draft.port) || draft.port === '';
-              onChange({ ...draft, security, port: usual ? String(SMTP_DEFAULT_PORT[security]) : draft.port });
-            }}
-          >
-            <SelectTrigger id="mail-security" className="w-full">
+          <Label htmlFor="mail-sender">Send with</Label>
+          <Select value={draft.sender} onValueChange={(next) => onChange({ ...draft, sender: next as MailSenderKind })}>
+            <SelectTrigger id="mail-sender" className="w-full sm:w-[calc(50%-0.75rem)]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {SMTP_SECURITY.map((security) => (
-                <SelectItem key={security} value={security}>
-                  {SMTP_SECURITY_LABEL[security]}
+              {MAIL_SENDERS.map((sender) => (
+                <SelectItem key={sender} value={sender}>
+                  {MAIL_SENDER_LABEL[sender]}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-muted-foreground text-xs">
-            {draft.security === 'none'
-              ? 'Email goes over the network unencrypted. Use it only for a relay on your own network.'
-              : draft.security === 'tls'
-                ? 'Encrypted from the start, usually on port 465.'
-                : 'Encrypted after the server greets, usually on port 587.'}
-          </p>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="mail-port">Port</Label>
-          <Input
-            id="mail-port"
-            type="number"
-            min={1}
-            max={65535}
-            value={draft.port}
-            onChange={(event) => onChange({ ...draft, port: event.target.value })}
-            className="w-28"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="mail-user">
-            User name <span className="font-normal text-muted-foreground">(optional)</span>
-          </Label>
-          <Input
-            id="mail-user"
-            value={draft.user}
-            onChange={(event) => onChange({ ...draft, user: event.target.value })}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="mail-password">Password</Label>
-          <Input
-            id="mail-password"
-            type="password"
-            value={draft.password}
-            onChange={(event) => onChange({ ...draft, password: event.target.value, removePassword: false })}
-            placeholder={saved.hasPassword && !draft.removePassword ? 'Saved. Leave empty to keep it.' : undefined}
-            autoComplete="new-password"
-            disabled={!draft.user.trim()}
-          />
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-muted-foreground text-xs">
-              {draft.removePassword
-                ? 'The saved password is removed when you save.'
-                : !draft.user.trim()
-                  ? 'Enter the user name first. A server that takes email without a sign-in needs neither.'
-                  : 'Stored encrypted on the server and never shown again. Some services want an app password here.'}
-            </p>
-            {saved.hasPassword && (
-              <Hint text={draft.removePassword ? 'Keep the saved password after all.' : 'Remove the saved password when you save. Nothing changes until then.'}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0"
-                  onClick={() => onChange({ ...draft, password: '', removePassword: !draft.removePassword })}
-                >
-                  {draft.removePassword ? 'Keep password' : 'Remove password'}
-                </Button>
-              </Hint>
-            )}
-          </div>
-        </div>
+        {m365 ? <M365Fields saved={saved} draft={draft} onChange={onChange} /> : <SmtpFields saved={saved} draft={draft} onChange={onChange} />}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="mail-from">From address</Label>
           <Input
@@ -700,7 +801,9 @@ function MailSection({ saved, draft, onChange }: { saved: MailView; draft: MailD
             autoComplete="off"
             spellCheck={false}
           />
-          <p className="text-muted-foreground text-xs">An address the mail server lets this user send from.</p>
+          <p className="text-muted-foreground text-xs">
+            {m365 ? 'The mailbox Spooldoc sends as. The app must be allowed to send from it.' : 'An address the mail server lets this user send from.'}
+          </p>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="mail-from-name">
@@ -716,8 +819,10 @@ function MailSection({ saved, draft, onChange }: { saved: MailView; draft: MailD
               changed
                 ? 'Save your changes first: the test email uses the saved mail server.'
                 : !saved.configured
-                  ? 'Set the host and the From address, and save, first.'
-                  : `Send an email to ${user.email} with the saved mail server, to check that it works.`
+                  ? saved.sender === 'm365'
+                    ? 'Set the tenant ID, the client ID, the client secret and the From address, and save, first.'
+                    : 'Set the host and the From address, and save, first.'
+                  : `Send an email to ${user.email} ${saved.sender === 'm365' ? 'through Microsoft 365' : 'with the saved mail server'}, to check that it works.`
             }
           >
             <Button type="button" variant="outline" size="sm" onClick={() => void onTest()} disabled={sending || changed || !saved.configured}>

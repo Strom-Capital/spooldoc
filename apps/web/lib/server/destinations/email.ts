@@ -6,7 +6,7 @@ import { getDb } from '../db';
 import { runDeliveries, runs } from '../db/schema';
 import { addressList, composeEmail, formatOf, type EmailFormatting } from '../email-message';
 import { getFormats } from '../formats';
-import { fromHeader, mailErrorText, mailSender, mailServer, NO_MAIL_SERVER, stopsSending } from '../mail';
+import { fromHeader, mailErrorText, mailSecrets, mailSender, mailServer, NO_MAIL_SERVER, stopsSending } from '../mail';
 import { StepError } from '../step-error';
 import type { DeliverInput, Destination } from './index';
 import { storeRunFiles } from './store';
@@ -38,7 +38,7 @@ export function emailDestination(config: EmailConfig): Destination {
         throw new StepError('deliver', error instanceof Error ? error.message : String(error));
       });
       if (!server) throw new StepError('deliver', NO_MAIL_SERVER);
-      if (server.password) input.addSecret(server.password);
+      for (const secret of mailSecrets(server)) input.addSecret(secret);
 
       await storeRunFiles(runId, files);
       const formatting: EmailFormatting = { formats: await getFormats(), types: input.valueTypes };

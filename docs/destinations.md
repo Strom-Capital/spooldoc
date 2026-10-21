@@ -124,7 +124,8 @@ be deleted. Deleting one never touches the folder or its files.
 
 An email destination sends one email per document: each invoice to the
 customer on it, each delivery note to the address printed in it. Emails
-go through the mail server set in [Settings](configuration.md#mail-server).
+go through the SMTP server or the Microsoft 365 mailbox set in
+[Settings](configuration.md#mail-server).
 Add one with **Add destination** on the Destinations page and pick
 **Email**. It has a name and a test address.
 
@@ -193,7 +194,8 @@ template, the message is the HTML the template makes for the page group.
 Its CSS is moved into the elements, since many mail programs drop
 `<style>`, and its [images](templates.md#logos-images-and-fonts) go into the email as inline
 attachments, since some mail programs block images written into the HTML.
-A plain-text version goes with it.
+A plain-text version goes with it through an SMTP server. Microsoft 365
+takes one body per email, so there the email has the HTML message only.
 
 **Files.** Each email carries its own document's files, in the formats
 under Attach, named as the [Spooldoc download](#spooldoc-download) names
@@ -201,6 +203,9 @@ them. The files of an Excel template of the whole spooled file go in one
 email of their own, and only when Attach picks their format. That email
 has no page group, so its fields can read only `{d.splf...}`. A copy of
 every file is kept in Spooldoc, so the job log can show what was mailed.
+Through Microsoft 365, each file can be up to 3 MB and the whole email up
+to 4 MB, with images; an email over that fails with the file's name and
+what to do, and the other emails are still sent.
 
 ### When an email fails
 
@@ -222,9 +227,14 @@ every email for real.
 Errors of the mail server say what to check: a refused sign-in, a host
 or port that cannot be reached, a TLS setting that does not match the
 port, an email too large for the server, or an address the server
-refused. The server's own text is under Details. When the server or the
-connection fails, the run stops sending, and the emails it did not try
-say so.
+refused. Through Microsoft 365 they name a wrong tenant ID, client ID or
+secret, an expired secret, a missing Mail.Send permission, a mailbox the
+app may not send as or that does not exist, and throttling. When
+Microsoft 365 asks Spooldoc to wait a few seconds, it waits and tries
+again, twice at most; when the wait is longer than a minute, or the
+throttling goes on, the email fails and says to retry later. The server's own text is under Details. When the server,
+the sign-in or the connection fails, the run stops sending, and the
+emails it did not try say so.
 
 ## Writing a destination
 

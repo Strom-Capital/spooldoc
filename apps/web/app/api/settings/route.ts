@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { AI_PROVIDER_IDS, EFFORT_IDS } from '@/lib/ai-providers';
 import { guard } from '@/lib/server/auth';
-import { json, readJson } from '@/lib/server/http';
+import { invalidResponse, json, readJson } from '@/lib/server/http';
 import { formatsSchema } from '@/lib/formats';
 import { mailSettingsSchema } from '@/lib/mail-config';
 import { getFormats, updateFormats } from '@/lib/server/formats';
-import { getMailView, updateMail } from '@/lib/server/mail';
+import { getMailView, mailChangeProblem, updateMail } from '@/lib/server/mail';
 import { getRendering, updateRendering } from '@/lib/server/rendering';
 import { getAiSettings, getSettings, updateAiSettings, updateSettings } from '@/lib/server/settings';
 import { cleanupStatus, watchStatus } from '@/lib/server/watcher';
@@ -92,6 +92,10 @@ export async function PUT(request: Request): Promise<Response> {
     return body.response;
   }
   const { ai, rendering, mail, formats, ...change } = body.data;
+  const mailProblem = mail ? await mailChangeProblem(mail) : null;
+  if (mailProblem) {
+    return invalidResponse(mailProblem, ['mail', 'clientSecret']);
+  }
   if (Object.keys(change).length > 0) {
     await updateSettings(change);
   }
