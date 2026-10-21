@@ -46,7 +46,7 @@ it starts.
 | `pnpm -r test` | Vitest in every package. |
 | `pnpm --filter @spooldoc/core demo` | The demo spooled files as JSON. |
 | `pnpm --filter @spooldoc/ibmi capture -- --list` | Queues and spooled files of the IBM i in `local/.env`. |
-| `pnpm --filter @spooldoc/ibmi capture -- EMAIL SPDINVOICE` | Capture the newest `SPDINVOICE` on `EMAIL` into `workspace/samples`, scrubbed. |
+| `pnpm --filter @spooldoc/ibmi capture -- INVOICES SPDINVOICE` | Capture the newest `SPDINVOICE` on `INVOICES` into `workspace/samples`, scrubbed. |
 | `pnpm --filter @spooldoc/web db:generate` | Write a migration from the schema. |
 | `pnpm --filter @spooldoc/web db:migrate` | Apply the migrations by hand. |
 

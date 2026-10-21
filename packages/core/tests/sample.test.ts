@@ -11,12 +11,12 @@ describe("samples", () => {
 
   it("scrubs identifiers and keeps the rest", () => {
     const { sample } = loadFixture("invoice");
-    const dirty = { ...sample, system: "host.internal", splf: { ...sample.splf, jobUser: "REALUSER", jobNumber: "123456" }, attributes: { ...sample.attributes, queue: { library: "REALLIB", name: "EMAIL" } } };
+    const dirty = { ...sample, system: "host.internal", splf: { ...sample.splf, jobUser: "REALUSER", jobNumber: "123456" }, attributes: { ...sample.attributes, queue: { library: "REALLIB", name: "INVOICES" } } };
     const clean = scrubSample(dirty);
     expect(clean.splf.jobUser).toBe("DEMOUSER");
     expect(clean.splf.jobNumber).toBe("000000");
     expect(clean.system).toBe("ibmi.example.com");
-    expect(clean.attributes.queue).toEqual({ library: "MYLIB", name: "EMAIL" });
+    expect(clean.attributes.queue).toEqual({ library: "MYLIB", name: "INVOICES" });
     expect(clean.id).toBe(sample.id);
     expect(clean.pages).toBe(sample.pages);
     expect(clean.rawBase64).toBe(sample.rawBase64);

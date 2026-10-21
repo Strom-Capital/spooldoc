@@ -4,12 +4,12 @@
 //   npm run print -- --list       list only, print nothing
 import { cl, connect, errorText, printJobLog, settings } from "./connection.mjs";
 
-const QUEUES = ["FORMS", "EMAIL", "REPORTS"];
+const QUEUES = ["FORMS", "INVOICES", "REPORTS"];
 const listOnly = process.argv[2] === "--list";
 const queue = listOnly ? "*ALL" : (process.argv[2] ?? "*ALL").toUpperCase();
 const count = listOnly ? 1 : Number(process.argv[3] ?? 1);
 if (![...QUEUES, "*ALL"].includes(queue) || !Number.isInteger(count) || count < 1 || count > 20) {
-  console.error("usage: npm run print -- [*ALL|FORMS|EMAIL|REPORTS] [count 1-20]");
+  console.error("usage: npm run print -- [*ALL|FORMS|INVOICES|REPORTS] [count 1-20]");
   process.exit(2);
 }
 
@@ -37,11 +37,11 @@ async function listEntries() {
     `SELECT *
        FROM QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC
       WHERE OUTPUT_QUEUE_LIBRARY_NAME = ?
-        AND OUTPUT_QUEUE_NAME IN ('FORMS', 'EMAIL', 'REPORTS')
+        AND OUTPUT_QUEUE_NAME IN ('FORMS', 'INVOICES', 'REPORTS')
       ORDER BY CREATE_TIMESTAMP`,
     [s.lib],
   );
-  console.log(`${rows.length} spooled file(s) on ${s.lib}/FORMS, EMAIL, REPORTS:`);
+  console.log(`${rows.length} spooled file(s) on ${s.lib}/FORMS, INVOICES, REPORTS:`);
   const table = rows.map((r) => ({
     queue: r.OUTPUT_QUEUE_NAME,
     file: r.SPOOLED_FILE_NAME,
@@ -65,7 +65,7 @@ async function listWidths() {
               CHARACTERS_PER_INCH, LINES_PER_INCH
          FROM QSYS2.OUTPUT_QUEUE_ENTRIES
         WHERE OUTPUT_QUEUE_LIBRARY_NAME = ?
-          AND OUTPUT_QUEUE_NAME IN ('FORMS', 'EMAIL', 'REPORTS')
+          AND OUTPUT_QUEUE_NAME IN ('FORMS', 'INVOICES', 'REPORTS')
         ORDER BY CREATE_TIMESTAMP`,
       [s.lib],
     );

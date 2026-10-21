@@ -62,7 +62,7 @@ describe('/api/servers', () => {
       return jobId;
     };
     const statements = await jobOn(id, 'Statements', 'MYOUTQ');
-    const invoices = await jobOn(id, 'Invoices', 'EMAIL');
+    const invoices = await jobOn(id, 'Invoices', 'INVOICES');
     await jobOn(other, 'Elsewhere', 'MYOUTQ');
 
     const { servers: listed } = await (await list.GET(appRequest('/api/servers', { headers: auth }))).json();
