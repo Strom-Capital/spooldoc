@@ -33,7 +33,7 @@ describe('the mail server in Settings', () => {
     const response = await put({ mail });
     expect(response.status).toBe(200);
     const view = (await response.json()) as SettingsView;
-    expect(view.mail).toEqual({ ...mail, password: undefined, hasPassword: true, configured: true });
+    expect(view.mail).toEqual({ ...mail, password: undefined, sender: 'smtp', hasPassword: true, tenantId: '', clientId: '', hasClientSecret: false, configured: true });
     expect(JSON.stringify(view)).not.toContain('mail-Passw0rd');
     const [row] = await db().select({ enc: settings.smtpPasswordEnc }).from(settings);
     expect(row?.enc).toMatch(/^v1\./);

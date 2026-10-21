@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emailSpecSchema, emptySpec, type EmailSpec, type JobSpec } from '@/lib/job-spec';
 import { destinations, jobs, jobVersions, runDeliveries, runs, settings } from '@/lib/server/db/schema';
 import { addressList, addressProblems, composeEmail, emailSpecProblems, htmlToText, inlineHtml } from '@/lib/server/email-message';
-import { mailErrorText, setMailSender, stopsSending, updateMail } from '@/lib/server/mail';
+import { mailErrorText, setMailSender, stopsSending, updateMail, type SmtpServer } from '@/lib/server/mail';
 import { runJob } from '@/lib/server/runner';
 
 import { resetTables } from './helpers/db';
@@ -110,7 +110,7 @@ describe('the plain text of an HTML body', () => {
 });
 
 describe('mail errors', () => {
-  const server = { host: 'smtp.example.com', port: 587 };
+  const server: SmtpServer = { sender: 'smtp', host: 'smtp.example.com', port: 587, security: 'starttls', user: null, password: null, from: 'invoices@example.com', fromName: null };
   const error = (props: Record<string, unknown>) => Object.assign(new Error(String(props.message ?? 'failed')), props);
 
   it('say what went wrong and what to do next, and keep the server text as the detail', () => {

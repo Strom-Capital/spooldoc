@@ -5,7 +5,7 @@ import type { AiProviderId, Effort } from './ai-providers';
 import type { EmailConfig, IfsConfig } from './destination-config';
 import type { Formats } from './formats';
 import type { Format, JobSpec } from './job-spec';
-import type { SmtpSecurity } from './mail-config';
+import type { MailSenderKind, SmtpSecurity } from './mail-config';
 
 /**
  * Why a server cannot be used: `host` it cannot be reached (Spooldoc tries again by
@@ -289,16 +289,23 @@ export interface SettingsView {
   formats: Formats;
 }
 
-/** The mail server email destinations send through, as Settings shows it. Never carries the password. */
+/** How email destinations send, as Settings shows it. Never carries the password or the client secret. */
 export interface MailView {
+  /** Through the SMTP server, or through Microsoft 365. */
+  sender: MailSenderKind;
   host: string;
   port: number;
   security: SmtpSecurity;
   user: string;
   hasPassword: boolean;
+  /** The Microsoft 365 directory (tenant) ID and application (client) ID. */
+  tenantId: string;
+  clientId: string;
+  hasClientSecret: boolean;
+  /** The From address; with Microsoft 365, the mailbox it sends from. */
   from: string;
   fromName: string;
-  /** A host and a From address are set, so email can be sent. */
+  /** The picked sender has what it needs (a host, or a tenant, client ID and secret) and a From address, so email can be sent. */
   configured: boolean;
 }
 

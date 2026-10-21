@@ -69,6 +69,22 @@ stand-in for Carbone's HTTP API. The tests against a real Carbone server
 run only when `SPOOLDOC_CARBONE_URL` is set, such as
 `SPOOLDOC_CARBONE_URL=http://localhost:4000 pnpm --filter @spooldoc/core test`.
 
+The Microsoft 365 sender is tested with `fetch` mocked, so no test calls
+Microsoft. To check it in the app without a tenant, start the stand-in
+for the token endpoint and Graph, and point the app at it with
+`SPOOLDOC_MICROSOFT_URL`, which replaces both
+`https://login.microsoftonline.com` and `https://graph.microsoft.com`:
+
+```sh
+node apps/web/scripts/microsoft-stand-in.mjs 3405
+SPOOLDOC_MICROSOFT_URL=http://localhost:3405 pnpm --filter @spooldoc/web dev
+```
+
+The stand-in prints each email and sends nothing. Some values fail on
+purpose, such as the client secret `expired` or a From address that
+starts with `blocked@`; the script lists them. The variable is a test
+aid: leave it unset in production.
+
 Add a fixture by printing the document with demo-spool, capturing it with
 the capture command (which scrubs the job user and number) and writing
 its definition, template and expected JSON next to the sample.

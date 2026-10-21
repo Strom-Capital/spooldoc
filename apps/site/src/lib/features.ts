@@ -201,7 +201,7 @@ export const FEATURES: Feature[] = [
     body: [
       'The built-in destination keeps every file in Spooldoc, ready to download from the run in the job log.',
       'An IFS destination writes each file to a folder on the job\'s IBM i, where programs can pick it up. Each file is tagged with the right CCSID and is never half written. When a file with the same name exists, the destination replaces it, adds a number or fails the run, as you choose.',
-      'An email destination sends one email per document through your SMTP server. To, Subject and the message take fields such as <code>{d.pg.email}</code>, so each invoice goes to the customer on it, with its PDF attached. The message can be the document itself, from an HTML template. The job builder shows the email of each page group before anything is sent, and a test address sends every email to you first.',
+      'An email destination sends one email per document through your SMTP server or Microsoft 365. To, Subject and the message take fields such as <code>{d.pg.email}</code>, so each invoice goes to the customer on it, with its PDF attached. The message can be the document itself, from an HTML template. The job builder shows the email of each page group before anything is sent, and a test address sends every email to you first.',
       'The spooled file is held, moved or deleted only after every file was delivered. When an email fails, the job log lists each email with its status, and Retry sends only the ones not sent yet.',
     ],
     shots: ['email-step', 'destinations', 'destination-ifs'],
