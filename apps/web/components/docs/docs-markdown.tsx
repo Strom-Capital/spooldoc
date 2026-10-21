@@ -67,7 +67,9 @@ export function DocsMarkdown({ children, className }: { children: string; classN
       mode="static"
       className={cn(
         // Inline code wraps anywhere, so a long tag never widens a phone screen; code blocks scroll in themselves.
-        'text-[15px] leading-7 [&_:not(pre)>code]:wrap-anywhere [&_:is(h2,h3,h4)]:scroll-mt-20 [&_h2]:mt-10 [&_h3]:mt-8 [&_p]:my-3',
+        // Streamdown lays out an off-screen code block as a 200px box (content-visibility: auto) until it
+        // scrolls near, which moves every heading below it. Here each block has its real height from the start.
+        'text-[15px] leading-7 [&_:not(pre)>code]:wrap-anywhere [&_[data-streamdown=code-block]]:[content-visibility:visible]! [&_:is(h2,h3,h4)]:scroll-mt-20 [&_h2]:mt-10 [&_h3]:mt-8 [&_p]:my-3',
         className,
       )}
       plugins={plugins}

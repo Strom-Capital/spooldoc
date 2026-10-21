@@ -23,9 +23,11 @@ import {
 } from '@/components/ui/sidebar';
 import type { DocsGroup } from '@/lib/server/docs';
 import { DocsSearch, DocsSearchButton } from './docs-search';
+import { useHeadingPin } from './hash-pin';
 
 /** The docs: the guides in their groups on the left, search, and the page. */
 export function DocsShell({ nav, children }: { nav: DocsGroup[]; children: ReactNode }) {
+  useHeadingPin();
   return (
     <DocsSearch>
       {/* Always open on desktop; on phones the sidebar opens from the menu button. */}

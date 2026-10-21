@@ -10,6 +10,7 @@ import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, Comma
 import { Spinner } from '@/components/ui/spinner';
 import { shortcut } from '@/lib/client/keys';
 import type { DocsSection } from '@/lib/server/docs';
+import { pinHeading } from './hash-pin';
 
 type Index = MiniSearch<DocsSection & { id: number }>;
 type Loaded = { state: 'idle' | 'loading' } | { state: 'ready'; index: Index } | { state: 'error'; message: string };
@@ -72,20 +73,28 @@ export function DocsSearch({ children }: { children: ReactNode }) {
 
   // Where to go once the dialog has closed. Going while its scroll lock still hides the
   // scrollbar would scroll to a layout that rewraps when the scrollbar comes back.
-  const target = useRef<string | null>(null);
+  const target = useRef<{ page: string; anchor: string } | null>(null);
 
   function go(page: string, anchor: string) {
-    target.current = `/docs/${page}${anchor ? `#${anchor}` : ''}`;
+    target.current = { page, anchor };
     setOpen(false);
   }
 
   function onClosed(event: Event) {
-    const href = target.current;
+    const picked = target.current;
     target.current = null;
-    if (href) {
-      // Focus stays with the page we go to, not the button that opened the search.
-      event.preventDefault();
-      router.push(href);
+    if (!picked) {
+      return;
+    }
+    // Focus stays with the page we go to, not the button that opened the search.
+    event.preventDefault();
+    const path = `/docs/${picked.page}`;
+    const samePage = window.location.pathname === path;
+    router.push(`${path}${picked.anchor ? `#${picked.anchor}` : ''}`);
+    // A new page pins its heading when it shows; a `#` on this page changes no path and
+    // fires no hashchange, so it is pinned here.
+    if (samePage) {
+      pinHeading(picked.anchor);
     }
   }
 
