@@ -152,7 +152,7 @@ with invented ones before you paste a spooled file, a log or a screenshot.
 
 ## License
 
-[MIT](LICENSE). Carbone runs as its own service under its own licence;
+[MIT](LICENSE). Carbone runs as its own service under its own license;
 Spooldoc only calls it. The agent's Carbone syntax reference is the
 [Carbone Skill](https://github.com/carboneio/carbone-skill) by Carbone,
 under the Apache License 2.0 (`apps/web/lib/server/carbone-skill.LICENSE`).
