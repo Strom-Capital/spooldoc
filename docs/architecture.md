@@ -112,7 +112,7 @@ backup:
 | `job_chats` | The agent's conversation for each job |
 | `samples` | Captured spooled files: raw bytes, attributes and parsed pages, for previews and runs |
 | `runs`, `run_files` | Every run with its steps, and the files kept in Spooldoc: by the Spooldoc download destination, by an IFS destination with Keep a copy in Spooldoc, or by an email destination |
-| `run_deliveries` | Every email a run sent or tried to send, one per document, so Retry sends only the rest |
+| `run_deliveries` | Every delivery a run made or tried, one per document with its destination kind, such as each email, so Retry sends only the rest |
 | `watch_seen` | Which spooled files each job has processed |
 | `destinations` | Where jobs deliver |
 | `assets` | Logos, images and fonts for templates |
