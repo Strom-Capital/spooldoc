@@ -4,11 +4,13 @@
  * which is centered on the text, on alternating sides. A code sample that fits a column
  * (the YAML) takes the screenshot's place, and the screenshot goes full width below; one
  * with long lines (the shell commands) goes full width below. No column is left empty.
+ * A feature with two or more screenshots shows them in a carousel.
  */
 import Base from '../layouts/Base.astro';
+import Carousel from '../components/Carousel.astro';
 import CodeBlock from '../components/CodeBlock.astro';
 import Shot from '../components/Shot.astro';
-import { FEATURES } from '../lib/features';
+import { FEATURES, SHOTS } from '../lib/features';
 import { docsUrl } from '../lib/links';
 import { FEATURES_DESCRIPTION } from '../lib/structuredData';
 ---
@@ -35,7 +37,13 @@ import { FEATURES_DESCRIPTION } from '../lib/structuredData';
 
   {FEATURES.map((feature, i) => {
     const code = feature.code;
-    const shot = <Shot name={feature.shot} alt={feature.alt} eager={i === 0} />;
+    const shots = feature.shots.map((name) => ({ name, alt: SHOTS[name] }));
+    const shot =
+      shots.length > 1 ? (
+        <Carousel shots={shots} label={feature.title} eager={i === 0} />
+      ) : (
+        <Shot name={feature.shots[0]} alt={SHOTS[feature.shots[0]]} eager={i === 0} />
+      );
     return (
       <section class="feature" id={feature.id} aria-labelledby={`${feature.id}-title`}>
         <div class:list={['container', 'feature-grid', { flip: i % 2 === 1, 'code-beside': code?.place === 'beside' }]}>

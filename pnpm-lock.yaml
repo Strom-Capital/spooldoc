@@ -142,6 +142,9 @@ importers:
       astro:
         specifier: ^7.4.1
         version: 7.4.1(@astrojs/markdown-remark@7.3.3)(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
+      embla-carousel:
+        specifier: ^8.6.0
+        version: 8.6.0
       minisearch:
         specifier: ^7.2.0
         version: 7.2.0
@@ -4177,6 +4180,9 @@ packages:
 
   electron-to-chromium@1.5.456:
     resolution: {integrity: sha512-8hboqI6xesozteFb8aa7OGknvxUtTeRJLz0FoePysUEh/oWbddykIGdgpEJRbPRg/nIMfBf2DFos+H2MtvJl2A==}
+
+  embla-carousel@8.6.0:
+    resolution: {integrity: sha512-SjWyZBHJPbqxHOzckOfo8lHisEaJWmwd23XppYFYVh10bU66/Pn5tkVkbkCMZVdbUE5eTCI2nD8OyIP4Z+uwkA==}
 
   emmet@2.4.11:
     resolution: {integrity: sha512-23QPJB3moh/U9sT4rQzGgeyyGIrcM+GH5uVYg2C6wZIxAIJq7Ng3QLT79tl8FUwDXhyq9SusfknOrofAKqvgyQ==}
@@ -11114,6 +11120,8 @@ snapshots:
   ee-first@1.1.1: {}
 
   electron-to-chromium@1.5.456: {}
+
+  embla-carousel@8.6.0: {}
 
   emmet@2.4.11:
     dependencies:

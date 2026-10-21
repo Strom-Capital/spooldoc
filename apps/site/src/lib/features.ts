@@ -13,9 +13,11 @@ export interface Feature {
   summary: string;
   /** A few short paragraphs for /features. */
   body: string[];
-  /** The light and dark screenshot in docs/assets, without `-light.png`. */
-  shot: string;
-  alt: string;
+  /**
+   * The screenshots in docs/assets, without `-light.png`, each with its alt text in SHOTS.
+   * One shows on its own; two or more show in a carousel, the first one first.
+   */
+  shots: [ShotName, ...ShotName[]];
   /** The guides this feature is described in, the first one linked from the section. */
   docs: { slug: string; title: string }[];
   /**
@@ -24,6 +26,47 @@ export interface Feature {
    */
   code?: { code: string; lang: 'yaml' | 'sh'; title: string; place: 'beside' | 'below'; track?: 'install_command_copied' };
 }
+
+/**
+ * The alt text of each screenshot the site shows, a full sentence that says what it shows.
+ * The files are docs/assets/<name>-light.png and -dark.png, the ones the guides use.
+ */
+export const SHOTS = {
+  servers:
+    'The Servers page lists two servers: one connected, with its OS version and CCSID, and one that cannot be reached, with the reason and the ports to check.',
+  queues:
+    'The Queues page of a server with one library lists the output queue INVOICES with its ready, held and total files, the jobs that read it and its text, with New job and Hide on the row.',
+  'queue-files':
+    'The spooled files of one output queue, under the path Queues, the server and the queue, with the four filters above the list and one held spooled file with its number, job, user data, pages, width and length, and when it was created.',
+  'job-builder':
+    'The job builder with the extract step open shows the six pipeline steps across the top, the sample invoice page with field hits highlighted on the left, and the definition editor on the right.',
+  'xml-definition':
+    'The extract step of a job whose spooled file holds XML: the page with its elements highlighted on the left, and the definition with source: xml, the page group element FORM, its fields and its repeating lines on the right.',
+  'template-preview':
+    "The render step of a job with two templates shows the Document template's HTML in an editor on the left and the rendered invoice preview on the right.",
+  'word-template':
+    'The render step of a job with a Word template shows the uploaded .docx and the tips for tags in Word on the left, and the PDF preview of the open order lines on the right.',
+  'excel-template':
+    'The render step of a job with an Excel template of the whole spooled file shows the uploaded .xlsx and the tips for tags in Excel on the left, and the PDF preview with a row per order line on the right.',
+  'ai-assistant':
+    'The agent panel beside the workbench shows the suggested prompts, one per kind of template, and the message box.',
+  jobs: 'The Jobs page lists five jobs with their server, queue, mode, version and last run: three watching and two run on demand, three of them deleting their spooled files after delivery, and one whose last run failed.',
+  trigger:
+    'The trigger step of a job set to Watching: the watcher runs ready files and the files already on the queue too, and the queue is watched by polling every 30 seconds, with Set up real-time below.',
+  finish:
+    'The finish step of a job set to Delete, with a warning that spooled files are deleted from the IBM i after their documents are delivered.',
+  'job-log':
+    'A run opened from the job log shows its status, the spooled file, the five steps with their timings, and the five pick list PDFs it delivered.',
+  'job-log-failed':
+    'A failed run opened from the job log says which authority the user profile needs on the folder and the CHGAUT command that grants it, keeps the IBM i message under Details, and shows that the Deliver step failed.',
+  destinations:
+    'The Destinations page lists two IFS folders, each with its folder, its settings and the number of jobs that use it, and the built-in Spooldoc download.',
+  'destination-ifs':
+    'The New IFS destination dialog is filled in with a name, the folder /home/docs/delivery-notes, Add a number when a file with the same name exists, and Keep a copy in Spooldoc on.',
+  home: 'The Home page shows counts of servers, output queues, jobs and runs, a chart of runs per day by status, and two items under Needs attention: a server that cannot be reached and a failed run.',
+} as const;
+
+export type ShotName = keyof typeof SHOTS;
 
 export const QUICK_START = [
   'git clone https://github.com/Strom-Capital/spooldoc.git && cd spooldoc',
@@ -45,6 +88,8 @@ text:
   page:
     width: 132
     length: 66
+  footer:
+    fromLine: 60
   split:
     field: invoiceNo
   fields:
@@ -74,8 +119,7 @@ export const FEATURES: Feature[] = [
       'The Queues page lists the output queues of a server with their ready, held and total files. Search, sort and hide the queues you never need. Open a queue to list its spooled files, and look at any of them page by page.',
       'When a server cannot be reached, its status says why and what to check, and it shows under Needs attention on the Home page.',
     ],
-    shot: 'servers',
-    alt: 'The Servers page with two servers: one connected, with its OS version and CCSID, and one that cannot be reached, with the reason and what to check',
+    shots: ['servers', 'queues', 'queue-files'],
     docs: [
       { slug: 'servers', title: 'Servers' },
       { slug: 'queues', title: 'Queues' },
@@ -90,8 +134,7 @@ export const FEATURES: Feature[] = [
       'Reading and layout stay apart. A template lays out the JSON and never sees lines and columns. A new look is a new template, and a moved column is one fix in the definition.',
       'The workbench checks the YAML as you type and highlights every field it finds on the page. You check each value next to the line it came from, before anything is rendered.',
     ],
-    shot: 'job-builder',
-    alt: 'The job builder with the extract step open: six pipeline steps across the top, the sample page with field hits highlighted on the left and the definition editor on the right',
+    shots: ['job-builder', 'xml-definition'],
     docs: [{ slug: 'definitions', title: 'Definitions' }],
     code: { code: DEFINITION_EXAMPLE, lang: 'yaml', title: 'YAML, the start of the definition shown below', place: 'beside' },
   },
@@ -104,8 +147,7 @@ export const FEATURES: Feature[] = [
       'Upload a Word or Excel template, or let the agent design one. An Excel template can make one sheet of the whole spooled file, a row per line, to sort, filter and sum.',
       'Spooldoc checks every tag against the definition before it renders. A Carbone server of your own or Carbone Cloud renders the documents. Logos, images and fonts are uploaded once, as assets.',
     ],
-    shot: 'word-template',
-    alt: 'The render step of a job with a Word template: the uploaded .docx and the tips for tags in Word on the left, and the PDF preview on the right',
+    shots: ['template-preview', 'word-template', 'excel-template'],
     docs: [
       { slug: 'templates', title: 'Templates' },
       { slug: 'carbone', title: 'Carbone' },
@@ -120,8 +162,7 @@ export const FEATURES: Feature[] = [
       'It uses an AI model you choose: Anthropic, Google, OpenAI, OpenRouter, Vercel AI Gateway or a local model behind an OpenAI-compatible endpoint. Spooldoc works without a model.',
       'Nothing it writes goes live until you save and activate a version, and none of its tools reaches the IBM i. With masking on, the model sees the layout and not the values. A local model keeps the values on your network.',
     ],
-    shot: 'ai-assistant',
-    alt: 'The agent panel beside the workbench, with the suggested prompts and the message box',
+    shots: ['ai-assistant'],
     docs: [{ slug: 'agent', title: 'Agent' }],
   },
   {
@@ -133,8 +174,7 @@ export const FEATURES: Feature[] = [
       'Saving a version takes a fixed copy of the draft, with a note of what changed. Runs use the active version, and every run is logged against the version it used. Restore an older version to go back.',
       'Run a job on demand on the files you pick, or let it watch the queue. Watching works by polling, or in real time through a data queue that Spooldoc creates only when you turn real-time watching on. When the documents are delivered, the finish step holds, moves, deletes or leaves the spooled file. Delete asks first.',
     ],
-    shot: 'jobs',
-    alt: 'The Jobs page with five jobs: two watching, one of them with a watch error, one paused, and two run on demand, each with its server, queue, version and last run',
+    shots: ['jobs', 'trigger', 'finish'],
     docs: [{ slug: 'jobs', title: 'Jobs' }],
   },
   {
@@ -146,8 +186,7 @@ export const FEATURES: Feature[] = [
       'A failed run says which step failed and why, in IBM i terms: the object, the authority and the command that fixes it. The IBM i\'s own message is kept under Details. Failed runs show under Needs attention on the Home page.',
       'Retry runs the same spooled file again with the active version. Runs are kept for 90 days by default, and you set how long.',
     ],
-    shot: 'job-log-failed',
-    alt: 'A failed run opened from the job log: the error says which authority the user profile needs on the folder and the command that grants it, Details holds the IBM i message, and the steps show that Deliver failed',
+    shots: ['job-log', 'job-log-failed'],
     docs: [{ slug: 'job-log', title: 'Job log' }],
   },
   {
@@ -159,8 +198,7 @@ export const FEATURES: Feature[] = [
       'An IFS destination writes each file to a folder on the job\'s IBM i, where programs can pick it up. Each file is tagged with the right CCSID and is never half written. When a file with the same name exists, the destination replaces it, adds a number or fails the run, as you choose.',
       'The spooled file is held, moved or deleted only after every file was delivered.',
     ],
-    shot: 'destinations',
-    alt: 'The Destinations page with two IFS folders, each with its folder and settings and the number of jobs that use it, and the built-in Spooldoc download',
+    shots: ['destinations', 'destination-ifs'],
     docs: [{ slug: 'destinations', title: 'Destinations' }],
   },
   {
@@ -172,8 +210,7 @@ export const FEATURES: Feature[] = [
       'Every release publishes the image to <code>ghcr.io/strom-capital/spooldoc</code>, tagged with its version. Pin a version in production, so an upgrade happens when you choose. The server applies its database migrations when it starts.',
       'Spooldoc runs next to the IBM i, not on it. It needs a route to the host server ports, and nothing else on the IBM i.',
     ],
-    shot: 'home',
-    alt: 'The Home page: counts of servers, output queues, jobs and runs, and a chart of runs per day by status',
+    shots: ['home'],
     docs: [
       { slug: 'deployment', title: 'Deployment' },
       { slug: 'getting-started', title: 'Getting started' },

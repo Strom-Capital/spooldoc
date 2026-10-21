@@ -74,7 +74,7 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/ai-assistant-dark.png">
-    <img src="docs/assets/ai-assistant-light.png" alt="The job builder: the pipeline from source to finish across the top, the sample invoice page with every extracted field highlighted, the YAML definition beside it, and the agent panel on the right" width="900">
+    <img src="docs/assets/ai-assistant-light.png" alt="The job builder shows the pipeline from source to finish across the top, the sample invoice page with every extracted field highlighted, the YAML definition beside it, and the agent panel on the right." width="900">
   </picture>
 </p>
 

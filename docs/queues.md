@@ -29,6 +29,13 @@ Hover over the count, or click, tap or press Enter on it, to list them,
 each with a link to the job and its state: Watching, Paused, On demand or
 Draft only. On a hidden queue, the list notes that its jobs still run.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/queues-dark.png">
+    <img src="assets/queues-light.png" alt="The Queues page of a server with one library lists the output queue INVOICES with its ready, held and total files, the jobs that read it and its text, with New job and Hide on the row." width="900">
+  </picture>
+</p>
+
 ## Finding a queue
 
 - **Search** matches the library and the queue name.
@@ -50,16 +57,23 @@ Click a queue, or its name, to list its spooled files. The path above the title 
 the queue's place: Queues, the server and the queue. Queues opens the
 Queues page, and the server opens it on that server.
 
-The list shows each file's name, number, job, user data, form type,
-status, pages and when it was created. Four filters narrow the list. The
+The list shows each file's name, number, job, user data, pages, width and
+length, status and when it was created. Four filters narrow the list. The
 first three are a "contains" match:
 
 | Filter | Matches |
 |--------|---------|
-| Spooled file name contains | The spooled file name |
+| Name contains | The spooled file name |
 | Job contains | The job as `number/user/name` |
 | User data contains | The `USRDTA` attribute |
 | Status | One of the statuses picked. Pick several to see, say, ready and held files. With none picked, any status matches. |
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/queue-files-dark.png">
+    <img src="assets/queue-files-light.png" alt="The spooled files of one output queue, under the path Queues, the server and the queue, with the four filters above the list and one held spooled file with its number, job, user data, pages, width and length, and when it was created." width="900">
+  </picture>
+</p>
 
 Each status shows as a colored pill with an icon. Hover over it for the
 status as the IBM i spells it, such as `READY`.

@@ -1,0 +1,127 @@
+---
+/**
+ * Two or more screenshots, one at a time, with previous and next buttons and a count
+ * under them. Built on embla-carousel, the engine of shadcn/ui's Carousel, with the same
+ * roles and labels. Each slide is a Shot, so light and dark and the full-size viewer work
+ * as anywhere else.
+ *
+ * - Swipe or drag, the buttons, or the left and right arrow keys while focus is inside.
+ *   A button that turns disabled at either end hands focus to the other one.
+ * - Without JavaScript the screenshots sit side by side in a row that scrolls, and the
+ *   buttons and count are left out. With scripting on, the styles for the carousel apply
+ *   from the first paint, so nothing moves when the script starts.
+ */
+import Shot from './Shot.astro';
+
+interface Props {
+  shots: { name: string; alt: string }[];
+  /** What the screenshots are of, for the region's label. */
+  label: string;
+  /** Loads the first screenshot at once. */
+  eager?: boolean;
+}
+const { shots, label, eager = false } = Astro.props;
+const count = shots.length;
+---
+<div class="carousel" role="region" aria-roledescription="carousel" aria-label={label} data-carousel>
+  <div class="viewport" data-carousel-viewport>
+    <div class="track">
+      {shots.map((shot, i) => (
+        <div class="slide" role="group" aria-roledescription="slide" aria-label={`${i + 1} of ${count}`}>
+          <Shot name={shot.name} alt={shot.alt} eager={eager && i === 0} />
+        </div>
+      ))}
+    </div>
+  </div>
+  <div class="controls">
+    <button type="button" class="nav" aria-label="Previous screenshot" disabled data-carousel-prev>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m15 18-6-6 6-6" />
+      </svg>
+    </button>
+    <p class="count" aria-live="polite"><span data-carousel-current>1</span> of {count}</p>
+    <button type="button" class="nav" aria-label="Next screenshot" data-carousel-next>
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="m9 18 6-6-6-6" />
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script>
+  import EmblaCarousel from 'embla-carousel';
+
+  for (const root of document.querySelectorAll<HTMLElement>('[data-carousel]')) {
+    const viewport = root.querySelector<HTMLElement>('[data-carousel-viewport]');
+    const prev = root.querySelector<HTMLButtonElement>('[data-carousel-prev]');
+    const next = root.querySelector<HTMLButtonElement>('[data-carousel-next]');
+    const current = root.querySelector<HTMLElement>('[data-carousel-current]');
+    if (!viewport || !prev || !next || !current) continue;
+
+    root.setAttribute('data-ready', '');
+    const embla = EmblaCarousel(viewport, { align: 'start' });
+
+    const update = () => {
+      const focused = document.activeElement;
+      prev.disabled = !embla.canScrollPrev();
+      next.disabled = !embla.canScrollNext();
+      // A button that turns disabled loses focus; hand it to the other one, so the arrow
+      // keys and Tab carry on from here.
+      if (focused === next && next.disabled) prev.focus();
+      if (focused === prev && prev.disabled) next.focus();
+      current.textContent = String(embla.selectedScrollSnap() + 1);
+    };
+    embla.on('init', update).on('select', update).on('reInit', update);
+    update();
+
+    prev.addEventListener('click', () => embla.scrollPrev());
+    next.addEventListener('click', () => embla.scrollNext());
+    root.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        embla.scrollPrev();
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        embla.scrollNext();
+      }
+    });
+  }
+</script>
+
+<style>
+  .carousel { position: relative; min-width: 0; }
+
+  /*
+   * Without JavaScript: a row that scrolls and snaps to each screenshot. The frame's shadow
+   * shows past the edges where the browser supports overflow-clip-margin.
+   */
+  .viewport {
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: var(--space-4);
+  }
+  .track { display: flex; margin-left: calc(-1 * var(--space-5)); }
+  .slide { flex: 0 0 100%; min-width: 0; padding-left: var(--space-5); scroll-snap-align: start; }
+  .controls { display: none; }
+
+  /* With JavaScript, from the first paint where the browser can tell, or once the script runs. */
+  @media (scripting: enabled) {
+    .viewport { overflow: clip; overflow-clip-margin: 20px; scroll-snap-type: none; padding-bottom: 0; }
+    .slide { scroll-snap-align: none; }
+    .controls { display: flex; }
+  }
+  .carousel[data-ready] .viewport { overflow: clip; overflow-clip-margin: 20px; scroll-snap-type: none; padding-bottom: 0; }
+  .carousel[data-ready] .slide { scroll-snap-align: none; }
+  .carousel[data-ready] .controls { display: flex; }
+
+  .controls { align-items: center; justify-content: center; gap: var(--space-3); margin-top: var(--space-4); }
+  .nav {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; padding: 0; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--background); color: var(--foreground);
+    cursor: pointer;
+  }
+  .nav:hover:not(:disabled) { background: var(--muted); }
+  .nav:disabled { opacity: 0.5; cursor: default; }
+  .count { margin: 0; min-width: 4.5em; text-align: center; font-size: 0.875rem; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+</style>

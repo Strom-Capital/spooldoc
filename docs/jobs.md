@@ -15,7 +15,7 @@ first.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/jobs-dark.png">
-    <img src="assets/jobs-light.png" alt="The Jobs page with five jobs: two watching, one of them with a watch error, one paused, and two run on demand, each with its server, queue, version and last run" width="900">
+    <img src="assets/jobs-light.png" alt="The Jobs page lists five jobs with their server, queue, mode, version and last run: three watching and two run on demand, three of them deleting their spooled files after delivery, and one whose last run failed." width="900">
   </picture>
 </p>
 
@@ -39,7 +39,7 @@ has changes.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/job-builder-dark.png">
-    <img src="assets/job-builder-light.png" alt="The job builder with the extract step open: six pipeline steps across the top, the sample page with field hits highlighted on the left and the definition editor on the right" width="900">
+    <img src="assets/job-builder-light.png" alt="The job builder with the extract step open shows the six pipeline steps across the top, the sample invoice page with field hits highlighted on the left, and the definition editor on the right." width="900">
   </picture>
 </p>
 
@@ -188,14 +188,21 @@ runs, oldest first, and the note goes away. A render that finds Carbone
 down fails that one run, which you can retry from the
 [Job log](job-log.md#retry); the files after it wait.
 
-Two more switches:
+Two more choices, under Which files the watcher runs:
 
-- **Backlog.** When watching starts, Spooldoc takes stock of the queue.
-  Leave them for Run now ignores the files already there; Run them too
-  runs them.
-- **Held files.** By default the watcher takes ready files. With held files
-  included it takes held ones too, which is how a queue with no writer is
-  usually set up.
+- **Held files.** By default the watcher takes ready files. Ready and held
+  files takes held ones too, for programs that print with `HOLD(*YES)`,
+  which is how a queue with no writer is usually set up.
+- **Backlog.** When watching starts or resumes, Spooldoc takes stock of
+  the queue. Leave them for Run now ignores the files already there; Run
+  them too runs them.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/trigger-dark.png">
+    <img src="assets/trigger-light.png" alt="The trigger step of a job set to Watching: the watcher runs ready files and the files already on the queue too, and the queue is watched by polling every 30 seconds, with Set up real-time below." width="900">
+  </picture>
+</p>
 
 Pause a job, on the Jobs list or the trigger step, to stop watching
 without losing anything; the files that arrive meanwhile are left for
@@ -222,6 +229,13 @@ second click. The API answers `409` with `confirm: "delete"` until the
 request carries `confirmDelete: true`. Once a deleting version is active,
 later deleting versions need no confirmation. The Jobs list marks a job
 whose active version deletes its spooled files.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/finish-dark.png">
+    <img src="assets/finish-light.png" alt="The finish step of a job set to Delete, with a warning that spooled files are deleted from the IBM i after their documents are delivered." width="900">
+  </picture>
+</p>
 
 A finish that fails leaves the run with the status warning: the documents
 are delivered and the spooled file is where it was. Previews only read.
