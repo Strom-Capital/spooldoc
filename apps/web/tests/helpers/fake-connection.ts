@@ -4,6 +4,8 @@ import {
   ConnectionError,
   type CommandResult,
   type Connection,
+  type IfsEntry,
+  type IfsWriteOptions,
   type OutputQueue,
   type QueueFileCount,
   type QueueFileCountFilter,
@@ -51,6 +53,10 @@ export class FakeConnection implements Connection {
   readonly entries = new Map<string, Uint8Array[]>();
   /** Methods that throw this error when called. */
   readonly failures = new Map<string, Error>();
+  /** Files in the IFS, by path, with the CCSID they were written with. */
+  readonly ifs = new Map<string, { bytes: Uint8Array; ccsid: number }>();
+  /** Folders in the IFS. */
+  readonly folders = new Set<string>(['/']);
   /** What `runCommand` answers. */
   commandResult: (command: string) => CommandResult = () => ({ ok: true, messages: [] });
   closed = false;
@@ -144,6 +150,22 @@ export class FakeConnection implements Connection {
   async runCommand(command: string): Promise<CommandResult> {
     this.record('runCommand', command);
     return this.commandResult(command);
+  }
+
+  async ifsStat(path: string): Promise<IfsEntry | null> {
+    this.record('ifsStat', path);
+    return this.folders.has(path) ? 'directory' : this.ifs.has(path) ? 'file' : null;
+  }
+
+  /** Writes like the real one: the folder must exist, and a file with the same name is replaced. */
+  async writeIfsFile(path: string, bytes: Uint8Array, options: IfsWriteOptions): Promise<{ replaced: boolean }> {
+    this.record('writeIfsFile', path, options);
+    if (!this.folders.has(path.slice(0, path.lastIndexOf('/')) || '/')) {
+      throw new ConnectionError('notfound', `The folder of ${path} does not exist on ibmi.example.com.`);
+    }
+    const replaced = this.ifs.has(path);
+    this.ifs.set(path, { bytes: new Uint8Array(bytes), ccsid: options.ccsid });
+    return { replaced };
   }
 
   async close(): Promise<void> {

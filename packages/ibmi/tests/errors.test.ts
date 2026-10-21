@@ -225,3 +225,81 @@ describe("helpers", () => {
     expect(summarize("just text")).toBe("just text");
   });
 });
+
+describe("long error texts", () => {
+  /** Runs `fn` and expects it to take less than 100 ms. */
+  const fast = (fn: () => unknown): void => {
+    const started = performance.now();
+    fn();
+    expect(performance.now() - started).toBeLessThan(100);
+  };
+  const N = 50_000;
+
+  it("reads an exception line with many spaces after the colon in linear time", () => {
+    fast(() => summarize(`a.AError:${" ".repeat(N)}`));
+    expect(summarize("java.io.IOException:   inner text")).toBe("inner text");
+  });
+
+  it("looks for an object name in linear time", () => {
+    fast(() => guidance("notfound", "#".repeat(N)));
+    fast(() => guidance("authority", "#".repeat(N)));
+    expect(guidance("notfound", "CPF2105 Object MYOUTQ in MYLIB type *OUTQ not found.", undefined, {})).toMatch(/^Output queue MYLIB\/MYOUTQ does not exist/);
+  });
+
+  it("looks for a disabled profile in linear time", () => {
+    const text = "profile ".repeat(N);
+    fast(() => classifyError(text));
+    fast(() => classifyError(text, "IFS /home/docs/out"));
+    fast(() => guidance("auth", text));
+    expect(classifyError("User profile DEMOUSER is disabled.")).toBe("auth");
+    expect(guidance("auth", "The profile DEMOUSER is disabled.", undefined, { user: "demouser" })).toMatch(/^The user profile DEMOUSER is disabled/);
+  });
+
+  it("looks for an unknown user profile in linear time", () => {
+    fast(() => guidance("auth", "user profile ".repeat(N)));
+    expect(guidance("auth", "User profile DEMOUSER not found.", undefined, { user: "demouser", host: "ibmi.example.com" })).toBe(
+      "There is no user profile DEMOUSER on ibmi.example.com. Check the user on the Servers page.",
+    );
+  });
+});
+
+describe("IFS errors", () => {
+  const target = { host: "ibmi.example.com", user: "demouser" };
+
+  it("calls a missing authority on a folder an authority error, not a failed sign-on", () => {
+    const err = toConnectionError(
+      javaError("com.ibm.as400.access.AS400SecurityException: Access to request was denied."),
+      [PASSWORD],
+      "IFS file /home/docs/out/invoice-1001.pdf",
+      target,
+    );
+    expect(err.code).toBe("authority");
+    expect(err.message).toBe(
+      "DEMOUSER needs *WX authority on /home/docs/out and *X on every folder above it. A security officer can grant it with CHGAUT OBJ('/home/docs/out') USER(DEMOUSER) DTAAUT(*WX).",
+    );
+    expect(err.detail).toBe("IFS file /home/docs/out/invoice-1001.pdf: Access to request was denied.");
+  });
+
+  it("asks for *X on the folders when a path cannot be looked at", () => {
+    const err = toConnectionError(javaError("com.ibm.as400.access.ExtendedIOException: Access to request was denied."), [PASSWORD], "IFS /home/docs/out", target);
+    expect(err.code).toBe("authority");
+    expect(err.message).toMatch(/^DEMOUSER needs \*X authority on every folder in \/home\/docs\/out\./);
+  });
+
+  it("says which folder does not exist", () => {
+    const err = toConnectionError(
+      javaError("com.ibm.as400.access.ExtendedIOException: Path not found."),
+      [PASSWORD],
+      "IFS file /home/docs/out/invoice-1001.pdf",
+      target,
+    );
+    expect(err.code).toBe("notfound");
+    expect(err.message).toBe("The folder /home/docs/out does not exist on ibmi.example.com. Create it, or change the destination's folder.");
+  });
+
+  it("still calls a wrong password a failed sign-on", () => {
+    expect(classifyError("com.ibm.as400.access.AS400SecurityException: Password is not correct.", "IFS file /home/docs/out/a.pdf")).toBe("auth");
+    expect(classifyError("java.net.ConnectException: Connection refused", "IFS /home/docs/out")).toBe("host");
+    expect(classifyError("com.ibm.as400.access.AS400SecurityException: Access to request was denied.")).toBe("auth");
+  });
+});

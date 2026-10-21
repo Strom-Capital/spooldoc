@@ -1,7 +1,8 @@
 import { CarboneError, type HtmlRender } from '@spooldoc/core';
+import { ConnectionError } from '@spooldoc/ibmi';
 import { eq } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { assets, jobs, jobVersions, queueHealth, runFiles, runs, watchSeen } from '@/lib/server/db/schema';
+import { assets, destinations, jobs, jobVersions, queueHealth, runFiles, runs, watchSeen } from '@/lib/server/db/schema';
 import type { JobDetail, JobSummary, RunView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { fakeCarbone, fakeRenderer, PDF_BYTES, sentPageGroup } from './helpers/carbone';
@@ -568,5 +569,122 @@ describe('runs', () => {
     expect(none.runs).toEqual([]);
     expect(await db().select({ id: runFiles.id }).from(runFiles)).toHaveLength(6);
     expect(await db().select({ id: runs.id }).from(runs)).toHaveLength(2);
+  });
+});
+
+describe('runs that deliver to an IFS folder', () => {
+  const FOLDER = '/home/docs/out';
+
+  /** A ready job, saved as version 1, that delivers to an IFS destination with these settings. */
+  async function ifsJob(config: Record<string, unknown> = {}, formats: ('pdf' | 'html')[] = ['pdf']): Promise<string> {
+    const id = await readyJob();
+    const [destination] = await db()
+      .insert(destinations)
+      .values({ kind: 'ifs', name: 'Output folder', config: { folder: FOLDER, ...config } })
+      .returning({ id: destinations.id });
+    await jobRoute.PATCH(
+      patch(`/api/jobs/${id}`, { draft: { destination: { destinationId: destination!.id }, render: { templates: [tpl({ formats })] } } }),
+      params({ id }),
+    );
+    await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    fake().folders.add(FOLDER);
+    return id;
+  }
+
+  async function run(id: string): Promise<RunView> {
+    const [one] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
+    return one!;
+  }
+
+  const deliver = (r: RunView) => r.steps.find((s) => s.step === 'deliver');
+  const written = () => [...fake().ifs.keys()].sort();
+
+  it('writes every file to the folder, tagged by type, and keeps a copy in Spooldoc', async () => {
+    const id = await ifsJob({}, ['pdf', 'html']);
+    const r = await run(id);
+    expect(r.status).toBe('success');
+    expect(deliver(r)?.note).toBe(`Wrote 12 files to ${FOLDER} on ibmi.example.com, a copy kept in Spooldoc`);
+    expect(written()).toHaveLength(12);
+    expect(fake().ifs.get(`${FOLDER}/invoice-260101.pdf`)).toEqual({ bytes: PDF_BYTES, ccsid: 65535 });
+    expect(fake().ifs.get(`${FOLDER}/invoice-260101.html`)?.ccsid).toBe(1208);
+    expect(r.files).toHaveLength(12);
+    expect(fake().actions()).toEqual(['holdSpooledFile']);
+  });
+
+  it('keeps no copy when the setting is off', async () => {
+    const id = await ifsJob({ keepCopy: false });
+    const r = await run(id);
+    expect(r.status).toBe('success');
+    expect(deliver(r)?.note).toBe(`Wrote 6 files to ${FOLDER} on ibmi.example.com`);
+    expect(r.files).toEqual([]);
+    expect(await db().select({ id: runFiles.id }).from(runFiles)).toHaveLength(0);
+    expect(written()).toHaveLength(6);
+  });
+
+  it('replaces a file with the same name by default', async () => {
+    const id = await ifsJob();
+    fake().ifs.set(`${FOLDER}/invoice-260101.pdf`, { bytes: new Uint8Array([1]), ccsid: 819 });
+    const r = await run(id);
+    expect(r.status).toBe('success');
+    expect(deliver(r)?.note).toBe(`Wrote 6 files to ${FOLDER} on ibmi.example.com (1 replaced), a copy kept in Spooldoc`);
+    expect(fake().ifs.get(`${FOLDER}/invoice-260101.pdf`)).toEqual({ bytes: PDF_BYTES, ccsid: 65535 });
+  });
+
+  it('fails the run before writing anything when a name is taken and the setting says so', async () => {
+    const id = await ifsJob({ ifExists: 'fail' });
+    fake().ifs.set(`${FOLDER}/invoice-260101.pdf`, { bytes: new Uint8Array([1]), ccsid: 65535 });
+    const r = await run(id);
+    expect(r.status).toBe('failed');
+    expect(r.error).toBe(
+      `invoice-260101.pdf is already in ${FOLDER}. Nothing was written. Change "When a file with the same name exists" or move the old file.`,
+    );
+    expect(fake().calls.filter((c) => c.method === 'writeIfsFile')).toEqual([]);
+    expect(fake().actions()).toEqual([]);
+    // The copy in Spooldoc is kept, so the documents can still be downloaded.
+    expect(r.files).toHaveLength(6);
+  });
+
+  it('adds a number to a name that is taken when the setting says so', async () => {
+    const id = await ifsJob({ ifExists: 'suffix' });
+    fake().ifs.set(`${FOLDER}/invoice-260101.pdf`, { bytes: new Uint8Array([1]), ccsid: 65535 });
+    fake().ifs.set(`${FOLDER}/invoice-260101-2.pdf`, { bytes: new Uint8Array([2]), ccsid: 65535 });
+    const r = await run(id);
+    expect(r.status).toBe('success');
+    expect(deliver(r)?.note).toBe(`Wrote 6 files to ${FOLDER} on ibmi.example.com (1 with a number added), a copy kept in Spooldoc`);
+    expect(fake().ifs.get(`${FOLDER}/invoice-260101.pdf`)?.bytes).toEqual(new Uint8Array([1]));
+    expect(fake().ifs.get(`${FOLDER}/invoice-260101-3.pdf`)?.bytes).toEqual(PDF_BYTES);
+  });
+
+  it('fails the run and leaves the spooled file alone when the folder does not exist', async () => {
+    const id = await ifsJob({ keepCopy: false });
+    fake().folders.delete(FOLDER);
+    const r = await run(id);
+    expect(r.status).toBe('failed');
+    expect(r.error).toBe(`The folder ${FOLDER} does not exist on ibmi.example.com. Create it, or change the destination's folder.`);
+    expect(deliver(r)?.ok).toBe(false);
+    expect(r.steps.map((s) => s.step)).not.toContain('finish');
+    expect(fake().actions()).toEqual([]);
+    expect(written()).toEqual([]);
+  });
+
+  it('says how many files were written when a write fails part way, with the IBM i text one step away', async () => {
+    const id = await ifsJob();
+    const conn = fake();
+    const write = conn.writeIfsFile.bind(conn);
+    let calls = 0;
+    vi.spyOn(conn, 'writeIfsFile').mockImplementation(async (path, bytes, options) => {
+      if (++calls === 3) {
+        throw new ConnectionError('authority', 'DEMOUSER needs *WX authority on /home/docs/out and *X on every folder above it.', {
+          detail: 'IFS file /home/docs/out/x.pdf: Access to request was denied.',
+        });
+      }
+      return write(path, bytes, options);
+    });
+    const r = await run(id);
+    expect(r.status).toBe('failed');
+    expect(r.error).toBe(`Wrote 2 of 6 files to ${FOLDER}, then: DEMOUSER needs *WX authority on /home/docs/out and *X on every folder above it.`);
+    expect(deliver(r)?.detail).toBe('IFS file /home/docs/out/x.pdf: Access to request was denied.');
+    expect(written()).toHaveLength(2);
+    expect(fake().actions()).toEqual([]);
   });
 });

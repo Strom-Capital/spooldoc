@@ -2,9 +2,9 @@
 
 import { MousePointerClickIcon, PanelRightCloseIcon } from 'lucide-react';
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Hint } from '@/components/hint';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
 import { useJob } from './job-provider';
 
@@ -79,9 +79,11 @@ export function AiSidebar({ open, setOpen, children }: { open: boolean; setOpen(
   // Stays mounted while closed, so a running answer keeps streaming.
   return (
     <aside aria-label="Agent" className={open ? 'relative flex w-[380px] shrink-0 flex-col border-l' : 'hidden'}>
-      <Button variant="ghost" size="icon-sm" className="absolute top-1.5 right-1.5 z-10" onClick={() => setOpen(false)} aria-label="Close the agent">
-        <PanelRightCloseIcon />
-      </Button>
+      <Hint text="Close the agent. A running answer keeps going.">
+        <Button variant="ghost" size="icon-sm" className="absolute top-1.5 right-1.5 z-10" onClick={() => setOpen(false)} aria-label="Close the agent">
+          <PanelRightCloseIcon />
+        </Button>
+      </Hint>
       <div className="min-h-0 flex-1 [&_section[aria-label=Agent]>div:first-child]:pr-10">{children}</div>
     </aside>
   );
@@ -90,14 +92,11 @@ export function AiSidebar({ open, setOpen, children }: { open: boolean; setOpen(
 /** Opens the agent. */
 export function AiButton({ open, setOpen }: { open: boolean; setOpen(open: boolean): void }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button variant={open ? 'secondary' : 'outline'} size="sm" onClick={() => setOpen(!open)} aria-pressed={open}>
-          <MousePointerClickIcon />
-          <span className="hidden sm:inline">Agent</span>
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{open ? 'Close' : 'Open'} the agent</TooltipContent>
-    </Tooltip>
+    <Hint text={open ? 'Close the agent' : 'Open the agent. It can write the definition and template from the sample for you to check. Nothing goes live until you save and activate it.'}>
+      <Button variant={open ? 'secondary' : 'outline'} size="sm" onClick={() => setOpen(!open)} aria-pressed={open} aria-label="Agent">
+        <MousePointerClickIcon />
+        <span className="hidden sm:inline">Agent</span>
+      </Button>
+    </Hint>
   );
 }

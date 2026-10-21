@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { Hint } from '@/components/hint';
 import { Page } from '@/components/page';
 import { RowOpenButton, useRowOpen } from '@/components/row-actions';
 import { ServerErrorNote } from '@/components/server-status';
@@ -182,35 +183,36 @@ export function QueueFilesPage({
             onChange={(event) => filterBy(setName)(event.target.value)}
             placeholder="Name contains"
             aria-label="Spooled file name contains"
-            title="Shows spooled files whose name contains this text"
             className="w-48"
             spellCheck={false}
           />
-          <Input
-            value={job}
-            onChange={(event) => filterBy(setJob)(event.target.value)}
-            placeholder="Job contains"
-            aria-label="Job contains"
-            title="Shows spooled files whose job (number/user/name) contains this text"
-            className="w-48"
-            spellCheck={false}
-          />
+          <Hint text="Matches any part of the job that printed the file: number/user/name.">
+            <Input
+              value={job}
+              onChange={(event) => filterBy(setJob)(event.target.value)}
+              placeholder="Job contains"
+              aria-label="Job contains"
+              className="w-48"
+              spellCheck={false}
+            />
+          </Hint>
           <Input
             value={userData}
             onChange={(event) => filterBy(setUserData)(event.target.value)}
             placeholder="User data contains"
             aria-label="User data contains"
-            title="Shows spooled files whose user data contains this text"
             className="w-48"
             spellCheck={false}
           />
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" aria-label="Status" title="Shows spooled files with one of the statuses picked">
-                {statusFilterLabel(statuses)}
-                <ChevronDownIcon data-icon="inline-end" />
-              </Button>
-            </DropdownMenuTrigger>
+            <Hint text="Shows spooled files with any of the statuses you pick.">
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" aria-label="Status">
+                  {statusFilterLabel(statuses)}
+                  <ChevronDownIcon data-icon="inline-end" />
+                </Button>
+              </DropdownMenuTrigger>
+            </Hint>
             <DropdownMenuContent align="start" className="w-44">
               {SPOOLED_FILE_STATUSES.map((value) => (
                 <DropdownMenuCheckboxItem

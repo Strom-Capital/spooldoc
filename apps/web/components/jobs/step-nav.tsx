@@ -2,6 +2,7 @@
 
 import { ChevronLeftIcon, ChevronRightIcon, SaveIcon } from 'lucide-react';
 import { createContext, useContext, useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
+import { Hint } from '@/components/hint';
 import { Button } from '@/components/ui/button';
 import { STEP_TITLE, stepAfter, stepBefore, type Step } from '@/lib/client/job-steps';
 import { nextVariant, type ForwardVariant } from '@/lib/client/step-status';
@@ -81,10 +82,12 @@ export function StepFooter() {
   return (
     <div className="flex items-center gap-2 border-t pt-4">
       {before && (
-        <Button variant="ghost" size="sm" onClick={() => go(before)} title={`Back to ${STEP_TITLE[before]}`}>
-          <ChevronLeftIcon />
-          Back
-        </Button>
+        <Hint text={`Back to ${STEP_TITLE[before]}`}>
+          <Button variant="ghost" size="sm" onClick={() => go(before)}>
+            <ChevronLeftIcon />
+            Back
+          </Button>
+        </Hint>
       )}
       <div className="ml-auto">
         {after ? (
@@ -94,10 +97,12 @@ export function StepFooter() {
           </Button>
         ) : (
           unsaved && (
-            <Button size="sm" variant={variant} onClick={onSaveVersion}>
-              <SaveIcon />
-              Save version
-            </Button>
+            <Hint text="Save the draft as a fixed version. You choose whether it becomes the active version, which watching and Run now use.">
+              <Button size="sm" variant={variant} onClick={onSaveVersion}>
+                <SaveIcon />
+                Save version
+              </Button>
+            </Hint>
           )
         )}
       </div>

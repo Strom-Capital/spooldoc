@@ -3,6 +3,7 @@
 import type { SamplePage } from '@spooldoc/core';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { Hint } from '@/components/hint';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { pageLines } from '@/lib/client/render';
@@ -75,9 +76,11 @@ export function SpoolViewer({
       {paging && (
         <div className="flex h-10 shrink-0 items-center gap-1 border-b px-2 text-sm">
           <span className="mr-1 font-medium">Page</span>
-          <Button variant="ghost" size="icon-sm" onClick={() => go(-1)} disabled={index <= 0} aria-label="Previous page">
-            <ChevronLeftIcon />
-          </Button>
+          <Hint text={index <= 0 ? undefined : 'Previous page'}>
+            <Button variant="ghost" size="icon-sm" onClick={() => go(-1)} disabled={index <= 0} aria-label="Previous page">
+              <ChevronLeftIcon />
+            </Button>
+          </Hint>
           <select
             value={current?.no ?? ''}
             onChange={(event) => onPage(Number(event.target.value))}
@@ -90,15 +93,17 @@ export function SpoolViewer({
               </option>
             ))}
           </select>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={() => go(1)}
-            disabled={index < 0 || index >= pages.length - 1}
-            aria-label="Next page"
-          >
-            <ChevronRightIcon />
-          </Button>
+          <Hint text={index < 0 || index >= pages.length - 1 ? undefined : 'Next page'}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => go(1)}
+              disabled={index < 0 || index >= pages.length - 1}
+              aria-label="Next page"
+            >
+              <ChevronRightIcon />
+            </Button>
+          </Hint>
         </div>
       )}
       <div className="relative min-h-0 flex-1">

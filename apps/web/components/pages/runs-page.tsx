@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { Hint } from '@/components/hint';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
 import { RowOpenButton, useRowOpen } from '@/components/row-actions';
@@ -307,10 +308,12 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                 <div className="flex items-center justify-between gap-2">
                   <RunStatusBadge status={open.status} />
                   {(open.status === 'failed' || open.status === 'warning' || open.status === 'skipped') && (
-                    <Button variant="outline" size="sm" onClick={() => retry(open)} disabled={retrying !== null}>
-                      {retrying === open.id ? <Spinner /> : <RotateCcwIcon />}
-                      {retrying === open.id ? 'Retrying...' : 'Retry'}
-                    </Button>
+                    <Hint text="Run this spooled file again with the job's active version, as a new run. Its finish step runs too, if it has one.">
+                      <Button variant="outline" size="sm" onClick={() => retry(open)} disabled={retrying !== null}>
+                        {retrying === open.id ? <Spinner /> : <RotateCcwIcon />}
+                        {retrying === open.id ? 'Retrying...' : 'Retry'}
+                      </Button>
+                    </Hint>
                   )}
                 </div>
                 <div>
@@ -348,7 +351,11 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                 <div>
                   <h3 className="mb-2 font-medium text-sm">Files</h3>
                   {open.files.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">None delivered.</p>
+                    <p className="text-muted-foreground text-sm">
+                      {open.steps.some((step) => step.step === 'deliver' && step.ok)
+                        ? 'No copy kept in Spooldoc. The Deliver step says where the files went.'
+                        : 'None delivered.'}
+                    </p>
                   ) : (
                     <div className="flex flex-col gap-3">
                       {fileGroups(open.files).map((group) => (

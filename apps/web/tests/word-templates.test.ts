@@ -86,7 +86,7 @@ describe('uploading a Word template', () => {
     expect(response.status).toBe(201);
     const saved = (await response.json()) as TemplateFileView;
     expect(saved).toMatchObject({ name: 'invoice.docx', size: goodDocx.length, madeBy: 'upload', previousId: null });
-    expect((await job(id)).draft.render.templates[0]).toMatchObject({ kind: 'docx', fileId: saved.id, formats: ['pdf'] });
+    expect((await job(id)).draft.render.templates[0]).toMatchObject({ kind: 'docx', fileId: saved.id, formats: ['docx'] });
 
     const info = await fileInfo.GET(get(`/api/template-files/${saved.id}`), params({ id: saved.id }));
     expect(await info.json()).toEqual({ ...saved, previous: null });

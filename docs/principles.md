@@ -111,8 +111,9 @@ The same thing looks, reads and behaves the same everywhere.
 In practice:
 
 - One component for each pattern: selects, empty states, loading states,
-  confirmations. Look in `components/ui`, `components/page.tsx` and
-  `components/empty-state.tsx` before adding one. A list loads with
+  confirmations, hints. Look in `components/ui`, `components/page.tsx`,
+  `components/empty-state.tsx` and `components/hint.tsx` before adding
+  one. A list loads with
   `Loading`; a table already on screen keeps its shape with `SkeletonRows`.
 - A table row works the same in every table. A click on the row, or on
   its name, opens it. At most two actions show on the row, the ones people
@@ -125,6 +126,11 @@ In practice:
   list, the builder and the toast.
 - Errors read "Could not ..." and say what to do. Success toasts say
   what was done and name the thing: "Deleted MYJOB", "Saved version 3".
+- A button whose label alone does not say what it does, or that is
+  disabled, has a hint made with `Hint` (`components/hint.tsx`): what it
+  does, what it changes and whether that can be undone, or why it is
+  disabled. Every icon-only button has a hint and an `aria-label`. A hint
+  that only repeats the label is left out.
 - Every control works from the keyboard and reads in dark mode.
 
 ## Fewer features, finished

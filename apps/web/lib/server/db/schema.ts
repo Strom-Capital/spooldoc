@@ -176,7 +176,7 @@ export const destinations = pgTable(
     builtin: boolean('builtin').notNull().default(false),
     ...timestamps,
   },
-  (t) => [check('destinations_kind_check', sql`${t.kind} in ('spooldoc')`)],
+  (t) => [check('destinations_kind_check', sql`${t.kind} in ('spooldoc', 'ifs')`)],
 );
 
 /** A pipeline from an output queue to a destination. `draft` is the spec being edited. */

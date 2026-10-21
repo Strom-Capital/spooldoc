@@ -4,11 +4,12 @@ import { PencilIcon, PlusIcon, RefreshCwIcon, ServerIcon, Trash2Icon } from 'luc
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { Hint } from '@/components/hint';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { JobsPopover } from '@/components/jobs-popover';
 import { ErrorNote, Page } from '@/components/page';
 import { ActionsCell, ActionsHead, RowAction, RowMenu, useRowOpen } from '@/components/row-actions';
-import { ServerStatus, useReconnect } from '@/components/server-status';
+import { RECONNECT_HINT, ServerStatus, useReconnect } from '@/components/server-status';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -135,10 +136,12 @@ export function ServersPage({ allowedHosts }: { allowedHosts: string[] }) {
                     />
                   </td>
                   <ActionsCell>
-                    <RowAction onClick={() => void reconnect(server)} disabled={pending !== null}>
-                      {pending === server.id ? <Spinner /> : <RefreshCwIcon />}
-                      Reconnect
-                    </RowAction>
+                    <Hint text={RECONNECT_HINT}>
+                      <RowAction onClick={() => void reconnect(server)} disabled={pending !== null}>
+                        {pending === server.id ? <Spinner /> : <RefreshCwIcon />}
+                        Reconnect
+                      </RowAction>
+                    </Hint>
                     <RowAction onClick={() => setEditing(server)}>
                       <PencilIcon />
                       Edit

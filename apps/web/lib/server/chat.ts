@@ -72,7 +72,6 @@ import {
   hasOwnContent,
   KIND_FORMATS,
   KIND_NAMES,
-  kindDefaultFormats,
   kindName,
   starterContent,
   nameTaken,
@@ -1955,7 +1954,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
           .array(z.enum(FORMATS))
           .min(1)
           .optional()
-          .describe('The formats to make (default PDF; XLSX for an Excel template)'),
+          .describe('The formats to make (default PDF; DOCX for a Word template; XLSX for an Excel template)'),
       }),
       execute: inTurn(async ({ name, kind = 'html', scope, formats }): Promise<TemplateChangeResult> => {
         const other = formats?.find((format) => !KIND_FORMATS[kind].includes(format));
@@ -1971,11 +1970,14 @@ export function buildTools({ sample: current, store, masked, assets = [], render
             if (nameTaken(templates, name)) {
               throw new Error(`There is already a template named "${name}". Pick another name.`);
             }
-            added = newTemplate(templates, name, formats ?? kindDefaultFormats(kind));
+            added = newTemplate(templates, name);
             if (kind === 'xlsx') {
               added = withContent(added, { kind, fileId: null, scope: scope ?? 'splf' });
             } else if (kind === 'docx') {
               added = withContent(added, starterContent(kind));
+            }
+            if (formats) {
+              added = { ...added, formats: FORMATS.filter((format) => formats.includes(format)) };
             }
             return [...templates, added];
           });

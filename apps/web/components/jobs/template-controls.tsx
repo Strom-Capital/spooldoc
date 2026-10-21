@@ -13,6 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Hint } from '@/components/hint';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -132,11 +133,13 @@ export function TemplateControls({ template, onPick }: { template: JobTemplate; 
         </select>
         {!readOnly && (
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon-sm" aria-label={`Settings of ${template.name}`}>
-                <MoreHorizontalIcon />
-              </Button>
-            </DropdownMenuTrigger>
+            <Hint text="The files this template makes, its kind and name. Add or remove a template here too.">
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon-sm" aria-label={`Settings of ${template.name}`}>
+                  <MoreHorizontalIcon />
+                </Button>
+              </DropdownMenuTrigger>
+            </Hint>
             <DropdownMenuContent align="start" className="w-64">
               <DropdownMenuLabel className="text-muted-foreground text-xs">Files it makes</DropdownMenuLabel>
               {KIND_FORMATS[kind].map((format) => {

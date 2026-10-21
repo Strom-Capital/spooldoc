@@ -78,6 +78,15 @@ export interface QueueRef {
   name: string;
 }
 
+/** What an IFS path is. */
+export type IfsEntry = "file" | "directory";
+
+/** How `writeIfsFile` writes. */
+export interface IfsWriteOptions {
+  /** The CCSID the file is tagged with: 1208 for text such as HTML, 65535 for binary. */
+  ccsid: number;
+}
+
 /** The messages of a CL command. */
 export interface CommandResult {
   ok: boolean;
@@ -112,6 +121,16 @@ export interface Connection {
    * a connection problem throws.
    */
   runCommand(command: string): Promise<CommandResult>;
+  /** What is at a path in the IFS: a file, a directory, or nothing (null). */
+  ifsStat(path: string): Promise<IfsEntry | null>;
+  /**
+   * Write a file to the IFS, replacing one with the same name. The bytes go to `path.part`
+   * first and are renamed into place, so a program watching the folder never sees half a
+   * file. A new file is tagged with `ccsid`.
+   *
+   * @returns Whether a file with the same name was replaced
+   */
+  writeIfsFile(path: string, bytes: Uint8Array, options: IfsWriteOptions): Promise<{ replaced: boolean }>;
   close(): Promise<void>;
 }
 

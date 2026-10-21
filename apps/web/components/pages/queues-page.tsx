@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { Hint } from '@/components/hint';
 import { JobsPopover } from '@/components/jobs-popover';
 import { ErrorNote, Page } from '@/components/page';
 import { ActionsCell, ActionsHead, RowAction, RowMenu, useRowOpen } from '@/components/row-actions';
@@ -32,7 +33,6 @@ import { EmptyState, TableEmpty } from '@/components/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
 import { withLatestCall, type LatestCall } from '@/lib/client/server-state';
 import type { QueueCountView, QueueView, ServerView } from '@/lib/types';
@@ -53,6 +53,9 @@ const COUNT_COLUMNS: { key: CountKey; label: string; tip: string }[] = [
 ];
 
 const queueKey = (q: { library: string; name: string }) => `${q.library}/${q.name}`;
+
+const HIDE_HINT = 'Hide in Spooldoc, so jobs no longer offer it. Nothing changes on the IBM i, and Unhide brings it back.';
+const NEW_JOB_HINT = 'Start a job that reads spooled files from this queue. It runs only after you save a version.';
 
 /** Output queues of one server: search, sort, hide and unhide, and start a job from one. */
 export function QueuesPage({ serverId }: { serverId: string | null }) {
@@ -280,10 +283,12 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
         {selectedRows.length > 0 && (
           <div className="flex items-center gap-2 sm:ml-auto">
             <span className="text-muted-foreground text-sm">{selectedRows.length} selected</span>
-            <Button variant="outline" size="sm" onClick={() => setHidden(selectedRows, true)}>
-              <EyeOffIcon />
-              Hide
-            </Button>
+            <Hint text={HIDE_HINT}>
+              <Button variant="outline" size="sm" onClick={() => setHidden(selectedRows, true)}>
+                <EyeOffIcon />
+                Hide
+              </Button>
+            </Hint>
             {showHidden && (
               <Button variant="outline" size="sm" onClick={() => setHidden(selectedRows, false)}>
                 <EyeIcon />
@@ -358,14 +363,11 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
                           {queue.name}
                         </Link>
                         {queue.dataQueue && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
+                          <Hint text={`Sends an entry to ${queue.dataQueue.library}/${queue.dataQueue.name} when a file is ready`}>
+                            <span tabIndex={0} className="inline-flex rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring">
                               <RadioIcon className="size-3.5 text-muted-foreground" aria-label="Sends to a data queue" />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              Sends an entry to {queue.dataQueue.library}/{queue.dataQueue.name} when a file is ready
-                            </TooltipContent>
-                          </Tooltip>
+                            </span>
+                          </Hint>
                         )}
                         {queue.hidden && <span className="rounded bg-muted px-1.5 text-[11px]">Hidden</span>}
                       </div>
@@ -376,14 +378,18 @@ export function QueuesPage({ serverId }: { serverId: string | null }) {
                     <JobsCell queue={queue} />
                     <td className="px-3 py-2 text-muted-foreground">{queue.text}</td>
                     <ActionsCell>
-                      <RowAction onClick={() => void newJob(source)} disabled={creating !== null}>
-                        {starting ? <Spinner /> : <PlusIcon />}
-                        New job
-                      </RowAction>
-                      <RowAction onClick={() => void setHidden([queue], !queue.hidden)}>
-                        {queue.hidden ? <EyeIcon /> : <EyeOffIcon />}
-                        {queue.hidden ? 'Unhide' : 'Hide'}
-                      </RowAction>
+                      <Hint text={creating !== null ? 'Wait for the new job to open.' : NEW_JOB_HINT}>
+                        <RowAction onClick={() => void newJob(source)} disabled={creating !== null}>
+                          {starting ? <Spinner /> : <PlusIcon />}
+                          New job
+                        </RowAction>
+                      </Hint>
+                      <Hint text={queue.hidden ? undefined : HIDE_HINT}>
+                        <RowAction onClick={() => void setHidden([queue], !queue.hidden)}>
+                          {queue.hidden ? <EyeIcon /> : <EyeOffIcon />}
+                          {queue.hidden ? 'Unhide' : 'Hide'}
+                        </RowAction>
+                      </Hint>
                       <RowMenu label={queueKey(queue)}>
                         <DropdownMenuItem onSelect={() => void newJob(source)} disabled={creating !== null}>
                           <PlusIcon />
@@ -477,14 +483,7 @@ function SortHeader({
       className={cn('px-3 py-2 align-bottom font-medium', numeric && 'text-right')}
       aria-sort={active ? (sort.desc ? 'descending' : 'ascending') : 'none'}
     >
-      {tip ? (
-        <Tooltip>
-          <TooltipTrigger asChild>{button}</TooltipTrigger>
-          <TooltipContent className="max-w-64">{tip}</TooltipContent>
-        </Tooltip>
-      ) : (
-        button
-      )}
+      <Hint text={tip}>{button}</Hint>
     </th>
   );
 }

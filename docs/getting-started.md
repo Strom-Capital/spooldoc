@@ -78,12 +78,17 @@ Rendering. See [Contributing](contributing.md) for the tools and the tests.
    hand; the starter template renders every field and table. See
    [Definitions](definitions.md) and [Templates](templates.md).
 7. **Pick a destination.** Spooldoc download keeps the files in Spooldoc.
+   An IFS folder, added on the Destinations page, writes them to the IBM i.
    See [Destinations](destinations.md).
 8. **Save a version and run it.** Runs use the active version. Run now
    takes one spooled file from the queue; Watch the queue runs every new
    one, in real time through a data queue or by polling. See [Jobs](jobs.md).
 9. **Check the job log.** Every run shows its steps, errors and the
    delivered files. See [Job log](job-log.md).
+
+Not sure what a button does? Rest the pointer on it, or move to it with
+Tab. A short hint says what it does, what it changes, and why it is
+disabled when it is.
 
 <p align="center">
   <picture>

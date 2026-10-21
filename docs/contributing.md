@@ -91,9 +91,27 @@ Schema changes go in `apps/web/lib/server/db/schema.ts`; then run
 ### Adding a destination
 
 A destination is a `kind` and a `deliver` call in
-`apps/web/lib/server/destinations`: it receives the run id, the files and
-the run's transaction, and stores or sends them. Register it in the kinds
-map and add its settings to the Destinations page.
+`apps/web/lib/server/destinations`. `deliver` receives the run id, the
+files, and the open connection and host of the job's server, and returns
+the note the Deliver step shows, such as "Wrote 6 files to
+/home/docs/out on ibmi.example.com". It runs outside any database
+transaction, since it may wait on another system. To keep the files in
+Spooldoc as well, call `storeRunFiles`, which saves them in one
+transaction of its own. Throw a `StepError` with a message that says what
+to do, and the system's own text as its detail.
+
+Then:
+
+- Add the kind to the check on `destinations.kind` in
+  `lib/server/db/schema.ts` and generate the migration.
+- Put the settings' schema in `lib/destination-config.ts`, which the API
+  and the Destinations page share, and register the kind in the `KINDS`
+  map.
+- Add its fields to the destination dialog and its text to
+  `destinationText`.
+- A call that changes the IBM i goes on the `Connection` interface, in
+  both fake connections, and in the wrappers in `jt400/jvm.ts` (as a
+  change, not retried) and `lib/server/ibmi.ts`.
 
 ### Writing the docs
 

@@ -48,6 +48,8 @@ export interface JobState {
    */
   noteServerCall(serverId: string, error: ShownError | null): void;
   destinations: DestinationView[];
+  /** Why the destinations could not be loaded, or null. */
+  destinationsError: string | null;
 }
 
 const JobContext = createContext<JobState | null>(null);
@@ -72,6 +74,7 @@ export function JobProvider({ initial, children }: { initial: JobDetail; childre
   const [calls, setCalls] = useState<Record<string, LatestCall>>({});
   const [serversError, setServersError] = useState<ShownError | null>(null);
   const [destinations, setDestinations] = useState<DestinationView[]>([]);
+  const [destinationsError, setDestinationsError] = useState<string | null>(null);
   const pending = useRef<DraftPatch>({});
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlight = useRef(0);
@@ -99,7 +102,10 @@ export function JobProvider({ initial, children }: { initial: JobDetail; childre
 
   useEffect(() => {
     reloadServers();
-    api<{ destinations: DestinationView[] }>('/api/destinations').then((data) => setDestinations(data.destinations), () => undefined);
+    api<{ destinations: DestinationView[] }>('/api/destinations').then(
+      (data) => setDestinations(data.destinations),
+      (err) => setDestinationsError(errorText(err)),
+    );
   }, [reloadServers]);
 
   // The active version's spec, to show whether the draft has changes that are not saved as a version.
@@ -255,8 +261,29 @@ export function JobProvider({ initial, children }: { initial: JobDetail; childre
       reloadServers,
       noteServerCall,
       destinations,
+      destinationsError,
     }),
-    [job, spec, viewing, setViewing, activeSpec, draftDiffers, updateDraft, updateJob, refresh, flush, saveState, saveError, step, servers, serversError, reloadServers, noteServerCall, destinations],
+    [
+      job,
+      spec,
+      viewing,
+      setViewing,
+      activeSpec,
+      draftDiffers,
+      updateDraft,
+      updateJob,
+      refresh,
+      flush,
+      saveState,
+      saveError,
+      step,
+      servers,
+      serversError,
+      reloadServers,
+      noteServerCall,
+      destinations,
+      destinationsError,
+    ],
   );
 
   return <JobContext.Provider value={value}>{children}</JobContext.Provider>;
