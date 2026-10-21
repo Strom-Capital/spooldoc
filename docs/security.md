@@ -9,8 +9,9 @@ GitHub, not a public issue.
 
 ## What the model receives
 
-The agent is the only part of Spooldoc that talks to anything but
-your IBM i and your database. What it sends to the model provider:
+Spooldoc talks to your IBM i, its database, the Carbone server you
+configure (see [Carbone](#carbone) below) and, only through the agent,
+the model provider you choose. What the agent sends to the model provider:
 
 - The page text of the job's preview sample: the first pages in the
   instructions, any other page on request. Values go as printed unless
@@ -26,8 +27,11 @@ your IBM i and your database. What it sends to the model provider:
 
 What it never receives: IBM i credentials, the login session, the IBM i
 connection, any other spooled file, or the job log. No tool reaches the
-IBM i: the four tools read the preview sample and write the definition and
-template of the job's draft. What the model writes, and the job builder
+IBM i. The tools read the preview sample, read and write the definition
+and templates of the job's draft, render previews of the draft with
+Carbone, read the Carbone syntax reference, ask the user a question, and,
+when the user asks to reuse another job, list the other jobs and read
+their definition and templates. What the model writes, and the job builder
 itself, use the real values. A hosted provider processes what it receives
 under its own terms; a local model keeps it on your network, and its base
 URL is called by the server, so only enter one you trust.

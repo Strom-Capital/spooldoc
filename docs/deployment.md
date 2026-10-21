@@ -74,8 +74,17 @@ such as a site-to-site VPN; do not open the host server ports to the
 internet. Set `SPOOLDOC_ALLOWED_HOSTS` so users can only add the systems
 you intend.
 
-The agent calls the model provider over HTTPS, or a local model at the
-base URL you enter. Nothing else leaves the host.
+Spooldoc connects to:
+
+- the IBM i, on the host server ports above
+- its Postgres database
+- the Carbone server you configure under Settings, Rendering: the
+  `carbone` service of the Compose file, another server of yours, or
+  Carbone Cloud over HTTPS
+- the model provider you choose, over HTTPS, or a local model at the base
+  URL you enter, only when the agent is used
+
+Nothing else leaves the host.
 
 ## More than one instance
 

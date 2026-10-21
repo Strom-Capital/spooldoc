@@ -5,30 +5,19 @@ description: "What happens in a run, how the queue watcher works, the packages a
 
 Spooldoc is one web app (Next.js) with a Postgres database. It connects to
 IBM i systems through jt400, so the host needs a Java runtime; the
-container image holds both. Documents are rendered by a
-[Carbone](carbone.md) server that Spooldoc calls over HTTP: the `carbone`
-service of the Compose file, another server of yours, or Carbone Cloud.
+container image holds both. jt400 is the only way Spooldoc reaches the
+IBM i, on the host server ports 449 and 8470 to 8476 (see
+[Deployment](deployment.md#network)); the agent has no connection to it.
+Documents are rendered by a [Carbone](carbone.md) server that Spooldoc
+calls over HTTP: the `carbone` service of the Compose file, another server
+of yours, or Carbone Cloud.
 
-```mermaid
-flowchart LR
-    subgraph ibmi [IBM i]
-        direction TB
-        programs[Programs] --> outq[(Output queue)]
-        outq -.-> dtaq[Data queue]
-    end
-    subgraph app [Spooldoc]
-        direction TB
-        builder[Job builder] <--> agent[Agent]
-        watcher[Queue watcher] --> run[Run: capture, extract,<br>render, deliver, finish]
-        builder --> db[(Postgres)]
-        run --> db
-    end
-    outq --> watcher
-    dtaq -.-> watcher
-    run --> carbone[Carbone]
-    run --> dest[Destination]
-    agent -.-> model[Model provider]
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/architecture-dark.svg">
+    <img src="assets/architecture-light.svg" alt="Architecture: on the IBM i, programs print spooled files to an output queue, which can also send an entry per ready file to a data queue for real-time watching; Spooldoc reaches the IBM i only through jt400, on host server ports 449 and 8470 to 8476. Through jt400 the job builder lists queues, captures samples and sets up real-time watching; the watcher gets new files from the output queue or the data queue entries; a run reads the spooled file, writes files for an IFS destination to an IFS folder, and then holds, moves or deletes the spooled file. A run captures, extracts, renders, delivers and finishes, and sends each template and its JSON to Carbone, its own container, which makes PDF, HTML, DOCX or XLSX. The browser reaches the job builder on port 3000; the job builder previews with Carbone and saves jobs, samples and assets in Postgres, its own container, where the watcher records the files it has seen and runs store runs, samples and files. The agent chats with the job builder and sends page text, masked if masking is on, to a model provider: Anthropic, Google, OpenAI, OpenRouter, Vercel AI Gateway or a local model" width="900">
+  </picture>
+</p>
 
 ## A run
 
@@ -70,8 +59,7 @@ template with the same definition; a moved column is one fix in the
 definition with every template untouched. Values are typed once, the
 reading can be checked on its own in the workbench and in the extraction
 report, one spooled file splits into many page groups, and the same JSON
-feeds every template and format and, later, destinations that want the data
-itself. See [the FAQ](faq.md#why-turn-the-pages-into-json-first-instead-of-rendering-straight-from-the-spooled-file).
+feeds every template and format. See [the FAQ](faq.md#why-turn-the-pages-into-json-first-instead-of-rendering-straight-from-the-spooled-file).
 
 ## The queue watcher
 
@@ -118,9 +106,11 @@ backup:
 | `user`, `session`, `account`, `verification` | Sign-in (Better Auth) |
 | `servers` | IBM i systems, passwords encrypted, and the data queue Spooldoc reads on each |
 | `queue_prefs` | Hidden queues |
+| `queue_health` | Why a watched queue is polled instead of watched in real time, and since when |
 | `jobs`, `job_versions` | Each job's editable draft and its saved versions |
+| `job_chats` | The agent's conversation for each job |
 | `samples` | Captured spooled files: raw bytes, attributes and parsed pages, for previews and runs |
-| `runs`, `run_outputs` | Every run with its steps, and the delivered files of the Spooldoc download destination |
+| `runs`, `run_files` | Every run with its steps, and the files kept in Spooldoc: by the Spooldoc download destination, or by an IFS destination with Keep a copy in Spooldoc |
 | `watch_seen` | Which spooled files each job has processed |
 | `destinations` | Where jobs deliver |
 | `assets` | Logos, images and fonts for templates |

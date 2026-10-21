@@ -1,82 +1,121 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="Spooldoc architecture">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="740" viewBox="0 0 1200 740" font-family="ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-label="Spooldoc architecture">
+<title>Spooldoc architecture</title>
+<desc>On the IBM i, programs print spooled files to an output queue. When real-time watching is on, the output queue also sends an entry per ready file to a data queue that Spooldoc creates. Spooldoc reaches the IBM i only through jt400, on host server ports 449 and 8470 to 8476. The job builder, used from a browser on port 3000, lists queues, captures a sample spooled file and sets up real-time watching through jt400; it saves jobs, samples and assets in Postgres and renders previews with Carbone. The agent works in the job builder and sends page text, masked if masking is on, to a model provider: Anthropic, Google, OpenAI, OpenRouter, Vercel AI Gateway or a local model. The agent has no connection to the IBM i. The queue watcher learns of new spooled files from the data queue or by polling, records the files it has seen in Postgres and starts a run. A run captures, extracts, renders, delivers and finishes: it reads the spooled file through jt400, sends each template with its JSON to Carbone, its own container, which makes PDF, HTML, DOCX or XLSX files, stores runs, samples and files in Postgres, writes files to an IFS folder on the IBM i for an IFS destination, and then holds, moves or deletes the spooled file.</desc>
 <defs>
   <marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#c8c8c4"/></marker>
 </defs>
-<rect x="40" y="130" width="260" height="490" rx="12" fill="none" stroke="#454543" stroke-width="1.2" stroke-dasharray="5 4"/><text x="56" y="152" font-size="12" font-weight="600" letter-spacing="1.2" fill="#a0a09c">IBM I</text>
-<rect x="360" y="130" width="560" height="490" rx="12" fill="none" stroke="#454543" stroke-width="1.2" stroke-dasharray="5 4"/><text x="376" y="152" font-size="12" font-weight="600" letter-spacing="1.2" fill="#a0a09c">SPOOLDOC</text>
-<rect x="70" y="170" width="200" height="70" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
-<text x="170.0" y="203.0" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Programs</text>
-<text x="170.0" y="220.0" text-anchor="middle" font-size="11" fill="#a0a09c">print as they always have</text>
-<path d="M170 240 V290" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
-<rect x="70" y="290" width="200" height="80" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
-<text x="170.0" y="328.0" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Output queue</text>
-<text x="170.0" y="345.0" text-anchor="middle" font-size="11" fill="#a0a09c">spooled files, *SCS text</text>
-<path d="M170 370 V510" fill="none" stroke="#c8c8c4" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#head)"/>
-<rect x="70" y="510" width="200" height="62" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
-<text x="170.0" y="532.0" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Data queue</text>
-<text x="170.0" y="549.0" text-anchor="middle" font-size="11" fill="#a0a09c">optional: tells Spooldoc at once</text>
-<text x="170.0" y="563.0" text-anchor="middle" font-size="11" fill="#a0a09c">when a file is ready</text>
-<rect x="405" y="40" width="200" height="56" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
-<text x="505.0" y="66.0" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Browser</text>
-<text x="505.0" y="83.0" text-anchor="middle" font-size="11" fill="#a0a09c">whoever sets up the jobs</text>
-<path d="M505 96 V170" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
-<rect x="390" y="170" width="230" height="70" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
-<text x="505.0" y="196.0" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Job builder</text>
-<text x="505.0" y="213.0" text-anchor="middle" font-size="11" fill="#a0a09c">page view, definition, JSON,</text>
-<text x="505.0" y="227.0" text-anchor="middle" font-size="11" fill="#a0a09c">template, preview, versions</text>
-<path d="M620 205 H650" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)" marker-start="url(#head)"/>
-<rect x="650" y="170" width="215" height="70" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
-<text x="757.5" y="196.0" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Agent</text>
-<text x="757.5" y="213.0" text-anchor="middle" font-size="11" fill="#a0a09c">proposes the definition and</text>
-<text x="757.5" y="227.0" text-anchor="middle" font-size="11" fill="#a0a09c">the template, fixes what is missing</text>
-<path d="M865 205 H960" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
-<text x="912" y="196" text-anchor="middle" font-size="11" fill="#a0a09c">page text</text>
-<rect x="960" y="170" width="200" height="70" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
-<text x="1060.0" y="196.0" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Model provider</text>
-<text x="1060.0" y="213.0" text-anchor="middle" font-size="11" fill="#a0a09c">Anthropic, OpenAI, Google,</text>
-<text x="1060.0" y="227.0" text-anchor="middle" font-size="11" fill="#a0a09c">OpenRouter, Gateway, local</text>
-<rect x="390" y="272" width="130" height="56" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
-<text x="455.0" y="298.0" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Watcher</text>
-<text x="455.0" y="315.0" text-anchor="middle" font-size="11" fill="#a0a09c">polling, or real time</text>
-<path d="M455 328 V370" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
-<rect x="390" y="370" width="90" height="84" rx="8" fill="#6f8cff" stroke="#6f8cff" stroke-width="1.5"/>
-<text x="435.0" y="403.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0b1233">Capture</text>
-<text x="435.0" y="420.0" text-anchor="middle" font-size="11" fill="#0b1233">read the</text>
-<text x="435.0" y="434.0" text-anchor="middle" font-size="11" fill="#0b1233">spooled file</text>
-<rect x="492" y="370" width="90" height="84" rx="8" fill="#6f8cff" stroke="#6f8cff" stroke-width="1.5"/>
-<text x="537.0" y="403.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0b1233">Extract</text>
-<text x="537.0" y="420.0" text-anchor="middle" font-size="11" fill="#0b1233">pages</text>
-<text x="537.0" y="434.0" text-anchor="middle" font-size="11" fill="#0b1233">to JSON</text>
-<rect x="594" y="370" width="90" height="84" rx="8" fill="#6f8cff" stroke="#6f8cff" stroke-width="1.5"/>
-<text x="639.0" y="403.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0b1233">Render</text>
-<text x="639.0" y="420.0" text-anchor="middle" font-size="11" fill="#0b1233">HTML</text>
-<text x="639.0" y="434.0" text-anchor="middle" font-size="11" fill="#0b1233">and PDF</text>
-<rect x="696" y="370" width="90" height="84" rx="8" fill="#6f8cff" stroke="#6f8cff" stroke-width="1.5"/>
-<text x="741.0" y="403.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0b1233">Deliver</text>
-<text x="741.0" y="420.0" text-anchor="middle" font-size="11" fill="#0b1233">files to the</text>
-<text x="741.0" y="434.0" text-anchor="middle" font-size="11" fill="#0b1233">destination</text>
-<rect x="798" y="370" width="90" height="84" rx="8" fill="#6f8cff" stroke="#6f8cff" stroke-width="1.5"/>
-<text x="843.0" y="403.0" text-anchor="middle" font-size="14" font-weight="600" fill="#0b1233">Finish</text>
-<text x="843.0" y="420.0" text-anchor="middle" font-size="11" fill="#0b1233">hold, move</text>
-<text x="843.0" y="434.0" text-anchor="middle" font-size="11" fill="#0b1233">or delete</text>
-<path d="M480 412 H492" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
-<path d="M582 412 H594" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
-<path d="M684 412 H696" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
-<path d="M786 412 H798" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
-<path d="M270 300 H390" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
-<text x="330" y="291" text-anchor="middle" font-size="11" fill="#a0a09c">new spooled files</text>
-<path d="M270 350 H330 V412 H390" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)" marker-start="url(#head)"/>
-<text x="390" y="486" font-size="11" fill="#a0a09c">jt400: read the spooled file; after delivery hold, move or delete it</text>
-<path d="M741 454 V520" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
-<text x="751" y="494" text-anchor="start" font-size="11" fill="#a0a09c">runs, samples, files</text>
-<path d="M480 529 a155.0 9 0 0 1 310 0 v58 a155.0 9 0 0 1 -310 0 z" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
-<ellipse cx="635.0" cy="529" rx="155.0" ry="9" fill="none" stroke="#2f2f2e" stroke-width="1.5"/>
-<text x="635.0" y="559.0" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Postgres</text>
-<text x="635.0" y="576.0" text-anchor="middle" font-size="11" fill="#a0a09c">servers, jobs, versions, samples, runs, files, assets</text>
-<path d="M741 370 V342 H1060 V370" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
-<rect x="960" y="370" width="200" height="84" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
-<text x="1060.0" y="396.0" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Destination</text>
-<text x="1060.0" y="413.0" text-anchor="middle" font-size="11" fill="#a0a09c">Spooldoc download now;</text>
-<text x="1060.0" y="427.0" text-anchor="middle" font-size="11" fill="#a0a09c">SFTP, S3, IFS, email and</text>
-<text x="1060.0" y="441.0" text-anchor="middle" font-size="11" fill="#a0a09c">webhooks later</text>
+<rect x="494" y="30" width="230" height="60" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
+<text x="609" y="58" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Browser</text>
+<text x="609" y="75" text-anchor="middle" font-size="11" fill="#a0a09c">whoever sets up the jobs</text>
+<rect x="950" y="22" width="200" height="82" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
+<text x="1050" y="47" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Model provider</text>
+<text x="1050" y="64" text-anchor="middle" font-size="11" fill="#a0a09c">Anthropic, Google, OpenAI,</text>
+<text x="1050" y="78" text-anchor="middle" font-size="11" fill="#a0a09c">OpenRouter, Vercel AI Gateway,</text>
+<text x="1050" y="92" text-anchor="middle" font-size="11" fill="#a0a09c">or a local model</text>
+<rect x="20" y="150" width="230" height="560" rx="12" fill="none" stroke="#454543" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="36" y="172" font-size="12" font-weight="600" fill="#a0a09c" letter-spacing="1.2">IBM I</text>
+<rect x="38" y="190" width="194" height="60" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
+<text x="135" y="218" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Programs</text>
+<text x="135" y="235" text-anchor="middle" font-size="11" fill="#a0a09c">print as they always have</text>
+<rect x="38" y="290" width="194" height="80" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
+<text x="135" y="328" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Output queue</text>
+<text x="135" y="345" text-anchor="middle" font-size="11" fill="#a0a09c">spooled files, *SCS text</text>
+<rect x="38" y="430" width="194" height="74" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
+<text x="135" y="458" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Data queue</text>
+<text x="135" y="475" text-anchor="middle" font-size="11" fill="#a0a09c">optional, for real time;</text>
+<text x="135" y="489" text-anchor="middle" font-size="11" fill="#a0a09c">Spooldoc creates it</text>
+<rect x="38" y="600" width="194" height="70" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
+<text x="135" y="626" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">IFS folder</text>
+<text x="135" y="643" text-anchor="middle" font-size="11" fill="#a0a09c">where an IFS destination</text>
+<text x="135" y="657" text-anchor="middle" font-size="11" fill="#a0a09c">writes the files</text>
+<path d="M135 250 L135 290" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
+<path d="M135 370 L135 430" fill="none" stroke="#c8c8c4" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#head)"/>
+<text x="145" y="396" font-size="11" fill="#a0a09c">an entry per</text>
+<text x="145" y="410" font-size="11" fill="#a0a09c">ready file</text>
+<rect x="300" y="150" width="870" height="560" rx="12" fill="none" stroke="#454543" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="316" y="172" font-size="12" font-weight="600" fill="#a0a09c" letter-spacing="1.2">SPOOLDOC</text>
+<rect x="318" y="190" width="54" height="500" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
+<text x="345" y="214" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">jt400</text>
+<text x="349" y="440" text-anchor="middle" font-size="11" fill="#a0a09c" transform="rotate(-90 349 440)">Java, host server ports 449 and 8470 to 8476</text>
+<rect x="494" y="170" width="230" height="90" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
+<text x="609" y="206" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Job builder</text>
+<text x="609" y="223" text-anchor="middle" font-size="11" fill="#a0a09c">page view, definition, JSON,</text>
+<text x="609" y="237" text-anchor="middle" font-size="11" fill="#a0a09c">template, preview, versions</text>
+<rect x="950" y="170" width="200" height="66" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
+<text x="1050" y="194" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Agent</text>
+<text x="1050" y="211" text-anchor="middle" font-size="11" fill="#a0a09c">proposes the definition and</text>
+<text x="1050" y="225" text-anchor="middle" font-size="11" fill="#a0a09c">the template; you check them</text>
+<rect x="687" y="296" width="180" height="60" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
+<text x="777" y="317" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Carbone</text>
+<text x="777" y="334" text-anchor="middle" font-size="11" fill="#a0a09c">its own container, makes</text>
+<text x="777" y="348" text-anchor="middle" font-size="11" fill="#a0a09c">PDF, HTML, DOCX or XLSX</text>
+<rect x="494" y="570" width="130" height="60" rx="8" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
+<text x="559" y="598" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Watcher</text>
+<text x="559" y="615" text-anchor="middle" font-size="11" fill="#a0a09c">polling, or real time</text>
+<path d="M700 590 a210 9 0 0 1 420 0 v80 a210 9 0 0 1 -420 0 z" fill="#161616" stroke="#2f2f2e" stroke-width="1.5"/>
+<ellipse cx="910" cy="590" rx="210" ry="9" fill="none" stroke="#2f2f2e" stroke-width="1.5"/>
+<text x="910" y="625.5" text-anchor="middle" font-size="14" font-weight="600" fill="#ededec">Postgres</text>
+<text x="910" y="642.5" text-anchor="middle" font-size="11" fill="#a0a09c">its own container: servers, jobs, versions, samples,</text>
+<text x="910" y="656.5" text-anchor="middle" font-size="11" fill="#a0a09c">templates, assets, runs, files, settings</text>
+<rect x="494" y="396" width="566" height="126" rx="10" fill="none" stroke="#2f2f2e" stroke-width="1.5"/>
+<text x="510" y="414" font-size="12" font-weight="600" fill="#a0a09c" letter-spacing="1.2">RUN</text>
+<rect x="503" y="424" width="100" height="84" rx="8" fill="#6f8cff" stroke="#6f8cff" stroke-width="1.5"/>
+<text x="553" y="457" text-anchor="middle" font-size="14" font-weight="600" fill="#0b1233">Capture</text>
+<text x="553" y="474" text-anchor="middle" font-size="11" fill="#0b1233">read the</text>
+<text x="553" y="488" text-anchor="middle" font-size="11" fill="#0b1233">spooled file</text>
+<rect x="615" y="424" width="100" height="84" rx="8" fill="#6f8cff" stroke="#6f8cff" stroke-width="1.5"/>
+<text x="665" y="457" text-anchor="middle" font-size="14" font-weight="600" fill="#0b1233">Extract</text>
+<text x="665" y="474" text-anchor="middle" font-size="11" fill="#0b1233">pages</text>
+<text x="665" y="488" text-anchor="middle" font-size="11" fill="#0b1233">to JSON</text>
+<path d="M603 466 L615 466" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
+<rect x="727" y="424" width="100" height="84" rx="8" fill="#6f8cff" stroke="#6f8cff" stroke-width="1.5"/>
+<text x="777" y="457" text-anchor="middle" font-size="14" font-weight="600" fill="#0b1233">Render</text>
+<text x="777" y="474" text-anchor="middle" font-size="11" fill="#0b1233">templates,</text>
+<text x="777" y="488" text-anchor="middle" font-size="11" fill="#0b1233">with Carbone</text>
+<path d="M715 466 L727 466" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
+<rect x="839" y="424" width="100" height="84" rx="8" fill="#6f8cff" stroke="#6f8cff" stroke-width="1.5"/>
+<text x="889" y="457" text-anchor="middle" font-size="14" font-weight="600" fill="#0b1233">Deliver</text>
+<text x="889" y="474" text-anchor="middle" font-size="11" fill="#0b1233">files to the</text>
+<text x="889" y="488" text-anchor="middle" font-size="11" fill="#0b1233">destination</text>
+<path d="M827 466 L839 466" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
+<rect x="951" y="424" width="100" height="84" rx="8" fill="#6f8cff" stroke="#6f8cff" stroke-width="1.5"/>
+<text x="1001" y="457" text-anchor="middle" font-size="14" font-weight="600" fill="#0b1233">Finish</text>
+<text x="1001" y="474" text-anchor="middle" font-size="11" fill="#0b1233">hold, move</text>
+<text x="1001" y="488" text-anchor="middle" font-size="11" fill="#0b1233">or delete</text>
+<path d="M939 466 L951 466" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
+<path d="M609 90 L609 170" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)" marker-start="url(#head)"/>
+<text x="619" y="128" font-size="11" fill="#a0a09c">port 3000</text>
+<path d="M724 203 L950 203" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)" marker-start="url(#head)"/>
+<text x="837" y="196" text-anchor="middle" font-size="11" fill="#a0a09c">chat</text>
+<path d="M1050 104 L1050 170" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)" marker-start="url(#head)"/>
+<text x="1060" y="125" font-size="11" fill="#a0a09c">page text,</text>
+<text x="1060" y="139" font-size="11" fill="#a0a09c">masked if on</text>
+<path d="M705 260 L705 296" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
+<text x="697" y="283" text-anchor="end" font-size="11" fill="#a0a09c">previews</text>
+<path d="M724 250 L1100 250 L1100 586" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)" marker-start="url(#head)"/>
+<text x="837" y="244" text-anchor="middle" font-size="11" fill="#a0a09c">jobs, samples, assets</text>
+<path d="M777 356 L777 424" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)" marker-start="url(#head)"/>
+<text x="787" y="380" font-size="11" fill="#a0a09c">template and JSON</text>
+<path d="M900 522 L900 581" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
+<text x="910" y="556" font-size="11" fill="#a0a09c">runs, samples, files</text>
+<path d="M553 570 L553 508" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
+<path d="M624 610 L700 610" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
+<text x="662" y="602" text-anchor="middle" font-size="11" fill="#a0a09c">seen files</text>
+<path d="M232 330 L318 330" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)" marker-start="url(#head)"/>
+<text x="275" y="322" text-anchor="middle" font-size="11" fill="#a0a09c">spooled files</text>
+<path d="M232 467 L318 467" fill="none" stroke="#c8c8c4" stroke-width="1.5" stroke-dasharray="4 4" marker-end="url(#head)"/>
+<text x="275" y="459" text-anchor="middle" font-size="11" fill="#a0a09c">entries</text>
+<path d="M318 635 L232 635" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
+<text x="275" y="627" text-anchor="middle" font-size="11" fill="#a0a09c">files</text>
+<path d="M372 225 L494 225" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)" marker-start="url(#head)"/>
+<text x="433" y="203" text-anchor="middle" font-size="11" fill="#a0a09c">queues, samples,</text>
+<text x="433" y="217" text-anchor="middle" font-size="11" fill="#a0a09c">real-time setup</text>
+<path d="M372 450 L494 450" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)" marker-start="url(#head)"/>
+<text x="433" y="428" text-anchor="middle" font-size="11" fill="#a0a09c">read, then hold,</text>
+<text x="433" y="442" text-anchor="middle" font-size="11" fill="#a0a09c">move or delete</text>
+<path d="M494 500 L372 500" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
+<text x="433" y="478" text-anchor="middle" font-size="11" fill="#a0a09c">files for</text>
+<text x="433" y="492" text-anchor="middle" font-size="11" fill="#a0a09c">the IFS</text>
+<path d="M372 600 L494 600" fill="none" stroke="#c8c8c4" stroke-width="1.5" marker-end="url(#head)"/>
+<text x="433" y="592" text-anchor="middle" font-size="11" fill="#a0a09c">new files</text>
 </svg>
