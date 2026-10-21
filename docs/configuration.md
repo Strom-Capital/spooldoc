@@ -75,7 +75,7 @@ Under Settings, for the whole app:
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/settings-dark.png">
-    <img src="assets/settings-light.png" alt="The Settings page shows Rendering with Carbone connected, its URL and Spooldoc's public key, the Mail server with its host, security, port, user name, a saved password and the From address, the Agent with its provider, model, effort and usage, and the Watching and Retention settings." width="900">
+    <img src="assets/settings-light.png" alt="The Settings page shows Rendering with Carbone connected, its URL and Spooldoc's public key, Formats set to 1 234,56, 29.10.2026 and EUR, the Mail server with its host, security, port, user name, a saved password and the From address, the Agent with its provider, model, effort and usage, and the Watching and Retention settings." width="900">
   </picture>
 </p>
 
