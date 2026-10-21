@@ -1,6 +1,6 @@
 /**
  * A failed API call, with the server's `{ error }` text and the HTTP status. For an IBM i
- * error, `code` is its class (`host`, `auth`, `notfound`, `authority` or `other`), `detail`
+ * error, `code` is its class (`host`, `auth`, `notfound`, `authority`, `exists` or `other`), `detail`
  * the system's own text and `messageId` its message, such as `CPF2204`.
  */
 export class ApiError extends Error {

@@ -12,6 +12,7 @@ const STATUS: Record<ConnectionErrorCode, number> = {
   host: 502,
   notfound: 404,
   authority: 403,
+  exists: 409,
   other: 500,
 };
 
@@ -48,7 +49,7 @@ export function ibmiFields(error: unknown, secrets: readonly string[] = []): { m
 
 /**
  * Turn an error from the IBM i into a JSON response with the password removed:
- * 422 sign-on, 502 host, 404 not found, 403 authority, 500 anything else. The body is
+ * 422 sign-on, 502 host, 404 not found, 403 authority, 409 exists, 500 anything else. The body is
  * `{ error, code, messageId?, detail? }`: `error` says what to do, `detail` is the
  * system's own text.
  *

@@ -6,6 +6,7 @@ import {
   type Connection,
   type IfsEntry,
   type IfsWriteOptions,
+  type IfsWriteResult,
   type OutputQueue,
   type QueueFileCount,
   type SpooledFileEntry,
@@ -130,7 +131,7 @@ export class FakeConnection implements Connection {
     return this.folders.has(path) ? "directory" : this.ifs.has(path) ? "file" : null;
   }
 
-  async writeIfsFile(path: string, bytes: Uint8Array, { ccsid }: IfsWriteOptions): Promise<{ replaced: boolean }> {
+  async writeIfsFile(path: string, bytes: Uint8Array, { ccsid, ifExists }: IfsWriteOptions): Promise<IfsWriteResult> {
     this.calls.push("writeIfsFile");
     const failure = this.failures.get("writeIfsFile");
     if (failure) throw failure;
@@ -138,6 +139,7 @@ export class FakeConnection implements Connection {
       throw new ConnectionError("notfound", `The folder of ${path} does not exist.`);
     }
     const replaced = this.ifs.has(path);
+    if (replaced && ifExists === "fail") throw new ConnectionError("exists", `${path} is already there. It was not replaced.`);
     this.ifs.set(path, { bytes: new Uint8Array(bytes), ccsid });
     return { replaced };
   }

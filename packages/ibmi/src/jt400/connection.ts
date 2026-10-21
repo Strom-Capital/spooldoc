@@ -14,10 +14,13 @@ import {
   type Connection,
   type Credentials,
   type IfsEntry,
+  type IfsWriteOptions,
+  type IfsWriteResult,
   type QueueRef,
   type SystemInfo,
 } from "../connection.js";
 import { toConnectionError } from "../errors.js";
+import { writeIfsFileSafely, type IfsFileOps } from "./ifs-write.js";
 import { javaBytes, LOGIN_TIMEOUT_SECONDS, loadJava, openJdbc, plain, readAllSync, writeAllAsync, type JavaObject, type Jt400Db } from "./bridge.js";
 import {
   mapQueueFileCountRow,
@@ -209,40 +212,46 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
     }
   };
 
-  const writeIfsFile = async (path: string, bytes: Uint8Array, { ccsid }: { ccsid: number }): Promise<{ replaced: boolean }> => {
-    const java = loadJava();
-    const { IFSFile, IFSFileOutputStream } = classes;
-    const partPath = `${path}.part`;
-    const part = new IFSFile(system, partPath);
-    let written = false;
-    try {
-      // A part file left by an earlier failure keeps its old CCSID, so it goes first.
-      if (await part.exists()) await part.delete();
-      const stream = new IFSFileOutputStream(system, partPath, IFSFileOutputStream.SHARE_NONE, false, ccsid);
+  // jt400's IFSFile.renameTo does not replace a file that is there, so a rename into a
+  // taken name fails rather than replacing it. See `writeIfsFileSafely` for the steps.
+  const ifsOps: IfsFileOps = {
+    async exists(path) {
       try {
-        await writeAllAsync(java, stream, bytes);
-      } finally {
-        await stream.close();
+        return Boolean(await new classes.IFSFile(system, path).exists());
+      } catch (err) {
+        throw fail(err, `IFS ${path}`);
       }
-      const target = new IFSFile(system, path);
-      const replaced = Boolean(await target.exists());
-      if (replaced && !(await target.delete())) {
-        throw new Error(`The file ${path} could not be deleted to replace it. Check that no job has it open and that the user can delete it.`);
+    },
+    async write(path, bytes, ccsid) {
+      try {
+        const { IFSFileOutputStream } = classes;
+        const stream = new IFSFileOutputStream(system, path, IFSFileOutputStream.SHARE_NONE, false, ccsid);
+        try {
+          await writeAllAsync(loadJava(), stream, bytes);
+        } finally {
+          await stream.close();
+        }
+      } catch (err) {
+        throw fail(err, `IFS file ${path}`);
       }
-      if (!(await part.renameTo(target))) {
-        throw new Error(`The file ${partPath} could not be renamed to ${path}.`);
+    },
+    async rename(from, to) {
+      try {
+        return Boolean(await new classes.IFSFile(system, from).renameTo(new classes.IFSFile(system, to)));
+      } catch (err) {
+        throw fail(err, `IFS file ${to}`);
       }
-      written = true;
-      return { replaced };
-    } catch (err) {
-      throw fail(err, `IFS file ${path}`);
-    } finally {
-      if (!written) {
-        // Best effort: the error above says what went wrong, and a part file is never read.
-        await Promise.resolve(part.delete()).catch(() => undefined);
+    },
+    async delete(path) {
+      try {
+        return Boolean(await new classes.IFSFile(system, path).delete());
+      } catch (err) {
+        throw fail(err, `IFS file ${path}`);
       }
-    }
+    },
   };
+  const writeIfsFile = (path: string, bytes: Uint8Array, options: IfsWriteOptions): Promise<IfsWriteResult> =>
+    writeIfsFileSafely(ifsOps, path, bytes, options);
 
   let closed = false;
   return {
