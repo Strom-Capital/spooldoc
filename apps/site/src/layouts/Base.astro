@@ -18,6 +18,7 @@ import { docsUrl, links, url } from '../lib/links';
 import { SITE_NAME, serializeJsonLd, type JsonLd } from '../lib/structuredData';
 
 interface Props {
+  /** Followed by `| Spooldoc`, unless it starts with the name, as the home page's does. */
   title: string;
   description: string;
   type?: 'website' | 'article';
@@ -31,7 +32,7 @@ interface Props {
 
 const { title, description, type = 'website', jsonLd, wide = false, noindex = false } = Astro.props;
 
-const fullTitle = title === SITE_NAME ? title : `${title} | ${SITE_NAME}`;
+const fullTitle = title === SITE_NAME || title.startsWith(`${SITE_NAME}: `) ? title : `${title} | ${SITE_NAME}`;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const path = Astro.url.pathname;
 const current = (prefix: string) => (path === url(prefix) || path.startsWith(url(prefix) + '/') ? 'page' : undefined);

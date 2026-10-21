@@ -54,6 +54,9 @@ export function docsSlugs(): string[] {
   return docsNav().flatMap(({ pages }) => pages.map(({ slug }) => slug));
 }
 
+/** The meta description of /docs, which docs/README.md has no front matter for. */
+export const DOCS_INDEX_DESCRIPTION = 'The Spooldoc guides: install, use and run Spooldoc, and develop it.';
+
 /**
  * docs/README.md, which is /docs: its `#` heading as the title, and the rest rewritten
  * like any guide. It has no front matter, so the reader's docsPage does not take it.

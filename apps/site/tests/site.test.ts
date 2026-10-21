@@ -8,7 +8,7 @@ import { DEFINITION_EXAMPLE, FEATURES } from '../src/lib/features';
 import { docsUrl, formatDate, links, url } from '../src/lib/links';
 import { llmsTxt } from '../src/lib/llms';
 import { sortPosts, type PostLike } from '../src/lib/sortPosts';
-import { homeJsonLd, postJsonLd, serializeJsonLd } from '../src/lib/structuredData';
+import { FEATURES_DESCRIPTION, HOME_TITLE, homeJsonLd, postJsonLd, serializeJsonLd } from '../src/lib/structuredData';
 
 const site = new URL('https://spooldoc.com');
 const post: PostLike = {
@@ -234,7 +234,8 @@ describe('site copy', () => {
     for (const file of files) {
       const text = fs.readFileSync(file, 'utf8');
       expect(text, file).not.toMatch(/\b(colours?|licence|behaviour|organis(e|ed|ation)|favourite|centre|catalogue|analyse)\b/i);
-      expect(text, file).not.toMatch(/\bspool files?\b/i);
+      // The home page's title and the features page's description use the word people search with.
+      expect(text.replace(HOME_TITLE, '').replace(FEATURES_DESCRIPTION, ''), file).not.toMatch(/\bspool files?\b/i);
       expect(text, file).not.toMatch(/\bconver(t|ts|ted|ting|sion)\b/i);
     }
   });

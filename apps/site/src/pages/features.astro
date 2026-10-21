@@ -10,15 +10,17 @@ import CodeBlock from '../components/CodeBlock.astro';
 import Shot from '../components/Shot.astro';
 import { FEATURES } from '../lib/features';
 import { docsUrl, links } from '../lib/links';
+import { FEATURES_DESCRIPTION } from '../lib/structuredData';
 ---
-<Base title="Features" description="What Spooldoc does today: your programs print as they always have, YAML definitions read the pages, HTML, Word and Excel templates lay them out, the agent drafts, and every run is in the job log.">
+<Base title="Features" description={FEATURES_DESCRIPTION}>
   <section class="section intro">
     <div class="container">
       <div class="section-head">
         <h1>What Spooldoc does today</h1>
         <p class="lead">
-          Each feature here works in the latest release. The guides have the details,
-          and the <a href={links.releases}>release notes</a> say what changed.
+          Spooldoc reads the spooled files your IBM i (AS/400, iSeries) prints and lays them
+          out as PDF, Word or Excel documents. Each feature here works in the latest release.
+          The guides have the details, and the <a href={links.releases}>release notes</a> say what changed.
         </p>
       </div>
       <nav class="toc" aria-label="Features">

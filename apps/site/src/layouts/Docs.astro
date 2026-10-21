@@ -2,11 +2,14 @@
 /**
  * A guide: the sidebar from docs/README.md's groups, the page, and its contents list
  * from the `##` and `###` headings. On a phone the sidebar folds into a menu above the page.
+ * The head links the guide's Markdown copy and carries its JSON-LD.
  */
 import Base from './Base.astro';
 import DocsSearch from '../components/DocsSearch.astro';
-import { docsNav, type DocsHeading } from '../lib/docs';
-import { docsUrl, GITHUB } from '../lib/links';
+import { docsNav, repoRoot, type DocsHeading } from '../lib/docs';
+import { gitFileDate } from '../lib/lastmod';
+import { docsMarkdownUrl, docsUrl, GITHUB } from '../lib/links';
+import { docsJsonLd } from '../lib/structuredData';
 
 interface Props {
   title: string;
@@ -21,8 +24,10 @@ interface Props {
 const { title, description, slug, headings, file } = Astro.props;
 const nav = docsNav();
 const currentTitle = slug ? nav.flatMap((group) => group.pages).find((page) => page.slug === slug)?.title : 'Overview';
+const jsonLd = docsJsonLd({ site: Astro.site!, slug, title, description, dateModified: gitFileDate(repoRoot(), `docs/${file}`) });
 ---
-<Base title={slug ? `${title} docs` : 'Docs'} description={description} wide>
+<Base title={slug ? `${title} docs` : 'Docs'} description={description} jsonLd={jsonLd} wide>
+  <link slot="head" rel="alternate" type="text/markdown" title={`${title} as Markdown`} href={docsMarkdownUrl(slug)} />
   <div class="container docs">
     <aside class="sidebar" aria-label="Docs">
       <DocsSearch />

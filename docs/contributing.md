@@ -163,6 +163,13 @@ repository root. The site deploys to GitHub Pages when a change to it, to
 `docs/`, to `packages/docs` or to `CHANGELOG.md` merges to `main`
 (`.github/workflows/pages.yml`).
 
+For language models, the site writes `/llms.txt`, `/llms-full.txt` with
+every guide in full, and each guide as Markdown at `/docs/<slug>.md`, with
+absolute links. The sitemap dates each guide and page by the last commit to
+its file, and each post by its date. A guide's JSON-LD carries the same
+date. The deploy checks out the full history for this; a shallow clone
+builds without the dates.
+
 ## Conventions
 
 - Check the change against the [principles](principles.md). When it
