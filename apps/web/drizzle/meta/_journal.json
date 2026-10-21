@@ -183,6 +183,13 @@
       "when": 1792597875608,
       "tag": "0025_m365_mail_sender",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792607089819,
+      "tag": "0026_run_deliveries_kind",
+      "breakpoints": true
     }
   ]
 }

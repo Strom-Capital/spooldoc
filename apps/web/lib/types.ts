@@ -172,19 +172,23 @@ export interface RunView {
   steps: RunStepView[];
   /** The delivered files, with the name of the job template each was rendered with. */
   files: { id: string; name: string; size: number; contentType: string; template: string }[];
-  /** The emails the run sent or tried to send, one per document; empty when its destination sends no email. */
+  /** The deliveries the run made or tried, one per document; empty when its destination records none. */
   deliveries: DeliveryView[];
-  /** The run's job version delivers to an email destination. */
-  sendsEmail: boolean;
+  /** The kind of the run's job version destination when that kind records deliveries, such as `email`. */
+  deliveryKind: DeliveryKind | null;
   startedAt: string;
   finishedAt: string | null;
 }
 
-/** One email of a run, for one document. */
+/** The destination kinds that record a delivery per document. */
+export type DeliveryKind = 'email';
+
+/** One delivery of a run, for one document, such as one email. */
 export interface DeliveryView {
   id: string;
+  kind: DeliveryKind;
   document: string;
-  /** The addresses the email was for, as the job's To gave them. */
+  /** Where the delivery went. For an email, the addresses it was for, as the job's To gave them. */
   to: string;
   /** Sent to the destination's test address instead of `to`. */
   test: boolean;

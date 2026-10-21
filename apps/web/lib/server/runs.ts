@@ -1,12 +1,15 @@
 import 'server-only';
 
 import { and, desc, eq, gte, inArray, lt, lte, sql, type SQL } from 'drizzle-orm';
-import type { DeliveryView, RunStatus, RunView } from '@/lib/types';
+import type { DeliveryKind, DeliveryView, RunStatus, RunView } from '@/lib/types';
 import { getDb } from './db';
 import { destinations, jobs, jobVersions, runDeliveries, runFiles, runs } from './db/schema';
 import { UUID } from './servers';
 
 type RunRow = typeof runs.$inferSelect;
+
+/** The destination kinds that record a delivery per document in `run_deliveries`. */
+const DELIVERY_KINDS: readonly DeliveryKind[] = ['email'];
 
 /** Runs as the API returns them, with job names and delivered files (without their bytes). */
 export async function runViews(rows: RunRow[]): Promise<RunView[]> {
@@ -24,6 +27,7 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
     .select({
       id: runDeliveries.id,
       runId: runDeliveries.runId,
+      kind: runDeliveries.kind,
       document: runDeliveries.document,
       to: runDeliveries.to,
       test: runDeliveries.test,
@@ -41,15 +45,15 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
     .from(jobs)
     .where(inArray(jobs.id, [...new Set(rows.map((row) => row.jobId))]));
   const jobName = new Map(jobRows.map((job) => [job.id, job.name]));
-  // The job versions of these runs whose destination sends email.
-  const emailVersions = await db
-    .select({ jobId: jobVersions.jobId, number: jobVersions.number })
+  // The job versions of these runs whose destination records deliveries, with its kind.
+  const deliveryVersions = await db
+    .select({ jobId: jobVersions.jobId, number: jobVersions.number, kind: destinations.kind })
     .from(jobVersions)
     .innerJoin(destinations, sql`${destinations.id}::text = ${jobVersions.spec} -> 'destination' ->> 'destinationId'`)
-    .where(and(inArray(jobVersions.jobId, [...new Set(rows.map((row) => row.jobId))]), eq(destinations.kind, 'email')));
-  const sendsEmail = new Set(emailVersions.map((version) => `${version.jobId}/${version.number}`));
+    .where(and(inArray(jobVersions.jobId, [...new Set(rows.map((row) => row.jobId))]), inArray(destinations.kind, [...DELIVERY_KINDS])));
+  const deliveryKind = new Map(deliveryVersions.map((version) => [`${version.jobId}/${version.number}`, version.kind as DeliveryKind]));
   return rows.map((row) => ({
-    sendsEmail: sendsEmail.has(`${row.jobId}/${row.version}`),
+    deliveryKind: deliveryKind.get(`${row.jobId}/${row.version}`) ?? null,
     id: row.id,
     seq: row.seq,
     jobId: row.jobId,
@@ -64,7 +68,7 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
     files: files.filter((f) => f.runId === row.id).map(({ id, name, size, contentType, template }) => ({ id, name, size, contentType, template })),
     deliveries: deliveries
       .filter((d) => d.runId === row.id)
-      .map((d) => ({ id: d.id, document: d.document, to: d.to, test: d.test, status: d.status as DeliveryView['status'], sentInRun: d.sentInRun, error: d.error, detail: d.detail, sentAt: d.sentAt.toISOString() })),
+      .map((d) => ({ id: d.id, kind: d.kind as DeliveryKind, document: d.document, to: d.to, test: d.test, status: d.status as DeliveryView['status'], sentInRun: d.sentInRun, error: d.error, detail: d.detail, sentAt: d.sentAt.toISOString() })),
     startedAt: row.startedAt.toISOString(),
     finishedAt: row.finishedAt?.toISOString() ?? null,
   }));

@@ -5,10 +5,15 @@ import { Fragment, useState } from 'react';
 import { ErrorNote } from '@/components/page';
 import { StatusPill, type StatusTone } from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
-import type { DeliveryView } from '@/lib/types';
+import type { DeliveryKind, DeliveryView } from '@/lib/types';
 
-/** Emails shown at first and per Show more. */
+/** Deliveries shown at first and per Show more. */
 const PAGE = 50;
+
+/** The words of the deliveries table for each kind: its title, the plural for Show more, its empty text and where each went. */
+const KIND_TEXT: Record<DeliveryKind, { title: string; plural: string; none: string; to: string; noTarget: string }> = {
+  email: { title: 'Emails', plural: 'emails', none: 'This run sent no email.', to: 'To', noTarget: 'No address' },
+};
 
 /** How a delivery reads: Sent, Test, Sent in run #N or Failed. */
 function deliveryStatus(delivery: DeliveryView): { tone: StatusTone; icon: typeof CheckCircle2Icon; label: string; title?: string } {
@@ -42,11 +47,12 @@ function Addresses({ text }: { text: string }) {
 const time = (iso: string): string => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
 /**
- * The emails of a run, one row per document: the document, To, the status and the time. A
- * failed row opens to show what went wrong and the mail server's own text. A long list
- * shows the first emails and says how many more there are.
+ * The deliveries of a run, such as its emails, one row per document: the document, where it
+ * went, the status and the time. A failed row opens to show what went wrong and the other
+ * system's own text. A long list shows the first deliveries and says how many more there are.
  */
-export function RunEmails({ deliveries }: { deliveries: DeliveryView[] }) {
+export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; deliveries: DeliveryView[] }) {
+  const text = KIND_TEXT[kind];
   const [shown, setShown] = useState(PAGE);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const sent = deliveries.filter((delivery) => delivery.status !== 'failed').length;
@@ -60,7 +66,7 @@ export function RunEmails({ deliveries }: { deliveries: DeliveryView[] }) {
   return (
     <div>
       <h3 className="mb-2 font-medium text-sm">
-        Emails{' '}
+        {text.title}{' '}
         {deliveries.length > 0 && (
           <span className="font-normal text-muted-foreground">
             ({sent} of {deliveries.length} sent)
@@ -68,7 +74,7 @@ export function RunEmails({ deliveries }: { deliveries: DeliveryView[] }) {
         )}
       </h3>
       {deliveries.length === 0 ? (
-        <p className="text-muted-foreground text-sm">This run sent no email.</p>
+        <p className="text-muted-foreground text-sm">{text.none}</p>
       ) : (
         <div className="overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
@@ -101,7 +107,7 @@ export function RunEmails({ deliveries }: { deliveries: DeliveryView[] }) {
                         ) : (
                           <div className="break-words">{delivery.document}</div>
                         )}
-                        <div className="text-muted-foreground text-xs">{delivery.to ? <>To <Addresses text={delivery.to} /></> : 'No address'}</div>
+                        <div className="text-muted-foreground text-xs">{delivery.to ? <>{text.to} <Addresses text={delivery.to} /></> : text.noTarget}</div>
                       </td>
                       <td className="w-px whitespace-nowrap px-3 py-2">
                         <StatusPill tone={status.tone} icon={status.icon} title={status.title}>
@@ -127,7 +133,7 @@ export function RunEmails({ deliveries }: { deliveries: DeliveryView[] }) {
       {deliveries.length > shown && (
         <div className="mt-2 flex items-center justify-between gap-2">
           <span className="text-muted-foreground text-xs">
-            Showing {shown} of {deliveries.length} emails.
+            Showing {shown} of {deliveries.length} {text.plural}.
           </span>
           <Button variant="outline" size="sm" onClick={() => setShown((n) => n + PAGE)}>
             Show {Math.min(PAGE, deliveries.length - shown)} more

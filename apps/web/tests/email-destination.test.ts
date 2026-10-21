@@ -6,6 +6,7 @@ import { destinations, jobs, jobVersions, runDeliveries, runs, settings } from '
 import { addressList, addressProblems, composeEmail, emailSpecProblems, htmlToText, inlineHtml } from '@/lib/server/email-message';
 import { mailErrorText, setMailSender, stopsSending, updateMail, type SmtpServer } from '@/lib/server/mail';
 import { runJob } from '@/lib/server/runner';
+import { runViews } from '@/lib/server/runs';
 
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, GOOD_PASSWORD, loadSample } from './helpers/fake-connection';
@@ -190,6 +191,17 @@ describe('the email destination in a run', () => {
     const deliveries = await db().select().from(runDeliveries).where(eq(runDeliveries.runId, runId));
     expect(deliveries.map((d) => d.status)).toEqual(Array(6).fill('sent'));
     expect(conn.actions()).toEqual(['holdSpooledFile']);
+  });
+
+  it('records each email as a delivery of kind email, and the run view says so', async () => {
+    const { jobId } = await emailJob();
+    const runId = await run(jobId, new FakeConnection());
+    const deliveries = await db().select().from(runDeliveries).where(eq(runDeliveries.runId, runId));
+    expect(deliveries.map((d) => d.kind)).toEqual(Array(6).fill('email'));
+    const [row] = await db().select().from(runs).where(eq(runs.id, runId));
+    const [view] = await runViews([row!]);
+    expect(view!.deliveryKind).toBe('email');
+    expect(view!.deliveries.map((d) => d.kind)).toEqual(Array(6).fill('email'));
   });
 
   it('fails the run when one email fails, leaves the file alone, and Retry sends only that one', async () => {

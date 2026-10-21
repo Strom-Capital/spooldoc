@@ -49,7 +49,7 @@ export function emailDestination(config: EmailConfig): Destination {
         .select({ document: runDeliveries.document, to: runDeliveries.to, seq: runs.seq })
         .from(runDeliveries)
         .innerJoin(runs, eq(runs.id, runDeliveries.runId))
-        .where(and(eq(runDeliveries.jobId, job.id), eq(runDeliveries.splfKey, job.splfKey), eq(runDeliveries.status, 'sent'), eq(runDeliveries.test, false)))
+        .where(and(eq(runDeliveries.kind, 'email'), eq(runDeliveries.jobId, job.id), eq(runDeliveries.splfKey, job.splfKey), eq(runDeliveries.status, 'sent'), eq(runDeliveries.test, false)))
         .orderBy(runs.seq);
       // The first run that sent each document, and where it went.
       const sentBefore = new Map<string, { seq: number; to: string }>();
@@ -68,8 +68,8 @@ export function emailDestination(config: EmailConfig): Destination {
       }
 
       const test = config.testAddress;
-      const record = (row: Omit<DeliveryRow, 'runId' | 'jobId' | 'splfKey' | 'destinationId'>) =>
-        db.insert(runDeliveries).values({ runId, jobId: job.id, splfKey: job.splfKey, destinationId: input.destinationId, ...row });
+      const record = (row: Omit<DeliveryRow, 'runId' | 'jobId' | 'splfKey' | 'destinationId' | 'kind'>) =>
+        db.insert(runDeliveries).values({ runId, jobId: job.id, splfKey: job.splfKey, destinationId: input.destinationId, kind: 'email', ...row });
 
       const sender = mailSender(server);
       let sent = 0;

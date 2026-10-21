@@ -325,9 +325,9 @@ export const runFiles = pgTable(
 );
 
 /**
- * One email a run sent, or tried to send, for one document. Retry reads the deliveries of
- * the same job and spooled file, so a document already sent is not sent again. Deleted
- * with its run.
+ * One document a run delivered, or tried to deliver, to a destination that records each
+ * delivery, such as one email. Retry reads the deliveries of the same job and spooled file,
+ * so a document already delivered is not delivered again. Deleted with its run.
  */
 export const runDeliveries = pgTable(
   'run_deliveries',
@@ -342,15 +342,20 @@ export const runDeliveries = pgTable(
     /** The spooled file, as `splfKey` in `lib/job-spec` writes it. */
     splfKey: text('splf_key').notNull(),
     destinationId: uuid('destination_id').references(() => destinations.id, { onDelete: 'set null' }),
+    /** The destination kind that delivered it, such as `email`. */
+    kind: text('kind').notNull().default('email'),
     /** The page group of the document; null for the document of the whole spooled file. */
     pageGroupIndex: integer('page_group_index'),
     /** The document's file name without extension, such as `invoice-260101`. */
     document: text('document').notNull(),
-    /** The addresses the email was for, as the job's To field gave them, comma separated. */
+    /**
+     * Where the delivery went. For an email, the addresses it was for, as the job's To field
+     * gave them, comma separated.
+     */
     to: text('to').notNull().default(''),
     /** Sent to the destination's test address instead of `to`. */
     test: boolean('test').notNull().default(false),
-    /** `sent`, `failed`, or `already_sent` when an earlier run sent it. */
+    /** `sent`, `failed`, or `already_sent` when an earlier run delivered it. */
     status: text('status').notNull(),
     /** The run that sent it, for `already_sent`. */
     sentInRun: bigint('sent_in_run', { mode: 'number' }),
