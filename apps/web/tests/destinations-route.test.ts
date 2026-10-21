@@ -202,3 +202,65 @@ describe('webhook destinations', () => {
     expect(cleared.config).toMatchObject({ testUrl: null });
   });
 });
+
+describe('SFTP destinations', () => {
+  const sftp = (config: Record<string, unknown>) => ({
+    kind: 'sftp',
+    name: 'MYSFTP',
+    config: { host: 'sftp.example.com', username: 'MYUSER', auth: 'password', folder: '/in/invoices/', ...config },
+    secrets: { password: 'Sftp-Password-789' },
+  });
+
+  beforeEach(async () => {
+    await resetTables(db());
+    auth = await signedIn();
+  });
+
+  it('add one with the defaults, the password kept out of every view, and no host key until a check trusts one', async () => {
+    const added = await add(sftp({ testFolder: '' }));
+    expect(added.status).toBe(201);
+    const view = (await added.json()) as DestinationView;
+    expect(view).toMatchObject({
+      kind: 'sftp',
+      config: {
+        host: 'sftp.example.com',
+        port: 22,
+        username: 'MYUSER',
+        auth: 'password',
+        publicKey: null,
+        folder: '/in/invoices',
+        testFolder: null,
+        ifExists: 'replace',
+        keepCopy: true,
+        tempName: true,
+        hostKey: null,
+        key: null,
+        hasKey: false,
+        hasPassword: true,
+      },
+    });
+    expect(JSON.stringify(await all())).not.toContain('Sftp-Password-789');
+    const [row] = await db().select().from(destinations).where(eq(destinations.id, view.id));
+    expect(JSON.stringify(row)).not.toContain('Sftp-Password-789');
+  });
+
+  it.each([
+    ['a scheme', { host: 'sftp://sftp.example.com' }, 'Enter the host name only, without sftp:// or another scheme.'],
+    ['a user in the host', { host: 'MYUSER@sftp.example.com' }, 'Enter the host name only. The user goes in User.'],
+    ['a port in the host', { host: 'sftp.example.com:2222' }, 'Enter a host name or IP address, such as sftp.example.com. The port goes in its own field.'],
+    ['a port out of range', { port: 70000 }, 'Enter a port from 1 to 65535.'],
+    ['a user with a space', { username: 'MY USER' }, 'Enter the user without spaces.'],
+    ['a folder with ..', { folder: '/in/../etc' }, 'Enter the folder without . or .. parts.'],
+  ])('refuse %s', async (_, config, message) => {
+    const response = await add(sftp(config));
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toBe(message);
+  });
+
+  it('ask for the password, and for a key Spooldoc made', async () => {
+    const noPassword = await add({ ...sftp({}), secrets: {} });
+    expect(await noPassword.json()).toMatchObject({ error: 'Enter the password.', field: 'secrets.password' });
+    const noKey = await add(sftp({ auth: 'spooldoc-key' }));
+    expect(await noKey.json()).toMatchObject({ error: 'Make the key first.', field: 'sealedKey' });
+  });
+});

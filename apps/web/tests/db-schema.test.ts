@@ -84,6 +84,7 @@ describe('database rules', () => {
     await expect(db().insert(destinations).values({ kind: 'ftp', name: 'x' })).rejects.toThrow();
     await expect(db().insert(destinations).values({ kind: 'ifs', name: 'Output folder', config: { folder: '/home/docs/out' } })).resolves.toBeDefined();
     await expect(db().insert(destinations).values({ kind: 'webhook', name: 'MYHOOK', config: { url: 'https://hooks.example.com/spooldoc', testUrl: null } })).resolves.toBeDefined();
+    await expect(db().insert(destinations).values({ kind: 'sftp', name: 'MYSFTP', config: { host: 'sftp.example.com', username: 'MYUSER', folder: '/in/invoices' } })).resolves.toBeDefined();
     expect(await builtinDestination()).toBeTruthy();
     await db().execute(sql`select 1`);
   });

@@ -9,7 +9,7 @@ import { UUID } from './servers';
 type RunRow = typeof runs.$inferSelect;
 
 /** The destination kinds that record a delivery per document in `run_deliveries`. */
-const DELIVERY_KINDS: readonly DeliveryKind[] = ['email', 'webhook'];
+const DELIVERY_KINDS: readonly DeliveryKind[] = ['email', 'webhook', 'sftp'];
 
 /** The most of a receiver's answer the Job log shows. One more character is stored, to tell it was cut. */
 export const RESPONSE_LIMIT = 2048;
@@ -42,6 +42,7 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
       attempts: runDeliveries.attempts,
       ms: runDeliveries.ms,
       response: runDeliveries.response,
+      size: runDeliveries.size,
       sentAt: runDeliveries.sentAt,
     })
     .from(runDeliveries)
@@ -90,6 +91,7 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
         ms: d.ms,
         response: d.response === null ? null : d.response.slice(0, RESPONSE_LIMIT),
         responseTruncated: d.response !== null && d.response.length > RESPONSE_LIMIT,
+        size: d.size,
         sentAt: d.sentAt.toISOString(),
       })),
     startedAt: row.startedAt.toISOString(),

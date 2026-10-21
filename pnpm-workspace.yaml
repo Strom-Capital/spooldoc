@@ -4,5 +4,7 @@ packages:
 
 allowBuilds:
   esbuild: true
+  cpu-features: false
   java: true
+  ssh2: false
   unrs-resolver: false

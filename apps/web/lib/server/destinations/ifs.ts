@@ -5,28 +5,13 @@ import type { IfsConfig } from '@/lib/destination-config';
 import { isConnectionError } from '../ibmi';
 import { StepError } from '../step-error';
 import type { Destination } from './index';
+import { key, numbered, ownNames, SUFFIX_TRIES } from './names';
 import { nFiles, storeRunFiles, type RunFile } from './store';
 
 /** The CCSID a file is tagged with: UTF-8 for text such as HTML, binary for PDF, DOCX and XLSX. */
 export function ccsidFor(contentType: string): number {
   return /^text\/|[/+](json|xml)\b/.test(contentType) ? 1208 : 65535;
 }
-
-/** `invoice-1001.pdf` with a number: `invoice-1001-2.pdf`. */
-function numbered(name: string, n: number): string {
-  const dot = name.lastIndexOf('.');
-  return dot > 0 ? `${name.slice(0, dot)}-${n}${name.slice(dot)}` : `${name}-${n}`;
-}
-
-/**
- * A name as the IFS compares it. Folders outside /QOpenSys ignore case, so `Acme.pdf` and
- * `ACME.pdf` are one file. Names are compared this way in every folder: in a folder that
- * minds case, the cost is a number that was not needed, never a lost file.
- */
-const key = (name: string): string => name.toLowerCase();
-
-/** How many times Add a number tries the next number when a name is taken as it writes. */
-const SUFFIX_TRIES = 10;
 
 const reason = (err: unknown): { message: string; detail?: string } => {
   const message = (err instanceof Error ? err.message : String(err)).split('\n')[0] ?? '';
@@ -35,28 +20,6 @@ const reason = (err: unknown): { message: string; detail?: string } => {
 };
 
 const taken = (err: unknown): boolean => isConnectionError(err) && err.code === 'exists';
-
-/**
- * The name each file of a run gets in the folder, before the folder is looked at. Two
- * names that differ only in case would be one file in the IFS, so the later one gets the
- * first number that no file of the run has. Spooldoc's own names stay as they are: only
- * the IFS ignores case.
- */
-function ownNames(files: RunFile[]): string[] {
-  const all = new Set(files.map((file) => key(file.name)));
-  const claimed = new Set<string>();
-  return files.map((file) => {
-    let name = file.name;
-    if (claimed.has(key(name))) {
-      let n = 2;
-      while (all.has(key(numbered(file.name, n)))) n++;
-      name = numbered(file.name, n);
-      all.add(key(name));
-    }
-    claimed.add(key(name));
-    return name;
-  });
-}
 
 /**
  * Writes each file of a run to a folder in the IFS of the job's server. Spooldoc never

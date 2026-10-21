@@ -2,7 +2,7 @@
 
 import type { SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
 import type { AiProviderId, Effort } from './ai-providers';
-import type { EmailConfig, IfsConfig, WebhookConfigView } from './destination-config';
+import type { EmailConfig, HostKeyInfo, IfExists, IfsConfig, SftpConfigView, WebhookConfigView } from './destination-config';
 import type { Formats } from './formats';
 import type { Format, JobSpec } from './job-spec';
 import type { MailSenderKind, SmtpSecurity } from './mail-config';
@@ -76,7 +76,7 @@ export type DestinationView = {
   builtin: boolean;
   /** The jobs whose draft or any version delivers here. */
   jobs: QueueView['jobs'];
-} & ({ kind: 'spooldoc'; config: Record<string, never> } | { kind: 'ifs'; config: IfsConfig } | { kind: 'email'; config: EmailConfig } | { kind: 'webhook'; config: WebhookConfigView });
+} & ({ kind: 'spooldoc'; config: Record<string, never> } | { kind: 'ifs'; config: IfsConfig } | { kind: 'email'; config: EmailConfig } | { kind: 'webhook'; config: WebhookConfigView } | { kind: 'sftp'; config: SftpConfigView });
 
 /** An uploaded image or font, without its bytes. */
 export interface AssetView {
@@ -181,7 +181,7 @@ export interface RunView {
 }
 
 /** The destination kinds that record a delivery per document. */
-export type DeliveryKind = 'email' | 'webhook';
+export type DeliveryKind = 'email' | 'webhook' | 'sftp';
 
 /** One delivery of a run, for one document, such as one email. */
 export interface DeliveryView {
@@ -205,6 +205,8 @@ export interface DeliveryView {
   response: string | null;
   /** The answer was longer than `response`. */
   responseTruncated: boolean;
+  /** For an upload: the size of the file in bytes. */
+  size: number | null;
   sentAt: string;
 }
 
@@ -392,6 +394,83 @@ export interface WebhookTestView {
   truncated: boolean;
   error?: string;
   detail?: string;
+}
+
+/** A key Spooldoc made for an SFTP destination: the public line to add to the server, and the private key sealed so only the server can open it. */
+export interface SftpKeyView {
+  publicKey: string;
+  key: HostKeyInfo;
+  /** The private key, encrypted with Spooldoc's secret key. The page hands it back on check and save. */
+  sealed: string;
+}
+
+/** One line of Check connection. */
+export interface SftpCheckStage {
+  stage: 'reach' | 'hostKey' | 'signIn' | 'folder' | 'testFolder';
+  /** `new` and `changed` are a host key Spooldoc does not trust; the check stops there. */
+  status: 'ok' | 'failed' | 'new' | 'changed';
+  text: string;
+  ms?: number;
+  /** The server's own text, for a failed line. */
+  detail?: string;
+}
+
+/** A host key the check saw, with the token that trusts it. */
+export interface SftpSeenHostKey extends HostKeyInfo {
+  /** Signed by Spooldoc for this host and port. Check with `trust` set to it, and save with it, to trust the key. */
+  token: string;
+}
+
+/** What Check connection found, line by line. It writes nothing. */
+export interface SftpCheckView {
+  stages: SftpCheckStage[];
+  /** A host key Spooldoc does not trust yet: new, or not the one it trusts. */
+  hostKey?: SftpSeenHostKey & { state: 'new' | 'changed'; trustedFingerprint?: string };
+  /** The host key the check verified, with the token to save it with. */
+  trusted?: SftpSeenHostKey;
+  /** The command that prints the key's fingerprint on the server, to compare by eye. */
+  compare?: string;
+}
+
+/** What a run will do to one file of the page group in the folder. */
+export type SftpOutcome =
+  | { kind: 'new' }
+  | { kind: 'replaces'; mtime: string | null }
+  | { kind: 'becomes'; name: string }
+  | { kind: 'fails' };
+
+/** A file already in the folder on the server. */
+export interface SftpEntryView {
+  name: string;
+  size: number;
+  /** When it was last changed; null when the server does not say. */
+  mtime: string | null;
+  folder: boolean;
+}
+
+/** The folder of an SFTP destination, with one page group's files placed in it. */
+export interface SftpFolderView {
+  /** `MYUSER@sftp.example.com:/in/invoices`, the folder runs write to: the test folder in test mode. */
+  target: string;
+  folder: string;
+  testMode: boolean;
+  ifExists: IfExists;
+  pageGroup: number;
+  pageGroups: number;
+  /** The page group's files, as a run names them, with what a run does to each. */
+  files: { name: string; outcome: SftpOutcome }[];
+  /** The files in the folder, sorted by name; at most `SFTP_LIST_LIMIT`. */
+  entries: SftpEntryView[];
+  /** The folder holds more entries than were read. */
+  truncated: boolean;
+  readAt: string;
+}
+
+/** What Upload test did with each file of the page group. */
+export interface SftpUploadTestView {
+  folder: string;
+  ms: number;
+  files: { name: string; finalName: string; size: number; ms: number; error?: string; detail?: string }[];
 }
 
 /** An item of Needs attention on Home, to dismiss or bring back. */

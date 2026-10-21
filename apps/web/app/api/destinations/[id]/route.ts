@@ -1,9 +1,10 @@
 import { eq } from 'drizzle-orm';
-import { CONFIG_SCHEMAS, updateDestinationSchema } from '@/lib/destination-config';
+import { CONFIG_SCHEMAS, sftpConfigSchema, updateDestinationSchema } from '@/lib/destination-config';
 import { guard } from '@/lib/server/auth';
 import { getDb } from '@/lib/server/db';
 import { destinations } from '@/lib/server/db/schema';
 import { destinationView } from '@/lib/server/destinations';
+import { openSftpSecrets, resolveSftp, sealSftpSecrets, type SftpSecrets } from '@/lib/server/destinations/sftp';
 import { openWebhookSecrets, sealWebhookSecrets, type WebhookSecrets } from '@/lib/server/destinations/webhook';
 import { errorResponse, invalidResponse, json, readJson } from '@/lib/server/http';
 import { destinationJobs, jobsUsingDestination } from '@/lib/server/jobs-using';
@@ -30,7 +31,9 @@ async function changeable(id: string): Promise<{ row: typeof destinations.$infer
  * Change a destination's name or settings. A webhook also takes `headers`: each header it
  * keeps, with a new value or null to keep the saved one; a header left out is removed.
  * `rotateSecret` gives it a new signing secret, which the answer holds as
- * `revealedSecret` this once.
+ * `revealedSecret` this once. An SFTP destination takes new `secrets`, a `sealedKey` from
+ * `sftp-key`, and the `hostKeyToken` from Check connection: a saved password is used again
+ * only for the same server and user, and a change of host or port forgets the host key.
  */
 export async function PATCH(request: Request, { params }: Context): Promise<Response> {
   const auth = await guard(request);
@@ -45,7 +48,7 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
   if ('response' in body) {
     return body.response;
   }
-  const { name, config, headers, rotateSecret } = body.data;
+  const { name, config, headers, rotateSecret, secrets, sealedKey, hostKeyToken } = body.data;
   const values: Partial<typeof destinations.$inferInsert> = {};
   let revealedSecret: string | undefined;
   if (found.row.kind === 'webhook' && (headers !== undefined || rotateSecret)) {
@@ -74,7 +77,22 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
     values.secretsEnc = sealWebhookSecrets(next);
   }
   if (name !== undefined) values.name = name;
-  if (config !== undefined) {
+  if (found.row.kind === 'sftp' && (config !== undefined || secrets !== undefined || sealedKey !== undefined || hostKeyToken !== undefined)) {
+    const savedConfig = sftpConfigSchema.safeParse(found.row.config);
+    let savedSecrets: SftpSecrets | null = null;
+    try {
+      savedSecrets = openSftpSecrets(found.row.secretsEnc);
+    } catch {
+      // Secrets sealed with another key: the request must give them again.
+    }
+    const resolved = resolveSftp(
+      { config: config ?? found.row.config, secrets, sealedKey, hostKeyToken },
+      { config: savedConfig.success ? savedConfig.data : null, secrets: savedSecrets },
+    );
+    if ('error' in resolved) return invalidResponse(resolved.error, resolved.field.split('.'));
+    values.config = resolved.config;
+    values.secretsEnc = sealSftpSecrets(resolved.secrets);
+  } else if (config !== undefined) {
     const schema = CONFIG_SCHEMAS[found.row.kind as keyof typeof CONFIG_SCHEMAS];
     const parsed = schema.safeParse(config);
     if (!parsed.success) {
