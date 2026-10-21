@@ -6,6 +6,13 @@ description: "Your name, your password and the theme."
 Profile, in the sidebar under Settings, holds what belongs to you rather
 than to the whole app. Sign out is at the bottom of the sidebar.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/profile-dark.png">
+    <img src="assets/profile-light.png" alt="The Profile page: the name and email, the password change and the theme picker" width="900">
+  </picture>
+</p>
+
 ## Name
 
 The name is how you are shown in the app. Change it and select **Save**.

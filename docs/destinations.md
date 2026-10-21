@@ -7,6 +7,13 @@ A destination is where the files of a run go. Jobs pick one in the
 destination step. The Destinations page lists them with the jobs that use
 each, and adds, edits and deletes the ones you made.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/destinations-dark.png">
+    <img src="assets/destinations-light.png" alt="The Destinations page with two IFS folders, each with its folder and settings and the number of jobs that use it, and the built-in Spooldoc download" width="900">
+  </picture>
+</p>
+
 ## Spooldoc download
 
 The built-in destination keeps every file in Spooldoc's database. The
@@ -27,6 +34,13 @@ An IFS destination writes each file of a run to a folder in the IFS, where
 programs on the IBM i can pick it up. Add one with **Add destination** on
 the Destinations page. It has a name, a folder such as `/home/docs/out`,
 and two settings.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/destination-ifs-dark.png">
+    <img src="assets/destination-ifs-light.png" alt="The New IFS destination dialog filled in: a name, the folder /home/docs/delivery-notes, Add a number when a file with the same name exists, and Keep a copy in Spooldoc on" width="900">
+  </picture>
+</p>
 
 **The folder is on the job's server.** A destination holds a folder, not a
 server: each job writes to the folder on the IBM i it reads its spooled

@@ -11,6 +11,14 @@ Click a job, or its name, to open it in the job builder. Each row has
 Job log, and a watching job has Pause or Resume too. The ⋯ menu at the
 end of the row has Pause or Resume, Job log, and Delete job, which asks
 first.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/jobs-dark.png">
+    <img src="assets/jobs-light.png" alt="The Jobs page with five jobs: two watching, one of them with a watch error, one paused, and two run on demand, each with its server, queue, version and last run" width="900">
+  </picture>
+</p>
+
 The job builder shows the pipeline as six steps, and each step opens an
 inspector. Click a step to open it, or use Next and Back to go through them
 in order. Next sits at the end of each form, and in the bar above the page
