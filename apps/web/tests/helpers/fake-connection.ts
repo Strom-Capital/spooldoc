@@ -6,6 +6,7 @@ import {
   type Connection,
   type IfsEntry,
   type IfsWriteOptions,
+  type IfsWriteResult,
   type OutputQueue,
   type QueueFileCount,
   type QueueFileCountFilter,
@@ -152,20 +153,38 @@ export class FakeConnection implements Connection {
     return this.commandResult(command);
   }
 
-  async ifsStat(path: string): Promise<IfsEntry | null> {
-    this.record('ifsStat', path);
-    return this.folders.has(path) ? 'directory' : this.ifs.has(path) ? 'file' : null;
+  /**
+   * The key of the file at `path`, if there is one. Like the IFS, names outside /QOpenSys
+   * ignore case: `ACME.pdf` is the file `Acme.pdf`.
+   */
+  ifsFileAt(path: string): string | undefined {
+    if (this.ifs.has(path) || path.startsWith('/QOpenSys/')) return this.ifs.has(path) ? path : undefined;
+    const lower = path.toLowerCase();
+    return [...this.ifs.keys()].find((key) => key.toLowerCase() === lower);
   }
 
-  /** Writes like the real one: the folder must exist, and a file with the same name is replaced. */
-  async writeIfsFile(path: string, bytes: Uint8Array, options: IfsWriteOptions): Promise<{ replaced: boolean }> {
+  async ifsStat(path: string): Promise<IfsEntry | null> {
+    this.record('ifsStat', path);
+    return this.folders.has(path) ? 'directory' : this.ifsFileAt(path) ? 'file' : null;
+  }
+
+  /**
+   * Writes like the real one: the folder must exist, and a file with the same name is
+   * replaced, or with `ifExists: 'fail'` left alone with an "exists" error.
+   */
+  async writeIfsFile(path: string, bytes: Uint8Array, options: IfsWriteOptions): Promise<IfsWriteResult> {
     this.record('writeIfsFile', path, options);
-    if (!this.folders.has(path.slice(0, path.lastIndexOf('/')) || '/')) {
+    const folder = path.slice(0, path.lastIndexOf('/')) || '/';
+    if (!this.folders.has(folder)) {
       throw new ConnectionError('notfound', `The folder of ${path} does not exist on ibmi.example.com.`);
     }
-    const replaced = this.ifs.has(path);
+    const old = this.ifsFileAt(path);
+    if (old && options.ifExists === 'fail') {
+      throw new ConnectionError('exists', `${path.slice(folder.length + 1)} is already in ${folder}. It was not replaced.`);
+    }
+    if (old) this.ifs.delete(old);
     this.ifs.set(path, { bytes: new Uint8Array(bytes), ccsid: options.ccsid });
-    return { replaced };
+    return { replaced: old !== undefined };
   }
 
   async close(): Promise<void> {

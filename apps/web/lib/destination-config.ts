@@ -38,7 +38,7 @@ export type IfsConfig = z.infer<typeof ifsConfigSchema>;
 /** What happens to a file with the same name, as a sentence. */
 export const IF_EXISTS_TEXT: Record<IfExists, string> = {
   replace: 'A file with the same name is replaced.',
-  fail: 'A file with the same name fails the run, and nothing is written.',
+  fail: 'A file with the same name fails the run, and no file is replaced.',
   suffix: 'A file with the same name gets a number added, such as invoice-1001-2.pdf.',
 };
 

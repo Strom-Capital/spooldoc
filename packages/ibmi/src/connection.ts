@@ -85,6 +85,22 @@ export type IfsEntry = "file" | "directory";
 export interface IfsWriteOptions {
   /** The CCSID the file is tagged with: 1208 for text such as HTML, 65535 for binary. */
   ccsid: number;
+  /**
+   * What to do when a file with the name is there at the moment the new file is renamed
+   * into place: replace it (the default), or fail with code "exists" and replace nothing.
+   */
+  ifExists?: "replace" | "fail";
+}
+
+/** What `writeIfsFile` did. */
+export interface IfsWriteResult {
+  /** Whether a file with the same name was replaced. */
+  replaced: boolean;
+  /**
+   * The old file, renamed aside, when it could not be deleted after the new one was in
+   * place. The new file is written; this one is left over.
+   */
+  leftover?: string;
 }
 
 /** The messages of a CL command. */
@@ -124,18 +140,21 @@ export interface Connection {
   /** What is at a path in the IFS: a file, a directory, or nothing (null). */
   ifsStat(path: string): Promise<IfsEntry | null>;
   /**
-   * Write a file to the IFS, replacing one with the same name. The bytes go to `path.part`
-   * first and are renamed into place, so a program watching the folder never sees half a
-   * file. A new file is tagged with `ccsid`.
+   * Write a file to the IFS. The bytes go to a part file of this write only and are
+   * renamed into place, so a program watching the folder never sees half a file, and
+   * two writes never share a part file. A file with the same name is replaced, or with
+   * `ifExists: "fail"` left alone. A replaced file is renamed aside first and put back
+   * if the new one cannot take its place, so a failed write never loses both. A new
+   * file is tagged with `ccsid`.
    *
-   * @returns Whether a file with the same name was replaced
+   * @throws ConnectionError with code "exists" when `ifExists` is "fail" and the name is taken
    */
-  writeIfsFile(path: string, bytes: Uint8Array, options: IfsWriteOptions): Promise<{ replaced: boolean }>;
+  writeIfsFile(path: string, bytes: Uint8Array, options: IfsWriteOptions): Promise<IfsWriteResult>;
   close(): Promise<void>;
 }
 
-/** Why a connection call failed. */
-export type ConnectionErrorCode = "auth" | "host" | "notfound" | "authority" | "other";
+/** Why a connection call failed. "exists": an IFS file with the name is there already. */
+export type ConnectionErrorCode = "auth" | "host" | "notfound" | "authority" | "exists" | "other";
 
 /**
  * A failed connection call. The message says what went wrong and, where Spooldoc knows,
