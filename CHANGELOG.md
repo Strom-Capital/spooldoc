@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/Strom-Capital/spooldoc/compare/v0.3.0...v0.3.1) (2026-10-21)
+
+
+### Bug Fixes
+
+* **ibmi:** queue text with ä, ö and å reads right ([e0bf248](https://github.com/Strom-Capital/spooldoc/commit/e0bf2483151e240eb48779f650e37cbbd58aeaf4))
+
 ## [0.3.0](https://github.com/Strom-Capital/spooldoc/compare/v0.2.0...v0.3.0) (2026-10-21)
 
 
