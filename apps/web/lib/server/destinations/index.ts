@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { DocumentData } from '@spooldoc/core';
+import type { DocumentData, ValueType } from '@spooldoc/core';
 import type { Connection } from '@spooldoc/ibmi';
 import { eq } from 'drizzle-orm';
 import { emailConfigSchema, ifsConfigSchema } from '@/lib/destination-config';
@@ -36,6 +36,8 @@ export interface DeliverInput {
   destinationId: string;
   /** The job's email part, for an email destination. */
   email: EmailSpec | null;
+  /** The type of each typed field of the definition, by path such as `pg.dueDate`, for fields an email prints. */
+  valueTypes: Record<string, ValueType>;
   /** The open connection of the job's server, and its host. */
   conn: Connection;
   host: string;

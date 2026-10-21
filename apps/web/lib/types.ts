@@ -3,6 +3,7 @@
 import type { SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
 import type { AiProviderId, Effort } from './ai-providers';
 import type { EmailConfig, IfsConfig } from './destination-config';
+import type { Formats } from './formats';
 import type { Format, JobSpec } from './job-spec';
 import type { SmtpSecurity } from './mail-config';
 
@@ -284,6 +285,8 @@ export interface SettingsView {
   ai: AiSettingsView;
   rendering: RenderingView;
   mail: MailView;
+  /** How numbers, amounts and dates print in documents and email fields. */
+  formats: Formats;
 }
 
 /** The mail server email destinations send through, as Settings shows it. Never carries the password. */

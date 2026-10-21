@@ -160,9 +160,19 @@ filled in from the page group of each document:
 | Message | The text of the email, with fields, when the message is text. |
 | Attach | The formats of the document's files that go with the email: PDF by default. |
 
-Tags are plain paths, without formatters. **Insert field** lists the
-fields of the definition with their values in the page group shown, and
-puts the one you pick at the cursor. A tag that is not a field of the
+A tag can take one formatter, as in a template: `formatN`, `formatC` or
+`formatD`, such as `{d.pg.totalAmount:formatC(2)}`,
+`{d.pg.totalAmount:formatN(2)} {d.pg.currency}` or
+`{d.pg.dueDate:formatD('DD.MM.YYYY')}`. They print what a template prints
+with the same tag and the [Formats](configuration.md#formats) in Settings,
+so an email and its PDF show the same amount. Without a formatter, a date
+field prints in the date format of Settings, and a number keeps its
+decimals with the separators of Settings: `1,374.5`. Any other
+formatter, or one with a wrong argument, is listed under the fields, and
+a version cannot be saved with it. A value that is not a number or a date
+prints nothing. **Insert field** lists the fields of the definition with
+their values in the page group shown, formatted, and puts the one you
+pick at the cursor. A tag that is not a field of the
 definition is listed under the fields, and a version cannot be saved with
 one. From is always the address in Settings.
 

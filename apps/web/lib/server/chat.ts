@@ -464,7 +464,7 @@ Rules:
 - One complete HTML page in Carbone's template language. The data is \`d\` = \`{ pg, pgs, splf }\`: \`d.pg\` is the page group being made, so \`{d.pg.invoiceNo}\` prints one of its fields; \`d.pgs\` holds every page group of the spooled file, and \`d.splf\` holds the spooled file's \`name\`, \`number\`, \`jobName\`, \`jobUser\` and \`jobNumber\`.
 - Repeat a table row with a row of \`[i]\` tags and, right after it, an end row with \`[i+1]\`, which Carbone removes: \`<tr><td>{d.pg.lines[i].item}</td></tr>\` then \`<tr><td>{d.pg.lines[i+1]}</td></tr>\`.
 - Show a block only when a field has a value: \`{d.pg.address2:ifNEM:showBegin}{d.pg.address2}<br>{d.pg.address2:showEnd}\`.
-- Format dates with \`:formatD('DD.MM.YYYY')\` and amounts with \`:formatN(2)\` (\`1,234.50\`). Pad with \`:padl(6)\` or \`:padr(6, '0')\`.
+- Format dates with \`:formatD('DD.MM.YYYY')\` and amounts with \`:formatN(2)\` (\`1,234.50\`), or with the currency with \`:formatC(2)\`. The separators, month names and currency follow Settings, Formats; never set \`{o.lang}\` in a template. Pad with \`:padl(6)\` or \`:padr(6, '0')\`.
 - Inside tags use straight single quotes only, never double or curly quotes. Never write Nunjucks or Jinja (\`{{ }}\`, \`{% %}\`).
 - Use only the fields the definition extracts. Spooldoc checks every tag against the definition before it renders, and a tag it does not know is an error with its line.
 - A4: \`@page { size: A4; margin: 15mm; }\`, all CSS in one \`<style>\` element, no external fonts, images or stylesheets, no scripts. Keep \`carbone-pdf-header, carbone-pdf-footer, carbone-pdf-options { display: none; }\` in the style, so a PDF header or footer does not show in HTML output.

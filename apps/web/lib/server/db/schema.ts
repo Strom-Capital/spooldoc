@@ -405,6 +405,12 @@ export const settings = pgTable(
     /** The From address and name of every email. */
     mailFrom: text('mail_from'),
     mailFromName: text('mail_from_name'),
+    /** The Carbone `lang` of numbers, amounts and month names, such as `en-us`. */
+    numberFormat: text('number_format').notNull().default('en-us'),
+    /** The pattern of a date in an email field without `formatD`, such as `YYYY-MM-DD`. */
+    dateFormat: text('date_format').notNull().default('YYYY-MM-DD'),
+    /** The ISO 4217 code `formatC` prints; null is the number format's own, as Carbone does without one. */
+    currency: text('currency'),
     ...timestamps,
   },
   (t) => [
@@ -412,6 +418,7 @@ export const settings = pgTable(
     check('settings_carbone_mode_check', sql`${t.carboneMode} in ('onprem', 'cloud')`),
     check('settings_smtp_security_check', sql`${t.smtpSecurity} in ('tls', 'starttls', 'none')`),
     check('settings_smtp_port_check', sql`${t.smtpPort} between 1 and 65535`),
+    check('settings_currency_check', sql`${t.currency} ~ '^[A-Z]{3}$'`),
     check('settings_ai_provider_check', sql`${t.aiProvider} in (${providerList})`),
     check('settings_poll_check', sql`${t.pollSeconds} between 5 and 3600`),
     check('settings_safety_check', sql`${t.safetyCheckSeconds} between 60 and 86400`),

@@ -2,7 +2,9 @@ import { z } from 'zod';
 import { AI_PROVIDER_IDS, EFFORT_IDS } from '@/lib/ai-providers';
 import { guard } from '@/lib/server/auth';
 import { json, readJson } from '@/lib/server/http';
+import { formatsSchema } from '@/lib/formats';
 import { mailSettingsSchema } from '@/lib/mail-config';
+import { getFormats, updateFormats } from '@/lib/server/formats';
 import { getMailView, updateMail } from '@/lib/server/mail';
 import { getRendering, updateRendering } from '@/lib/server/rendering';
 import { getAiSettings, getSettings, updateAiSettings, updateSettings } from '@/lib/server/settings';
@@ -59,11 +61,12 @@ const settingsSchema = z
     ai: aiSchema,
     rendering: renderingSchema,
     mail: mailSettingsSchema,
+    formats: formatsSchema,
   })
   .partial();
 
 async function view(): Promise<Response> {
-  return json({ ...(await getSettings()), watching: watchStatus(), cleanup: cleanupStatus(), ai: await getAiSettings(), rendering: await getRendering(), mail: await getMailView() });
+  return json({ ...(await getSettings()), watching: watchStatus(), cleanup: cleanupStatus(), ai: await getAiSettings(), rendering: await getRendering(), mail: await getMailView(), formats: await getFormats() });
 }
 
 /** The watcher intervals, the retention, how many queues are watched or polled, the chat model and the Carbone connection (never a key). */
@@ -88,9 +91,12 @@ export async function PUT(request: Request): Promise<Response> {
   if ('response' in body) {
     return body.response;
   }
-  const { ai, rendering, mail, ...change } = body.data;
+  const { ai, rendering, mail, formats, ...change } = body.data;
   if (Object.keys(change).length > 0) {
     await updateSettings(change);
+  }
+  if (formats) {
+    await updateFormats(formats);
   }
   if (mail) {
     await updateMail(mail);

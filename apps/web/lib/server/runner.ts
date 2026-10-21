@@ -37,6 +37,7 @@ import { getDb } from './db';
 import { jobVersions, runs, watchSeen, type RunStep } from './db/schema';
 import { destinationFor, type RunDocument, type RunFile } from './destinations';
 import { documentRenderer, fileNameFor, templateHtml } from './documents';
+import { fieldTypes } from './email-message';
 import { redact } from './http';
 import { connectServer, isConnectionError } from './ibmi';
 import { log } from './log';
@@ -272,6 +273,7 @@ export async function executeRun(runId: string, request: RunRequest, connection?
           job: { id: request.jobId, splfKey: splfKey(request.splf) },
           destinationId: spec.destination.destinationId!,
           email: spec.destination.email,
+          valueTypes: fieldTypes(def),
           conn,
           host,
           addSecret: (secret) => secrets.push(secret),

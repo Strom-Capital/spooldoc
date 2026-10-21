@@ -117,7 +117,7 @@ backup:
 | `destinations` | Where jobs deliver |
 | `assets` | Logos, images and fonts for templates |
 | `template_files` | Uploaded Word and Excel templates. A row never changes, so a version keeps the file it was saved with |
-| `settings`, `ai_providers` | Intervals, retention, the mail server with its password encrypted, and the agent's model per provider with its key encrypted |
+| `settings`, `ai_providers` | Intervals, retention, number, date and currency formats, the mail server with its password encrypted, and the agent's model per provider with its key encrypted |
 | `agent_usage` | The agent's tokens per model step, and the cost when the provider reported one |
 
 The server applies migrations when it starts (`SPOOLDOC_MIGRATE=off` to

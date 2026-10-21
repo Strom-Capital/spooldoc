@@ -69,6 +69,7 @@ Under Settings, for the whole app:
 | Safety check | 5 minutes | How often a real-time queue is listed anyway, in case a data queue entry was missed. |
 | Keep runs for | 90 days | How long runs are kept, 1 to 3650 days. See [Retention](job-log.md#retention). |
 | Agent | None | The provider, key, model and effort of the agent. See [Agent](agent.md#choosing-a-model). The section also shows the agent's [usage](agent.md#usage) this month and last month. |
+| Formats | `1,234.56`, `YYYY-MM-DD` | How numbers, amounts and dates print in documents and email fields. See [Formats](#formats). |
 | Mail server | None | The SMTP server email destinations send through. See [Mail server](#mail-server). |
 
 <p align="center">
@@ -77,6 +78,24 @@ Under Settings, for the whole app:
     <img src="assets/settings-light.png" alt="The Settings page shows Rendering with Carbone connected, its URL and Spooldoc's public key, the Mail server with its host, security, port, user name, a saved password and the From address, the Agent with its provider, model, effort and usage, and the Watching and Retention settings." width="900">
   </picture>
 </p>
+
+## Formats
+
+How numbers, amounts and dates print, for the whole app. Every render
+sends them to Carbone, and email fields follow them too.
+
+| Setting | Choices | What it does |
+|---------|---------|--------------|
+| Number format | `1,234.56` (the default), `1 234,56`, `1.234,56`, `1’234.56` | The separators of `formatN` and `formatC`, and the language of month and day names in `formatD`: English, Swedish, German and Swiss German. |
+| Date format | `YYYY-MM-DD` (the default), `DD.MM.YYYY`, `DD/MM/YYYY`, `MM/DD/YYYY` | A date field in an email field without `formatD`. In a template, `formatD` sets the pattern. |
+| Currency | Empty (the default), or a code such as EUR, USD, GBP, SEK, NOK, DKK or CHF | The currency `formatC` prints. Empty is the number format's own: USD for `1,234.56`, SEK for `1 234,56`, EUR for `1.234,56`, CHF for `1’234.56`. |
+
+The defaults print what Spooldoc printed before Formats existed. With
+`1.234,56` and EUR, `{d.pg.total:formatC(2)}` prints `1.234,50 €` and
+`{d.pg.total:formatN(2)}` prints `1.234,50`. Carbone has no number format
+of its own for Finnish, Norwegian or Danish, so `1 234,56` comes with
+Swedish month names. A currency must be one Carbone knows; Settings lists
+them.
 
 ## Mail server
 

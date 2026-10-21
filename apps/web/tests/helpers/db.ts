@@ -68,6 +68,7 @@ export async function resetTables(db: Db): Promise<void> {
   await db.execute(sql`
     update settings set poll_seconds = 30, safety_check_seconds = 300, retention_days = 90, ai_provider = null, ai_mask = false,
       carbone_mode = 'onprem', carbone_url = null, carbone_api_key_enc = null, carbone_key_enc = null, carbone_public_key = null, carbone_check = null,
-      smtp_host = null, smtp_port = null, smtp_security = 'starttls', smtp_user = null, smtp_password_enc = null, mail_from = null, mail_from_name = null
+      smtp_host = null, smtp_port = null, smtp_security = 'starttls', smtp_user = null, smtp_password_enc = null, mail_from = null, mail_from_name = null,
+      number_format = 'en-us', date_format = 'YYYY-MM-DD', currency = null
   `);
 }

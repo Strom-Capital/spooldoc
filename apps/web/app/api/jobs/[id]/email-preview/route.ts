@@ -1,4 +1,4 @@
-import { extract, parseDefinition, templatePaths, valueAt, type Definition } from '@spooldoc/core';
+import { extract, parseDefinition, templatePaths, type Definition } from '@spooldoc/core';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { emailConfigSchema } from '@/lib/destination-config';
@@ -8,7 +8,18 @@ import { guard } from '@/lib/server/auth';
 import { getDb } from '@/lib/server/db';
 import { destinations } from '@/lib/server/db/schema';
 import { fileNameFor, previewRenderer } from '@/lib/server/documents';
-import { addressList, addressProblems, emailSpecProblems, emailSubject, expandSegments, messageBody } from '@/lib/server/email-message';
+import {
+  addressList,
+  addressProblems,
+  emailSpecProblems,
+  emailSubject,
+  expandSegments,
+  expandText,
+  fieldTypes,
+  messageBody,
+  type EmailFormatting,
+} from '@/lib/server/email-message';
+import { getFormats } from '@/lib/server/formats';
 import { errorResponse, json, readJson } from '@/lib/server/http';
 import { draftAndSample } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
@@ -27,15 +38,12 @@ const previewSchema = z.object({
 });
 
 /** The single values an email field can read: the page group's fields and the spooled file's, without tables and records. */
-function emailFields(def: Definition, data: unknown): { path: string; value: string }[] {
+function emailFields(def: Definition, data: unknown, formatting: EmailFormatting): { path: string; value: string }[] {
   const paths = [...templatePaths(def)];
   const lists = new Set(paths.filter((path) => path.includes('[]')).map((path) => path.slice(0, path.indexOf('[]'))));
   return paths
     .filter((path) => /^(pg|splf)\.[^.[\]]+$/.test(path) && !lists.has(path))
-    .map((path) => {
-      const value = valueAt(data, path);
-      return { path, value: value === null || value === undefined || typeof value === 'object' ? '' : String(value) };
-    });
+    .map((path) => ({ path, value: expandText(`{d.${path}}`, data, formatting).text }));
 }
 
 /**
@@ -84,6 +92,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const [row] = destinationId ? await getDb().select({ kind: destinations.kind, config: destinations.config }).from(destinations).where(eq(destinations.id, destinationId)) : [];
   const testAddress = row?.kind === 'email' ? (emailConfigSchema.safeParse(row.config).data?.testAddress ?? null) : null;
   const mail = await getMailView();
+  const formatting: EmailFormatting = { formats: await getFormats(), types: fieldTypes(def) };
 
   // The message template's HTML for this page group, rendered as a run renders it.
   let templateHtml: string | null = null;
@@ -104,10 +113,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!templateHtml) bodyError = rendered.carbone?.error ?? rendered.template?.error ?? rendered.errors[0] ?? 'The message template could not be rendered.';
   }
 
-  const to = addressList(email.to, data).addresses;
-  const { html } = messageBody({ spec: email, data, templateHtml, wouldGoTo: testAddress ? to : null });
-  const subject = email.subject.trim() ? expandSegments(email.subject, data) : [{ text: emailSubject(email, data, document, false) }];
-  const problems = addressProblems(email, data).map((problem) => `Page group ${index + 1}: ${problem}. This email will fail.`);
+  const to = addressList(email.to, data, formatting).addresses;
+  const { html } = messageBody({ spec: email, data, templateHtml, wouldGoTo: testAddress ? to : null, formatting });
+  const subject = email.subject.trim() ? expandSegments(email.subject, data, formatting) : [{ text: emailSubject(email, data, document, false, formatting) }];
+  const problems = addressProblems(email, data, formatting).map((problem) => `Page group ${index + 1}: ${problem}. This email will fail.`);
 
   const attachments = draft.render.templates
     .filter((t) => !perSpooledFile(t))
@@ -122,10 +131,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     pageGroups: groups.length,
     document,
     from: mail.configured ? { address: mail.from, name: mail.fromName || null } : null,
-    to: expandSegments(email.to, data),
-    cc: expandSegments(email.cc, data),
-    bcc: expandSegments(email.bcc, data),
-    replyTo: expandSegments(email.replyTo, data),
+    to: expandSegments(email.to, data, formatting),
+    cc: expandSegments(email.cc, data, formatting),
+    bcc: expandSegments(email.bcc, data, formatting),
+    replyTo: expandSegments(email.replyTo, data, formatting),
     subject: testAddress ? [{ text: '[Test] ' }, ...subject] : subject,
     html: bodyError && !templateHtml ? '' : html,
     attachments,
@@ -133,7 +142,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     testAddress,
     problems,
     unknownTags: emailSpecProblems(email, def, draft.render.templates).filter((problem) => !problem.startsWith('Enter To')),
-    fields: emailFields(def, data),
+    fields: emailFields(def, data, formatting),
   };
   return json(view);
 }

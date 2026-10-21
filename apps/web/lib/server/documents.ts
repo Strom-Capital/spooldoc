@@ -1,7 +1,9 @@
 import 'server-only';
 
 import { documentName, parseDefinition, renderDocument, starterTemplate, type Definition, type DocumentRender } from '@spooldoc/core';
+import { carboneLocale } from '@/lib/formats';
 import type { TemplateContent } from '@/lib/job-spec';
+import { getFormats } from './formats';
 import { log } from './log';
 import type { SampleTemplate } from './render';
 import { carboneServer, noteRenderFailure, renderingReady } from './rendering';
@@ -56,16 +58,19 @@ export function setDocumentRenderer(next: DocumentRenderer | null): void {
  * @throws CarboneError when no Carbone server can be used, such as Carbone Cloud without a key
  */
 export async function documentRenderer(): Promise<DocumentRenderer> {
-  if (override) return override;
+  // Every render prints numbers, amounts and dates as Settings, Formats, says.
+  const locale = carboneLocale(await getFormats());
+  const withLocale = (render: DocumentRenderer): DocumentRenderer => (input) => render({ ...input, locale: input.locale ?? locale });
+  if (override) return withLocale(override);
   const server = await carboneServer();
-  return async (input) => {
+  return withLocale(async (input) => {
     try {
       return await renderDocument(server, input);
     } catch (error) {
       await noteRenderFailure(error);
       throw error;
     }
-  };
+  });
 }
 
 /**
@@ -73,8 +78,7 @@ export async function documentRenderer(): Promise<DocumentRenderer> {
  * working: with no working Carbone server there is no render to try.
  */
 export async function previewRenderer(): Promise<DocumentRenderer | null> {
-  if (override) return override;
-  if (!(await renderingReady())) return null;
+  if (!override && !(await renderingReady())) return null;
   try {
     return await documentRenderer();
   } catch (error) {

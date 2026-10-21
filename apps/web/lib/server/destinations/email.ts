@@ -4,7 +4,8 @@ import { and, eq } from 'drizzle-orm';
 import type { EmailConfig } from '@/lib/destination-config';
 import { getDb } from '../db';
 import { runDeliveries, runs } from '../db/schema';
-import { addressList, composeEmail, formatOf } from '../email-message';
+import { addressList, composeEmail, formatOf, type EmailFormatting } from '../email-message';
+import { getFormats } from '../formats';
 import { fromHeader, mailErrorText, mailSender, mailServer, NO_MAIL_SERVER, stopsSending } from '../mail';
 import { StepError } from '../step-error';
 import type { DeliverInput, Destination } from './index';
@@ -40,6 +41,7 @@ export function emailDestination(config: EmailConfig): Destination {
       if (server.password) input.addSecret(server.password);
 
       await storeRunFiles(runId, files);
+      const formatting: EmailFormatting = { formats: await getFormats(), types: input.valueTypes };
 
       const db = getDb();
       // Documents sent for real by an earlier run of this job on this spooled file.
@@ -97,11 +99,12 @@ export function emailDestination(config: EmailConfig): Destination {
             from: fromHeader(server),
             testAddress: test,
             templateHtml: document.html ?? null,
+            formatting,
           });
           if (!composed.email) {
             const message = `${composed.problems.join('. ')}.`;
             failures.push({ message: `${document.name}: ${message}` });
-            await record({ ...base, to: addressList(spec.to, document.data).addresses.join(', '), status: 'failed', error: message });
+            await record({ ...base, to: addressList(spec.to, document.data, formatting).addresses.join(', '), status: 'failed', error: message });
             continue;
           }
           const to = composed.email.to.join(', ');

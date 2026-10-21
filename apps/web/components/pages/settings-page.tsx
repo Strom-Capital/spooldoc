@@ -18,6 +18,18 @@ import { Switch } from '@/components/ui/switch';
 import { AI_PROVIDERS, aiProvider, DEFAULT_LOCAL_BASE_URL, EFFORTS, type AiProviderId, type Effort } from '@/lib/ai-providers';
 import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
 import { usageText } from '@/lib/client/format';
+import {
+  COMMON_CURRENCIES,
+  CURRENCIES,
+  DATE_FORMATS,
+  EXAMPLE_DATE,
+  formatC,
+  formatD,
+  NUMBER_FORMATS,
+  type DateFormat,
+  type Formats,
+  type NumberLang,
+} from '@/lib/formats';
 import { SMTP_DEFAULT_PORT, SMTP_SECURITY, SMTP_SECURITY_LABEL, type SmtpSecurity } from '@/lib/mail-config';
 import type { AgentUsageView, AiSettingsView, CarboneCheck, MailView, RenderingView, SettingsView, UsageMonth } from '@/lib/types';
 
@@ -726,6 +738,91 @@ function MailSection({ saved, draft, onChange }: { saved: MailView; draft: MailD
   );
 }
 
+/** The formats as edited. An empty currency is the number format's own. */
+interface FormatsDraft {
+  numberFormat: NumberLang;
+  dateFormat: DateFormat;
+  currency: string;
+}
+
+const formatsDraft = (saved: Formats): FormatsDraft => ({ ...saved, currency: saved.currency ?? '' });
+
+/** How numbers, amounts and dates print in documents and email fields. */
+function FormatsSection({ draft, onChange }: { draft: FormatsDraft; onChange(draft: FormatsDraft): void }) {
+  const own = NUMBER_FORMATS.find((format) => format.lang === draft.numberFormat)?.currency ?? 'USD';
+  const code = draft.currency.trim().toUpperCase();
+  const known = code === '' || code in CURRENCIES;
+  const example = formatC(1234.5, 2, { numberFormat: draft.numberFormat, currency: code && known ? code : null });
+  return (
+    <section id="formats" className="scroll-mt-4 rounded-lg border p-5">
+      <h2 className="font-semibold">Formats</h2>
+      <p className="mt-0.5 mb-5 text-muted-foreground text-sm">
+        How numbers, amounts and dates print: in documents, through formatN, formatC and formatD in templates, and in email fields.
+      </p>
+      <div className="grid gap-6 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="formats-number">Number format</Label>
+          <Select value={draft.numberFormat} onValueChange={(next) => onChange({ ...draft, numberFormat: next as NumberLang })}>
+            <SelectTrigger id="formats-number" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {NUMBER_FORMATS.map((format) => (
+                <SelectItem key={format.lang} value={format.lang}>
+                  <span className="tabular">{format.example}</span>
+                  <span className="text-muted-foreground">{format.language} month names</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground text-xs">The separators of numbers and amounts, and the language of month and day names in formatD.</p>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="formats-date">Date format</Label>
+          <Select value={draft.dateFormat} onValueChange={(next) => onChange({ ...draft, dateFormat: next as DateFormat })}>
+            <SelectTrigger id="formats-date" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DATE_FORMATS.map((pattern) => (
+                <SelectItem key={pattern} value={pattern}>
+                  <span className="tabular">{formatD(EXAMPLE_DATE, pattern)}</span>
+                  <span className="text-muted-foreground">{pattern}</span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-muted-foreground text-xs">A date field in an email, without formatD. In a template, formatD sets the pattern.</p>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="formats-currency">Currency</Label>
+          <Input
+            id="formats-currency"
+            list="formats-currencies"
+            value={draft.currency}
+            onChange={(event) => onChange({ ...draft, currency: event.target.value.toUpperCase().slice(0, 3) })}
+            placeholder={`${own}, the number format's own`}
+            aria-invalid={!known || undefined}
+            autoComplete="off"
+            spellCheck={false}
+            className="w-56 uppercase placeholder:normal-case"
+          />
+          <datalist id="formats-currencies">
+            {[...COMMON_CURRENCIES, ...Object.keys(CURRENCIES).filter((c) => !(COMMON_CURRENCIES as readonly string[]).includes(c))].map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+          <p className="text-muted-foreground text-xs">
+            {known
+              ? `The currency formatC prints, such as ${example}. Empty is ${own}, the currency of the number format.`
+              : `Carbone does not know ${code}. Pick one of ${Object.keys(CURRENCIES).join(', ')}.`}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 /** What the last cleanup did, in a sentence. */
 function cleanupText(cleanup: NonNullable<SettingsView['cleanup']>): string {
   const at = new Date(cleanup.at).toLocaleString();
@@ -749,6 +846,7 @@ export function SettingsPage() {
   const [ai, setAi] = useState<AiDraft | null>(null);
   const [rendering, setRendering] = useState<RenderingDraft | null>(null);
   const [mail, setMail] = useState<MailDraft | null>(null);
+  const [formats, setFormats] = useState<FormatsDraft | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -761,6 +859,8 @@ export function SettingsPage() {
         setAi(aiDraft(data.ai, data.ai.provider));
         setRendering(renderingDraft(data.rendering));
         setMail(mailDraft(data.mail));
+      setFormats(formatsDraft(data.formats));
+        setFormats(formatsDraft(data.formats));
       },
       (err) => setError(errorText(err)),
     );
@@ -785,7 +885,7 @@ export function SettingsPage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!draft || !ai || !rendering || !mail || !settings) return;
+    if (!draft || !ai || !rendering || !mail || !formats || !settings) return;
     setBusy(true);
     setError(null);
     try {
@@ -793,12 +893,13 @@ export function SettingsPage() {
       const mailPart = mailChange(settings.mail, mail);
       const data = await api<SettingsView>('/api/settings', {
         method: 'PUT',
-        body: { ...draft, ai: aiChange(ai), ...(change ? { rendering: change } : {}), ...(mailPart ? { mail: mailPart } : {}) },
+        body: { ...draft, ai: aiChange(ai), ...(change ? { rendering: change } : {}), ...(mailPart ? { mail: mailPart } : {}), formats },
       });
       setSettings(data);
       setAi(aiDraft(data.ai, data.ai.provider));
       setRendering(renderingDraft(data.rendering));
       setMail(mailDraft(data.mail));
+      setFormats(formatsDraft(data.formats));
       if (change && !data.rendering.check?.ok) {
         toast.error('Saved the settings, but Carbone does not work yet', { description: data.rendering.check?.error });
       } else {
@@ -819,9 +920,10 @@ export function SettingsPage() {
       {!draft && !error && (
         <Loading>Loading settings...</Loading>
       )}
-      {draft && ai && rendering && mail && settings && (
+      {draft && ai && rendering && mail && formats && settings && (
         <form onSubmit={onSubmit} className="flex flex-col gap-6">
           <RenderingSection saved={settings.rendering} draft={rendering} busy={checking} onChange={setRendering} onCheck={() => void onCheck()} />
+          <FormatsSection draft={formats} onChange={setFormats} />
           <MailSection saved={settings.mail} draft={mail} onChange={setMail} />
           <AiSection saved={settings.ai} ai={ai} onChange={setAi} />
           <section className="rounded-lg border p-5">
