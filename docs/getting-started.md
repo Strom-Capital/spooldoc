@@ -93,7 +93,7 @@ disabled when it is.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/home-dark.png">
-    <img src="assets/home-light.png" alt="The Home page: counts of servers, output queues, jobs and runs, a chart of runs per day by status, and a Needs attention list" width="900">
+    <img src="assets/home-light.png" alt="The Home page: counts of servers, output queues, jobs and runs, and a chart of runs per day by status" width="900">
   </picture>
 </p>
 
