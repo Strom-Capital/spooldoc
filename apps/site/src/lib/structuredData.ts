@@ -5,6 +5,14 @@ import { docsUrl, links, url } from './links';
 export type JsonLd = Record<string, unknown>;
 
 export const SITE_NAME = 'Spooldoc';
+/**
+ * The home page's title and the features page's description, in the words people search
+ * with. They are the only place the site uses the searcher's short word for a spooled file;
+ * the pages and the guides say "spooled file" (tests/site.test.ts).
+ */
+export const HOME_TITLE = 'Spooldoc: IBM i spool files to PDF, Word and Excel';
+export const FEATURES_DESCRIPTION =
+  'What Spooldoc does with IBM i spool files: a YAML definition reads each page into data, and HTML, Word or Excel templates lay it out as PDF, DOCX or XLSX.';
 /** The brand guide's 25-word description: the meta description of the home page. */
 export const SITE_DESCRIPTION =
   'Spooldoc turns IBM i spooled files into documents. A YAML definition reads each page into data; HTML, Word or Excel templates lay it out. Open source.';
@@ -68,6 +76,39 @@ export function postJsonLd(post: PostLike, site: URL): JsonLd {
     sameAs: post.data.originalUrl,
     isPartOf: { '@type': 'Blog', name: `${SITE_NAME} blog`, url: abs('/blog/', site) },
   };
+}
+
+/**
+ * A guide: the article, and for a page under /docs the breadcrumb Docs > page. The two go
+ * in one `@graph`, as the page has one JSON-LD script.
+ *
+ * @param slug - The guide's slug; none for /docs
+ * @param dateModified - The last commit to the guide's file, when git can tell
+ */
+export function docsJsonLd({ site, slug, title, description, dateModified }: { site: URL; slug?: string; title: string; description: string; dateModified?: Date }): JsonLd {
+  const pageUrl = abs(docsUrl(slug), site);
+  const docs = abs(docsUrl(), site);
+  const article: JsonLd = {
+    '@type': 'TechArticle',
+    '@id': `${pageUrl}#article`,
+    mainEntityOfPage: pageUrl,
+    url: pageUrl,
+    headline: title,
+    description,
+    dateModified: dateModified?.toISOString(),
+    inLanguage: 'en',
+    author: organization(),
+    publisher: organization(),
+    isPartOf: slug ? { '@type': 'CollectionPage', name: `${SITE_NAME} docs`, url: docs } : { '@type': 'WebSite', name: SITE_NAME, url: abs('/', site) },
+  };
+  const breadcrumb: JsonLd = {
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Docs', item: docs },
+      { '@type': 'ListItem', position: 2, name: title, item: pageUrl },
+    ],
+  };
+  return { '@context': 'https://schema.org', '@graph': slug ? [article, breadcrumb] : [article] };
 }
 
 /** Serialize for a `<script type="application/ld+json">` tag. */

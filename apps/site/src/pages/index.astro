@@ -8,7 +8,7 @@ import { assetSize, siteVersion } from '../lib/docs';
 import { docsUrl, links, url } from '../lib/links';
 import { zoomLabel } from '../lib/imageLinks';
 import { getPosts } from '../lib/posts';
-import { homeJsonLd, LONG_DESCRIPTION, SITE_DESCRIPTION, SITE_NAME } from '../lib/structuredData';
+import { HOME_TITLE, homeJsonLd, LONG_DESCRIPTION, SITE_DESCRIPTION } from '../lib/structuredData';
 
 const posts = (await getPosts()).slice(0, 3);
 const version = siteVersion();
@@ -23,7 +23,7 @@ const tour = [
   { name: 'job-log', title: 'Job log', text: 'Every run with its steps, their timings and the files it delivered.', alt: 'A run opened from the job log: status, the spooled file, the five steps with their timings, and the five delivered PDFs' },
 ];
 ---
-<Base title={SITE_NAME} description={SITE_DESCRIPTION} jsonLd={homeJsonLd(Astro.site!, version)}>
+<Base title={HOME_TITLE} description={SITE_DESCRIPTION} jsonLd={homeJsonLd(Astro.site!, version)}>
   <section class="hero">
     <div class="container hero-grid">
       <div class="pitch">
@@ -98,7 +98,7 @@ const tour = [
   <section class="section" aria-labelledby="features">
     <div class="container">
       <div class="section-head">
-        <h2 id="features">What it does today</h2>
+        <h2 id="features">Features</h2>
       </div>
       <ul class="grid">
         {FEATURES.map((feature) => (

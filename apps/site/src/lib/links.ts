@@ -29,6 +29,14 @@ export function docsUrl(slug?: string, anchor?: string): string {
   return url(`/docs/${slug ? `${slug}/` : ''}${anchor ? `#${anchor}` : ''}`);
 }
 
+/**
+ * A guide as Markdown, for language models: `/docs/jobs.md` for a page, `/docs/index.md`
+ * for the index. Written by pages/docs/[slug].md.ts and pages/docs/index.md.ts.
+ */
+export function docsMarkdownUrl(slug?: string): string {
+  return url(`/docs/${slug ?? 'index'}.md`);
+}
+
 /** 21 October 2026 */
 export function formatDate(date: Date): string {
   return date.toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });

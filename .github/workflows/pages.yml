@@ -41,6 +41,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+          # Full history: the sitemap's <lastmod> and the guides' dateModified come from the
+          # last commit to each page's file. A shallow clone builds without them.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v6
 
