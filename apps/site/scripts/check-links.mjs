@@ -2,6 +2,8 @@
 /**
  * Checks every internal link and image in the built site (dist/): the file it points at
  * exists, and so does the `#anchor` on that page. Links to other sites are not fetched.
+ * It also finds a word glued to a link or inline code, which the HTML compression makes
+ * of a line break before the tag.
  * Run after `astro build`: `pnpm --filter @spooldoc/site check:links`.
  */
 import fs from 'node:fs';
@@ -50,6 +52,13 @@ let checked = 0;
 for (const page of pages) {
   const html = fs.readFileSync(path.join(dist, page), 'utf8');
   const pageUrl = new URL(`https://spooldoc.com/${page.replace(/index\.html$/, '')}`);
+  // A word glued to an inline element, such as "therelease notes": Astro's HTML compression
+  // drops a line break in the source between a word and a tag. Code blocks are left out.
+  const prose = html.replace(/<pre\b[\s\S]*?<\/pre>/g, '').replace(/<(script|style)\b[\s\S]*?<\/\1>/g, '');
+  for (const [glued] of prose.matchAll(/[A-Za-z,]<(?:a|code|strong|em)[ >]/g)) {
+    problems.push(`${page}: a word runs into an inline element at "${glued}". Keep the space before the tag on the same line, or write {' '}.`);
+  }
+
   // Attributes of real tags only: a tag shown as code is escaped (`&#x3C;img src=...>`).
   const attributes = [...html.matchAll(/<[a-zA-Z][^<>]*>/g)].flatMap(([tag]) => [...tag.matchAll(/\s(href|src)="([^"]*)"/g)]);
   for (const [, attribute, value] of attributes) {
@@ -70,7 +79,7 @@ for (const page of pages) {
 }
 
 if (problems.length > 0) {
-  console.error(`${problems.length} broken ${problems.length === 1 ? 'link' : 'links'} in dist/:\n${problems.map((line) => `- ${line}`).join('\n')}`);
+  console.error(`${problems.length} ${problems.length === 1 ? 'problem' : 'problems'} in dist/:\n${problems.map((line) => `- ${line}`).join('\n')}`);
   process.exit(1);
 }
 console.log(`Checked ${checked} internal links and images on ${pages.length} pages. All resolve.`);
