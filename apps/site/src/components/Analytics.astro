@@ -22,6 +22,8 @@
  * Events, besides page views:
  * - install_command_copied  a copy button with data-track="install_command_copied",
  *                           the quick start's (CodeBlock.astro, CodeCopy.astro)
+ * - video_played            a video started for the first time on the page, with
+ *                           { video, theme } (SiteVideo.astro, scripts/site-video.ts)
  */
 const key = import.meta.env.PUBLIC_POSTHOG_KEY;
 const host = import.meta.env.PUBLIC_POSTHOG_HOST || 'https://eu.i.posthog.com';
