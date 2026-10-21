@@ -1,0 +1,188 @@
+---
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
+import '@fontsource/montserrat/latin-600.css';
+import geistLatin from '@fontsource-variable/geist/files/geist-latin-wght-normal.woff2?url';
+import '../styles/global.css';
+import faviconLight from '../../../web/public/brand/spooldoc-favicon-light.svg?raw';
+import faviconDark from '../../../web/public/brand/spooldoc-favicon-dark.svg?raw';
+import Logo from '../components/Logo.astro';
+import CodeCopy from '../components/CodeCopy.astro';
+import Analytics from '../components/Analytics.astro';
+import ThemeSwitch from '../components/ThemeSwitch.astro';
+import { svgDataUrl } from '../lib/brand';
+import { docsUrl, links, url } from '../lib/links';
+import { SITE_NAME, serializeJsonLd, type JsonLd } from '../lib/structuredData';
+
+interface Props {
+  title: string;
+  description: string;
+  type?: 'website' | 'article';
+  /** schema.org structured data for this page. See lib/structuredData.ts. */
+  jsonLd?: JsonLd;
+  /** Lets the main content use the full width, for the docs. */
+  wide?: boolean;
+  /** Keeps the page out of search engines and gives it no canonical URL, for the 404 page. */
+  noindex?: boolean;
+}
+
+const { title, description, type = 'website', jsonLd, wide = false, noindex = false } = Astro.props;
+
+const fullTitle = title === SITE_NAME ? title : `${title} | ${SITE_NAME}`;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const path = Astro.url.pathname;
+const current = (prefix: string) => (path === url(prefix) || path.startsWith(url(prefix) + '/') ? 'page' : undefined);
+
+/** Share image (1280 x 640), made by scripts/og.mjs. */
+const ogImage = new URL(url('/og.png'), Astro.site).href;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    <link rel="preload" href={geistLatin} as="font" type="font/woff2" crossorigin />
+    <meta name="description" content={description} />
+    {noindex ? <meta name="robots" content="noindex" /> : <link rel="canonical" href={canonical} />}
+    <link rel="icon" href={svgDataUrl(faviconLight)} type="image/svg+xml" media="(prefers-color-scheme: light)" />
+    <link rel="icon" href={svgDataUrl(faviconDark)} type="image/svg+xml" media="(prefers-color-scheme: dark)" />
+    <link rel="alternate" type="application/rss+xml" title="Spooldoc blog" href={url('/rss.xml')} />
+    <link rel="sitemap" href={url('/sitemap-index.xml')} />
+    <link rel="alternate" type="text/markdown" title="Summary for language models" href={url('/llms.txt')} />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f0f0f" media="(prefers-color-scheme: dark)" />
+    <script is:inline>
+      // Apply a saved theme before first paint. See ThemeSwitch.astro.
+      try {
+        const theme = localStorage.getItem('theme');
+        if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
+      } catch {}
+    </script>
+    <meta property="og:type" content={type} />
+    <meta property="og:site_name" content={SITE_NAME} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="640" />
+    <meta property="og:image:alt" content="Spooldoc: Spooled files into documents, for IBM i." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content={ogImage} />
+    {jsonLd && <script type="application/ld+json" is:inline set:html={serializeJsonLd(jsonLd)} />}
+    <slot name="head" />
+    <Analytics />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class:list={['container', 'bar', { wide }]}>
+        <a class="brand" href={url('/')} aria-label="Spooldoc home">
+          <Logo id="header" height={30} />
+        </a>
+        <nav id="site-nav" aria-label="Main">
+          <a href={url('/features/')} aria-current={current('/features')}>Features</a>
+          <a href={docsUrl()} aria-current={current('/docs')}>Docs</a>
+          <a href={url('/blog/')} aria-current={current('/blog')}>Blog</a>
+          <a href={links.github}>GitHub</a>
+        </nav>
+        <div class="tools">
+          <ThemeSwitch />
+          <button type="button" class="menu-toggle" aria-controls="site-nav" aria-expanded="false" aria-label="Open menu" data-menu-toggle>
+            <span aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class:list={['container', { wide }]}>
+        <div class="foot-top">
+          <a class="brand" href={url('/')} aria-label="Spooldoc home"><Logo id="footer" height={26} /></a>
+          <nav class="foot-links" aria-label="Footer">
+            <a href={url('/features/')}>Features</a>
+            <a href={docsUrl()}>Docs</a>
+            <a href={url('/blog/')}>Blog</a>
+            <a href={url('/rss.xml')}>RSS</a>
+            <a href={links.github}>GitHub</a>
+            <a href={links.discussions}>Discussions</a>
+            <a href={links.releases}>Releases</a>
+          </nav>
+        </div>
+        <p class="legal">
+          <span><a href={links.license}>MIT license</a>. Made by Ström Capital Oy.</span>
+          <span>IBM and IBM i are trademarks of International Business Machines Corporation. Spooldoc is not affiliated with IBM.</span>
+        </p>
+      </div>
+    </footer>
+
+    <CodeCopy />
+    <script>
+      // Phone menu: the button shows and hides the header nav.
+      const toggle = document.querySelector<HTMLButtonElement>('[data-menu-toggle]');
+      const nav = document.getElementById('site-nav');
+      if (toggle && nav) {
+        const set = (open: boolean) => {
+          nav.classList.toggle('open', open);
+          toggle.setAttribute('aria-expanded', String(open));
+          toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+        };
+        toggle.addEventListener('click', () => set(!nav.classList.contains('open')));
+        nav.addEventListener('click', (event) => {
+          if ((event.target as HTMLElement).closest('a')) set(false);
+        });
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' && nav.classList.contains('open')) {
+            set(false);
+            toggle.focus();
+          }
+        });
+      }
+    </script>
+  </body>
+</html>
+
+<style>
+  .skip { position: absolute; left: -999px; top: 8px; background: var(--background); color: var(--foreground); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; z-index: 20; }
+  .skip:focus { left: 8px; }
+  main:focus { outline: none; }
+
+  .site-header { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--background) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+  .container.wide { max-width: 1440px; }
+  .bar { display: flex; align-items: center; gap: var(--space-4) 28px; min-height: var(--header); }
+  .brand { display: inline-flex; align-items: center; color: var(--foreground); text-decoration: none; margin-right: auto; }
+  .site-header nav { display: flex; align-items: center; gap: 24px; font-size: 0.925rem; }
+  .site-header nav a { display: inline-flex; align-items: center; min-height: 36px; color: var(--muted-foreground); text-decoration: none; font-weight: 500; white-space: nowrap; }
+  .site-header nav a:hover, .site-header nav a[aria-current] { color: var(--foreground); }
+  .tools { display: flex; align-items: center; gap: 8px; }
+
+  /* Two-line menu button, turning into a cross when open. Phones only. */
+  .menu-toggle { display: none; width: 36px; height: 36px; padding: 0; background: none; border: 1px solid var(--border); border-radius: var(--radius); color: var(--foreground); cursor: pointer; place-items: center; }
+  .menu-toggle span, .menu-toggle span::before { display: block; width: 16px; height: 1.5px; background: currentColor; position: relative; transition: transform 0.15s; }
+  .menu-toggle span { transform: translateY(-3px); }
+  .menu-toggle span::before { content: ''; position: absolute; left: 0; top: 6px; }
+  .menu-toggle[aria-expanded='true'] span { transform: rotate(45deg); }
+  .menu-toggle[aria-expanded='true'] span::before { top: 0; transform: rotate(-90deg); }
+
+  @media (max-width: 719px) {
+    .menu-toggle { display: inline-grid; }
+    .site-header nav { display: none; position: absolute; left: 0; right: 0; top: 100%; flex-direction: column; align-items: stretch; gap: 0; padding: 4px var(--gutter) 16px; background: var(--background); border-bottom: 1px solid var(--border); font-size: 1.05rem; }
+    .site-header nav.open { display: flex; }
+    .site-header nav a { min-height: 48px; border-top: 1px solid var(--border); color: var(--foreground); }
+    .site-header nav a:first-child { border-top: 0; }
+  }
+
+  .site-footer { border-top: 1px solid var(--border); padding: var(--space-6) 0 var(--space-5); margin-top: var(--space-8); }
+  .foot-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-4) var(--space-6); }
+  .foot-links { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 0.925rem; }
+  .foot-links a { color: var(--muted-foreground); text-decoration: none; }
+  .foot-links a:hover { color: var(--foreground); }
+  .legal { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2) var(--space-6); margin: var(--space-5) 0 0; font-size: 0.8rem; color: var(--muted-foreground); }
+  .legal a { color: inherit; }
+</style>

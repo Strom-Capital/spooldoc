@@ -1,0 +1,33 @@
+---
+import Base from '../../layouts/Base.astro';
+import PostList from '../../components/PostList.astro';
+import { getPosts } from '../../lib/posts';
+import { url } from '../../lib/links';
+
+const posts = await getPosts();
+const years = [...new Set(posts.map((p) => p.data.date.getUTCFullYear()))];
+---
+<Base title="Blog" description="Posts and release notes from Spooldoc, open output management for IBM i.">
+  <section class="section">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Blog</p>
+        <h1>Blog</h1>
+        <p class="lead">Posts about Spooldoc and its releases. Also as <a href={url('/rss.xml')}>RSS</a>.</p>
+      </div>
+      {posts.length === 0 && <p class="muted">No posts yet.</p>}
+      {years.map((year) => (
+        <section class="year" aria-label={String(year)}>
+          <h2 class="year-label">{year}</h2>
+          <PostList posts={posts.filter((p) => p.data.date.getUTCFullYear() === year)} headingLevel="h3" />
+        </section>
+      ))}
+    </div>
+  </section>
+</Base>
+
+<style>
+  .year { display: grid; gap: var(--space-3); margin-top: var(--space-7); }
+  .year:first-of-type { margin-top: 0; }
+  .year-label { font: 500 13px/1.4 var(--font-mono); letter-spacing: 0; color: var(--muted-foreground); margin: 0; }
+</style>

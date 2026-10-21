@@ -3,8 +3,8 @@ title: "Contributing"
 description: "Set up a development environment, run the tests, and know the conventions before opening a pull request."
 ---
 
-Thanks for helping. Spooldoc is a pnpm workspace in TypeScript: two
-packages and one app. The short rules are in [CONTRIBUTING.md](../CONTRIBUTING.md)
+Thanks for helping. Spooldoc is a pnpm workspace in TypeScript: three
+packages, the app and the website. The short rules are in [CONTRIBUTING.md](../CONTRIBUTING.md)
 at the repository root; this page has the setup and the layout.
 
 ## Prerequisites
@@ -78,9 +78,10 @@ its definition, template and expected JSON next to the sample.
 | Path | What it holds |
 |------|---------------|
 | `packages/core` | Pure TypeScript, no UI and no IBM i dependency: samples, the *SCS parser, definitions, extraction, templates, PDF, masking, workspace. |
-| `packages/docs` | Reads the guides in `docs/` for the app's `/docs`: the sidebar from `docs/README.md`, front matter, headings, links and search sections. No Next.js code. |
+| `packages/docs` | Reads the guides in `docs/` for the app's `/docs` and the website's: the sidebar from `docs/README.md`, front matter, headings, links and search sections. No Next.js or Astro code. |
 | `packages/ibmi` | The IBM i connection through jt400: queues, spooled files, hold, move, delete, data queues, CL commands. The root export does not load Java; `@spooldoc/ibmi/jt400` does. |
 | `apps/web` | The Next.js app. `lib/server` holds config, the database (`db/`, with the Drizzle schema and migrations in `drizzle/`), sign-in, the IBM i connection (`ibmi.ts` is the only module that loads jt400), the Carbone connection (`rendering.ts`) and rendering, the job runner, destinations and the queue watcher, started from `instrumentation.ts`. Route handlers are under `app/api`, pages under `components/pages`, the job builder under `components/jobs` and `components/workbench`. |
+| `apps/site` | The website at [spooldoc.com](https://spooldoc.com), in Astro: the home page, the features, the guides from `docs/` and the blog. Not part of the Docker image or the release. See [Website](#website). |
 | `demo-spool` | CL and RPG sources that create output queues and print invented documents on any IBM i. |
 | `Dockerfile`, `compose.yaml` | The container image and an example service for it. |
 | `workspace/` | Where the capture command writes samples. Ignored by git except its README. |
@@ -127,6 +128,33 @@ file on GitHub at that version. The web app's tests check that every
 page is listed once and that every link and anchor between the guides
 lands. A link from the app into the docs uses `DocsLink`, which opens
 the page in a new tab.
+
+## Website
+
+The website is `apps/site`, a static Astro site. It reads the guides in
+`docs/` with `packages/docs` when it is built, so the website and the app
+show the same files. Run it locally with:
+
+```sh
+pnpm --filter @spooldoc/docs build   # once, and after changing packages/docs
+pnpm --filter @spooldoc/site dev     # http://localhost:4321
+```
+
+To build it as it is deployed and check every link in it:
+
+```sh
+pnpm --filter @spooldoc/site... build
+pnpm --filter @spooldoc/site check:links
+pnpm --filter @spooldoc/site preview
+```
+
+Blog posts are Markdown files in `apps/site/src/content/blog`, named
+`YYYY-MM-DD-slug.md`, with a `title`, `description`, `date`, `tags` and
+`draft` header. A post about a release has the tag `release`. The share
+image, `public/og.png`, is made by `pnpm --filter @spooldoc/site og`.
+
+The site deploys to GitHub Pages when a change to it, to `docs/` or to
+`packages/docs` merges to `main` (`.github/workflows/pages.yml`).
 
 ## Conventions
 

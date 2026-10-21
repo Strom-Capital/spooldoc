@@ -1,0 +1,160 @@
+---
+import Base from '../layouts/Base.astro';
+import CodeBlock from '../components/CodeBlock.astro';
+import PostList from '../components/PostList.astro';
+import Shot from '../components/Shot.astro';
+import { FEATURES, QUICK_START } from '../lib/features';
+import { assetSize, siteVersion } from '../lib/docs';
+import { docsUrl, links, url } from '../lib/links';
+import { getPosts } from '../lib/posts';
+import { homeJsonLd, SITE_DESCRIPTION, SITE_NAME } from '../lib/structuredData';
+
+const posts = (await getPosts()).slice(0, 3);
+const version = siteVersion();
+const architecture = assetSize('architecture-light.svg', 1000);
+
+const tour = [
+  { name: 'home', title: 'Home', text: 'Servers, output queues, jobs and runs at a glance, with a chart of runs per day.', alt: 'The Home page: counts of servers, output queues, jobs and runs, and a chart of runs per day by status' },
+  { name: 'job-builder', title: 'Job builder', text: 'The sample page with every field it found highlighted, next to the YAML that found it.', alt: 'The job builder with the extract step open: six pipeline steps across the top, the sample page with field hits highlighted on the left and the definition editor on the right' },
+  { name: 'template-preview', title: 'Templates', text: 'An HTML template beside the document it makes, rendered by Carbone as you edit.', alt: 'The render step of a job with two templates: the template\'s HTML in an editor on the left and the rendered invoice preview on the right' },
+  { name: 'job-log', title: 'Job log', text: 'Every run with its steps, their timings and the files it delivered.', alt: 'A run opened from the job log: status, the spooled file, the five steps with their timings, and the five delivered PDFs' },
+];
+---
+<Base title={SITE_NAME} description={SITE_DESCRIPTION} jsonLd={homeJsonLd(Astro.site!, version)}>
+  <section class="hero">
+    <div class="container hero-grid">
+      <div class="pitch">
+        <p class="eyebrow">Open source, MIT license. Version {version}.</p>
+        <h1>Spooled files into documents, for IBM i.</h1>
+        <p class="tagline">Open output management.</p>
+        <p class="lead">
+          Spooldoc watches the output queues of your IBM i and reads each spooled file into JSON with a
+          definition you write in YAML. It makes documents with HTML, Word or Excel templates, and
+          delivers the files. The agent proposes the definition and the template from a sample. Every
+          run is logged.
+        </p>
+        <div class="btn-row">
+          <a class="btn btn--primary" href={docsUrl('getting-started')}>Get started</a>
+          <a class="btn" href={docsUrl()}>Read the docs</a>
+          <a class="btn" href={links.github}>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
+            GitHub
+          </a>
+        </div>
+      </div>
+      <div class="start">
+        <p class="start-label">Quick start, with Docker</p>
+        <CodeBlock code={QUICK_START} lang="sh" title="Shell" track="install_command_copied" />
+        <p class="start-note">
+          Then open <code>http://localhost:3000</code> and create the first account.
+          See <a href={docsUrl('getting-started')}>Getting started</a> for the first job.
+        </p>
+      </div>
+    </div>
+    <div class="container">
+      <Shot name="ai-assistant" eager class="hero-shot" alt="The job builder: the sample invoice page with every extracted field highlighted, the YAML definition beside it, and the agent panel on the right" />
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="how">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">How it works</p>
+        <h2 id="how">Programs print as they always have</h2>
+        <p class="lead">
+          Spooldoc connects through jt400 and runs a job for every new spooled file, in real time
+          through a data queue or by polling. A run reads the file, extracts the page groups, makes a
+          document of each with every template, delivers the files, then holds, moves, deletes or
+          leaves the spooled file. Nothing is installed on the IBM i.
+        </p>
+      </div>
+      <figure class="diagram">
+        <img data-theme-image="light" src={url('/docs/assets/architecture-light.svg')} width={architecture.width} height={architecture.height} loading="lazy" alt="Architecture: programs on the IBM i print to an output queue, optionally with a data queue; Spooldoc's watcher picks up new spooled files by polling or in real time, and a run captures, extracts, renders, delivers and finishes each one; the job builder and the agent write to the same Postgres database; delivered files go to a destination" />
+        <img data-theme-image="dark" src={url('/docs/assets/architecture-dark.svg')} width={architecture.width} height={architecture.height} loading="lazy" alt="Architecture: programs on the IBM i print to an output queue, optionally with a data queue; Spooldoc's watcher picks up new spooled files by polling or in real time, and a run captures, extracts, renders, delivers and finishes each one; the job builder and the agent write to the same Postgres database; delivered files go to a destination" />
+      </figure>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="tour">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">The app</p>
+        <h2 id="tour">From a sample page to a delivered document</h2>
+      </div>
+      <div class="tour">
+        {tour.map((shot) => (
+          <div class="tour-item">
+            <Shot name={shot.name} alt={shot.alt} />
+            <h3>{shot.title}</h3>
+            <p class="muted">{shot.text}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="features">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Features</p>
+        <h2 id="features">What it does today</h2>
+      </div>
+      <ul class="grid">
+        {FEATURES.map((feature) => (
+          <li>
+            <a class="card" href={url(`/features/#${feature.id}`)}>
+              <h3>{feature.title}</h3>
+              <p>{feature.summary}</p>
+            </a>
+          </li>
+        ))}
+      </ul>
+      <p class="more"><a href={url('/features/')}>All features in depth</a></p>
+    </div>
+  </section>
+
+  {posts.length > 0 && (
+    <section class="section" aria-labelledby="latest">
+      <div class="container">
+        <div class="section-head">
+          <p class="eyebrow">Blog</p>
+          <h2 id="latest">Latest posts</h2>
+        </div>
+        <PostList posts={posts} />
+        <p class="more"><a href={url('/blog/')}>All posts</a></p>
+      </div>
+    </section>
+  )}
+</Base>
+
+<style>
+  .hero { padding-top: var(--space-7); }
+  .hero-grid { display: grid; gap: var(--space-6); align-items: start; margin-bottom: var(--space-7); }
+  @media (min-width: 1000px) { .hero-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--space-7); } }
+  .pitch h1 { margin: var(--space-3) 0 var(--space-2); max-width: 14ch; }
+  .tagline { font-size: clamp(1.3rem, 2.6vw, 1.75rem); font-weight: 600; letter-spacing: -0.02em; color: var(--primary); margin: 0 0 var(--space-5); }
+  .pitch .lead { margin-bottom: var(--space-5); }
+  .start { min-width: 0; }
+  @media (min-width: 1000px) { .start { padding-top: 46px; } }
+  .start-label { font-weight: 600; margin: 0; }
+  .start :global(.code) { margin: var(--space-3) 0; }
+  .start-note { font-size: 0.925rem; color: var(--muted-foreground); }
+  .hero-shot { margin-top: 0; }
+
+  .diagram { margin: 0; padding: var(--space-5); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.8); background: var(--card); text-align: center; }
+  .diagram img { width: 100%; max-width: 1000px; }
+
+  .tour { display: grid; gap: var(--space-6) var(--space-5); }
+  @media (min-width: 760px) { .tour { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .tour-item h3 { margin: var(--space-4) 0 var(--space-1); }
+  .tour-item p { margin: 0; }
+
+  .grid { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+  @media (min-width: 600px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 1000px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .card { display: block; height: 100%; padding: var(--space-5); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.8); background: var(--card); color: var(--foreground); text-decoration: none; transition: border-color 0.15s; }
+  .card:hover { border-color: var(--primary); }
+  .card h3 { margin: 0 0 var(--space-2); }
+  .card p { margin: 0; color: var(--muted-foreground); font-size: 0.95rem; }
+  .more { margin: var(--space-5) 0 0; font-weight: 500; }
+</style>

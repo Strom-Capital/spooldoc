@@ -1,0 +1,50 @@
+---
+import { render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import { getPosts } from '../../lib/posts';
+import { docsUrl, formatDate, links, url } from '../../lib/links';
+import { postJsonLd } from '../../lib/structuredData';
+
+export async function getStaticPaths() {
+  const posts = await getPosts();
+  return posts.map((post) => ({ params: { slug: post.id }, props: { post } }));
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+---
+<Base title={post.data.title} description={post.data.description} type="article" jsonLd={postJsonLd(post, Astro.site!)}>
+  <article class="section">
+    <div class="container narrow">
+      <a class="back" href={url('/blog/')}><span aria-hidden="true">←</span> All posts</a>
+      <header class="post-head">
+        <p class="meta">
+          <time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time>
+          {post.data.tags.includes('release') && <span class="tag">Release</span>}
+        </p>
+        <h1>{post.data.title}</h1>
+        <p class="lead">{post.data.description}</p>
+      </header>
+      <div class="prose"><Content /></div>
+      <aside class="after" aria-label="Next steps">
+        <p>Questions or ideas? Ask in <a href={links.discussions}>Discussions</a>, or open an <a href={links.issues}>issue</a>.</p>
+        <div class="btn-row">
+          <a class="btn btn--primary" href={docsUrl('getting-started')}>Get started</a>
+          <a class="btn" href={links.github}>GitHub</a>
+        </div>
+      </aside>
+    </div>
+  </article>
+</Base>
+
+<style>
+  .narrow { max-width: calc(46rem + 2 * var(--gutter)); }
+  .back { display: inline-block; font-size: 0.9rem; text-decoration: none; color: var(--muted-foreground); margin-bottom: var(--space-5); }
+  .back:hover { color: var(--primary); }
+  .post-head { padding-bottom: var(--space-5); border-bottom: 1px solid var(--border); margin-bottom: var(--space-6); }
+  .meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 0 0 var(--space-3); font: 13px/1.5 var(--font-mono); color: var(--muted-foreground); }
+  .tag { font: 500 12px/1 var(--font-sans); color: var(--primary); border: 1px solid currentColor; border-radius: 999px; padding: 3px 8px; }
+  h1 { font-size: clamp(2rem, 4.4vw, 3rem); }
+  .prose { font-size: 1.075rem; }
+  .after { margin-top: var(--space-7); padding-top: var(--space-5); border-top: 1px solid var(--border); }
+</style>

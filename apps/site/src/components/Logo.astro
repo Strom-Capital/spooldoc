@@ -1,0 +1,33 @@
+---
+/**
+ * The horizontal logo, light and dark, straight from the app's brand folder. CSS shows
+ * the one that matches the page theme. The wordmark is set in Montserrat 600 (Base.astro).
+ */
+import light from '../../../web/public/brand/spooldoc-horizontal-light.svg?raw';
+import dark from '../../../web/public/brand/spooldoc-horizontal-dark.svg?raw';
+import { inlineSvg } from '../lib/brand';
+
+interface Props {
+  /** Height in pixels. */
+  height?: number;
+  /** Keeps the ids of two logos on one page apart. */
+  id: string;
+}
+const { height = 28, id } = Astro.props;
+---
+<span class="logo" style={`--logo-height: ${height}px`}>
+  <Fragment set:html={inlineSvg(light, `${id}-light`, 'logo-light')} />
+  <Fragment set:html={inlineSvg(dark, `${id}-dark`, 'logo-dark')} />
+</span>
+
+<style>
+  .logo { display: inline-flex; align-items: center; line-height: 0; }
+  .logo :global(svg) { height: var(--logo-height); width: auto; }
+  .logo :global(.logo-dark) { display: none; }
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme='light'])) .logo :global(.logo-light) { display: none; }
+    :global(:root:not([data-theme='light'])) .logo :global(.logo-dark) { display: block; }
+  }
+  :global(:root[data-theme='dark']) .logo :global(.logo-light) { display: none; }
+  :global(:root[data-theme='dark']) .logo :global(.logo-dark) { display: block; }
+</style>

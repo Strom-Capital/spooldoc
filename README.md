@@ -17,6 +17,8 @@
 
 Spooled files into documents, for IBM i. Open output management.
 
+Website, docs and blog: [spooldoc.com](https://spooldoc.com).
+
 Spooldoc watches the output queues of your IBM i, splits each spooled file
 into page groups and reads each into JSON with a definition you write in
 YAML, makes documents of them with ordinary HTML templates (PDF or HTML),
@@ -107,6 +109,9 @@ definition from a sample spooled file. See
 To run from source instead, see [Contributing](docs/contributing.md).
 
 ## Documentation
+
+The guides are also on the website, with search, at
+[spooldoc.com/docs](https://spooldoc.com/docs/).
 
 | Guide | What it covers |
 |-------|----------------|

@@ -1,0 +1,22 @@
+---
+/**
+ * A highlighted code block with a label and a copy button. Uses the same Shiki themes
+ * as Markdown (lib/shiki.ts); CodeCopy.astro adds the header and the button.
+ */
+import { Code } from 'astro:components';
+import type { ComponentProps } from 'astro/types';
+import { shikiConfig } from '../lib/shiki';
+
+type Lang = ComponentProps<typeof Code>['lang'];
+
+interface Props {
+  code: string;
+  lang: Lang;
+  /** Shown in the header instead of the language name. */
+  title?: string;
+  /** The analytics event the copy button sends (Analytics.astro). */
+  track?: 'install_command_copied';
+}
+const { code, lang, title, track } = Astro.props;
+---
+<Code code={code} lang={lang} themes={shikiConfig.themes} defaultColor={false} transformers={[...shikiConfig.transformers]} data-title={title} data-track={track} />
