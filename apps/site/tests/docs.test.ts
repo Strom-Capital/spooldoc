@@ -95,11 +95,10 @@ describe('renderMarkdown', () => {
     }
   });
 
-  it('highlights code with both themes and leaves Mermaid as text', async () => {
-    const html = await renderMarkdown('```yaml\ntype: invoice\n```\n\n```mermaid\nflowchart LR\n  a --> b\n```\n');
+  it('highlights code with both themes', async () => {
+    const html = await renderMarkdown('```yaml\ntype: invoice\n```\n');
     expect(html).toContain('--shiki-light:');
     expect(html).toContain('--shiki-dark:');
-    expect(html).toContain('class="language-mermaid"');
   });
 
   it('keeps straight quotes and double hyphens, as the app does', async () => {

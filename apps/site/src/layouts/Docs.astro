@@ -5,7 +5,6 @@
  */
 import Base from './Base.astro';
 import DocsSearch from '../components/DocsSearch.astro';
-import Mermaid from '../components/Mermaid.astro';
 import { docsNav, type DocsHeading } from '../lib/docs';
 import { docsUrl, GITHUB } from '../lib/links';
 
@@ -69,7 +68,6 @@ const currentTitle = slug ? nav.flatMap((group) => group.pages).find((page) => p
       </aside>
     )}
   </div>
-  <Mermaid />
 </Base>
 
 <script>

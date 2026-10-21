@@ -14,8 +14,6 @@ export default defineConfig({
   integrations: [sitemap()],
   // The stylesheets are small; inlining them saves render-blocking requests on mobile.
   build: { inlineStylesheets: 'always' },
-  // Mermaid's diagram chunks are large. Mermaid.astro loads them only on a guide with a diagram.
-  vite: { build: { chunkSizeWarningLimit: 1600 } },
   markdown: {
     // The guides render without smartypants, as in the app; the blog follows them.
     // Images in posts open full size when clicked, as in the guides (src/lib/imageLinks.ts).
