@@ -51,7 +51,6 @@
     "@streamdown/cjk": "^1.0.4",
     "@streamdown/code": "^2.0.0",
     "@streamdown/math": "^1.0.3",
-    "@streamdown/mermaid": "^1.0.3",
     "@xyflow/react": "^12.12.0",
     "ai": "^7.0.141",
     "better-auth": "^1.7.10",

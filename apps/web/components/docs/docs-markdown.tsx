@@ -1,14 +1,13 @@
 'use client';
 
 import { code } from '@streamdown/code';
-import { mermaid } from '@streamdown/mermaid';
 import { cn } from 'cn';
 import Link from 'next/link';
 import type { ComponentProps } from 'react';
 import rehypeSlug from 'rehype-slug';
 import { type Components, defaultRehypePlugins, type ExtraProps, Streamdown, type StreamdownProps } from 'streamdown';
 
-const plugins = { code, mermaid };
+const plugins = { code };
 
 type Pluggable = NonNullable<StreamdownProps['rehypePlugins']>[number];
 
@@ -76,7 +75,7 @@ export function DocsMarkdown({ children, className }: { children: string; classN
       rehypePlugins={rehypePlugins}
       components={components}
       linkSafety={{ enabled: false }}
-      controls={{ table: false, code: true, mermaid: true }}
+      controls={{ table: false, code: true }}
       tableMaxHeight={0}
       codeBlockMaxHeight={0}
     >

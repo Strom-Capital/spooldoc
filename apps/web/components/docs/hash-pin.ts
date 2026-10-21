@@ -12,8 +12,8 @@ let unpin: (() => void) | undefined;
 
 /**
  * Keeps the heading with this id at the top of the window while the page above it
- * settles. A Mermaid diagram draws itself after the page has scrolled, at a height known
- * only then, and would push the heading out of view. The pin ends when the reader moves
+ * settles. Anything that takes its height after the page has scrolled would push the
+ * heading out of view. The pin ends when the reader moves
  * the page, or after a few seconds.
  *
  * @param id - The heading's id, without `#`. An empty or unknown id only ends the last pin.
