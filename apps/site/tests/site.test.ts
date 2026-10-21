@@ -187,7 +187,7 @@ describe('site copy', () => {
 
   // The brand guide's banned words and claims we never make (sections 5.6 and 6.3).
   const banned =
-    /\b(seamless(ly)?|revolutioni[sz]e|unlock|leverage|cutting-edge|next-gen|robust|effortless(ly)?|easy|easier|game-changer|powerful|empower|supercharge|turbocharge|magic(ally)?|intelligent|solutions?|best-in-class|world-class|legacy|outdated|old-fashioned|finally|no more|out of the box|simply|obviously|enterprise-grade|production-ready|battle-tested|secure|compliant|free)\b/i;
+    /\b(seamless(ly)?|revolutioni[sz]e|unlock|leverage|cutting-edge|next-gen|robust|effortless(ly)?|easy|easier|game-changer|powerful|empower|supercharge|turbocharge|magic(ally)?|intelligent|smart|solutions?|best-in-class|world-class|legacy|outdated|old-fashioned|finally|no more|out of the box|simply|obviously|enterprise-grade|production-ready|battle-tested|secure|compliant|free)\b/i;
 
   it('uses none of the banned words', () => {
     for (const file of files) {
@@ -208,8 +208,9 @@ describe('site copy', () => {
     for (const file of files) {
       // The screenshot's file name and the provider's product name stay as they are.
       const text = fs.readFileSync(file, 'utf8').replaceAll('ai-assistant', '').replaceAll('Vercel AI Gateway', '');
-      expect(text, file).not.toMatch(/\bAI\b/);
-      expect(text, file).not.toMatch(/\bassistants?\b/i);
+      expect(text, file).not.toMatch(/\bassistants?\b|\bcopilot\b|AI-(powered|driven)|\bthe AI\b/i);
+      // "AI" is fine as a plain fact ("an AI model you choose"), at most twice in a file.
+      expect(text.match(/\bAI\b/g)?.length ?? 0, file).toBeLessThanOrEqual(2);
     }
   });
 });

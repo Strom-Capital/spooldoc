@@ -27,7 +27,7 @@ export function llmsTxt({ site, nav, posts, version }: { site: URL; nav: DocsGro
 - Runs as a container image, \`ghcr.io/strom-capital/spooldoc\`, on amd64 and arm64, with Postgres and a Carbone server for rendering. One Compose file starts all three.
 - For IBM i (AS/400, iSeries). Connects through jt400 on the host server ports. Nothing is installed on the IBM i, and programs need no changes.
 - Output: PDF, HTML, DOCX and XLSX. Destinations: Spooldoc download and a folder in the IFS.
-- The agent in the job builder proposes the definition and the template from a sample spooled file, with Anthropic, Google, OpenAI, OpenRouter, Vercel AI Gateway or a local model. Spooldoc works without a model.
+- The agent in the job builder proposes the definition and the template from a sample spooled file. It uses an AI model you choose: Anthropic, Google, OpenAI, OpenRouter, Vercel AI Gateway or a local model. Spooldoc works without a model.
 
 ## Site
 

@@ -103,7 +103,7 @@ export const FEATURES: Feature[] = [
     summary: 'The agent drafts the definition and the template from a sample. You decide.',
     body: [
       'The agent sits beside the job builder. From a sample spooled file it writes the definition, reads the extraction report and fixes what is missing. Then it writes a template and renders it: HTML, or a Word or Excel template it designs or edits, looking at every page it renders.',
-      'It works with Anthropic, Google, OpenAI, OpenRouter, Vercel AI Gateway or a local model behind an OpenAI-compatible endpoint. Spooldoc works without a model.',
+      'It uses an AI model you choose: Anthropic, Google, OpenAI, OpenRouter, Vercel AI Gateway or a local model behind an OpenAI-compatible endpoint. Spooldoc works without a model.',
       'Nothing it writes goes live until you save and activate a version, and none of its tools reaches the IBM i. With masking on, the model sees the layout and not the values. A local model keeps the values on your network.',
     ],
     shot: 'ai-assistant',
