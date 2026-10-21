@@ -1,6 +1,6 @@
 {
   "name": "@spooldoc/core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Spooldoc core: IBM i spooled files to JSON documents, and Carbone templates",
   "license": "MIT",
   "repository": {
