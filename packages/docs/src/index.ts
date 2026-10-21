@@ -141,13 +141,33 @@ export function docsHeadings(markdown: string): { depth: number; text: string; i
   const slugger = new GithubSlugger();
   const headings: { depth: number; text: string; id: string }[] = [];
   eachLine(markdown, (line, inCode) => {
-    const [, hashes, heading] = (inCode ? null : /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line)) ?? [];
-    if (hashes && heading) {
-      const text = inlineText(heading);
-      headings.push({ depth: hashes.length, text, id: slugger.slug(text) });
+    const heading = inCode ? undefined : atxHeading(line);
+    if (heading) {
+      const text = inlineText(heading.text);
+      headings.push({ depth: heading.depth, text, id: slugger.slug(text) });
     }
   });
   return headings;
+}
+
+/**
+ * A `#` heading line's level and text, without the closing `#`s. String code strips the
+ * end, so a long run of spaces or `#`s takes linear time.
+ */
+function atxHeading(line: string): { depth: number; text: string } | undefined {
+  const [, hashes, space, rest] = /^(#{1,6})(\s+)(.*)$/s.exec(line) ?? [];
+  if (!hashes || !space || rest === undefined) {
+    return undefined;
+  }
+  let end = rest.trimEnd().length;
+  while (end > 0 && rest[end - 1] === '#') {
+    end--;
+  }
+  // A heading of only closing `#`s keeps its first character, and one of only spaces its
+  // last space, as the heading needs at least one character.
+  const text = rest.slice(0, end).trimEnd() || rest.charAt(0) || (space.length > 1 ? space.slice(-1) : '');
+  // The text never holds a line break.
+  return text && !/[\r\u2028\u2029]/.test(text) ? { depth: hashes.length, text } : undefined;
 }
 
 /**
@@ -165,7 +185,7 @@ export function rewriteDocsMarkdown(markdown: string, options: DocsOptions): str
         };
         return `<p align="center">${image(light, 'dark:hidden')}${image(dark, 'hidden dark:inline')}</p>`;
       })
-      .replace(/(\]\()([^)\s]+)(\))/g, (_, open: string, target: string, end: string) => `${open}${docsHref(target, options)}${end}`),
+      .replace(/(\]\()([^()\s]+)(\))/g, (_, open: string, target: string, end: string) => `${open}${docsHref(target, options)}${end}`),
   );
 }
 
@@ -193,7 +213,7 @@ function naturalSize(file: string): { width: number; height: number } | undefine
       : undefined;
   }
   if (file.endsWith('.svg')) {
-    const tag = /<svg\b[^>]*>/.exec(data.toString('utf8'))?.[0] ?? '';
+    const tag = /<svg\b[^<>]*>/.exec(data.toString('utf8'))?.[0] ?? '';
     const attribute = (name: string) => new RegExp(`\\s${name}="([^"]+)"`).exec(tag)?.[1];
     const box = attribute('viewBox')?.trim().split(/[\s,]+/).map(Number);
     const width = Number.parseFloat(attribute('width') ?? '') || box?.[2];
@@ -240,7 +260,8 @@ function frontMatter(source: string, file: string): { fields: { title: string; d
   }
   const fields: Record<string, string> = {};
   for (const line of (match[1] ?? '').split('\n')) {
-    const [, key, value] = /^(\w+):\s*(.*)$/.exec(line) ?? [];
+    const [, key, rest] = /^(\w+):(.*)$/.exec(line) ?? [];
+    const value = rest?.trimStart();
     if (key && value !== undefined) {
       fields[key] = value.startsWith('"') ? (JSON.parse(value) as string) : value;
     }
@@ -301,7 +322,7 @@ function mapProse(markdown: string, rewrite: (text: string) => string): string {
 /** A heading's text as it reads: link text kept, code ticks and emphasis dropped. */
 function inlineText(markdown: string): string {
   return markdown
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/!?\[([^[\]]*)\]\([^()]*\)/g, '$1')
     .replace(/`([^`]*)`/g, '$1')
     .replace(/(\*\*|__|\*)(.+?)\1/g, '$2')
     .trim();
@@ -310,11 +331,11 @@ function inlineText(markdown: string): string {
 /** A section's text for search: no Markdown syntax, no HTML, one line. */
 function plainText(markdown: string): string {
   return markdown
-    .replace(/^\s*(`{3,}|~{3,}).*$/gm, ' ')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/^\s*\|?[\s:|-]+\|?\s*$/gm, ' ')
-    .replace(/^\s*(?:>|[-*+]|\d+\.)\s+/gm, '')
+    .replace(/^[^\S\n]*(`{3,}|~{3,}).*$/gm, ' ')
+    .replace(/<[^<>]+>/g, ' ')
+    .replace(/!?\[([^[\]]*)\]\([^()]*\)/g, '$1')
+    .replace(/^[\s:|-]+$/gm, ' ')
+    .replace(/^[^\S\n]*(?:>|[-*+]|\d+\.)\s+/gm, '')
     .replace(/[`|]|\*\*/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();

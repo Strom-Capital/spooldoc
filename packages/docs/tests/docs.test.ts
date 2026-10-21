@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -156,5 +157,35 @@ describe('docs', () => {
     const tags = sections.find((section) => section.page === 'templates' && section.anchor === 'tags-in-word');
     expect(tags?.heading).toBe('Tags in Word');
     expect(tags?.text).not.toMatch(/\]\(|<\w/);
+  });
+
+  it('reads long hostile text in linear time', () => {
+    const hostile = [
+      '['.repeat(50000),
+      '[]('.repeat(50000),
+      '](]('.repeat(50000),
+      '<'.repeat(50000),
+      '\n'.repeat(50000) + 'x',
+      `| ${' '.repeat(50000)}x`,
+      `- ${'\n'.repeat(50000)}x`,
+      `a: ${' '.repeat(50000)}\r`,
+    ];
+    const started = performance.now();
+    expect(docsHeadings('# a' + ' '.repeat(50000) + 'b')).toEqual([{ depth: 1, text: 'a' + ' '.repeat(50000) + 'b', id: expect.any(String) }]);
+    expect(docsHeadings('# a' + ' '.repeat(50000) + '#'.repeat(50000) + ' '.repeat(50000))[0]?.text).toBe('a');
+    expect(docsHeadings('# ' + '['.repeat(50000))).toHaveLength(1);
+    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'spooldoc-docs-'));
+    try {
+      fs.writeFileSync(path.join(temp, 'README.md'), '## Group\n\n| [Page](page.md) | A page |\n');
+      fs.writeFileSync(path.join(temp, 'page.md'), `---\ntitle: Page\ndescription: A page\n---\n\n${hostile.join('\n\n')}\n`);
+      const local: DocsOptions = { ...options, folder: temp };
+      expect(docsSections(local).length).toBeGreaterThan(0);
+      for (const text of hostile) {
+        rewriteDocsMarkdown(text, local);
+      }
+    } finally {
+      fs.rmSync(temp, { recursive: true, force: true });
+    }
+    expect(performance.now() - started).toBeLessThan(2000);
   });
 });
