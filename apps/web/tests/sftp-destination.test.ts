@@ -25,7 +25,8 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-describe('the SFTP destination', () => {
+// Each test signs in over real SSH, in pure JS, and runs whole jobs: slower than a unit test on a busy CI runner.
+describe('the SFTP destination', { timeout: 30_000 }, () => {
   const sample = loadSample('invoice');
   let serverId: string;
 

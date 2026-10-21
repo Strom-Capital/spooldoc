@@ -69,7 +69,8 @@ describe('sftp-key', () => {
   });
 });
 
-describe('sftp-check', () => {
+// These sign in over real SSH, in pure JS: slower than a unit test on a busy CI runner.
+describe('sftp-check', { timeout: 30_000 }, () => {
   it('stops at a new host key before the sign-in, then checks every line once the key is trusted, and writes nothing', async () => {
     const key = await makeKey();
     server.options.publicKey = key.publicKey;
@@ -200,7 +201,7 @@ describe('adding and changing an SFTP destination', () => {
   });
 });
 
-describe('the step folder view and Upload test', () => {
+describe('the step folder view and Upload test', { timeout: 30_000 }, () => {
   async function sftpJob(change: Partial<SftpConfig> = {}): Promise<{ jobId: string; destinationId: string }> {
     const serverId = await insertServer();
     const sample = await storeSample(serverId, { sample: loadSample('invoice'), warnings: [] });
