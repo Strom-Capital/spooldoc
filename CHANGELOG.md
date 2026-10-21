@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.0](https://github.com/Strom-Capital/spooldoc/compare/v0.3.1...v0.4.0) (2026-10-21)
+
+
+### Features
+
+* **web:** email destination ([1a69164](https://github.com/Strom-Capital/spooldoc/commit/1a691646fcbace74f72524c6342c1e9372432b6e))
+* **web:** Microsoft 365 sender for email ([cb26dbc](https://github.com/Strom-Capital/spooldoc/commit/cb26dbcc82467946f48cac9101b2068e795dd8f8))
+* **web:** number, date and currency formats in Settings ([1a69164](https://github.com/Strom-Capital/spooldoc/commit/1a691646fcbace74f72524c6342c1e9372432b6e))
+* **web:** webhook destination ([#130](https://github.com/Strom-Capital/spooldoc/issues/130)) ([516356f](https://github.com/Strom-Capital/spooldoc/commit/516356f29cd0fad4ec935962734ccc0520fa41c6))
+
 ## [0.3.1](https://github.com/Strom-Capital/spooldoc/compare/v0.3.0...v0.3.1) (2026-10-21)
 
 
