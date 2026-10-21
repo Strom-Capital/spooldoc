@@ -11,6 +11,7 @@ workspace
 **/.env.*
 !**/.env.example
 demo-spool
+apps/site
 *.log
 .DS_Store
 Dockerfile

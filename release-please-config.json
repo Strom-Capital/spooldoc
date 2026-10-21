@@ -8,6 +8,7 @@
       "initial-version": "0.1.0",
       "package-name": "spooldoc",
       "changelog-path": "CHANGELOG.md",
+      "exclude-paths": ["apps/site"],
       "extra-files": [
         { "type": "json", "path": "packages/core/package.json", "jsonpath": "$.version" },
         { "type": "json", "path": "packages/docs/package.json", "jsonpath": "$.version" },
