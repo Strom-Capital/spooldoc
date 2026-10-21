@@ -57,7 +57,7 @@ describe("jt400 connection cache", () => {
   });
 
   describe("a connection that drops", () => {
-    const info = { host: creds.host, user: "DEMOUSER", jobCcsid: 37, vrm: "V7R5" };
+    const info = { host: creds.host, user: "DEMOUSER", jobCcsid: 37, defaultCcsid: 37, vrm: "V7R5" };
     const queue = { library: "MYLIB", name: "MYOUTQ", files: 1, text: "", dataQueue: null };
     const splf = { name: "QPRINT", number: 1, jobName: "MYJOB", jobUser: "DEMOUSER", jobNumber: "000001" };
     const dropped = () => toConnectionError(new Error("java.sql.SQLException: The connection does not exist. (08003)"), [], undefined, { host: creds.host });

@@ -74,7 +74,7 @@ export class FakeConnection implements Connection {
   }
 
   async describe(): Promise<SystemInfo> {
-    return { host: 'ibmi.example.com', user: 'DEMOUSER', jobCcsid: 273, vrm: 'V7R5' };
+    return { host: 'ibmi.example.com', user: 'DEMOUSER', jobCcsid: 273, defaultCcsid: 273, vrm: 'V7R5' };
   }
 
   async listOutputQueues(filter: { library?: string; name?: string; libraries?: string[] } = {}): Promise<OutputQueue[]> {

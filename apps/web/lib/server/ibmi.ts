@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { ConnectionError, noAnswerError, withDeadline, type Connection, type ConnectionErrorCode, type Credentials, type SystemInfo } from '@spooldoc/ibmi';
+import { getConfig } from './config';
 import { errorResponse, json, redact } from './http';
 import { getServerRow, recordServerState, serverCredentials, signOnPaused, signOnPausedMessage, type ServerOutcome, type ServerRow } from './servers';
 
@@ -132,7 +133,8 @@ export interface ServerConnection {
 /**
  * Wraps a server's connection so every call records what it came to on the server (see
  * `recordServerState`): a call that works shows the server as connected, a host or
- * sign-on error shows why it is not.
+ * sign-on error shows why it is not. Queue text falls back to SPOOLDOC_DEFAULT_CCSID when
+ * the system's default CCSID is unknown.
  */
 function recorded(conn: Connection, server: ServerRow, password: string): Connection {
   const note = async <T>(call: Promise<T>): Promise<T> => {
@@ -148,7 +150,7 @@ function recorded(conn: Connection, server: ServerRow, password: string): Connec
   };
   return {
     describe: () => note(conn.describe()),
-    listOutputQueues: (filter) => note(conn.listOutputQueues(filter)),
+    listOutputQueues: (filter) => note(conn.listOutputQueues({ fallbackCcsid: getConfig().defaultCcsid, ...filter })),
     listSpooledFiles: (queue, filter) => note(conn.listSpooledFiles(queue, filter)),
     countSpooledFiles: (filter) => note(conn.countSpooledFiles(filter)),
     readSpooledFile: (id) => note(conn.readSpooledFile(id)),
