@@ -645,31 +645,37 @@ function MailSection({ saved, draft, onChange }: { saved: MailView; draft: MailD
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="mail-password">Password</Label>
-          <div className="flex gap-2">
-            <Input
-              id="mail-password"
-              type="password"
-              value={draft.password}
-              onChange={(event) => onChange({ ...draft, password: event.target.value, removePassword: false })}
-              placeholder={saved.hasPassword && !draft.removePassword ? 'Saved. Leave empty to keep it.' : undefined}
-              autoComplete="new-password"
-              disabled={!draft.user.trim()}
-            />
+          <Input
+            id="mail-password"
+            type="password"
+            value={draft.password}
+            onChange={(event) => onChange({ ...draft, password: event.target.value, removePassword: false })}
+            placeholder={saved.hasPassword && !draft.removePassword ? 'Saved. Leave empty to keep it.' : undefined}
+            autoComplete="new-password"
+            disabled={!draft.user.trim()}
+          />
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-muted-foreground text-xs">
+              {draft.removePassword
+                ? 'The saved password is removed when you save.'
+                : !draft.user.trim()
+                  ? 'Enter the user name first. A server that takes email without a sign-in needs neither.'
+                  : 'Stored encrypted on the server and never shown again. Some services want an app password here.'}
+            </p>
             {saved.hasPassword && (
               <Hint text={draft.removePassword ? 'Keep the saved password after all.' : 'Remove the saved password when you save. Nothing changes until then.'}>
-                <Button type="button" variant="outline" onClick={() => onChange({ ...draft, password: '', removePassword: !draft.removePassword })}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => onChange({ ...draft, password: '', removePassword: !draft.removePassword })}
+                >
                   {draft.removePassword ? 'Keep password' : 'Remove password'}
                 </Button>
               </Hint>
             )}
           </div>
-          <p className="text-muted-foreground text-xs">
-            {draft.removePassword
-              ? 'The saved password is removed when you save.'
-              : !draft.user.trim()
-                ? 'Enter the user name first. A server that takes email without a sign-in needs neither.'
-                : 'Stored encrypted on the server and never shown again. Some services want an app password here.'}
-          </p>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="mail-from">From address</Label>

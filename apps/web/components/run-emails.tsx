@@ -20,6 +20,25 @@ function deliveryStatus(delivery: DeliveryView): { tone: StatusTone; icon: typeo
   return { tone: 'ready', icon: CheckCircle2Icon, label: 'Sent' };
 }
 
+/** Addresses that may break only after an @ or between addresses, never inside a word. */
+function Addresses({ text }: { text: string }) {
+  const parts = text.split('@');
+  return (
+    <>
+      {parts.map((part, index) => (
+        <Fragment key={index}>
+          {part}
+          {index < parts.length - 1 && (
+            <>
+              @<wbr />
+            </>
+          )}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
 const time = (iso: string): string => new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
 /**
@@ -56,8 +75,8 @@ export function RunEmails({ deliveries }: { deliveries: DeliveryView[] }) {
             <thead className="bg-muted/50 text-left text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 font-medium">Document</th>
-                <th className="px-3 py-2 font-medium">Status</th>
-                <th className="hidden px-3 py-2 text-right font-medium sm:table-cell">Time</th>
+                <th className="w-px whitespace-nowrap px-3 py-2 font-medium">Status</th>
+                <th className="hidden w-px whitespace-nowrap px-3 py-2 text-right font-medium sm:table-cell">Time</th>
               </tr>
             </thead>
             <tbody>
@@ -82,14 +101,14 @@ export function RunEmails({ deliveries }: { deliveries: DeliveryView[] }) {
                         ) : (
                           <div className="break-words">{delivery.document}</div>
                         )}
-                        <div className="break-all text-muted-foreground text-xs">{delivery.to ? `To ${delivery.to}` : 'No address'}</div>
+                        <div className="text-muted-foreground text-xs">{delivery.to ? <>To <Addresses text={delivery.to} /></> : 'No address'}</div>
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2">
+                      <td className="w-px whitespace-nowrap px-3 py-2">
                         <StatusPill tone={status.tone} icon={status.icon} title={status.title}>
                           {status.label}
                         </StatusPill>
                       </td>
-                      <td className="tabular hidden whitespace-nowrap px-3 py-2 text-right text-muted-foreground text-xs sm:table-cell">{time(delivery.sentAt)}</td>
+                      <td className="tabular hidden w-px whitespace-nowrap px-3 py-2 text-right text-muted-foreground text-xs sm:table-cell">{time(delivery.sentAt)}</td>
                     </tr>
                     {failed && expanded && (
                       <tr>
