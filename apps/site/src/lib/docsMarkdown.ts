@@ -31,7 +31,7 @@ export function absoluteDocsMarkdown(markdown: string, site: URL, page: string):
       }
       if (fence) return line;
       return line
-        .replace(THEME_IMAGES, (_, src: string, alt: string) => `![${alt.replace(/[[\]]/g, '\\$&')}](${abs(src)})`)
+        .replace(THEME_IMAGES, (_, src: string, alt: string) => `![${alt.replace(/[\\[\]]/g, '\\$&')}](${abs(src)})`)
         .replace(/(\]\()([/#][^()\s]*)(\))/g, (_, open: string, target: string, close: string) => `${open}${abs(target)}${close}`)
         .replace(/(\s(?:href|src)=")(\/[^"]*)(")/g, (_, open: string, target: string, close: string) => `${open}${abs(target)}${close}`);
     })

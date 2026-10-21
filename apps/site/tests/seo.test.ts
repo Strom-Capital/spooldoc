@@ -33,6 +33,12 @@ describe('guides as Markdown', () => {
     expect(absoluteDocsMarkdown(pair, site, '/docs/jobs/')).toBe('![The Jobs page](https://spooldoc.com/docs/assets/jobs-light.png)');
   });
 
+  it('escape backslashes and brackets in alt text', () => {
+    const pair =
+      '<p align="center"><img data-theme-image="light" src="/docs/assets/a-light.png" alt="C:\\out [1]" width="9" height="5"><img data-theme-image="dark" src="/docs/assets/a-dark.png" alt="C:\\out [1]" width="9" height="5"></p>';
+    expect(absoluteDocsMarkdown(pair, site, '/docs/jobs/')).toBe('![C:\\\\out \\[1\\]](https://spooldoc.com/docs/assets/a-light.png)');
+  });
+
   it('leave code blocks alone', () => {
     const markdown = '```html\n<img src="/logo.png">\n[a](/docs/jobs)\n```\n[a](/docs/jobs)';
     expect(absoluteDocsMarkdown(markdown, site, '/docs/jobs/')).toBe('```html\n<img src="/logo.png">\n[a](/docs/jobs)\n```\n[a](https://spooldoc.com/docs/jobs/)');
