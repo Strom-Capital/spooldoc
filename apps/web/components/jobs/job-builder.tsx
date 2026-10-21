@@ -29,6 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Hint } from '@/components/hint';
 import { StatusPill } from '@/components/status-pill';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -173,9 +174,11 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
                       />
                     </form>
                   ) : (
-                    <button type="button" onClick={startRename} className="block max-w-full truncate rounded px-1 text-left font-semibold hover:bg-muted" title="Rename">
-                      {job.name}
-                    </button>
+                    <Hint text="Rename the job" side="bottom">
+                      <button type="button" onClick={startRename} className="block max-w-full truncate rounded px-1 text-left font-semibold hover:bg-muted">
+                        {job.name}
+                      </button>
+                    </Hint>
                   )}
                 </span>
               </BreadcrumbItem>
@@ -219,23 +222,41 @@ function TopBar({ ai, onSave, onRun }: { ai: { open: boolean; setOpen(open: bool
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" onClick={onSave} disabled={viewing !== 'draft'}>
-            <SaveIcon />
-            <span className="hidden sm:inline">Save version</span>
-          </Button>
+          <Hint
+            text={
+              viewing !== 'draft'
+                ? 'A saved version is read-only. Go back to the draft to save a new version.'
+                : 'Save the draft as a fixed version. Watching and Run now use the active version, so the draft can change without touching them.'
+            }
+          >
+            <Button variant="outline" size="sm" onClick={onSave} disabled={viewing !== 'draft'} aria-label="Save version">
+              <SaveIcon />
+              <span className="hidden sm:inline">Save version</span>
+            </Button>
+          </Hint>
         </ButtonGroup>
         {/* Primary once every step is ready; until then Next is the step to take. */}
-        <Button size="sm" variant={runVariant(ready)} onClick={onRun}>
-          <PlayIcon />
-          <span className="hidden sm:inline">Run now</span>
-        </Button>
+        <Hint
+          text={
+            job.activeVersion === null
+              ? 'Run the job by hand on spooled files you pick. It runs the active version, so save a version and make it active first.'
+              : `Run version ${job.activeVersion} now on spooled files you pick from the source queue.`
+          }
+        >
+          <Button size="sm" variant={runVariant(ready)} onClick={onRun} aria-label="Run now">
+            <PlayIcon />
+            <span className="hidden sm:inline">Run now</span>
+          </Button>
+        </Hint>
         <AiButton open={ai.open} setOpen={ai.setOpen} />
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon-sm" aria-label="More">
-              <MoreHorizontalIcon />
-            </Button>
-          </DropdownMenuTrigger>
+          <Hint text="Rename, Job log and Delete job">
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" aria-label="More">
+                <MoreHorizontalIcon />
+              </Button>
+            </DropdownMenuTrigger>
+          </Hint>
           <DropdownMenuContent
             align="end"
             onCloseAutoFocus={(event) => {
@@ -325,15 +346,19 @@ function VersionBanner() {
       </span>
       <div className="ml-auto flex gap-1.5">
         {job.activeVersion !== viewing && (
-          <Button size="xs" variant="outline" disabled={busy} onClick={onActivate}>
-            <StarIcon />
-            Make active
-          </Button>
+          <Hint text={`Watching and Run now use version ${viewing} from now on. The draft does not change.`}>
+            <Button size="xs" variant="outline" disabled={busy} onClick={onActivate}>
+              <StarIcon />
+              Make active
+            </Button>
+          </Hint>
         )}
-        <Button size="xs" variant="outline" disabled={busy} onClick={() => act('restore')}>
-          <RotateCcwIcon />
-          Restore to draft
-        </Button>
+        <Hint text={`Copy version ${viewing} into the draft, in place of what the draft has now. The active version does not change.`}>
+          <Button size="xs" variant="outline" disabled={busy} onClick={() => act('restore')}>
+            <RotateCcwIcon />
+            Restore to draft
+          </Button>
+        </Hint>
         <Button size="xs" variant="ghost" onClick={() => void setViewing('draft')}>
           Back to draft
         </Button>

@@ -2,6 +2,7 @@
 
 import { XIcon } from 'lucide-react';
 import { useState, type KeyboardEvent } from 'react';
+import { Hint } from '@/components/hint';
 
 /**
  * A list of short names: type one and press Enter or comma; Backspace in the empty box
@@ -47,14 +48,16 @@ export function TagInput({
       {value.map((name) => (
         <span key={name} className="inline-flex items-center gap-0.5 rounded-md bg-muted py-0.5 pr-0.5 pl-1.5 font-mono text-xs">
           {name}
-          <button
-            type="button"
-            onClick={() => onChange(value.filter((other) => other !== name))}
-            className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
-            aria-label={`Remove ${name}`}
-          >
-            <XIcon className="size-3" />
-          </button>
+          <Hint text={`Remove ${name}`}>
+            <button
+              type="button"
+              onClick={() => onChange(value.filter((other) => other !== name))}
+              className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+              aria-label={`Remove ${name}`}
+            >
+              <XIcon className="size-3" />
+            </button>
+          </Hint>
         </span>
       ))}
       <input

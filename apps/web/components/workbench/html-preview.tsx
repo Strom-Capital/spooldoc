@@ -4,10 +4,10 @@ import { FileCodeIcon, FileDownIcon, FileSpreadsheetIcon, FileTextIcon } from 'l
 import Link from 'next/link';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useAppInfo } from '@/components/app-info';
+import { Hint } from '@/components/hint';
 import { ErrorNote } from '@/components/page';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { shownError, type ShownError } from '@/lib/client/api';
 import { download, postForFile } from '@/lib/client/download';
 import { FORMAT_FILES, KIND_NAMES, perSpooledFile, spooledFileName } from '@/lib/job-spec';
@@ -49,7 +49,7 @@ export function HtmlPreview({ header, fileName = (name) => name }: { header?: Re
       ? 'Connect Carbone in Settings to render documents'
       : !rendered
         ? 'Nothing to print yet: fix the definition or the template first.'
-        : `Download this document as ${format}`;
+        : `Download this document as ${format}, made from the sample with the definition and template as they are now.`;
   const name = () =>
     fileName(perSpooledFile(content) && render ? spooledFileName(render.sample) : (render?.names?.[pageGroupIndex] ?? `document-${pageGroupIndex + 1}`));
 
@@ -77,17 +77,12 @@ export function HtmlPreview({ header, fileName = (name) => name }: { header?: Re
   }
 
   const fileButton = (format: 'pdf' | 'docx' | 'xlsx') => (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span tabIndex={ready ? undefined : 0}>
-          <Button size="sm" variant="outline" disabled={!ready || busy !== null} onClick={() => void onFile(format)}>
-            {busy === format ? <Spinner /> : format === 'pdf' ? <FileDownIcon /> : format === 'xlsx' ? <FileSpreadsheetIcon /> : <FileTextIcon />}
-            {FORMAT_FILES[format].label}
-          </Button>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent>{hint(`${format === 'xlsx' ? 'an' : 'a'} ${FORMAT_FILES[format].label}`)}</TooltipContent>
-    </Tooltip>
+    <Hint text={hint(`${format === 'xlsx' ? 'an' : 'a'} ${FORMAT_FILES[format].label}`)}>
+      <Button size="sm" variant="outline" disabled={!ready || busy !== null} onClick={() => void onFile(format)}>
+        {busy === format ? <Spinner /> : format === 'pdf' ? <FileDownIcon /> : format === 'xlsx' ? <FileSpreadsheetIcon /> : <FileTextIcon />}
+        {FORMAT_FILES[format].label}
+      </Button>
+    </Hint>
   );
 
   return (
@@ -98,10 +93,12 @@ export function HtmlPreview({ header, fileName = (name) => name }: { header?: Re
           {fileFormat ? (
             fileButton(fileFormat)
           ) : (
-            <Button size="sm" variant="outline" disabled={!render?.html} onClick={onHtml} title="Download this document as HTML">
-              <FileCodeIcon />
-              HTML
-            </Button>
+            <Hint text={render?.html ? 'Download this document as HTML' : 'Nothing to download yet: fix the definition or the template first.'}>
+              <Button size="sm" variant="outline" disabled={!render?.html} onClick={onHtml}>
+                <FileCodeIcon />
+                HTML
+              </Button>
+            </Hint>
           )}
           {fileButton('pdf')}
         </div>

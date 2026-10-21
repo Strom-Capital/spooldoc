@@ -3,6 +3,7 @@
 import { MoreHorizontalIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, type ComponentProps, type MouseEvent, type ReactNode } from 'react';
+import { Hint } from '@/components/hint';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
@@ -69,11 +70,13 @@ export function RowAction({ className, ...props }: Omit<ComponentProps<typeof Bu
 export function RowMenu({ label, busy = false, children }: { label: string; busy?: boolean; children: ReactNode }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${label}`} disabled={busy}>
-          {busy ? <Spinner /> : <MoreHorizontalIcon />}
-        </Button>
-      </DropdownMenuTrigger>
+      <Hint text="More actions">
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${label}`} disabled={busy}>
+            {busy ? <Spinner /> : <MoreHorizontalIcon />}
+          </Button>
+        </DropdownMenuTrigger>
+      </Hint>
       {/* As wide as its longest item, not the trigger, so no item wraps. */}
       <DropdownMenuContent align="end" className="w-auto min-w-36">
         {children}

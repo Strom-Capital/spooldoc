@@ -86,6 +86,10 @@ Rendering. See [Contributing](contributing.md) for the tools and the tests.
 9. **Check the job log.** Every run shows its steps, errors and the
    delivered files. See [Job log](job-log.md).
 
+Not sure what a button does? Rest the pointer on it, or move to it with
+Tab. A short hint says what it does, what it changes, and why it is
+disabled when it is.
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/home-dark.png">

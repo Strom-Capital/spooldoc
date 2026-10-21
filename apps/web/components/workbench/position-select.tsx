@@ -1,6 +1,7 @@
 'use client';
 
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { Hint } from '@/components/hint';
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { useWorkbench } from './workbench-provider';
@@ -62,9 +63,11 @@ function Stepper({
   };
   return (
     <ButtonGroup className="min-w-0">
-      <Button variant="outline" size="icon-sm" onClick={() => go(-1)} disabled={index <= 0} aria-label={`Previous ${name}`}>
-        <ChevronLeftIcon />
-      </Button>
+      <Hint text={index <= 0 ? undefined : `Previous ${name}`}>
+        <Button variant="outline" size="icon-sm" onClick={() => go(-1)} disabled={index <= 0} aria-label={`Previous ${name}`}>
+          <ChevronLeftIcon />
+        </Button>
+      </Hint>
       <select
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
@@ -77,15 +80,17 @@ function Stepper({
           </option>
         ))}
       </select>
-      <Button
-        variant="outline"
-        size="icon-sm"
-        onClick={() => go(1)}
-        disabled={index < 0 || index >= options.length - 1}
-        aria-label={`Next ${name}`}
-      >
-        <ChevronRightIcon />
-      </Button>
+      <Hint text={index < 0 || index >= options.length - 1 ? undefined : `Next ${name}`}>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          onClick={() => go(1)}
+          disabled={index < 0 || index >= options.length - 1}
+          aria-label={`Next ${name}`}
+        >
+          <ChevronRightIcon />
+        </Button>
+      </Hint>
     </ButtonGroup>
   );
 }

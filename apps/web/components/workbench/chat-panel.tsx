@@ -5,6 +5,7 @@ import { DefaultChatTransport, getToolName, isToolUIPart, type UIMessage } from 
 import { CheckIcon, MessageSquarePlusIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState, type ReactNode } from 'react';
+import { Hint } from '@/components/hint';
 import { Conversation, ConversationContent, ConversationScrollButton } from '@/components/ai-elements/conversation';
 import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message';
 import {
@@ -186,16 +187,20 @@ function ChatThread({
   return (
     <>
       <PanelHeader header={header}>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => void newChat()}
-          disabled={busy || clearing || messages.length === 0}
-          title="Forget this conversation and start another. The definition and template stay."
+        <Hint
+          text={
+            busy
+              ? 'Wait for the agent to finish, or stop it first.'
+              : messages.length === 0
+                ? 'This conversation is empty.'
+                : 'Forget this conversation and start another. The definition and template stay.'
+          }
         >
-          <MessageSquarePlusIcon />
-          New chat
-        </Button>
+          <Button variant="ghost" size="sm" onClick={() => void newChat()} disabled={busy || clearing || messages.length === 0}>
+            <MessageSquarePlusIcon />
+            New chat
+          </Button>
+        </Hint>
       </PanelHeader>
       <div className="flex min-h-0 flex-1 flex-col">
         <Conversation className="min-h-0">
@@ -286,7 +291,9 @@ function ChatThread({
               />
             </PromptInputBody>
             <PromptInputFooter className="justify-end">
-              <PromptInputSubmit status={status} onStop={() => void stop()} disabled={!busy && !draft.trim()} />
+              <Hint text={busy ? 'Stop the agent' : draft.trim() ? 'Send to the agent (Enter). Shift+Enter starts a new line.' : undefined}>
+                <PromptInputSubmit status={status} onStop={() => void stop()} disabled={!busy && !draft.trim()} />
+              </Hint>
             </PromptInputFooter>
           </PromptInput>
           {usage.text && <p className="px-1 pt-1.5 text-muted-foreground text-xs tabular-nums">{usage.text}</p>}

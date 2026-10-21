@@ -3,6 +3,7 @@
 import { MenuIcon } from 'lucide-react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { Hint } from '@/components/hint';
 import { Button } from '@/components/ui/button';
 import { SidebarInset, SidebarProvider, useSidebar } from '@/components/ui/sidebar';
 import { AppSidebar } from './app-sidebar';
@@ -29,9 +30,11 @@ function MobileBar() {
       <Link href="/" aria-label="Spooldoc home">
         <Logo className="h-6" />
       </Link>
-      <Button variant="ghost" size="icon" onClick={toggleSidebar} aria-label="Open menu">
-        <MenuIcon />
-      </Button>
+      <Hint text="Open menu">
+        <Button variant="ghost" size="icon" onClick={toggleSidebar} aria-label="Open menu">
+          <MenuIcon />
+        </Button>
+      </Hint>
     </header>
   );
 }
