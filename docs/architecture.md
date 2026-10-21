@@ -12,35 +12,12 @@ Documents are rendered by a [Carbone](carbone.md) server that Spooldoc
 calls over HTTP: the `carbone` service of the Compose file, another server
 of yours, or Carbone Cloud.
 
-```mermaid
-flowchart LR
-    subgraph ibmi [IBM i]
-        direction TB
-        programs[Programs] --> outq[(Output queue)]
-        outq -.->|an entry per ready file| dtaq[Data queue]
-        ifs[IFS folder]
-    end
-    subgraph app [Spooldoc]
-        direction TB
-        jt400[jt400]
-        builder[Job builder] <-->|chat| agent[Agent]
-        watcher[Queue watcher] --> run[Run: capture, extract,<br>render, deliver, finish]
-        builder -->|previews| carbone[Carbone container]
-        run <-->|template and JSON| carbone
-        builder <-->|jobs, samples, assets| db[(Postgres container)]
-        run -->|runs, samples, files| db
-        watcher -->|seen files| db
-    end
-    browser[Browser] <-->|port 3000| builder
-    outq <-->|spooled files| jt400
-    dtaq -.->|entries| jt400
-    jt400 -->|files| ifs
-    jt400 <-->|queues, samples, real-time setup| builder
-    jt400 -->|new files| watcher
-    jt400 <-->|read, then hold, move or delete| run
-    run -->|files for the IFS| jt400
-    agent <-->|page text, masked if on| model[Model provider]
-```
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/architecture-dark.svg">
+    <img src="assets/architecture-light.svg" alt="Architecture: on the IBM i, programs print spooled files to an output queue, which can also send an entry per ready file to a data queue for real-time watching; Spooldoc reaches the IBM i only through jt400, on host server ports 449 and 8470 to 8476. Through jt400 the job builder lists queues, captures samples and sets up real-time watching; the watcher gets new files from the output queue or the data queue entries; a run reads the spooled file, writes files for an IFS destination to an IFS folder, and then holds, moves or deletes the spooled file. A run captures, extracts, renders, delivers and finishes, and sends each template and its JSON to Carbone, its own container, which makes PDF, HTML, DOCX or XLSX. The browser reaches the job builder on port 3000; the job builder previews with Carbone and saves jobs, samples and assets in Postgres, its own container, where the watcher records the files it has seen and runs store runs, samples and files. The agent chats with the job builder and sends page text, masked if masking is on, to a model provider: Anthropic, Google, OpenAI, OpenRouter, Vercel AI Gateway or a local model" width="900">
+  </picture>
+</p>
 
 ## A run
 
