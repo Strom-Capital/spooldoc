@@ -9,7 +9,7 @@ import { assetSize, siteVersion } from '../lib/docs';
 import { docsUrl, links, url } from '../lib/links';
 import { zoomLabel } from '../lib/imageLinks';
 import { getPosts } from '../lib/posts';
-import { OVERVIEW_VIDEO } from '../lib/video';
+import { OVERVIEW_VIDEO, WALKTHROUGH_VIDEO } from '../lib/video';
 import { HOME_TITLE, homeJsonLd, LONG_DESCRIPTION, SITE_DESCRIPTION } from '../lib/structuredData';
 
 const posts = (await getPosts()).slice(0, 3);
@@ -65,6 +65,9 @@ const tour = [
         <summary>Transcript</summary>
         {OVERVIEW_VIDEO.transcript.map((paragraph) => <p>{paragraph}</p>)}
       </details>
+      <p class="more-video">
+        Five more minutes: <a href={WALKTHROUGH_VIDEO.url} data-track="video_link_clicked" data-track-video={WALKTHROUGH_VIDEO.name}>the walkthrough on YouTube</a>.
+      </p>
     </div>
   </section>
 
@@ -162,6 +165,7 @@ const tour = [
   .transcript { margin-top: var(--space-4); max-width: 46rem; }
   .transcript summary { cursor: pointer; font-weight: 500; }
   .transcript p { margin: var(--space-3) 0 0; color: var(--muted-foreground); line-height: 1.7; }
+  .more-video { margin: var(--space-3) 0 0; color: var(--muted-foreground); font-size: 0.95rem; }
 
   .tour { display: grid; gap: var(--space-6) var(--space-5); }
   @media (min-width: 760px) { .tour { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

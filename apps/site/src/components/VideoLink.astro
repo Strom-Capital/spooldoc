@@ -1,0 +1,62 @@
+---
+/**
+ * A video on YouTube as a poster that links to it, light and dark like the screenshots
+ * (the .frame and data-theme-image rules in global.css). The site embeds no YouTube player
+ * and loads no YouTube script, so it stays cookieless. Posters live in public/video:
+ * <name>-light.jpg and <name>-dark.jpg, 1920 x 1080. A click sends video_link_clicked
+ * (Analytics.astro).
+ */
+import { url } from '../lib/links';
+
+interface Props {
+  /** File name stem in public/video, such as `walkthrough`. */
+  name: string;
+  /** The video on YouTube. */
+  href: string;
+  /** The link's accessible name: what it does. */
+  label: string;
+  /** The length as YouTube shows it, such as `5:22`. */
+  length: string;
+}
+
+const { name, href, label, length } = Astro.props;
+const themes = ['light', 'dark'] as const;
+---
+<figure class="frame video-link">
+  <a href={href} aria-label={label} data-track="video_link_clicked" data-track-video={name}>
+    {themes.map((theme) => (
+      <img data-theme-image={theme} src={url(`/video/${name}-${theme}.jpg`)} alt="" width="1920" height="1080" loading="lazy" decoding="async" />
+    ))}
+    <span class="play" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="28" height="28"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" /></svg>
+    </span>
+    <span class="length" aria-hidden="true">{length}</span>
+  </a>
+</figure>
+
+<style>
+  .video-link a { position: relative; display: block; border-radius: var(--radius); overflow: hidden; aspect-ratio: 16 / 9; background: var(--muted); }
+  .video-link img { width: 100%; height: 100%; object-fit: cover; }
+  .play {
+    position: absolute; top: 50%; left: 50%; translate: -50% -50%;
+    display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%;
+    background: var(--primary); color: var(--primary-foreground);
+    box-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.4);
+    transition: scale 0.15s ease;
+  }
+  .play svg { margin-left: 3px; }
+  .video-link a:hover .play, .video-link a:focus-visible .play { scale: 1.08; }
+  .length {
+    position: absolute; right: var(--space-3); bottom: var(--space-3);
+    padding: 2px 8px; border-radius: calc(var(--radius) * 0.8);
+    background: color-mix(in srgb, var(--foreground) 85%, transparent); color: var(--background);
+    font: 500 0.8rem/1.5 var(--font-sans); font-variant-numeric: tabular-nums;
+  }
+  @media (max-width: 640px) {
+    .play { width: 56px; height: 56px; }
+    .play svg { width: 22px; height: 22px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .play { transition: none; }
+  }
+</style>

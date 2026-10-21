@@ -8,7 +8,7 @@ import { DEFINITION_EXAMPLE, FEATURES, SHOTS } from '../src/lib/features';
 import { docsUrl, formatDate, links, url } from '../src/lib/links';
 import { llmsTxt } from '../src/lib/llms';
 import { sortPosts, type PostLike } from '../src/lib/sortPosts';
-import { OVERVIEW_VIDEO, vttCues } from '../src/lib/video';
+import { OVERVIEW_VIDEO, WALKTHROUGH_VIDEO, videoAt, videoTime, vttCues } from '../src/lib/video';
 import { FEATURES_DESCRIPTION, HOME_TITLE, homeJsonLd, postJsonLd, serializeJsonLd } from '../src/lib/structuredData';
 
 const site = new URL('https://spooldoc.com');
@@ -217,6 +217,45 @@ describe('overview video', () => {
     const home = fs.readFileSync(path.join(process.cwd(), 'src/pages/index.astro'), 'utf8');
     expect(home).toContain('<SiteVideo name={OVERVIEW_VIDEO.name} label={OVERVIEW_VIDEO.label} />');
     expect(home).toContain('<summary>Transcript</summary>');
+  });
+});
+
+describe('walkthrough video', () => {
+  const folder = path.join(process.cwd(), 'public/video');
+  const { name, chapters } = WALKTHROUGH_VIDEO;
+
+  it('has a poster for each theme', () => {
+    for (const file of [`${name}-light.jpg`, `${name}-dark.jpg`]) {
+      expect(fs.existsSync(path.join(folder, file)), file).toBe(true);
+    }
+  });
+
+  it('gives its length in seconds and as shown', () => {
+    expect(videoTime(WALKTHROUGH_VIDEO.seconds)).toBe(WALKTHROUGH_VIDEO.length);
+    expect(WALKTHROUGH_VIDEO.url).toMatch(/^https:\/\/youtu\.be\/[\w-]+$/);
+  });
+
+  it('has chapters from the start, in order, inside the video', () => {
+    const seconds = chapters.map((chapter) => chapter.seconds);
+    expect(seconds[0]).toBe(0);
+    expect(seconds).toEqual([...new Set(seconds)].sort((a, b) => a - b));
+    expect(Math.max(...seconds)).toBeLessThan(WALKTHROUGH_VIDEO.seconds);
+  });
+
+  it('links each chapter to its second', () => {
+    expect(videoTime(87)).toBe('1:27');
+    for (const chapter of chapters) {
+      const link = new URL(videoAt(WALKTHROUGH_VIDEO.url, chapter.seconds));
+      expect(link.origin + link.pathname).toBe(WALKTHROUGH_VIDEO.url);
+      expect(link.searchParams.get('t'), chapter.title).toBe(String(chapter.seconds));
+    }
+  });
+
+  it('is on the features page, and linked from the home page', () => {
+    const features = fs.readFileSync(path.join(process.cwd(), 'src/pages/features.astro'), 'utf8');
+    expect(features).toContain('<VideoLink name={WALKTHROUGH_VIDEO.name}');
+    const home = fs.readFileSync(path.join(process.cwd(), 'src/pages/index.astro'), 'utf8');
+    expect(home).toContain('href={WALKTHROUGH_VIDEO.url}');
   });
 });
 

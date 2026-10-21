@@ -16,6 +16,44 @@ export const OVERVIEW_VIDEO = {
   ],
 } as const;
 
+/**
+ * The walkthrough on YouTube, on the features page (VideoLink.astro). The site does not
+ * embed YouTube: a poster links out. Its posters are in public/video: walkthrough-light.jpg
+ * and walkthrough-dark.jpg. Each chapter starts at `seconds` and links to the video there.
+ */
+export const WALKTHROUGH_VIDEO = {
+  name: 'walkthrough',
+  url: 'https://youtu.be/TK0a1nvhn1Q',
+  /** The length in seconds, and as YouTube shows it. */
+  seconds: 322,
+  length: '5:22',
+  label: 'Watch the Spooldoc walkthrough on YouTube (5 minutes)',
+  chapters: [
+    { seconds: 0, title: 'What it does' },
+    { seconds: 18, title: 'How it connects' },
+    { seconds: 34, title: 'Watching output queues' },
+    { seconds: 48, title: 'Servers and queues' },
+    { seconds: 70, title: 'Source and trigger' },
+    { seconds: 87, title: 'The definition' },
+    { seconds: 126, title: 'XML spooled files' },
+    { seconds: 151, title: 'The agent' },
+    { seconds: 185, title: 'Templates: HTML, Word and Excel' },
+    { seconds: 239, title: 'The job' },
+    { seconds: 267, title: 'Runs and the job log' },
+    { seconds: 296, title: 'Install' },
+  ],
+} as const;
+
+/** 87 seconds as `1:27`. */
+export function videoTime(seconds: number): string {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}
+
+/** A YouTube link that starts the video at a second. */
+export function videoAt(videoUrl: string, seconds: number): string {
+  return `${videoUrl}?t=${seconds}`;
+}
+
 /** The text of each cue in a WebVTT file, in order. */
 export function vttCues(vtt: string): string[] {
   return vtt
