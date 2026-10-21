@@ -275,14 +275,14 @@ the new one.
 In the job's destination step, **Files to send** picks the formats of the
 document's files that go in each call: every format the templates make,
 by default. With none picked, each call holds the data only. Beside it,
-the step prints the call of one page group as a run would make it, with
-the real values of the sample: `document.created`, or `document.test`
-while a test URL is set.
+the step shows a preview of the call of one page group, with line
+numbers, as a run would make it, with the real values of the sample:
+`document.created`, or `document.test` while a test URL is set.
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/webhook-step-dark.png">
-    <img src="assets/webhook-step-light.png" alt="The destination step of an invoice job sends PDF files. Beside it, the call of page group 1 of 6 is printed on fanfold paper: POST /spooldoc, the headers with the Authorization value masked and the signature, and the JSON body with the invoice's fields and the PDF shown by its size. Below the perforation, the receiver's answer HTTP/1.1 200 OK in 142 ms." width="900">
+    <img src="assets/webhook-step-light.png" alt="The destination step of an invoice job sends PDF files. Beside it, a preview of the call of page group 1 of 6 with line numbers: POST /spooldoc, the headers with the Authorization value masked and the signature, and the JSON body with the invoice's fields and the PDF shown by its size. Below it, the receiver's answer HTTP/1.1 200 OK in 142 ms." width="900">
   </picture>
 </p>
 
@@ -375,11 +375,11 @@ Standard Webhooks site lists them.
 
 ### Sending a test
 
-**Send test** under the printed call renders that page group from the
+**Send test** under the preview renders that page group from the
 draft and posts it to the URL now, as `document.test`. It tries once,
-records nothing in the job log, and prints the receiver's answer below
+records nothing in the job log, and shows the receiver's answer below
 the call: the status, the time and the start of the body. A failed test
-prints the status in red and says why below it.
+shows the status in red and says why below it.
 
 **Test mode.** While **Send all calls to** is set on the destination,
 every call of every job that uses it goes there instead: runs and Send

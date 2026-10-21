@@ -212,15 +212,6 @@ img[data-theme-image='dark'] {
     border-radius: 2px;
   }
 }
-/* The webhook printout: the answer's paper feeds out below the perforation. */
-@keyframes paper-feed {
-  from {
-    clip-path: inset(0 0 100% 0);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
-  }
-}
 @keyframes flash {
   from {
     background: var(--hit-found-strong);

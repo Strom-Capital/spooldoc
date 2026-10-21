@@ -4,7 +4,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Hint } from '@/components/hint';
-import { RequestPrintout, type SendTestState } from '@/components/request-printout';
+import { CallPreview, type SendTestState } from '@/components/call-preview';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -65,7 +65,7 @@ function useWebhookPreview(webhook: WebhookSpec, destination: WebhookDestination
 
 /**
  * The webhook part of the destination step: the formats of the files each call carries,
- * the page group to show, and the live call of that page group printed beside them, with
+ * the page group to show, and the live call of that page group shown beside them, with
  * Send test.
  */
 export function WebhookStep({ destination }: { destination: WebhookDestination }) {
@@ -89,7 +89,7 @@ export function WebhookStep({ destination }: { destination: WebhookDestination }
       const result = await api<WebhookTestView>(`/api/jobs/${job.id}/webhook-test`, { method: 'POST', body: request });
       setTest((current) => ({ sending: false, result, error: null, seq: current.seq + 1 }));
     } catch (err) {
-      // A 502 is the receiver's answer, or no answer: it prints on the paper.
+      // A 502 is the receiver's answer, or no answer: it shows below the call.
       const body = err instanceof ApiError && err.status === 502 ? (err.body as WebhookTestView | undefined) : undefined;
       setTest((current) =>
         body && 'statusText' in body ? { sending: false, result: body, error: null, seq: current.seq + 1 } : { ...current, sending: false, error: shownError(err) },
@@ -162,7 +162,7 @@ export function WebhookStep({ destination }: { destination: WebhookDestination }
         </div>
       </div>
       <div className="min-w-0 lg:sticky lg:top-0">
-        <RequestPrintout
+        <CallPreview
           preview={preview}
           previous={previous}
           loading={loading}
