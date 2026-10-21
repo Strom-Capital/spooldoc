@@ -11,6 +11,7 @@ import CodeCopy from '../components/CodeCopy.astro';
 import Analytics from '../components/Analytics.astro';
 import ThemeSwitch from '../components/ThemeSwitch.astro';
 import { svgDataUrl } from '../lib/brand';
+import { siteVersion } from '../lib/docs';
 import { docsUrl, links, url } from '../lib/links';
 import { SITE_NAME, serializeJsonLd, type JsonLd } from '../lib/structuredData';
 
@@ -32,6 +33,9 @@ const fullTitle = title === SITE_NAME ? title : `${title} | ${SITE_NAME}`;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const path = Astro.url.pathname;
 const current = (prefix: string) => (path === url(prefix) || path.startsWith(url(prefix) + '/') ? 'page' : undefined);
+
+/** The latest release, shown in the footer with a link to its release notes. */
+const version = siteVersion();
 
 /** Share image (1280 x 640), made by scripts/og.mjs. */
 const ogImage = new URL(url('/og.png'), Astro.site).href;
@@ -116,7 +120,7 @@ const ogImage = new URL(url('/og.png'), Astro.site).href;
           </nav>
         </div>
         <p class="legal">
-          <span><a href={links.license}>MIT license</a>. Made by Ström Capital Oy.</span>
+          <span>Open source under the <a href={links.license}>MIT license</a>. <a href={`${links.releases}/tag/v${version}`}>Version {version}</a>. Made by Ström Capital Oy.</span>
           <span>IBM and IBM i are trademarks of International Business Machines Corporation. Spooldoc is not affiliated with IBM.</span>
         </p>
       </div>

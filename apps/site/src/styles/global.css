@@ -58,7 +58,6 @@ img[data-theme-image='dark'] { display: none; }
 .section-head h2, .section-head h1 { margin: 0; }
 
 /* Type helpers */
-.eyebrow { font: 500 13px/1.4 var(--font-mono); color: var(--primary); margin: 0; }
 .lead { font-size: 1.15rem; line-height: 1.6; color: var(--muted-foreground); max-width: 42rem; margin: 0; }
 .muted { color: var(--muted-foreground); }
 

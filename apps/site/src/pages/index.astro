@@ -24,7 +24,6 @@ const tour = [
   <section class="hero">
     <div class="container hero-grid">
       <div class="pitch">
-        <p class="eyebrow">Open source, MIT license. Version {version}.</p>
         <h1>Spooled files into documents, for IBM i.</h1>
         <p class="tagline">Open output management.</p>
         <p class="lead">{LONG_DESCRIPTION.replace(/ MIT licensed\.$/, '')}</p>
@@ -54,7 +53,6 @@ const tour = [
   <section class="section" aria-labelledby="how">
     <div class="container">
       <div class="section-head">
-        <p class="eyebrow">How it works</p>
         <h2 id="how">Programs print as they always have</h2>
         <p class="lead">
           Your programs on the IBM i (AS/400, iSeries) print to output queues, unchanged. Spooldoc
@@ -74,7 +72,6 @@ const tour = [
   <section class="section" aria-labelledby="tour">
     <div class="container">
       <div class="section-head">
-        <p class="eyebrow">The app</p>
         <h2 id="tour">From a sample page to a delivered document</h2>
       </div>
       <div class="tour">
@@ -92,7 +89,6 @@ const tour = [
   <section class="section" aria-labelledby="features">
     <div class="container">
       <div class="section-head">
-        <p class="eyebrow">Features</p>
         <h2 id="features">What it does today</h2>
       </div>
       <ul class="grid">
@@ -113,7 +109,6 @@ const tour = [
     <section class="section" aria-labelledby="latest">
       <div class="container">
         <div class="section-head">
-          <p class="eyebrow">Blog</p>
           <h2 id="latest">Latest posts</h2>
         </div>
         <PostList posts={posts} />
@@ -127,11 +122,11 @@ const tour = [
   .hero { padding-top: var(--space-7); }
   .hero-grid { display: grid; gap: var(--space-6); align-items: start; margin-bottom: var(--space-7); }
   @media (min-width: 1000px) { .hero-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--space-7); } }
-  .pitch h1 { margin: var(--space-3) 0 var(--space-2); max-width: 14ch; }
+  .pitch h1 { margin: 0 0 var(--space-2); max-width: 14ch; }
   .tagline { font-size: clamp(1.3rem, 2.6vw, 1.75rem); font-weight: 600; letter-spacing: -0.02em; color: var(--primary); margin: 0 0 var(--space-5); }
   .pitch .lead { margin-bottom: var(--space-5); }
   .start { min-width: 0; }
-  @media (min-width: 1000px) { .start { padding-top: 46px; } }
+  @media (min-width: 1000px) { .start { padding-top: 10px; } }
   .start-label { font-weight: 600; margin: 0; }
   .start :global(.code) { margin: var(--space-3) 0; }
   .start-note { font-size: 0.925rem; color: var(--muted-foreground); }

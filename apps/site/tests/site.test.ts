@@ -195,6 +195,17 @@ describe('site copy', () => {
   const banned =
     /\b(seamless(ly)?|revolutioni[sz]e|unlock|leverage|cutting-edge|next-gen|robust|effortless(ly)?|easy|easier|game-changer|powerful|empower|supercharge|turbocharge|magic(ally)?|intelligent|smart|solutions?|best-in-class|world-class|legacy|outdated|old-fashioned|finally|no more|out of the box|simply|obviously|enterprise-grade|production-ready|battle-tested|secure|compliant|free)\b/i;
 
+  it('puts no label above a heading', () => {
+    for (const file of files) {
+      expect(fs.readFileSync(file, 'utf8'), file).not.toMatch(/\beyebrow\b/);
+    }
+  });
+
+  it('shows the version in the footer, linked to its release notes', () => {
+    const base = fs.readFileSync(path.join(process.cwd(), 'src/layouts/Base.astro'), 'utf8');
+    expect(base).toContain('href={`${links.releases}/tag/v${version}`}>Version {version}</a>');
+  });
+
   it('uses none of the banned words', () => {
     for (const file of files) {
       expect(fs.readFileSync(file, 'utf8'), file).not.toMatch(banned);
