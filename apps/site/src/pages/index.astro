@@ -147,13 +147,12 @@ const tour = [
 
 <style>
   .hero { padding-top: var(--space-7); }
-  .hero-grid { display: grid; gap: var(--space-6); align-items: start; margin-bottom: var(--space-7); }
-  @media (min-width: 1000px) { .hero-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--space-7); } }
+  .hero-grid { display: grid; gap: var(--space-6); align-items: center; margin-bottom: var(--space-7); }
+  @media (min-width: 1100px) { .hero-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: var(--space-7); } }
   .pitch h1 { margin: 0 0 var(--space-2); max-width: 14ch; }
   .tagline { font-size: clamp(1.3rem, 2.6vw, 1.75rem); font-weight: 600; letter-spacing: -0.02em; color: var(--primary); margin: 0 0 var(--space-5); }
   .pitch .lead { margin-bottom: var(--space-5); }
-  .start { min-width: 0; }
-  @media (min-width: 1000px) { .start { padding-top: 10px; } }
+  .start { min-width: 0; max-width: 42rem; }
   .start-label { font-weight: 600; margin: 0; }
   .start :global(.code) { margin: var(--space-3) 0; }
   .start-note { font-size: 0.925rem; color: var(--muted-foreground); }

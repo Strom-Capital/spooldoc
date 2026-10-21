@@ -69,8 +69,11 @@ export const SHOTS = {
 export type ShotName = keyof typeof SHOTS;
 
 export const QUICK_START = [
-  'git clone https://github.com/Strom-Capital/spooldoc.git && cd spooldoc',
-  `printf 'BETTER_AUTH_SECRET=%s\\nSPOOLDOC_SECRET_KEY=%s\\n' "$(openssl rand -base64 32)" "$(openssl rand -base64 32)" > .env`,
+  'git clone https://github.com/Strom-Capital/spooldoc.git',
+  'cd spooldoc',
+  `printf 'BETTER_AUTH_SECRET=%s\\nSPOOLDOC_SECRET_KEY=%s\\n' \\`,
+  `  "$(openssl rand -base64 32)" \\`,
+  `  "$(openssl rand -base64 32)" > .env`,
   'docker compose up -d',
 ].join('\n');
 
