@@ -64,7 +64,7 @@ export const SHOTS = {
   'email-step':
     'The destination step of an invoice job sends to {d.pg.customerEmail} with a Bcc to an archive mailbox, a Reply-To and the subject Invoice {d.pg.invoiceNo} from MyCo Ltd. Beside the fields, the preview of page group 1 of 6 shows the email to invoices@northernsupply.example with invoice-260101.pdf attached and the message filled in, its total formatted as 302,66 € and its due date as 29.10.2026.',
   'webhook-step':
-    'The destination step of an invoice job sends PDF files to a webhook. Beside it, a preview of the call of page group 1 of 6 with line numbers: POST /spooldoc, the headers with the Authorization value masked and the signature, and the JSON body with the invoice fields and the PDF shown by its size. Below it, the receiver answered HTTP/1.1 200 OK in 142 ms.',
+    'The destination step of an invoice job sends its PDF and HTML files to a webhook. Beside the fields, a preview of the call of page group 1 of 6 with line numbers: POST /spooldoc, the headers with the Authorization value masked and the signature, and the JSON body with the document, the job, the spooled file and the invoice fields. Below it, the receiver answered HTTP/1.1 200 OK in 142 ms.',
   'destination-ifs':
     'The New IFS destination dialog is filled in with a name, the folder /home/docs/delivery-notes, Add a number when a file with the same name exists, and Keep a copy in Spooldoc on.',
   home: 'The Home page shows counts of servers, output queues, jobs and runs, a chart of runs per day by status, and two items under Needs attention: a server that cannot be reached and a failed run.',

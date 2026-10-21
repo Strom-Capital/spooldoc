@@ -99,7 +99,7 @@ tries" or "No answer after 3 tries", then its status and the time.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/job-log-webhooks-dark.png">
-    <img src="assets/job-log-webhooks-light.png" alt="A run of an invoice job opened from the job log lists its PDF files, then Webhook calls (6 of 6 sent): each invoice posted to hooks.example.com/spooldoc with the answer 200 OK and the time it took, Sent, and the time." width="900">
+    <img src="assets/job-log-webhooks-light.png" alt="A run of an invoice job opened from the job log lists its PDF files, then Webhook calls (6 of 6 sent): each invoice posted to hooks.example.com/spooldoc with the answer 200 OK, the time it took and 3 tries, Sent, and the time." width="900">
   </picture>
 </p>
 

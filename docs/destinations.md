@@ -282,7 +282,7 @@ numbers, as a run would make it, with the real values of the sample:
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/webhook-step-dark.png">
-    <img src="assets/webhook-step-light.png" alt="The destination step of an invoice job sends PDF files. Beside it, a preview of the call of page group 1 of 6 with line numbers: POST /spooldoc, the headers with the Authorization value masked and the signature, and the JSON body with the invoice's fields and the PDF shown by its size. Below it, the receiver's answer HTTP/1.1 200 OK in 142 ms." width="900">
+    <img src="assets/webhook-step-light.png" alt="The destination step of an invoice job sends its PDF and HTML files to a webhook. Beside the fields, a preview of the call of page group 1 of 6 with line numbers: POST /spooldoc, the headers with the Authorization value masked and the signature, and the JSON body with the document, the job, the spooled file and the invoice's fields. Below it, the receiver's answer HTTP/1.1 200 OK in 142 ms." width="900">
   </picture>
 </p>
 
