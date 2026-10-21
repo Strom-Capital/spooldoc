@@ -6,7 +6,7 @@ import { LONG_DESCRIPTION } from './structuredData';
 
 /**
  * /llms.txt, per https://llmstxt.org: what Spooldoc is, with a link to every guide, the
- * features page and the blog.
+ * features page, the blog and the changelog.
  */
 export function llmsTxt({ site, nav, posts, version }: { site: URL; nav: DocsGroup[]; posts: PostLike[]; version: string }): string {
   const abs = (path: string) => new URL(url(path), site).href;
@@ -34,7 +34,8 @@ export function llmsTxt({ site, nav, posts, version }: { site: URL; nav: DocsGro
 - [Home](${abs('/')}): what Spooldoc does, with screenshots and the architecture
 - [Features](${abs('/features/')}): each feature in depth
 - [Docs](${abs(docsUrl())}): the guides, the same files the app shows
-- [Blog](${abs('/blog/')}): posts and release notes (RSS: ${abs('/rss.xml')})
+- [Blog](${abs('/blog/')}): posts and release notes
+- [Changelog](${abs('/changelog/')}): every change in each release, newest first
 
 ## Features
 

@@ -11,9 +11,11 @@ on:
       - 'apps/site/**'
       - 'docs/**'
       - 'packages/docs/**'
-      # The site reads the version from the root package.json, which a release bumps,
-      # and the logo and favicons from the app's brand folder.
+      # The site reads the version from the root package.json and the changelog from
+      # CHANGELOG.md, which a release changes, and the logo and favicons from the app's
+      # brand folder.
       - 'package.json'
+      - 'CHANGELOG.md'
       - 'apps/web/public/brand/**'
       - 'pnpm-lock.yaml'
       - '.github/workflows/pages.yml'

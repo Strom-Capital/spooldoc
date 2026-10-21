@@ -81,7 +81,7 @@ its definition, template and expected JSON next to the sample.
 | `packages/docs` | Reads the guides in `docs/` for the app's `/docs` and the website's: the sidebar from `docs/README.md`, front matter, headings, links and search sections. No Next.js or Astro code. |
 | `packages/ibmi` | The IBM i connection through jt400: queues, spooled files, hold, move, delete, data queues, CL commands. The root export does not load Java; `@spooldoc/ibmi/jt400` does. |
 | `apps/web` | The Next.js app. `lib/server` holds config, the database (`db/`, with the Drizzle schema and migrations in `drizzle/`), sign-in, the IBM i connection (`ibmi.ts` is the only module that loads jt400), the Carbone connection (`rendering.ts`) and rendering, the job runner, destinations and the queue watcher, started from `instrumentation.ts`. Route handlers are under `app/api`, pages under `components/pages`, the job builder under `components/jobs` and `components/workbench`. |
-| `apps/site` | The website at [spooldoc.com](https://spooldoc.com), in Astro: the home page, the features, the guides from `docs/` and the blog. Not part of the Docker image or the release. See [Website](#website). |
+| `apps/site` | The website at [spooldoc.com](https://spooldoc.com), in Astro: the home page, the features, the guides from `docs/`, the blog and the changelog. Not part of the Docker image or the release. See [Website](#website). |
 | `demo-spool` | CL and RPG sources that create output queues and print invented documents on any IBM i. |
 | `Dockerfile`, `compose.yaml` | The container image and an example service for it. |
 | `workspace/` | Where the capture command writes samples. Ignored by git except its README. |
@@ -150,14 +150,18 @@ pnpm --filter @spooldoc/site preview
 
 Blog posts are Markdown files in `apps/site/src/content/blog`, named
 `YYYY-MM-DD-slug.md`, with a `title`, `description`, `date`, `tags` and
-`draft` header. A post about a release has the tag `release`. Screenshots
+`draft` header. A post about a release has the tag `release` and the slug
+`spooldoc-X-Y-Z`: the changelog links to it, and the post ends with a
+link to its version in the changelog. Screenshots
 and diagrams on the site, in the guides and in posts open full size when
 clicked, if they have alt text; an image with an empty alt or inside a
 link is left as it is. The share
 image, `public/og.png`, is made by `pnpm --filter @spooldoc/site og`.
 
-The site deploys to GitHub Pages when a change to it, to `docs/` or to
-`packages/docs` merges to `main` (`.github/workflows/pages.yml`).
+The changelog page, `/changelog`, is built from `CHANGELOG.md` at the
+repository root. The site deploys to GitHub Pages when a change to it, to
+`docs/`, to `packages/docs` or to `CHANGELOG.md` merges to `main`
+(`.github/workflows/pages.yml`).
 
 ## Conventions
 
