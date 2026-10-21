@@ -1,0 +1,22 @@
+---
+import Base from '../layouts/Base.astro';
+import { docsUrl, url } from '../lib/links';
+---
+<Base title="Page not found" description="This page does not exist." noindex>
+  <section class="section">
+    <div class="container">
+      <h1>This page is not on the queue</h1>
+      <p class="lead">The page you were looking for is not here. It may have moved.</p>
+      <div class="btn-row">
+        <a class="btn btn--primary" href={url('/')}>Home</a>
+        <a class="btn" href={docsUrl()}>Docs</a>
+        <a class="btn" href={url('/blog/')}>Blog</a>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  h1 { margin: 0 0 var(--space-4); }
+  .lead { margin-bottom: var(--space-6); }
+</style>

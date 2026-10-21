@@ -1,0 +1,12 @@
+---
+import Docs from '../../layouts/Docs.astro';
+import { docsIndex, siteDocsHtml } from '../../lib/docs';
+import { renderMarkdown } from '../../lib/markdown';
+
+/** docs/README.md: the groups of guides, as on GitHub. */
+const index = docsIndex();
+const html = siteDocsHtml(await renderMarkdown(index.markdown));
+---
+<Docs title={index.title} description="The Spooldoc guides: install, use and run Spooldoc, and develop it." headings={index.headings} file="README.md">
+  <Fragment set:html={html} />
+</Docs>

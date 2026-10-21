@@ -1,0 +1,46 @@
+---
+/**
+ * Adds a header with the language and a copy button to every highlighted code block on
+ * the page (Markdown fences and CodeBlock.astro). Included once, in Base.astro. A block
+ * with data-track gives its button the same data-track, for Analytics.astro.
+ */
+---
+<script>
+  const labels: Record<string, string> = { bash: 'Shell', sh: 'Shell', shell: 'Shell', json: 'JSON', yaml: 'YAML', html: 'HTML', sql: 'SQL', ts: 'TypeScript', js: 'JavaScript', plaintext: 'Text', text: 'Text' };
+
+  function enhance(pre: HTMLPreElement) {
+    if (pre.parentElement?.classList.contains('code')) return;
+    const lang = pre.dataset.language ?? '';
+    const wrap = document.createElement('div');
+    wrap.className = 'code';
+    const head = document.createElement('div');
+    head.className = 'code-head';
+    const name = document.createElement('span');
+    name.textContent = pre.dataset.title || labels[lang] || lang || 'Code';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = 'Copy';
+    button.setAttribute('aria-label', `Copy ${name.textContent}`);
+    // The event belongs to the button alone, not to a click in the code.
+    if (pre.dataset.track) {
+      button.dataset.track = pre.dataset.track;
+      delete pre.dataset.track;
+    }
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(pre.innerText.replace(/\n$/, ''));
+        button.textContent = 'Copied';
+      } catch {
+        button.textContent = 'Press Ctrl+C';
+      }
+      setTimeout(() => (button.textContent = 'Copy'), 1600);
+    });
+    head.append(name, button);
+    pre.replaceWith(wrap);
+    wrap.append(head, pre);
+    // A code block scrolls sideways on a phone; give it a stop in the tab order so it scrolls from the keyboard.
+    pre.tabIndex = 0;
+  }
+
+  for (const pre of document.querySelectorAll<HTMLPreElement>('pre.astro-code')) enhance(pre);
+</script>

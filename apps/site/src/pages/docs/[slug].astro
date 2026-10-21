@@ -1,0 +1,17 @@
+---
+import Docs from '../../layouts/Docs.astro';
+import { docsPage, docsSlugs, siteDocsHtml } from '../../lib/docs';
+import { renderMarkdown } from '../../lib/markdown';
+
+/** One page per guide listed in docs/README.md. */
+export function getStaticPaths() {
+  return docsSlugs().map((slug) => ({ params: { slug } }));
+}
+
+const { slug } = Astro.params as { slug: string };
+const page = docsPage(slug);
+const html = siteDocsHtml(await renderMarkdown(page.markdown));
+---
+<Docs title={page.title} description={page.description} slug={slug} headings={page.headings} file={`${slug}.md`}>
+  <Fragment set:html={html} />
+</Docs>

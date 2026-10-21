@@ -18,9 +18,11 @@ COPY packages/core/package.json packages/core/
 COPY packages/docs/package.json packages/docs/
 COPY packages/ibmi/package.json packages/ibmi/
 COPY apps/web/package.json apps/web/
-RUN pnpm install --frozen-lockfile
+# Only the web app and the packages it uses. The website (apps/site) is not in the
+# build context (.dockerignore) and not in the image.
+RUN pnpm install --frozen-lockfile --filter '@spooldoc/web...'
 COPY . .
-RUN pnpm -r build
+RUN pnpm --filter '@spooldoc/web...' build
 # A self-contained copy of the web app with its production dependencies, the
 # workspace packages included (their dist), the `java` addon built against this JDK.
 RUN pnpm --filter @spooldoc/web deploy --prod /app \

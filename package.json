@@ -16,7 +16,7 @@
   },
   "packageManager": "pnpm@12.3.4",
   "scripts": {
-    "dev": "pnpm -r --parallel dev",
+    "dev": "pnpm -r --parallel --filter '!@spooldoc/site' dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",

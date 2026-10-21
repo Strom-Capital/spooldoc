@@ -1,0 +1,97 @@
+---
+/**
+ * One section per feature. The heading and the paragraphs sit beside the screenshot,
+ * which is centered on the text, on alternating sides. A code sample that fits a column
+ * (the YAML) takes the screenshot's place, and the screenshot goes full width below; one
+ * with long lines (the shell commands) goes full width below. No column is left empty.
+ */
+import Base from '../layouts/Base.astro';
+import CodeBlock from '../components/CodeBlock.astro';
+import Shot from '../components/Shot.astro';
+import { FEATURES } from '../lib/features';
+import { docsUrl, links } from '../lib/links';
+---
+<Base title="Features" description="What Spooldoc does today: your programs print as they always have, YAML definitions read the pages, HTML, Word and Excel templates lay them out, the agent drafts, and every run is in the job log.">
+  <section class="section intro">
+    <div class="container">
+      <div class="section-head">
+        <h1>What Spooldoc does today</h1>
+        <p class="lead">
+          Each feature here works in the latest release. The guides have the details,
+          and the <a href={links.releases}>release notes</a> say what changed.
+        </p>
+      </div>
+      <nav class="toc" aria-label="Features">
+        <ul>
+          {FEATURES.map((feature) => <li><a href={`#${feature.id}`}>{feature.title}</a></li>)}
+        </ul>
+      </nav>
+    </div>
+  </section>
+
+  {FEATURES.map((feature, i) => {
+    const code = feature.code;
+    const shot = <Shot name={feature.shot} alt={feature.alt} eager={i === 0} />;
+    return (
+      <section class="feature" id={feature.id} aria-labelledby={`${feature.id}-title`}>
+        <div class:list={['container', 'feature-grid', { flip: i % 2 === 1, 'code-beside': code?.place === 'beside' }]}>
+          <div class="text">
+            <h2 id={`${feature.id}-title`}><a class="anchor" href={`#${feature.id}`}>{feature.title}</a></h2>
+            {feature.body.map((paragraph) => <p set:html={paragraph} />)}
+            <p class="docs">
+              {feature.docs.map((doc, j) => (
+                <>
+                  {j > 0 && ' and '}
+                  <a href={docsUrl(doc.slug)}>{j === 0 ? `Read the ${doc.title} guide` : doc.title}</a>
+                </>
+              ))}
+            </p>
+          </div>
+          <div class="aside">
+            {code?.place === 'beside' ? <CodeBlock code={code.code} lang={code.lang} title={code.title} track={code.track} /> : shot}
+          </div>
+          {code?.place === 'beside' && <div class="below">{shot}</div>}
+          {code?.place === 'below' && <div class="below"><CodeBlock code={code.code} lang={code.lang} title={code.title} track={code.track} /></div>}
+        </div>
+      </section>
+    );
+  })}
+</Base>
+
+<style>
+  .intro { padding-bottom: var(--space-5); }
+  .toc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .toc a { display: inline-flex; align-items: center; min-height: 34px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; color: var(--foreground); text-decoration: none; font-size: 0.9rem; }
+  .toc a:hover { background: var(--muted); }
+
+  .feature { padding-top: var(--space-8); }
+  .feature-grid { display: grid; gap: var(--space-5); }
+  /*
+   * Side by side only where the two come out about the same height: text and screenshot
+   * from 1200px, text and the YAML sample from 1000px. Narrower, they stack.
+   */
+  @media (min-width: 1000px) and (max-width: 1199px) {
+    .feature-grid.code-beside { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: var(--space-6); row-gap: var(--space-6); }
+    .feature-grid.code-beside.flip .text { order: 2; }
+    .feature-grid.code-beside.flip .aside { order: 1; }
+    .feature-grid.code-beside .below { grid-column: 1 / -1; order: 3; }
+  }
+  @media (min-width: 1200px) {
+    .feature-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); column-gap: var(--space-7); row-gap: var(--space-6); }
+    .feature-grid.flip { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+    .feature-grid.flip .text { order: 2; }
+    .feature-grid.flip .aside { order: 1; }
+    .below { grid-column: 1 / -1; order: 3; }
+  }
+  .text { min-width: 0; max-width: 65ch; }
+  .aside { min-width: 0; align-self: center; }
+  .below { min-width: 0; }
+  .aside :global(.code), .below :global(.code) { margin: 0; }
+  .text h2 { margin-bottom: var(--space-4); }
+  .anchor { color: inherit; text-decoration: none; }
+  .anchor:hover { color: var(--primary); }
+  .text p { color: var(--muted-foreground); }
+  .text :global(p a), .text :global(p code) { color: var(--foreground); }
+  .text :global(p a) { color: var(--primary); }
+  .docs { font-weight: 500; margin-bottom: 0; }
+</style>

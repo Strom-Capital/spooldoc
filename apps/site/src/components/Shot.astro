@@ -1,0 +1,24 @@
+---
+/**
+ * A screenshot from docs/assets in a frame, light and dark, following the page theme.
+ * The images are the ones the guides use, served at /docs/assets.
+ */
+import { assetSize } from '../lib/docs';
+import { url } from '../lib/links';
+
+interface Props {
+  /** The file name without `-light.png` or `-dark.png`, such as `job-builder`. */
+  name: string;
+  alt: string;
+  /** Loads at once; for the first screenshot on a page. */
+  eager?: boolean;
+  class?: string;
+}
+const { name, alt, eager = false, class: className } = Astro.props;
+const size = assetSize(`${name}-light.png`);
+const loading = eager ? 'eager' : 'lazy';
+---
+<figure class:list={['frame', className]}>
+  <img data-theme-image="light" src={url(`/docs/assets/${name}-light.png`)} alt={alt} width={size.width} height={size.height} loading={loading} decoding="async" />
+  <img data-theme-image="dark" src={url(`/docs/assets/${name}-dark.png`)} alt={alt} width={size.width} height={size.height} loading={loading} decoding="async" />
+</figure>

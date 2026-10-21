@@ -1,0 +1,220 @@
+---
+/**
+ * Search over every section of every guide, as in the app: the button, or Ctrl+K, ⌘K
+ * or / opens it. The index, /docs/search.json, loads the first time it opens, and
+ * MiniSearch runs in the browser. Arrow keys move through the results, Enter opens one,
+ * Escape closes.
+ */
+import { url } from '../lib/links';
+---
+<button type="button" class="search-button" data-search-open>
+  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+  <span class="label">Search the docs</span>
+  <kbd data-search-keys hidden></kbd>
+</button>
+
+<dialog class="search" aria-label="Search the docs" data-search-dialog data-index={url('/docs/search.json')}>
+  <div class="search-box">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+    <input
+      type="search"
+      placeholder="Search the docs"
+      autocomplete="off"
+      spellcheck="false"
+      role="combobox"
+      aria-expanded="false"
+      aria-controls="search-results"
+      aria-autocomplete="list"
+      aria-label="Search the docs"
+      data-search-input
+    />
+    <button type="button" class="close" data-search-close aria-label="Close search">Esc</button>
+  </div>
+  <p class="status" role="status" data-search-status>Type to search the docs</p>
+  <ul id="search-results" class="results" role="listbox" aria-label="Results" data-search-results></ul>
+</dialog>
+
+<script>
+  import MiniSearch, { type SearchResult } from 'minisearch';
+  import type { DocsSection } from '@spooldoc/docs';
+
+  type Hit = SearchResult & DocsSection;
+
+  const dialog = document.querySelector<HTMLDialogElement>('[data-search-dialog]');
+  const input = document.querySelector<HTMLInputElement>('[data-search-input]');
+  const list = document.querySelector<HTMLUListElement>('[data-search-results]');
+  const status = document.querySelector<HTMLParagraphElement>('[data-search-status]');
+
+  if (dialog && input && list && status) {
+    let index: MiniSearch<DocsSection & { id: number }> | undefined;
+    let loading: Promise<void> | undefined;
+    let hits: Hit[] = [];
+    let active = -1;
+
+    const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+    for (const keys of document.querySelectorAll<HTMLElement>('[data-search-keys]')) {
+      keys.textContent = mac ? '⌘K' : 'Ctrl K';
+      keys.hidden = false;
+    }
+
+    const load = (): Promise<void> => {
+      loading ??= (async () => {
+        status.textContent = 'Loading the search index';
+        try {
+          const response = await fetch(dialog.dataset.index ?? '/docs/search.json');
+          if (!response.ok) throw new Error(`The server answered ${response.status}.`);
+          const sections = (await response.json()) as DocsSection[];
+          const built = new MiniSearch<DocsSection & { id: number }>({
+            fields: ['pageTitle', 'heading', 'text'],
+            storeFields: ['page', 'pageTitle', 'heading', 'anchor', 'text'],
+            searchOptions: { prefix: true, fuzzy: 0.2, boost: { heading: 3, pageTitle: 2 }, combineWith: 'AND' },
+          });
+          built.addAll(sections.map((section, id) => ({ ...section, id })));
+          index = built;
+          search();
+        } catch (error) {
+          loading = undefined;
+          status.textContent = `Could not load the search index. ${error instanceof Error ? error.message : String(error)} Check the connection and open the search again.`;
+        }
+      })();
+      return loading;
+    };
+
+    const open = () => {
+      if (!dialog.open) dialog.showModal();
+      input.select();
+      void load();
+    };
+
+    const href = (hit: Hit) => `/docs/${hit.page}/${hit.anchor ? `#${hit.anchor}` : ''}`;
+
+    function snippet(text: string, terms: string[]): string {
+      const lower = text.toLowerCase();
+      const at = Math.min(...terms.map((term) => lower.indexOf(term.toLowerCase())).filter((i) => i >= 0), text.length);
+      if (at === text.length || at < 60) return text.slice(0, 160);
+      const start = text.lastIndexOf(' ', at - 40) + 1;
+      return `…${text.slice(start, start + 160)}`;
+    }
+
+    function setActive(next: number) {
+      const options = list!.querySelectorAll<HTMLElement>('[role="option"]');
+      options.forEach((option, i) => option.setAttribute('aria-selected', String(i === next)));
+      active = next;
+      const option = options[next];
+      if (option) {
+        input!.setAttribute('aria-activedescendant', option.id);
+        option.scrollIntoView({ block: 'nearest' });
+      } else {
+        input!.removeAttribute('aria-activedescendant');
+      }
+    }
+
+    function search() {
+      const query = input!.value.trim();
+      list!.replaceChildren();
+      hits = [];
+      if (!index) return;
+      if (!query) {
+        status!.textContent = 'Type to search the docs';
+        input!.setAttribute('aria-expanded', 'false');
+        setActive(-1);
+        return;
+      }
+      // Grouped by page, the pages in the order of their best result, as in the app.
+      const byPage = new Map<string, Hit[]>();
+      for (const hit of (index.search(query) as Hit[]).slice(0, 30)) {
+        byPage.set(hit.pageTitle, [...(byPage.get(hit.pageTitle) ?? []), hit]);
+      }
+      hits = [...byPage.values()].flat();
+      status!.textContent = hits.length ? `${hits.length === 30 ? 'The first 30' : hits.length} ${hits.length === 1 ? 'result' : 'results'}` : `No results for “${query}”`;
+      input!.setAttribute('aria-expanded', String(hits.length > 0));
+      let page = '';
+      hits.forEach((hit, i) => {
+        if (hit.pageTitle !== page) {
+          page = hit.pageTitle;
+          const group = document.createElement('li');
+          group.className = 'group';
+          group.setAttribute('role', 'presentation');
+          group.textContent = page;
+          list!.append(group);
+        }
+        const item = document.createElement('li');
+        item.setAttribute('role', 'option');
+        item.id = `search-hit-${i}`;
+        const link = document.createElement('a');
+        link.href = href(hit);
+        link.tabIndex = -1;
+        const heading = document.createElement('span');
+        heading.className = 'heading';
+        heading.textContent = hit.heading;
+        const text = document.createElement('span');
+        text.className = 'text';
+        text.textContent = snippet(hit.text, hit.terms);
+        link.append(heading, text);
+        link.addEventListener('click', () => dialog!.close());
+        item.addEventListener('mousemove', () => active !== i && setActive(i));
+        item.append(link);
+        list!.append(item);
+      });
+      setActive(hits.length ? 0 : -1);
+    }
+
+    input.addEventListener('input', search);
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowDown' && hits.length) {
+        event.preventDefault();
+        setActive((active + 1) % hits.length);
+      } else if (event.key === 'ArrowUp' && hits.length) {
+        event.preventDefault();
+        setActive((active - 1 + hits.length) % hits.length);
+      } else if (event.key === 'Enter' && active >= 0) {
+        event.preventDefault();
+        const link = list.querySelector<HTMLAnchorElement>(`#search-hit-${active} a`);
+        if (link) {
+          dialog.close();
+          link.click();
+        }
+      }
+    });
+
+    for (const button of document.querySelectorAll('[data-search-open]')) button.addEventListener('click', open);
+    document.querySelector('[data-search-close]')?.addEventListener('click', () => dialog.close());
+    // A click on the backdrop closes the dialog.
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    document.addEventListener('keydown', (event) => {
+      const typing = event.target instanceof HTMLElement && (event.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName));
+      if (event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        if (dialog.open) dialog.close();
+        else open();
+      } else if (event.key === '/' && !typing && !dialog.open) {
+        event.preventDefault();
+        open();
+      }
+    });
+  }
+</script>
+
+<style>
+  .search-button { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 38px; padding: 0 8px 0 12px; font: 400 0.9rem/1 var(--font-sans); color: var(--muted-foreground); background: var(--background); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; }
+  .search-button:hover { background: var(--muted); color: var(--foreground); }
+  .search-button .label { flex: 1; text-align: left; }
+  svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; flex: none; }
+
+  .search { width: min(640px, calc(100vw - 32px)); max-height: min(560px, calc(100dvh - 64px)); margin: 10vh auto auto; padding: 0; color: var(--foreground); background: var(--background); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.8); box-shadow: 0 24px 64px -16px rgb(0 0 0 / 0.35); overflow: hidden; }
+  .search[open] { display: flex; flex-direction: column; }
+  .search::backdrop { background: rgb(0 0 0 / 0.45); }
+  .search-box { display: flex; align-items: center; gap: 10px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); }
+  .search-box input { flex: 1; min-width: 0; height: 52px; border: 0; outline: 0; background: none; color: var(--foreground); font: 400 1rem var(--font-sans); }
+  .search-box input::-webkit-search-cancel-button { display: none; }
+  .close { font: 500 12px/1 var(--font-sans); color: var(--muted-foreground); background: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 5px 7px; cursor: pointer; }
+  .status { margin: 0; padding: 10px 16px; font-size: 0.85rem; color: var(--muted-foreground); }
+  .results { list-style: none; margin: 0; padding: 0 8px 8px; overflow-y: auto; }
+  .results :global(.group) { padding: 10px 8px 4px; font: 500 12px/1.4 var(--font-mono); color: var(--muted-foreground); }
+  .results :global([role='option'] a) { display: grid; gap: 2px; padding: 8px 10px; border-radius: var(--radius); color: var(--foreground); text-decoration: none; }
+  .results :global([role='option'][aria-selected='true'] a) { background: var(--muted); }
+  .results :global(.heading) { font-weight: 500; }
+  .results :global(.text) { font-size: 0.85rem; color: var(--muted-foreground); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+</style>

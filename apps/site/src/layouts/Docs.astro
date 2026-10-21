@@ -1,0 +1,119 @@
+---
+/**
+ * A guide: the sidebar from docs/README.md's groups, the page, and its contents list
+ * from the `##` and `###` headings. On a phone the sidebar folds into a menu above the page.
+ */
+import Base from './Base.astro';
+import DocsSearch from '../components/DocsSearch.astro';
+import Mermaid from '../components/Mermaid.astro';
+import { docsNav, type DocsHeading } from '../lib/docs';
+import { docsUrl, GITHUB } from '../lib/links';
+
+interface Props {
+  title: string;
+  description: string;
+  /** The guide's slug; none for /docs. */
+  slug?: string;
+  headings: DocsHeading[];
+  /** The page's file in docs/, for the edit link. */
+  file: string;
+}
+
+const { title, description, slug, headings, file } = Astro.props;
+const nav = docsNav();
+const currentTitle = slug ? nav.flatMap((group) => group.pages).find((page) => page.slug === slug)?.title : 'Overview';
+---
+<Base title={slug ? `${title} docs` : 'Docs'} description={description} wide>
+  <div class="container docs">
+    <aside class="sidebar" aria-label="Docs">
+      <DocsSearch />
+      <details class="nav-fold" open data-nav-fold>
+        <summary>
+          <span class="muted">Docs:</span> {currentTitle}
+        </summary>
+        <nav aria-label="Guides">
+          <a class="nav-link" href={docsUrl()} aria-current={!slug ? 'page' : undefined}>Overview</a>
+          {nav.map(({ group, pages }) => (
+            <div class="nav-group">
+              <p class="nav-heading">{group}</p>
+              <ul>
+                {pages.map((page) => (
+                  <li><a class="nav-link" href={docsUrl(page.slug)} aria-current={page.slug === slug ? 'page' : undefined}>{page.title}</a></li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </nav>
+      </details>
+    </aside>
+
+    <article class="page">
+      <header class="page-head">
+        <h1>{title}</h1>
+        {slug && <p class="lead">{description}</p>}
+      </header>
+      <div class="prose"><slot /></div>
+      <footer class="page-foot">
+        <a href={`${GITHUB}/blob/main/docs/${file}`}>Edit this page on GitHub</a>
+      </footer>
+    </article>
+
+    {headings.length > 0 && (
+      <aside class="contents" aria-labelledby="contents-title">
+        <p class="contents-title" id="contents-title">On this page</p>
+        <ul>
+          {headings.map((heading) => (
+            <li class={`depth-${heading.depth}`}><a href={`#${heading.id}`}>{heading.text}</a></li>
+          ))}
+        </ul>
+      </aside>
+    )}
+  </div>
+  <Mermaid />
+</Base>
+
+<script>
+  // The guide list starts open on wide screens and folded on phones, where it sits above the page.
+  const fold = document.querySelector<HTMLDetailsElement>('[data-nav-fold]');
+  if (fold) {
+    const wide = matchMedia('(min-width: 900px)');
+    const sync = () => {
+      fold.open = wide.matches;
+    };
+    sync();
+    wide.addEventListener('change', sync);
+  }
+</script>
+
+<style>
+  .docs { display: grid; gap: var(--space-5); padding-top: var(--space-5); }
+  @media (min-width: 900px) { .docs { grid-template-columns: 240px minmax(0, 1fr); gap: var(--space-7); padding-top: var(--space-6); } }
+  @media (min-width: 1240px) { .docs { grid-template-columns: 240px minmax(0, 1fr) 220px; } }
+
+  .sidebar { display: grid; gap: var(--space-4); align-content: start; min-width: 0; }
+  @media (min-width: 900px) { .sidebar { position: sticky; top: calc(var(--header) + var(--space-5)); max-height: calc(100dvh - var(--header) - var(--space-6)); overflow-y: auto; padding-bottom: var(--space-5); } }
+
+  .nav-fold summary { display: flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; font-weight: 500; }
+  @media (min-width: 900px) { .nav-fold summary { display: none; } }
+  .nav-fold nav { padding-top: var(--space-3); }
+  @media (min-width: 900px) { .nav-fold nav { padding-top: 0; } }
+  .nav-group { margin-top: var(--space-4); }
+  .nav-heading { margin: 0 0 var(--space-1); padding: 0 10px; font-size: 0.8rem; font-weight: 600; color: var(--muted-foreground); }
+  .nav-group ul { list-style: none; margin: 0; padding: 0; }
+  .nav-link { display: block; padding: 5px 10px; border-radius: var(--radius); color: var(--foreground); text-decoration: none; font-size: 0.925rem; }
+  .nav-link:hover { background: var(--muted); }
+  .nav-link[aria-current='page'] { background: var(--muted); color: var(--primary); font-weight: 500; }
+
+  .page { min-width: 0; max-width: 48rem; }
+  .page-head { margin-bottom: var(--space-6); }
+  .page-head h1 { font-size: clamp(2rem, 4vw, 2.6rem); margin-bottom: var(--space-3); }
+  .page-foot { margin-top: var(--space-7); padding-top: var(--space-4); border-top: 1px solid var(--border); font-size: 0.9rem; }
+
+  .contents { display: none; }
+  @media (min-width: 1240px) { .contents { display: block; position: sticky; top: calc(var(--header) + var(--space-5)); align-self: start; max-height: calc(100dvh - var(--header) - var(--space-6)); overflow-y: auto; } }
+  .contents-title { margin: 0 0 var(--space-2); font-size: 0.8rem; font-weight: 600; color: var(--muted-foreground); }
+  .contents ul { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--border); }
+  .contents a { display: block; padding: 4px 0 4px 12px; font-size: 0.85rem; line-height: 1.4; color: var(--muted-foreground); text-decoration: none; }
+  .contents a:hover { color: var(--foreground); }
+  .contents .depth-3 a { padding-left: 24px; }
+</style>

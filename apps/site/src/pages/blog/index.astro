@@ -1,0 +1,19 @@
+---
+import Base from '../../layouts/Base.astro';
+import PostList from '../../components/PostList.astro';
+import { getPosts } from '../../lib/posts';
+import { url } from '../../lib/links';
+
+const posts = await getPosts();
+---
+<Base title="Blog" description="Posts and release notes from Spooldoc, open output management for IBM i.">
+  <section class="section">
+    <div class="container">
+      <div class="section-head">
+        <h1>Blog</h1>
+        <p class="lead">Posts about Spooldoc and its releases. Also as <a href={url('/rss.xml')}>RSS</a>.</p>
+      </div>
+      {posts.length === 0 ? <p class="muted">No posts yet.</p> : <PostList posts={posts} headingLevel="h2" />}
+    </div>
+  </section>
+</Base>
