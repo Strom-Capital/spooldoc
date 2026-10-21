@@ -20,6 +20,9 @@ reviews:
   suggested_labels: false
   suggested_reviewers: false
   collapse_walkthrough: true
+  # With auto reviews off, the status comment only says a review was
+  # skipped, on every pull request.
+  review_status: false
 
   auto_review:
     enabled: false
