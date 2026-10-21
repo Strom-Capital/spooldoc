@@ -105,6 +105,21 @@ migrations. With Compose, set the new `SPOOLDOC_VERSION` (or leave it at
 1.0, a minor release (0.1 to 0.2) can include breaking changes, so read
 them before you upgrade, and pin `X.Y.Z` rather than following `latest`.
 
+### From 0.2.0
+
+The migrations turn each job's template and formats into the job's first
+template, Template 1, so every job and version opens again. Two things
+need you:
+
+- Spooldoc now renders with Carbone. Run it next to Spooldoc and connect
+  it in Settings; see [Carbone](carbone.md).
+- Templates and file name patterns are now written with Carbone tags,
+  not Nunjucks. Rewrite `{{ doc.invoiceNo }}` as `{d.pg.invoiceNo}`. The
+  Template tab of each job lists the Nunjucks left in its template, and
+  the definition check names a file name pattern that still has it. Until
+  then, a run of the job fails with the same message. Save the job as a
+  new version once both are rewritten.
+
 ## Sizing
 
 A run reads one spooled file and extracts in the Node process, so memory

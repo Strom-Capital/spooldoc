@@ -24,9 +24,37 @@ CREATE FUNCTION pg_temp.spooldoc_tags(text text) RETURNS text AS $$
   SELECT regexp_replace(regexp_replace(regexp_replace(text, '\md\.doc\M', 'd.pageGroup', 'g'), '\md\.documents\M', 'd.pageGroups', 'g'), '\md\.sample\.splf\M', 'd.splf', 'g')
 $$ LANGUAGE sql IMMUTABLE;--> statement-breakpoint
 
--- A definition: its tags, and the XML key that marks one piece, `document:`, is `pageGroup:`.
+-- The XML key that marks one piece, `xml.document`, is `xml.pageGroup`. Only the key right
+-- under the top-level `xml:`, in block or flow style, so a field named `document` keeps its name.
+CREATE FUNCTION pg_temp.spooldoc_xml_key(yaml text) RETURNS text AS $$
+DECLARE
+  lines text[] := string_to_array(yaml, E'\n');
+  inside boolean := false;
+  indent text;
+BEGIN
+  FOR i IN 1 .. coalesce(array_length(lines, 1), 0) LOOP
+    IF lines[i] ~ '^\s*(#.*)?$' THEN
+      CONTINUE;
+    ELSIF lines[i] ~ '^\S' THEN
+      inside := lines[i] ~ '^xml\s*:\s*(#.*)?$';
+      indent := NULL;
+      IF lines[i] ~ '^xml\s*:\s*\{' THEN
+        lines[i] := regexp_replace(lines[i], '^(xml\s*:\s*\{([^{}]*,)?\s*)document(\s*:)', '\1pageGroup\3');
+      END IF;
+    ELSIF inside THEN
+      indent := coalesce(indent, substring(lines[i] from '^\s+'));
+      IF substring(lines[i] from '^\s+') = indent THEN
+        lines[i] := regexp_replace(lines[i], '^(\s+)document(\s*:)', '\1pageGroup\2');
+      END IF;
+    END IF;
+  END LOOP;
+  RETURN array_to_string(lines, E'\n');
+END
+$$ LANGUAGE plpgsql IMMUTABLE;--> statement-breakpoint
+
+-- A definition: its tags and its XML key.
 CREATE FUNCTION pg_temp.spooldoc_definition(yaml text) RETURNS text AS $$
-  SELECT regexp_replace(pg_temp.spooldoc_tags(yaml), '^(\s+)document:', '\1pageGroup:', 'gn')
+  SELECT pg_temp.spooldoc_xml_key(pg_temp.spooldoc_tags(yaml))
 $$ LANGUAGE sql IMMUTABLE;--> statement-breakpoint
 
 -- `render: { outputs: [{ id, label, template: { kind, source | fileId }, formats }] }` as
