@@ -102,7 +102,16 @@ and the euro, `{d.pg.total:formatC(2)}` prints `1.234,50 €`. `formatN`
 without a number shows three decimals, `formatC` two.
 
 To print the currency of each document from the data, write it after the
-number: `{d.pg.total:formatN(2)} {d.pg.currency}`.
+number: `{d.pg.total:formatN(2)} {d.pg.currency}`. The same way prints a
+code in place of the sign, which `formatC` cannot: `{d.pg.total:formatN(2)} EUR`
+or `EUR {d.pg.total:formatN(2)}`.
+
+**`formatC` with a second currency converts the amount.** Carbone changes
+it at exchange rates built into Carbone, which are not today's rates.
+With the euro in Settings, `{d.pg.total:formatC(2, 'USD')}` prints
+`$1,407.70` for 1,234.50, and nothing says the amount was converted. To
+print an amount in another currency, use `formatN` and write the code
+after it, as above. Email fields do not take the second currency.
 
 Inside a tag, quote text with straight single quotes. Carbone prints
 double quotes and curly quotes as text, so the check below refuses them.
