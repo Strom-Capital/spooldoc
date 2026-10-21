@@ -10,7 +10,7 @@ each, and adds, edits and deletes the ones you made.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/destinations-dark.png">
-    <img src="assets/destinations-light.png" alt="The Destinations page lists two IFS folders, each with its folder, its settings and the number of jobs that use it, and the built-in Spooldoc download." width="900">
+    <img src="assets/destinations-light.png" alt="The Destinations page lists an email destination, two IFS folders with their folders and settings, and the built-in Spooldoc download, each with the number of jobs that use it." width="900">
   </picture>
 </p>
 
@@ -128,6 +128,13 @@ go through the mail server set in [Settings](configuration.md#mail-server).
 Add one with **Add destination** on the Destinations page and pick
 **Email**. It has a name and a test address.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/destination-email-dark.png">
+    <img src="assets/destination-email-light.png" alt="The New destination dialog with Email picked is filled in with a name and a test address under Send all email to, and says that while it is set every email goes only there." width="900">
+  </picture>
+</p>
+
 **The test address.** While **Send all email to** is set, every email of
 every job that uses the destination goes only there. Cc and Bcc are
 dropped, the subject starts with `[Test]`, and a line at the top of the
@@ -163,6 +170,13 @@ Beside the fields, the step shows the email of one page group as it will
 be sent: From, To, Subject, the files and the message. Previous and Next
 step through the page groups, so you can watch To and Subject change from
 customer to customer. Nothing is sent from the preview.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/email-step-dark.png">
+    <img src="assets/email-step-light.png" alt="The destination step of an invoice job sends to {d.pg.customerEmail} with a Bcc to an archive mailbox, a Reply-To and the subject Invoice {d.pg.invoiceNo} from MyCo Ltd. Beside the fields, the preview of page group 1 of 6 shows the email to invoices@northernsupply.example with invoice-260101.pdf attached and the message filled in." width="900">
+  </picture>
+</p>
 
 **The email can be the document.** With **Message from** set to an HTML
 template, the message is the HTML the template makes for the page group.

@@ -70,6 +70,13 @@ has an Emails section under its files, with a count such as "Emails (42
 of 43 sent)". It lists one email per document: the document, the
 addresses it was for, its status and the time.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/job-log-emails-dark.png">
+    <img src="assets/job-log-emails-light.png" alt="A run of an invoice job opened from the job log lists its PDF and HTML files, then Emails (6 of 6 sent): each invoice with the customer address it went to, Sent, and the time." width="900">
+  </picture>
+</p>
+
 | Status | Meaning |
 |--------|---------|
 | Sent | The mail server took the email. |
