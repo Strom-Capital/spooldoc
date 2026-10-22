@@ -1,6 +1,6 @@
 'use client';
 
-import { BracesIcon, ChevronLeftIcon, ChevronRightIcon, FileIcon, FlaskConicalIcon, TriangleAlertIcon } from 'lucide-react';
+import { BracesIcon, ChevronLeftIcon, ChevronRightIcon, FileIcon, FlaskConicalIcon, InfoIcon, TriangleAlertIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Hint } from '@/components/hint';
@@ -196,10 +196,17 @@ function HeaderRow({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
+/** Which email the preview shows: a page group's, or the whole spooled file's when `splf` is set and the run sends one. */
+interface Shown {
+  pageGroup: number;
+  splf: boolean;
+}
+
 /**
- * The email of one page group as the customer will get it: the header, the files, and the
- * message on paper. Previous and next step through the page groups, and the values that
- * change get a short highlight.
+ * The email of one page group, or of the whole spooled file, as the customer will get it:
+ * the header, the files, and the message on paper. Previous and next step through the
+ * page groups that get an email, then the whole spooled file's email last, and the values
+ * that change get a short highlight.
  */
 function EmailPreview({
   preview,
@@ -212,7 +219,7 @@ function EmailPreview({
   previous: EmailPreviewView | null;
   loading: boolean;
   error: string | null;
-  onStep(index: number): void;
+  onStep(shown: Shown): void;
 }) {
   const { sampleId } = useWorkbench();
   if (!sampleId) {
@@ -233,6 +240,14 @@ function EmailPreview({
   const stepped = previous !== null && previous.pageGroup !== preview.pageGroup;
   const changed = (pick: (view: EmailPreviewView) => EmailSegment[]) => stepped && joined(pick(previous)) !== joined(pick(preview));
   const from = preview.from;
+  const key = preview.pageGroup ?? 'splf';
+  const last = preview.pageGroups - 1;
+  // Before and after the email shown, in the order a run sends them.
+  const before: Shown | null =
+    preview.pageGroup === null ? (preview.pageGroupEmails ? { pageGroup: last, splf: false } : null) : preview.pageGroup > 0 ? { pageGroup: preview.pageGroup - 1, splf: false } : null;
+  const after: Shown | null =
+    preview.pageGroup === null ? null : preview.pageGroup < last ? { pageGroup: preview.pageGroup + 1, splf: false } : preview.spooledFileEmail ? { pageGroup: last, splf: true } : null;
+  const where = preview.pageGroup === null ? 'Whole spooled file' : `Page group ${preview.pageGroup + 1} of ${preview.pageGroups}`;
   return (
     <section aria-label="Email preview" className="overflow-hidden rounded-lg border bg-card">
       {preview.testAddress && (
@@ -255,29 +270,39 @@ function EmailPreview({
           )}
         </HeaderRow>
         <HeaderRow label="To">
-          <Filled key={preview.pageGroup} segments={preview.to} flash={changed((v) => v.to)} />
+          <Filled key={key} segments={preview.to} flash={changed((v) => v.to)} />
         </HeaderRow>
         {preview.cc.length > 0 && (
           <HeaderRow label="Cc">
-            <Filled key={preview.pageGroup} segments={preview.cc} flash={changed((v) => v.cc)} />
+            <Filled key={key} segments={preview.cc} flash={changed((v) => v.cc)} />
           </HeaderRow>
         )}
         {preview.bcc.length > 0 && (
           <HeaderRow label="Bcc">
-            <Filled key={preview.pageGroup} segments={preview.bcc} flash={changed((v) => v.bcc)} />
+            <Filled key={key} segments={preview.bcc} flash={changed((v) => v.bcc)} />
           </HeaderRow>
         )}
         {preview.replyTo.length > 0 && (
           <HeaderRow label="Reply-To">
-            <Filled key={preview.pageGroup} segments={preview.replyTo} flash={changed((v) => v.replyTo)} />
+            <Filled key={key} segments={preview.replyTo} flash={changed((v) => v.replyTo)} />
           </HeaderRow>
         )}
         <HeaderRow label="Subject">
           <span className="font-semibold">
-            <Filled key={preview.pageGroup} segments={preview.subject} flash={changed((v) => v.subject)} />
+            <Filled key={key} segments={preview.subject} flash={changed((v) => v.subject)} />
           </span>
         </HeaderRow>
       </dl>
+      {preview.notices.length > 0 && (
+        <ul className="flex flex-col gap-1 border-b bg-muted/40 px-4 py-2 text-muted-foreground text-sm">
+          {preview.notices.map((notice) => (
+            <li key={notice} className="flex items-start gap-2">
+              <InfoIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
+              {notice}
+            </li>
+          ))}
+        </ul>
+      )}
       {preview.problems.length > 0 && (
         <ul className="flex flex-col gap-1 border-b bg-destructive/5 px-4 py-2 text-destructive text-sm">
           {preview.problems.map((problem) => (
@@ -306,37 +331,38 @@ function EmailPreview({
           <iframe title="Message" sandbox="" srcDoc={preview.html} className="h-80 w-full rounded border bg-white" />
         )}
       </div>
-      <div className="flex items-center justify-between gap-2 border-t px-2 py-1.5">
-        <Hint text="Show the email of the page group before this one.">
-          <Button type="button" variant="ghost" size="sm" disabled={preview.pageGroup === 0} onClick={() => onStep(preview.pageGroup - 1)} aria-label="Previous page group">
-            <ChevronLeftIcon />
-            Previous
-          </Button>
-        </Hint>
-        <span className="tabular text-muted-foreground text-sm" aria-live="polite">
-          Page group {preview.pageGroup + 1} of {preview.pageGroups}
+      {preview.pageGroupEmails ? (
+        <div className="flex items-center justify-between gap-2 border-t px-2 py-1.5">
+          <Hint text="Show the email before this one.">
+            <Button type="button" variant="ghost" size="sm" disabled={before === null} onClick={() => before && onStep(before)} aria-label="Previous email">
+              <ChevronLeftIcon />
+              Previous
+            </Button>
+          </Hint>
+          <span className="tabular text-center text-muted-foreground text-sm" aria-live="polite">
+            {where}
+            {loading && <Spinner className="ml-1.5 inline size-3.5 align-[-2px]" aria-label="Loading the email" />}
+          </span>
+          <Hint text={after?.splf ? 'Show the email of the whole spooled file.' : 'Show the email after this one.'}>
+            <Button type="button" variant="ghost" size="sm" disabled={after === null} onClick={() => after && onStep(after)} aria-label="Next email">
+              Next
+              <ChevronRightIcon />
+            </Button>
+          </Hint>
+        </div>
+      ) : (
+        <p className="border-t px-4 py-2.5 text-center text-muted-foreground text-sm" aria-live="polite">
+          {where}
           {loading && <Spinner className="ml-1.5 inline size-3.5 align-[-2px]" aria-label="Loading the email" />}
-        </span>
-        <Hint text="Show the email of the next page group.">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={preview.pageGroup >= preview.pageGroups - 1}
-            onClick={() => onStep(preview.pageGroup + 1)}
-            aria-label="Next page group"
-          >
-            Next
-            <ChevronRightIcon />
-          </Button>
-        </Hint>
-      </div>
+        </p>
+      )}
     </section>
   );
 }
 
-/** The email of a page group, asked for again when the email changes (after a pause) or another page group is picked. */
-function useEmailPreview(email: EmailSpec, destinationId: string, pageGroup: number) {
+/** The email shown, asked for again when the email changes (after a pause) or another one is picked. */
+function useEmailPreview(email: EmailSpec, destinationId: string, shown: Shown) {
+  const { pageGroup, splf } = shown;
   const { job } = useJob();
   const { sampleId, yaml } = useWorkbench();
   const [state, setState] = useState<{ preview: EmailPreviewView | null; previous: EmailPreviewView | null; error: string | null; loading: boolean }>({
@@ -346,14 +372,18 @@ function useEmailPreview(email: EmailSpec, destinationId: string, pageGroup: num
     loading: false,
   });
   // The definition is part of the key, so the preview follows a change to it; the server reads it from the draft.
-  const body = useMemo(() => JSON.stringify({ request: { email, destinationId, pageGroup, sampleId: sampleId ?? undefined }, yaml }), [email, destinationId, pageGroup, sampleId, yaml]);
-  const lastGroup = useRef(pageGroup);
+  const document = splf ? 'splf' : undefined;
+  const body = useMemo(
+    () => JSON.stringify({ request: { email, destinationId, pageGroup, document, sampleId: sampleId ?? undefined }, yaml }),
+    [email, destinationId, pageGroup, document, sampleId, yaml],
+  );
+  const lastShown = useRef(`${pageGroup}/${splf}`);
   useEffect(() => {
     if (!sampleId) return;
     let cancelled = false;
-    // Stepping to another page group asks at once; typing waits for a pause.
-    const delay = lastGroup.current !== pageGroup ? 0 : PREVIEW_DELAY_MS;
-    lastGroup.current = pageGroup;
+    // Stepping to another email asks at once; typing waits for a pause.
+    const delay = lastShown.current !== `${pageGroup}/${splf}` ? 0 : PREVIEW_DELAY_MS;
+    lastShown.current = `${pageGroup}/${splf}`;
     const timer = setTimeout(() => {
       setState((current) => ({ ...current, loading: true }));
       const { request } = JSON.parse(body) as { request: Record<string, unknown> };
@@ -366,21 +396,21 @@ function useEmailPreview(email: EmailSpec, destinationId: string, pageGroup: num
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [body, job.id, pageGroup, sampleId]);
+  }, [body, job.id, pageGroup, splf, sampleId]);
   return state;
 }
 
 /**
  * The email part of the destination step: To, Cc, Bcc, Reply-To, Subject and the message,
  * each with fields of the definition, what to attach, and the live preview of the email
- * of one page group beside them.
+ * of one page group, or of the whole spooled file, beside them.
  */
 export function EmailStep({ destination }: { destination: EmailDestination }) {
   const { spec, updateDraft, readOnly } = useJob();
   const { pageGroupIndex } = useWorkbench();
   const email = spec.destination.email ?? emptyEmailSpec();
-  const [pageGroup, setPageGroup] = useState(pageGroupIndex);
-  const { preview, previous, loading, error } = useEmailPreview(email, destination.id, pageGroup);
+  const [shown, setShown] = useState<Shown>({ pageGroup: pageGroupIndex, splf: false });
+  const { preview, previous, loading, error } = useEmailPreview(email, destination.id, shown);
   const [showMore, setShowMore] = useState(false);
   const inputs = useRef<Partial<Record<EmailField, HTMLInputElement | HTMLTextAreaElement | null>>>({});
   const lastField = useRef<EmailField>('subject');
@@ -507,7 +537,7 @@ export function EmailStep({ destination }: { destination: EmailDestination }) {
         )}
       </div>
       <div className="lg:sticky lg:top-0">
-        <EmailPreview preview={preview} previous={previous} loading={loading} error={error} onStep={setPageGroup} />
+        <EmailPreview preview={preview} previous={previous} loading={loading} error={error} onStep={setShown} />
         {error && preview && <p className="mt-2 text-destructive text-xs">{error}</p>}
       </div>
     </div>

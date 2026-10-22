@@ -180,7 +180,10 @@ one. From is always the address in Settings.
 Beside the fields, the step shows the email of one page group as it will
 be sent: From, To, Subject, the files and the message. Previous and Next
 step through the page groups, so you can watch To and Subject change from
-customer to customer. Nothing is sent from the preview.
+customer to customer. When the run also sends an email for the whole
+spooled file, Next after the last page group shows that one, filled in
+from `{d.splf...}`. When page groups get no email, the preview shows only
+the whole spooled file's email. Nothing is sent from the preview.
 
 <p align="center">
   <picture>
@@ -201,7 +204,13 @@ takes one body per email, so there the email has the HTML message only.
 under Attach, named as the [Spooldoc download](#spooldoc-download) names
 them. The files of an Excel template of the whole spooled file go in one
 email of their own, and only when Attach picks their format. That email
-has no page group, so its fields can read only `{d.splf...}`. A copy of
+has no page group, so its fields can read only `{d.splf...}`. When Attach
+picks only formats of the whole spooled file, that one email is all the
+run sends: the page groups get no email, since it would have no file, and
+the preview says so. The whole spooled file's email always has the
+message written under **Message**, since a message template makes one
+page group's message. With Attach empty, each page group still gets its
+email, with nothing attached. A copy of
 every file is kept in Spooldoc, so the job log can show what was mailed.
 Through Microsoft 365, each file can be up to 3 MB and the whole email up
 to 4 MB, with images; an email over that fails with the file's name and
@@ -220,7 +229,11 @@ The other documents are still sent. Then the run fails with "Sent 42 of
 or deleted. The [job log](job-log.md#emails) lists every email with its
 status. After fixing the cause, [Retry](job-log.md#retry) sends only the
 emails that were not sent yet: a document an earlier run of the same job
-sent for the same spooled file is not sent again. An email sent to the
+sent for the same spooled file is not sent again. It counts as the same
+document when the spooled file has the same creation time, and the
+document the same pages and name. So a new spooled file whose job number
+the IBM i reused, or a newer job version that groups the pages another
+way, sends its emails again. An email sent to the
 test address does not count as sent, so taking the test address out sends
 every email for real.
 
@@ -234,7 +247,10 @@ Microsoft 365 asks Spooldoc to wait a few seconds, it waits and tries
 again, twice at most; when the wait is longer than a minute, or the
 throttling goes on, the email fails and says to retry later. The server's own text is under Details. When the server,
 the sign-in or the connection fails, the run stops sending, and the
-emails it did not try say so.
+emails it did not try say so. A run keeps one connection to an SMTP
+server open for its emails, instead of signing in for each one, so a
+server that limits sign-ins does not stop a long run. An address the server refuses fails that email
+only.
 
 ## Webhook
 

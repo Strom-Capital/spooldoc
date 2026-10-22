@@ -162,10 +162,10 @@ export async function executeRun(runId: string, request: RunRequest, connection?
         const def: Definition = parseDefinition(spec.extract.definition);
         // A file the definition is not for (its `match` rules) is skipped, not failed.
         const mismatch = matchProblems(def, sample);
-        if (mismatch.length > 0) return { def, groups: [], mismatch };
+        if (mismatch.length > 0) return { def, groups: [], ranges: [], mismatch };
         const result = extract(def, sample);
         if (result.pageGroups.length === 0) throw new Error('The definition finds no page groups in this spooled file.');
-        return { def, groups: result.pageGroups, mismatch };
+        return { def, groups: result.pageGroups, ranges: result.pageRanges, mismatch };
       },
       ({ groups, mismatch }) =>
         mismatch.length > 0 ? 'Not for this definition' : `${groups.length} ${groups.length === 1 ? 'page group' : 'page groups'}`,
@@ -173,7 +173,7 @@ export async function executeRun(runId: string, request: RunRequest, connection?
     if (extracted.mismatch.length > 0) {
       throw new SkipRun(`Skipped: the definition is not for this file (${extracted.mismatch.join('; ')}).`);
     }
-    const { def, groups } = extracted;
+    const { def, groups, ranges } = extracted;
     pageGroups = groups.length;
 
     // Looked up before the render, so an email destination's message template is rendered with the documents.
@@ -200,11 +200,12 @@ export async function executeRun(runId: string, request: RunRequest, connection?
     const documents: RunDocument[] = groups.map((group, index) => ({
       pageGroupIndex: index,
       name: documentName(fileNameFor(def, group, index, sample.splf.name.toLowerCase())),
+      pages: ranges[index] ?? null,
       data: { pg: group, splf: sample.splf },
       html: bodies.get(index) ?? null,
     }));
     if (spec.render.templates.some(perSpooledFile)) {
-      documents.push({ pageGroupIndex: null, name: documentName(spooledFileName(sample)), data: spooledFileData(groups, sample) });
+      documents.push({ pageGroupIndex: null, name: documentName(spooledFileName(sample)), pages: null, data: spooledFileData(groups, sample) });
     }
 
     await step(

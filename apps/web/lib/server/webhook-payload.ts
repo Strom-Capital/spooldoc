@@ -59,7 +59,7 @@ const isoSeconds = (date: Date) => date.toISOString().replace(/\.\d{3}Z$/, 'Z');
  *
  * @param pageGroups - How many page groups the spooled file has
  */
-export function webhookPayload(input: { type: WebhookType; at: Date; document: RunDocument; pageGroups: number; context: WebhookContext; files: RunFile[] }): WebhookPayload {
+export function webhookPayload(input: { type: WebhookType; at: Date; document: Pick<RunDocument, 'pageGroupIndex' | 'name' | 'data'>; pageGroups: number; context: WebhookContext; files: RunFile[] }): WebhookPayload {
   const { document, context } = input;
   const { splf, attributes } = context;
   return {

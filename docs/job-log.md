@@ -81,7 +81,7 @@ addresses it was for, its status and the time.
 |--------|---------|
 | Sent | The mail server took the email. |
 | Test | Sent to the destination's test address instead. |
-| Sent in run #N | An earlier run of the job sent it for the same spooled file, so it was not sent again. |
+| Sent in run #N | An earlier run of the job sent it for the same spooled file, with the same creation time, pages and name, so it was not sent again. |
 | Failed | Open the row to see why, with the mail server's own text under Details. |
 
 A long list shows the first 50 emails and says how many more there are.

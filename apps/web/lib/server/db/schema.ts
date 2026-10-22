@@ -355,6 +355,15 @@ export const runDeliveries = pgTable(
     /** The document's file name without extension, such as `invoice-260101`. */
     document: text('document').notNull(),
     /**
+     * The spooled file's creation time, as `YYYY-MM-DDTHH:MM:SS` or "" when the IBM i did not
+     * give it. With the pages, it tells a spooled file apart from an earlier one that had the
+     * same job number. Null on rows written before it was recorded.
+     */
+    splfCreated: text('splf_created'),
+    /** The first and last page of the document's page group; null for the document of the whole spooled file. */
+    firstPage: integer('first_page'),
+    lastPage: integer('last_page'),
+    /**
      * Where the delivery went. For an email, the addresses it was for, as the job's To field
      * gave them, comma separated.
      */
