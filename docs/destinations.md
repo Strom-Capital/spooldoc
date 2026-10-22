@@ -560,9 +560,11 @@ missing, before the first run.
 
 **Upload all files to** is the test folder, such as `/test/in`. While it
 is set, runs and Upload test write there instead, marked as a test, and
-the Destinations page and the destination step say "Test". An upload to
-the test folder does not count as uploaded, so taking the test folder
-out uploads every file again for real.
+the Destinations page and the destination step say "Test". Every file of
+a run goes to the test folder, even one an earlier run already uploaded
+for real, so a template change can be checked on a spooled file that was
+delivered. An upload to the test folder does not count as uploaded, so
+taking the test folder out uploads every file again for real.
 
 **When a file with the same name exists**, the destination does one of
 three things, as the [IFS folder](#ifs-folder) does:
@@ -661,9 +663,19 @@ moved or deleted. The server's own text is under Details. The
 [job log](job-log.md#uploads) lists every file with where it went. After
 fixing the cause, [Retry](job-log.md#retry) uploads only the files that
 this destination has not uploaded yet to this folder on this server, so
-Add a number never makes a second copy. After the job moves to another
-destination, or the destination to another server or folder, every file
-is uploaded again.
+Add a number never makes a second copy. A file counts as uploaded when
+an earlier run of the job uploaded it for the same spooled file, with the
+same creation time, pages and name. A new spooled file is uploaded even
+when the IBM i reused the job number of an earlier one. After the job
+moves to another destination, or the destination to another server or
+folder, every file is uploaded again.
+
+One run at a time uploads the files of a job and spooled file. When Retry
+or Run now starts while another run is still uploading, it waits for that
+run to finish, then uploads only what is left. After 5 minutes it stops
+waiting, and the run fails with "Another run of this job is uploading
+files of this spooled file. Retry when it has finished." No file is
+uploaded twice.
 
 ## Writing a destination
 

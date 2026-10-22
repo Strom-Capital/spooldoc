@@ -13,6 +13,9 @@ import type { DeliverInput, RunDocument } from './index';
  */
 
 type DeliveryRow = typeof runDeliveries.$inferInsert;
+/** What matching and recording a delivery need of its document: a file of a page group, too. */
+export type DeliveredDocument = Pick<RunDocument, 'pageGroupIndex' | 'name' | 'pages'>;
+
 /** A delivery row without what `deliveryRecorder` fills in. */
 export type DeliveryFields = Omit<DeliveryRow, 'runId' | 'jobId' | 'splfKey' | 'destinationId' | 'kind'>;
 
@@ -25,6 +28,8 @@ export interface EarlierDelivery {
   splfCreated: string | null;
   firstPage: number | null;
   lastPage: number | null;
+  /** Null once the destination is deleted. */
+  destinationId: string | null;
   /** When the row was written. */
   sentAt: Date;
   /** The run's number in the Job log. */
@@ -78,6 +83,7 @@ export async function earlierDeliveries(kind: string, job: DeliverInput['job'], 
       splfCreated: runDeliveries.splfCreated,
       firstPage: runDeliveries.firstPage,
       lastPage: runDeliveries.lastPage,
+      destinationId: runDeliveries.destinationId,
       sentAt: runDeliveries.sentAt,
       seq: runs.seq,
     })
@@ -128,7 +134,7 @@ export function earliestCreation(created: string): number | null {
  *
  * @param created - The spooled file's creation time, as the run read it
  */
-export function sameDocument(row: EarlierDelivery, document: RunDocument, created: string): boolean {
+export function sameDocument(row: EarlierDelivery, document: DeliveredDocument, created: string): boolean {
   if (row.document !== document.name) return false;
   if (row.splfCreated === null) {
     const earliest = earliestCreation(created);
@@ -138,11 +144,11 @@ export function sameDocument(row: EarlierDelivery, document: RunDocument, create
 }
 
 /** The first earlier delivery that sent this document, or undefined when none did. */
-export const sentBefore = (earlier: EarlierDelivery[], document: RunDocument, created: string): EarlierDelivery | undefined =>
+export const sentBefore = (earlier: EarlierDelivery[], document: DeliveredDocument, created: string): EarlierDelivery | undefined =>
   earlier.find((row) => row.status === 'sent' && sameDocument(row, document, created));
 
 /** What a delivery row records of its document and spooled file. */
-export function documentFields(document: RunDocument, created: string) {
+export function documentFields(document: DeliveredDocument, created: string) {
   return {
     pageGroupIndex: document.pageGroupIndex,
     document: document.name,
