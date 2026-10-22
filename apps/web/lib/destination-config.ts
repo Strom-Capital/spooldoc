@@ -130,11 +130,25 @@ export const headerName = z
   .regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/, 'Enter a header name of letters, digits and - only, such as Authorization')
   .refine((value) => !isReservedHeader(value), 'Pick another header name. Spooldoc sets Host, Content-Type, Content-Length, User-Agent and the webhook- headers itself');
 
-/** A header value: one line, without control characters. */
+/**
+ * What is wrong with a header value a call cannot carry, or null when it can. A value is
+ * one line of printable ASCII: fetch refuses characters above U+00FF, and receivers read
+ * the rest of Latin-1 in different ways.
+ */
+export function headerValueProblem(value: string): string | null {
+  if (/[\u0000-\u0008\u000a-\u001f\u007f]/.test(value)) return 'Enter the header value on one line, without control characters';
+  if (/[^\u0009 -~]/.test(value)) return 'Enter the header value in plain ASCII: letters, digits, spaces and punctuation, without accented letters or symbols such as €';
+  return null;
+}
+
+/** A header value: one line of printable ASCII. */
 const headerValue = z
   .string()
   .max(4000, 'Use a header value of at most 4000 characters')
-  .refine((value) => !/[\u0000-\u0008\u000a-\u001f\u007f]/.test(value), 'Enter the header value on one line, without control characters');
+  .superRefine((value, ctx) => {
+    const problem = headerValueProblem(value);
+    if (problem) ctx.addIssue({ code: 'custom', message: problem });
+  });
 
 /** True when no two headers have the same name, in any case. */
 const uniqueNames = (headers: { name: string }[]) => new Set(headers.map((header) => header.name.toLowerCase())).size === headers.length;

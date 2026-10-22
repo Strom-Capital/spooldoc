@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { createHash, createHmac, randomBytes } from 'node:crypto';
-import type { SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
+import type { PageRange, SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
 import { docsVersion } from './docs';
 import type { RunDocument, RunFile } from './destinations';
 
@@ -98,10 +98,19 @@ export function newSigningSecret(): string {
 
 /**
  * The id of the call for a document of a spooled file, the same on every Retry, so a
- * receiver can tell a call it already took. A test call gets an id of its own.
+ * receiver can tell a call it already took. The spooled file's creation time and the
+ * page group's pages are part of it, since the IBM i reuses job numbers: a new spooled
+ * file with the same job number, name and number gets new ids. A test call gets an id of
+ * its own.
+ *
+ * @param input.created - The spooled file's creation time, as the run read it; "" when the IBM i did not give it
+ * @param input.pages - The pages of the page group; null for the document of the whole spooled file
  */
-export function webhookId(input: { jobId: string; splfKey: string; document: string; test: boolean }): string {
-  const hash = createHash('sha256').update([input.jobId, input.splfKey, input.document, input.test ? 'test' : ''].join('\n')).digest('hex');
+export function webhookId(input: { jobId: string; splfKey: string; created: string; pages: PageRange | null; document: string; test: boolean }): string {
+  const pages = input.pages ? `${input.pages.first}-${input.pages.last}` : '';
+  const hash = createHash('sha256')
+    .update([input.jobId, input.splfKey, input.created, pages, input.document, input.test ? 'test' : ''].join('\n'))
+    .digest('hex');
   return `msg_${hash.slice(0, 32)}`;
 }
 

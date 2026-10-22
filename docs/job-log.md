@@ -107,8 +107,8 @@ tries" or "No answer after 3 tries", then its status and the time.
 |--------|---------|
 | Sent | The receiver answered with a 2xx status. |
 | Test | Sent to the destination's test URL instead. |
-| Sent in run #N | An earlier run of the job sent it for the same spooled file, so it was not sent again. |
-| Failed | Open the row to see why, with the receiver's answer, its first 2 KB, under Details. |
+| Sent in run #N | An earlier run of the job sent it for the same spooled file, with the same creation time, pages and name, so it was not sent again. |
+| Failed | Open the row to see why, with the receiver's answer, its first 2 KB, under Details. A document the run did not try says "Not sent" and why. |
 
 A run that sent nothing says "This run sent no webhook call."
 

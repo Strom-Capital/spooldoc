@@ -7,7 +7,7 @@ import { assetNames, assetResolver } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
 import { getDb } from '@/lib/server/db';
 import { destinations } from '@/lib/server/db/schema';
-import { fileNameFor, previewRenderer } from '@/lib/server/documents';
+import { documentNames, previewRenderer } from '@/lib/server/documents';
 import {
   addressList,
   addressProblems,
@@ -83,7 +83,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // The whole spooled file's email when it is asked for, or when it is the only one the run sends.
   const whole = sends.spooledFile && (body.data.document === 'splf' || !sends.pageGroups);
   const data = whole ? spooledFileData(groups, sample) : { pg: groups[index]!, splf: sample.splf };
-  const document = whole ? spooledFileName(sample) : fileNameFor(def, groups[index]!, index, sample.splf.name.toLowerCase());
+  // Named as a run names it, so two page groups with the same name get -2, -3 here too.
+  const names = documentNames(def, groups, sample, templates.some(perSpooledFile));
+  const document = whole ? (names.spooledFile ?? spooledFileName(sample)) : names.pageGroups[index]!;
 
   const destinationId = body.data.destinationId ?? draft.destination.destinationId;
   const [row] = destinationId ? await getDb().select({ kind: destinations.kind, config: destinations.config }).from(destinations).where(eq(destinations.id, destinationId)) : [];

@@ -1,0 +1,115 @@
+import 'server-only';
+
+import { and, eq, inArray } from 'drizzle-orm';
+import { getDb } from '../db';
+import { runDeliveries, runs } from '../db/schema';
+import { StepError } from '../step-error';
+import type { DeliverInput, RunDocument } from './index';
+
+/**
+ * What the destinations that deliver one document at a time share: which documents an
+ * earlier run already delivered, the rows of the run's deliveries, and the deliver step's
+ * note when some failed or were delivered before.
+ */
+
+type DeliveryRow = typeof runDeliveries.$inferInsert;
+/** A delivery row without what `deliveryRecorder` fills in. */
+export type DeliveryFields = Omit<DeliveryRow, 'runId' | 'jobId' | 'splfKey' | 'destinationId' | 'kind'>;
+
+/** A delivery of an earlier run of the same job on the same spooled file, not to a test address. */
+export interface EarlierDelivery {
+  document: string;
+  to: string;
+  status: string;
+  messageId: string | null;
+  splfCreated: string | null;
+  firstPage: number | null;
+  lastPage: number | null;
+  /** The run's number in the Job log. */
+  seq: number;
+}
+
+/** The deliveries, sent or failed, of earlier runs of this job on this spooled file through a kind of destination, first run first. */
+export async function earlierDeliveries(kind: string, job: DeliverInput['job']): Promise<EarlierDelivery[]> {
+  return getDb()
+    .select({
+      document: runDeliveries.document,
+      to: runDeliveries.to,
+      status: runDeliveries.status,
+      messageId: runDeliveries.messageId,
+      splfCreated: runDeliveries.splfCreated,
+      firstPage: runDeliveries.firstPage,
+      lastPage: runDeliveries.lastPage,
+      seq: runs.seq,
+    })
+    .from(runDeliveries)
+    .innerJoin(runs, eq(runs.id, runDeliveries.runId))
+    .where(
+      and(
+        eq(runDeliveries.kind, kind),
+        eq(runDeliveries.jobId, job.id),
+        eq(runDeliveries.splfKey, job.splfKey),
+        inArray(runDeliveries.status, ['sent', 'failed']),
+        eq(runDeliveries.test, false),
+      ),
+    )
+    .orderBy(runs.seq);
+}
+
+/**
+ * True when an earlier row is about this document. A document matches when the spooled file
+ * has the same creation time, and the page group the same pages and name: the IBM i reuses
+ * job numbers, and a newer job version can group the pages another way. Rows written before
+ * the creation time was recorded match on the name alone, as they did, so a Retry right
+ * after an upgrade does not send a second copy.
+ *
+ * @param created - The spooled file's creation time, as the run read it
+ */
+export function sameDocument(row: EarlierDelivery, document: RunDocument, created: string): boolean {
+  if (row.document !== document.name) return false;
+  if (row.splfCreated === null) return true;
+  return row.splfCreated === created && row.firstPage === (document.pages?.first ?? null) && row.lastPage === (document.pages?.last ?? null);
+}
+
+/** The first earlier delivery that sent this document, or undefined when none did. */
+export const sentBefore = (earlier: EarlierDelivery[], document: RunDocument, created: string): EarlierDelivery | undefined =>
+  earlier.find((row) => row.status === 'sent' && sameDocument(row, document, created));
+
+/** What a delivery row records of its document and spooled file. */
+export function documentFields(document: RunDocument, created: string) {
+  return {
+    pageGroupIndex: document.pageGroupIndex,
+    document: document.name,
+    splfCreated: created,
+    firstPage: document.pages?.first ?? null,
+    lastPage: document.pages?.last ?? null,
+  };
+}
+
+/** Records one delivery of the run, as it goes. */
+export function deliveryRecorder(input: Pick<DeliverInput, 'runId' | 'job' | 'destinationId'>, kind: string): (row: DeliveryFields) => Promise<unknown> {
+  return (row) => getDb().insert(runDeliveries).values({ runId: input.runId, jobId: input.job.id, splfKey: input.job.splfKey, destinationId: input.destinationId, kind, ...row });
+}
+
+/** The error of a document not tried, since an earlier one failed in a way the rest would too. */
+export const notSent = (reason: string): string => `Not sent: ${reason}`;
+
+/** `, 2 were sent in run #4`, or "" when none was delivered before. */
+export function earlierText(already: number, runsBefore: Iterable<number>, verb: 'sent' | 'uploaded'): string {
+  if (already === 0) return '';
+  const seqs = [...new Set(runsBefore)];
+  return `, ${already} ${already === 1 ? 'was' : 'were'} ${verb} in ${seqs.length === 1 ? `run #${seqs[0]}` : 'earlier runs'}`;
+}
+
+/**
+ * The deliver step's error when some deliveries failed: what was done, the first failure,
+ * and how many more there are.
+ *
+ * @param done - What was delivered, such as "Sent 2 of 3 documents to hooks.example.com"
+ * @param list - The run's list that has each one, such as "Emails"
+ */
+export function deliveryFailed(done: string, failures: { message: string; detail?: string }[], list: string): StepError {
+  const first = failures[0]!;
+  const more = failures.length > 1 ? ` ${failures.length - 1} more failed; the ${list} list of the run has each one.` : '';
+  return new StepError('deliver', `${done}. ${first.message}${more}`, first.detail);
+}

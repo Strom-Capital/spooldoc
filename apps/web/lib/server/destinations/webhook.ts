@@ -1,17 +1,14 @@
 import 'server-only';
 
 import { redact } from '@spooldoc/ibmi';
-import { and, eq } from 'drizzle-orm';
-import { shortUrl, urlWithoutQuery, WEBHOOK_TIMEOUT_SECONDS, type WebhookConfig } from '@/lib/destination-config';
+import { headerValueProblem, shortUrl, urlWithoutQuery, WEBHOOK_TIMEOUT_SECONDS, type WebhookConfig } from '@/lib/destination-config';
 import { bytes } from '@/lib/client/format';
 import { emptyWebhookSpec, FORMAT_FILES, type Format } from '@/lib/job-spec';
 import { RESPONSE_LIMIT } from '../runs';
-import { getDb } from '../db';
-import { runDeliveries, runs } from '../db/schema';
 import { retryAfterSeconds } from '../http';
 import { decryptSecret, encryptSecret } from '../secrets';
-import { StepError } from '../step-error';
 import { webhookHeaders, webhookId, webhookPayload, type WebhookType } from '../webhook-payload';
+import { deliveryFailed, deliveryRecorder, documentFields, earlierDeliveries, earlierText, notSent, sentBefore } from './deliveries';
 import type { DeliverInput, Destination, RunFile } from './index';
 import { storeRunFiles } from './store';
 
@@ -105,6 +102,8 @@ interface NetworkFailure {
   code: string | undefined;
   text: string;
   timeout: boolean;
+  /** fetch refused a header value before it sent anything, so another try fails too. */
+  badHeader: boolean;
 }
 
 /** A fetch that answers a network failure instead of throwing, with the cause's code. */
@@ -115,8 +114,19 @@ async function call(url: string, init: RequestInit): Promise<Response | NetworkF
     const cause = (error as { cause?: { code?: string; message?: string } }).cause;
     const timeout = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
     const text = [error instanceof Error ? error.message : String(error), cause?.message].filter(Boolean).join(': ');
-    return { code: cause?.code, text, timeout };
+    const badHeader = error instanceof TypeError && cause === undefined && /ByteString|header/i.test(error.message);
+    return { code: cause?.code, text, timeout, badHeader };
   }
+}
+
+/** A header of the destination that fetch cannot send, in plain words, with what to do. Every call would fail the same way. */
+function badHeaderError(target: WebhookTarget, header: string | null, detail?: string): { message: string; detail?: string; stops: boolean } {
+  const which = header ? `the value of the header ${header}` : 'a header value';
+  return {
+    message: `Could not send the call: ${which} of ${target.destination} has characters a header cannot carry. Open ${target.destination} on the Destinations page and enter the header value again.`,
+    detail,
+    stops: true,
+  };
 }
 
 const CERT_CODES = /CERT|SSL|TLS|SELF_SIGNED|UNABLE_TO_VERIFY|UNABLE_TO_GET_ISSUER/i;
@@ -170,16 +180,18 @@ function statusError(
   const status = `${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
   const detail = text.trim() ? text.slice(0, RESPONSE_LIMIT) : undefined;
   const tries = attempts > 1 ? ` after ${attempts} tries` : '';
-  const fail = (message: string) => ({ message, detail, stops: false });
+  const fail = (message: string, stops = false) => ({ message, detail, stops });
+  // An answer every later document would get too stops the rest: 3xx, 401, 403, 404, 405, 410.
   if (response.status >= 300 && response.status < 400) {
     const location = response.headers.get('location');
-    const to = location ? ` and points to ${urlWithoutQuery(new URL(location, url).href)}` : '';
-    return fail(`Could not send to ${host}: it answered ${status}${to}. Spooldoc does not follow redirects. Change the URL of ${target.destination} to the address the receiver takes.`);
+    const to = location ? ` and points to ${redirectTarget(location, url)}` : '';
+    return fail(`Could not send to ${host}: it answered ${status}${to}. Spooldoc does not follow redirects. Change the URL of ${target.destination} to the address the receiver takes.`, true);
   }
-  if (response.status === 401 || response.status === 403) return fail(`${host} refused the call (${status}). Check the headers of ${target.destination}.`);
+  if (response.status === 401 || response.status === 403) return fail(`${host} refused the call (${status}). Check the headers of ${target.destination}.`, true);
   if (response.status === 404 || response.status === 405 || response.status === 410) {
-    return fail(`${host} has nothing that takes the call at ${url.pathname} (${status}). Check the URL of ${target.destination}.`);
+    return fail(`${host} has nothing that takes the call at ${url.pathname} (${status}). Check the URL of ${target.destination}.`, true);
   }
+  if (response.status === 408) return fail(`${host} timed out waiting for the call (${status})${tries}. ${later}`);
   if (response.status === 413) {
     return fail(`${host} refused the call as too large (${status}): it was ${bytes(bodyBytes)}. Turn off files the receiver does not need in the job's Destination step.`);
   }
@@ -188,13 +200,24 @@ function statusError(
   return fail(`${host} refused the call (${status}). Its answer is under Details.`);
 }
 
+/** Where a redirect points, without its query string, which can hold a token. A Location that is not a URL is shown as it came, cut at `?` or `#`. */
+function redirectTarget(location: string, url: URL): string {
+  try {
+    return urlWithoutQuery(new URL(location, url).href);
+  } catch {
+    const raw = location.split(/[?#]/)[0]!.trim();
+    return raw.length > 200 ? `${raw.slice(0, 200)}...` : raw;
+  }
+}
+
 const retried = (status: number) => status === 408 || status === 429 || status >= 500;
 
 /**
  * Post one call: POST with the JSON body, signed, without following redirects, waiting
  * at most 30 seconds. A network error, 408, 429 or 5xx is tried again after 2 and then
  * 10 seconds, or after the Retry-After the receiver asks for, up to a minute, for at most
- * `maxAttempts` tries. Any other answer is final. Never throws.
+ * `maxAttempts` tries. Any other answer is final. A header value a call cannot carry fails
+ * at once, without another try. Never throws.
  *
  * @param input.later - What a 429 or 5xx message ends with: "Retry the run later." for a run
  */
@@ -202,6 +225,9 @@ export async function postWebhook(target: WebhookTarget, input: { id: string; bo
   const url = new URL(target.url);
   const maxAttempts = input.maxAttempts ?? MAX_ATTEMPTS;
   const bodyBytes = Buffer.byteLength(input.body);
+  // A value saved before Spooldoc checked it: fetch would refuse it on every try.
+  const bad = target.toTestUrl ? undefined : target.headers.find((header) => headerValueProblem(header.value) !== null);
+  if (bad) return { ok: false, status: null, statusText: '', attempts: 0, ms: 0, response: null, error: badHeaderError(target, bad.name) };
   for (let attempt = 1; ; attempt++) {
     const timestamp = Math.floor(Date.now() / 1000);
     const headers = webhookHeaders({ url: target.url, id: input.id, timestamp, body: input.body, secret: target.secret, headers: target.headers, toTestUrl: target.toTestUrl });
@@ -214,6 +240,7 @@ export async function postWebhook(target: WebhookTarget, input: { id: string; bo
     });
     if (!(answer instanceof Response)) {
       const ms = Math.round(performance.now() - started);
+      if (answer.badHeader) return { ok: false, status: null, statusText: '', attempts: attempt, ms, response: null, error: badHeaderError(target, null, answer.text) };
       if (attempt < maxAttempts) {
         await webhookTiming.sleep(WAITS_MS[attempt - 1] ?? WAITS_MS.at(-1)!);
         continue;
@@ -244,8 +271,6 @@ export function callFiles(files: RunFile[], pageGroupIndex: number | null, forma
   return files.filter((file) => file.pageGroupIndex === pageGroupIndex && types.has(file.contentType));
 }
 
-type DeliveryRow = typeof runDeliveries.$inferInsert;
-
 /**
  * Posts one call per document to the destination's URL, as JSON with the document's data
  * and the files in the formats the job picks, signed with the destination's secret. The
@@ -272,39 +297,36 @@ export function webhookDestination(config: WebhookConfig, secrets: WebhookSecret
       const type: WebhookType = test ? 'document.test' : 'document.created';
       const formats = webhookFormats(input);
 
-      const db = getDb();
-      // Documents sent for real by an earlier run of this job on this spooled file.
-      const earlier = await db
-        .select({ document: runDeliveries.document, seq: runs.seq })
-        .from(runDeliveries)
-        .innerJoin(runs, eq(runs.id, runDeliveries.runId))
-        .where(and(eq(runDeliveries.kind, 'webhook'), eq(runDeliveries.jobId, job.id), eq(runDeliveries.splfKey, job.splfKey), eq(runDeliveries.status, 'sent'), eq(runDeliveries.test, false)))
-        .orderBy(runs.seq);
-      const sentIn = new Map<string, number>();
-      for (const row of earlier) if (!sentIn.has(row.document)) sentIn.set(row.document, row.seq);
+      // The spooled file's creation time, as the run read it; "" when the IBM i did not give it.
+      const created = context.attributes.created;
+      // Calls of earlier runs of this job on this spooled file, first run first.
+      const earlier = await earlierDeliveries('webhook', job);
 
       // A call per page group; the whole spooled file's document only when one of its files goes.
       const calls = documents.filter((document) => document.pageGroupIndex !== null || callFiles(files, null, formats).length > 0);
       const pageGroups = documents.filter((document) => document.pageGroupIndex !== null).length;
       const to = urlWithoutQuery(target.url);
-      const record = (row: Omit<DeliveryRow, 'runId' | 'jobId' | 'splfKey' | 'destinationId' | 'kind'>) =>
-        db.insert(runDeliveries).values({ runId, jobId: job.id, splfKey: job.splfKey, destinationId: input.destinationId, kind: 'webhook', ...row });
+      const record = deliveryRecorder(input, 'webhook');
 
       let sent = 0;
       let already = 0;
+      const runsBefore = new Set<number>();
       const failures: { message: string; detail?: string }[] = [];
       let stopped: { message: string; detail?: string } | null = null;
       for (const document of calls) {
-        const base = { pageGroupIndex: document.pageGroupIndex, document: document.name };
-        const before = sentIn.get(document.name);
+        const base = documentFields(document, created);
+        const before = sentBefore(earlier, document, created);
         if (before !== undefined) {
           already++;
-          await record({ ...base, to, status: 'already_sent', sentInRun: before });
+          runsBefore.add(before.seq);
+          await record({ ...base, to, status: 'already_sent', sentInRun: before.seq });
           continue;
         }
-        const id = webhookId({ jobId: job.id, splfKey: job.splfKey, document: document.name, test });
+        // A call that failed before the creation time was recorded keeps its id on Retry.
+        const legacy = test ? undefined : earlier.findLast((row) => row.splfCreated === null && row.messageId !== null && row.document === document.name);
+        const id = legacy?.messageId ?? webhookId({ jobId: job.id, splfKey: job.splfKey, created, pages: document.pages, document: document.name, test });
         if (stopped) {
-          const message = `Not sent: ${stopped.message}`;
+          const message = notSent(stopped.message);
           failures.push({ message: `${document.name}: ${message}` });
           await record({ ...base, to, test, status: 'failed', messageId: id, attempts: 0, error: message, detail: stopped.detail ?? null });
           continue;
@@ -331,15 +353,8 @@ export function webhookDestination(config: WebhookConfig, secrets: WebhookSecret
       }
 
       const where = test ? `the test URL ${shortUrl(target.url)}` : host;
-      if (failures.length > 0) {
-        const first = failures[0]!;
-        const more = failures.length > 1 ? ` ${failures.length - 1} more failed; the Webhook calls list of the run has each one.` : '';
-        throw new StepError('deliver', `Sent ${sent + already} of ${nDocuments(calls.length)} to ${where}. ${first.message}${more}`, first.detail);
-      }
-      const runsBefore = [...new Set(calls.map((document) => sentIn.get(document.name)).filter((seq) => seq !== undefined))];
-      const earlierText =
-        already > 0 ? `, ${already} ${already === 1 ? 'was' : 'were'} sent in ${runsBefore.length === 1 ? `run #${runsBefore[0]}` : 'earlier runs'}` : '';
-      return `Sent ${nDocuments(sent)} to ${where}${earlierText}`;
+      if (failures.length > 0) throw deliveryFailed(`Sent ${sent + already} of ${nDocuments(calls.length)} to ${where}`, failures, 'Webhook calls');
+      return `Sent ${nDocuments(sent)} to ${where}${earlierText(already, runsBefore, 'sent')}`;
     },
   };
 }

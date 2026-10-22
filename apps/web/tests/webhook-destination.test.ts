@@ -6,10 +6,16 @@ import { destinations, jobs, jobVersions, runDeliveries, runs } from '@/lib/serv
 import { sealWebhookSecrets, webhookTiming } from '@/lib/server/destinations/webhook';
 import { runJob } from '@/lib/server/runner';
 import { runViews } from '@/lib/server/runs';
+import { storeSample } from '@/lib/server/samples';
 import { newSigningSecret, type WebhookPayload } from '@/lib/server/webhook-payload';
+import type { WebhookPreviewView } from '@/lib/types';
+import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, GOOD_PASSWORD, loadSample } from './helpers/fake-connection';
 import { db, insertServer } from './helpers/fixtures';
+import { appRequest, params } from './helpers/mocks';
+
+const previewRoute = await import('@/app/api/jobs/[id]/webhook-preview/route');
 
 const URL_IN_USE = 'https://hooks.example.com/spooldoc?token=Query-Token-123';
 const TEST_URL = 'https://inspect.example.com/abc';
@@ -251,14 +257,142 @@ describe('the webhook destination', () => {
     expect(stored).not.toContain('Query-Token-123');
   });
 
-  it('does not follow a redirect, and names where it points', async () => {
+  it('does not follow a redirect, names where it points, and stops the rest', async () => {
     const { jobId } = await webhookJob();
     receiver.state.answer = () => new Response(null, { status: 301, statusText: 'Moved Permanently', headers: { location: 'https://new.example.com/hook?key=abc' } });
     const runId = await run(jobId);
-    expect(receiver.calls).toHaveLength(6);
+    expect(receiver.calls).toHaveLength(1);
     expect((await runRow(runId)).error).toContain(
       'Could not send to hooks.example.com: it answered 301 Moved Permanently and points to https://new.example.com/hook. Spooldoc does not follow redirects. Change the URL of MYHOOK to the address the receiver takes.',
     );
+    const deliveries = await deliveriesOf(runId);
+    expect(deliveries.slice(1).map((d) => d.error)).toEqual(Array(5).fill(expect.stringMatching(/^Not sent: Could not send to hooks\.example\.com: it answered 301/)));
+  });
+
+  it('fails the call, without throwing, on a redirect to a Location that is not a URL', async () => {
+    const { jobId } = await webhookJob();
+    receiver.state.answer = () => new Response(null, { status: 302, statusText: 'Found', headers: { location: 'http://[::1/hook?key=abc' } });
+    const runId = await run(jobId);
+    const row = await runRow(runId);
+    expect(row.status).toBe('failed');
+    expect(row.error).toContain('Could not send to hooks.example.com: it answered 302 Found and points to http://[::1/hook. Spooldoc does not follow redirects.');
+    expect(row.error).not.toContain('key=abc');
+    const deliveries = await deliveriesOf(runId);
+    expect(deliveries.map((d) => d.status)).toEqual(Array(6).fill('failed'));
+    expect(deliveries[0]).toMatchObject({ httpStatus: 302, attempts: 1 });
+  });
+
+  it.each([
+    [401, 'Unauthorized', 'hooks.example.com refused the call (401 Unauthorized). Check the headers of MYHOOK.'],
+    [404, 'Not Found', 'hooks.example.com has nothing that takes the call at /spooldoc (404 Not Found). Check the URL of MYHOOK.'],
+  ])('stops the rest after a %i, as every call would get it', async (status, statusText, message) => {
+    const { jobId } = await webhookJob();
+    receiver.state.answer = () => new Response('no', { status, statusText });
+    const runId = await run(jobId);
+    expect(receiver.calls).toHaveLength(1);
+    const row = await runRow(runId);
+    expect(row.error).toBe(`Sent 0 of 6 documents to hooks.example.com. invoice-260101: ${message} 5 more failed; the Webhook calls list of the run has each one.`);
+    const deliveries = await deliveriesOf(runId);
+    expect(deliveries.slice(1).map((d) => [d.status, d.error, d.attempts])).toEqual(Array(5).fill(['failed', `Not sent: ${message}`, 0]));
+  });
+
+  it('tries a 408 again, and says the receiver timed out', async () => {
+    const { jobId } = await webhookJob();
+    receiver.state.answer = (call) =>
+      (JSON.parse(call.body) as WebhookPayload).data.document.name === 'invoice-260101' ? new Response('', { status: 408, statusText: 'Request Timeout' }) : Response.json({});
+    const runId = await run(jobId);
+    const deliveries = await deliveriesOf(runId);
+    expect(deliveries[0]).toMatchObject({
+      status: 'failed',
+      attempts: 3,
+      error: 'hooks.example.com timed out waiting for the call (408 Request Timeout) after 3 tries. Retry the run later.',
+    });
+    // A 408 does not stop the rest.
+    expect(deliveries.slice(1).map((d) => d.status)).toEqual(Array(5).fill('sent'));
+  });
+
+  it('fails at once, without a try, when a saved header value is one a call cannot carry', async () => {
+    const { jobId } = await webhookJob();
+    await db()
+      .update(destinations)
+      .set({ secretsEnc: sealWebhookSecrets({ signingSecret: secret, headers: [{ name: 'X-Api-Key', value: 'Avain-€-789' }] }) })
+      .where(eq(destinations.kind, 'webhook'));
+    const runId = await run(jobId);
+    expect(receiver.calls).toHaveLength(0);
+    expect(waits).toEqual([]);
+    const row = await runRow(runId);
+    const message =
+      'Could not send the call: the value of the header X-Api-Key of MYHOOK has characters a header cannot carry. Open MYHOOK on the Destinations page and enter the header value again.';
+    expect(row.error).toContain(`invoice-260101: ${message}`);
+    expect(row.error).not.toContain('Could not reach');
+    expect(row.error).not.toContain('Avain');
+    const deliveries = await deliveriesOf(runId);
+    expect(deliveries[0]).toMatchObject({ status: 'failed', attempts: 0 });
+    expect(deliveries.slice(1).map((d) => d.error)).toEqual(Array(5).fill(`Not sent: ${message}`));
+  });
+
+  it('records the creation time and pages, and sends again to a new spooled file with a reused job number', async () => {
+    const { jobId } = await webhookJob();
+    const conn = new FakeConnection();
+    const first = await run(jobId, conn);
+    const firstIds = receiver.calls.map((call) => call.headers['webhook-id']);
+    expect((await deliveriesOf(first))[0]).toMatchObject({ document: 'invoice-260101', splfCreated: sample.attributes.created, firstPage: 1, lastPage: 1 });
+
+    // A plain Retry of the same spooled file sends nothing again.
+    const retry = await run(jobId, conn);
+    expect(receiver.calls).toHaveLength(6);
+    expect((await deliveriesOf(retry)).map((d) => d.status)).toEqual(Array(6).fill('already_sent'));
+
+    // The IBM i reused the job number: same job, name and number, another creation time.
+    const file = conn.samples.find((s) => s.splf.name === sample.splf.name)!;
+    file.attributes = { ...file.attributes, created: '2026-10-18T08:15:00' };
+    const second = await run(jobId, conn);
+    expect((await runRow(second)).steps.find((step) => step.step === 'deliver')?.note).toBe('Sent 6 documents to hooks.example.com');
+    const newIds = receiver.calls.slice(6).map((call) => call.headers['webhook-id']);
+    expect(newIds).toHaveLength(6);
+    for (const id of newIds) expect(firstIds).not.toContain(id);
+  });
+
+  it('keeps the webhook-id of a call that failed before the creation time was recorded', async () => {
+    const { jobId } = await webhookJob();
+    receiver.state.answer = (call) =>
+      (JSON.parse(call.body) as WebhookPayload).data.document.name === 'invoice-260103' ? new Response('no', { status: 422, statusText: 'Unprocessable Entity' }) : Response.json({});
+    const conn = new FakeConnection();
+    await run(jobId, conn);
+    // Rows as an earlier Spooldoc wrote them, with the id it gave.
+    await db().update(runDeliveries).set({ splfCreated: null, firstPage: null, lastPage: null });
+    await db().update(runDeliveries).set({ messageId: 'msg_0123456789abcdef0123456789abcdef' }).where(eq(runDeliveries.document, 'invoice-260103'));
+
+    receiver.state.answer = () => Response.json({});
+    const before = receiver.calls.length;
+    await run(jobId, conn);
+    const again = receiver.calls.slice(before);
+    expect(again).toHaveLength(1);
+    expect(again[0]!.headers['webhook-id']).toBe('msg_0123456789abcdef0123456789abcdef');
+  });
+
+  it('names documents with the same name in the preview as the run does', async () => {
+    const { jobId, spec } = await webhookJob();
+    const definition = fixtureText('invoice', 'definition.yaml').replace('name: "invoice-{d.pg.invoiceNo}"', 'name: "invoice"');
+    const named: JobSpec = { ...spec, extract: { definition } };
+    await db().insert(jobVersions).values({ jobId, number: 2, spec: named });
+    const stored = await storeSample(serverId, { sample, warnings: [] });
+    await db().update(jobs).set({ activeVersion: 2, draft: { ...named, preview: { sampleId: stored.id } } });
+
+    const runId = await runJob({ jobId, version: 2, splf: sample.splf, trigger: 'manual' }, { conn: new FakeConnection(), host: 'ibmi.example.com', serverId, password: GOOD_PASSWORD });
+    const names = (await deliveriesOf(runId)).map((d) => d.document);
+    expect(names).toEqual(['invoice', 'invoice-2', 'invoice-3', 'invoice-4', 'invoice-5', 'invoice-6']);
+
+    const auth = await signedIn();
+    for (const pageGroupIndex of [0, 2]) {
+      const response = await previewRoute.POST(
+        appRequest(`/api/jobs/${jobId}/webhook-preview`, { method: 'POST', body: { pageGroupIndex }, headers: auth }),
+        params({ id: jobId }),
+      );
+      const view = (await response.json()) as WebhookPreviewView;
+      expect(view.document).toBe(names[pageGroupIndex]);
+      expect((JSON.parse(view.body) as WebhookPayload).data.document.name).toBe(names[pageGroupIndex]);
+    }
   });
 
   it('in test mode, sends to the test URL as document.test without the headers, and Retry does not count it', async () => {

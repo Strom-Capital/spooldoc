@@ -36,7 +36,7 @@ import { assetNames, assetResolver } from './assets';
 import { getDb } from './db';
 import { jobs, jobVersions, runs, watchSeen, type RunStep } from './db/schema';
 import { destinationFor, type RunDocument, type RunFile } from './destinations';
-import { documentRenderer, fileNameFor, templateHtml, type DocumentRenderer } from './documents';
+import { documentNames, documentRenderer, fileNameFor, templateHtml, type DocumentRenderer } from './documents';
 import { fieldTypes } from './email-message';
 import { redact } from './http';
 import { connectServer, isConnectionError } from './ibmi';
@@ -128,10 +128,12 @@ export async function executeRun(runId: string, request: RunRequest, connection?
   heartbeat.unref?.();
 
   try {
+    // The run's number comes along, for a destination that names the run.
     const [version] = await db
-      .select({ spec: jobVersions.spec, jobName: jobs.name })
+      .select({ spec: jobVersions.spec, jobName: jobs.name, seq: runs.seq })
       .from(jobVersions)
       .innerJoin(jobs, eq(jobs.id, jobVersions.jobId))
+      .innerJoin(runs, eq(runs.id, runId))
       .where(and(eq(jobVersions.jobId, request.jobId), eq(jobVersions.number, request.version)));
     if (!version) {
       throw new StepError('capture', `Version ${request.version} of the job is gone.`);
@@ -190,22 +192,16 @@ export async function executeRun(runId: string, request: RunRequest, connection?
 
     // Each document's name and data, for a destination that fills in fields. Two page groups
     // with the same name get a number, as their files do.
-    const taken = new Set<string>();
-    const documentName = (base: string) => {
-      let name = base;
-      for (let n = 2; taken.has(name); n++) name = `${base}-${n}`;
-      taken.add(name);
-      return name;
-    };
+    const names = documentNames(def, groups, sample, spec.render.templates.some(perSpooledFile));
     const documents: RunDocument[] = groups.map((group, index) => ({
       pageGroupIndex: index,
-      name: documentName(fileNameFor(def, group, index, sample.splf.name.toLowerCase())),
+      name: names.pageGroups[index]!,
       pages: ranges[index] ?? null,
       data: { pg: group, splf: sample.splf },
       html: bodies.get(index) ?? null,
     }));
-    if (spec.render.templates.some(perSpooledFile)) {
-      documents.push({ pageGroupIndex: null, name: documentName(spooledFileName(sample)), pages: null, data: spooledFileData(groups, sample) });
+    if (names.spooledFile !== null) {
+      documents.push({ pageGroupIndex: null, name: names.spooledFile, pages: null, data: spooledFileData(groups, sample) });
     }
 
     await step(
@@ -223,7 +219,7 @@ export async function executeRun(runId: string, request: RunRequest, connection?
           webhook: spec.destination.webhook,
           context: {
             job: { id: request.jobId, name: version.jobName, version: request.version },
-            run: { id: runId, seq: await runSeq(runId) },
+            run: { id: runId, seq: version.seq },
             splf: request.splf,
             attributes: sample.attributes,
           },
@@ -426,12 +422,6 @@ function fileCount(files: RunFile[]): string {
   }
   const parts = [...counts].map(([label, n]) => (label === 'PDF' ? `${n} PDF${n === 1 ? '' : 's'}` : `${n} ${label} file${n === 1 ? '' : 's'}`));
   return parts.join(' and ') || 'No files';
-}
-
-/** The number of a run in the Job log. */
-async function runSeq(runId: string): Promise<number> {
-  const [row] = await getDb().select({ seq: runs.seq }).from(runs).where(eq(runs.id, runId));
-  return row?.seq ?? 0;
 }
 
 /** Two capture entries (connect, read) become one. */

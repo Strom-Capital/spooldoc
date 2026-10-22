@@ -276,8 +276,11 @@ with a redirect fails the call, and the message names where it points.
 It waits 30 seconds for an answer.
 
 **Headers** go with every call, such as `Authorization: Bearer ...` or
-an API key the receiver asks for. The values are stored encrypted and
-never shown again; leave a value empty to keep the saved one. Spooldoc
+an API key the receiver asks for. A value is one line of plain ASCII:
+letters, digits, spaces and punctuation, without accented letters or
+symbols such as €, which a header cannot carry. The values are stored
+encrypted and never shown again; leave a value empty to keep the saved
+one. Spooldoc
 sets `Host`, `Content-Type`, `Content-Length`, `User-Agent` and the
 `webhook-` headers itself, so a destination cannot set them.
 
@@ -350,7 +353,7 @@ way, with three headers:
 
 | Header | What it holds |
 |--------|---------------|
-| `webhook-id` | The call's id, such as `msg_2f8a...`. A document of a spooled file keeps its id on every Retry, so a receiver that keeps the ids it took can skip a call it already has. |
+| `webhook-id` | The call's id, such as `msg_2f8a...`. A document of a spooled file keeps its id on every Retry, so a receiver that keeps the ids it took can skip a call it already has. A new spooled file gets new ids, even when the IBM i reused the job number of an earlier one. |
 | `webhook-timestamp` | When the call was signed, in seconds since 1970. |
 | `webhook-signature` | `v1,` and the base64 HMAC-SHA256 of `<id>.<timestamp>.<body>`, keyed with the bytes of the secret after `whsec_`. |
 
@@ -416,18 +419,23 @@ again can help:
 |--------------|-------|
 | A 2xx answer | Sent. |
 | No answer within 30 seconds, a dropped connection, 408, 429 or 5xx | Up to 3 tries, 2 and then 10 seconds apart, or after the `Retry-After` the receiver asks for, up to a minute. |
-| Any other 4xx, or a redirect | Fails at once. |
+| 413, or a 4xx not named here | Fails at once. |
+| A redirect, 401, 403, 404, 405 or 410 | Fails at once, and the run does not try the documents after it, since each would get the same answer. |
 | The host is not found, refuses the connection, or its certificate is not trusted | Fails after 3 tries, and the run does not try the documents after it. |
+| A saved header value that a header cannot carry | Fails without a try, and the run does not try the documents after it. Open the destination on the Destinations page and enter the header value again. |
 
-The other documents are still sent. Then the run fails with "Sent 5 of 6
-documents to hooks.example.com" and the first reason, and the spooled
-file is not held, moved or deleted. Each reason says what to check: the
-headers for 401 and 403, the URL for 404, and the size of the call for
-413, with the files the job could leave out. The receiver's answer is
-under Details. The [job log](job-log.md#webhook-calls) lists every call with
-its answer and its tries. After fixing the cause,
+Otherwise the other documents are still sent. A document the run did not
+try is recorded as "Not sent" with the reason. Then the run fails with
+"Sent 5 of 6 documents to hooks.example.com" and the first reason, and
+the spooled file is not held, moved or deleted. Each reason says what to
+check: the headers for 401 and 403, the URL for 404, and the size of the
+call for 413, with the files the job could leave out. The receiver's
+answer is under Details. The [job log](job-log.md#webhook-calls) lists
+every call with its answer and its tries. After fixing the cause,
 [Retry](job-log.md#retry) sends only the documents that were not sent
-yet, with the same `webhook-id` as before.
+yet, with the same `webhook-id` as before. A document counts as sent
+when an earlier run of the job sent it for the same spooled file, with
+the same creation time, pages and name.
 
 A receiver with a certificate from your own certificate authority needs
 that authority added to Spooldoc; see

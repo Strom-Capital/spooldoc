@@ -196,6 +196,25 @@ describe('webhook destinations', () => {
     expect((await add({ ...hook, headers: [{ name: 'X-Key', value: 'a' }, { name: 'x-key', value: 'b' }] })).status).toBe(400);
   });
 
+  it.each([
+    ['a euro sign', 'Bearer €-key'],
+    ['an accented letter', 'Avain-ä'],
+    ['a character beyond Latin-1', 'Bearer 鍵'],
+  ])('refuse a header value with %s, which a call cannot carry', async (_, value) => {
+    const message = 'Enter the header value in plain ASCII: letters, digits, spaces and punctuation, without accented letters or symbols such as €';
+    const added = await add({ ...hook, headers: [{ name: 'X-Key', value }] });
+    expect(added.status).toBe(400);
+    expect((await added.json()).error).toContain(message);
+    const { id } = (await (await add(hook)).json()) as Revealed;
+    const changed = await change(id, { headers: [{ name: 'X-Key', value }] });
+    expect(changed.status).toBe(400);
+    expect((await changed.json()).error).toContain(message);
+  });
+
+  it('take a header value of printable ASCII and tabs', async () => {
+    expect((await add({ ...hook, headers: [{ name: 'X-Key', value: 'Bearer abc.DEF-123_~!@#$%^&*()\tend' }] })).status).toBe(201);
+  });
+
   it('take a test URL, and drop it when it is empty', async () => {
     const { id } = (await (await add({ ...hook, config: { url: 'https://hooks.example.com/spooldoc', testUrl: 'https://inspect.example.com/abc' } })).json()) as Revealed;
     const cleared = (await (await change(id, { config: { url: 'https://hooks.example.com/spooldoc', testUrl: '' } })).json()) as Revealed;

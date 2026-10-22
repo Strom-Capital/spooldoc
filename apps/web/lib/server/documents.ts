@@ -2,7 +2,7 @@ import 'server-only';
 
 import { documentName, parseDefinition, renderDocument, starterTemplate, type Definition, type DocumentRender } from '@spooldoc/core';
 import { carboneLocale } from '@/lib/formats';
-import type { TemplateContent } from '@/lib/job-spec';
+import { spooledFileName, type TemplateContent } from '@/lib/job-spec';
 import { getFormats } from './formats';
 import { log } from './log';
 import type { SampleTemplate } from './render';
@@ -22,6 +22,30 @@ export function fileNameFor(def: Definition | null, pageGroup: Record<string, un
     }
   }
   return `${fallback}-${index + 1}`;
+}
+
+/**
+ * The name of each document of a spooled file, as a run names them: one per page group, in
+ * order, then the whole spooled file's when `spooledFile` is set. Two documents with the
+ * same name get `-2`, `-3` in that order, as their files do. A preview of one page group
+ * takes its name from here, so it matches the run.
+ */
+export function documentNames(
+  def: Definition | null,
+  groups: Record<string, unknown>[],
+  sample: { splf: { name: string } },
+  spooledFile: boolean,
+): { pageGroups: string[]; spooledFile: string | null } {
+  const taken = new Set<string>();
+  const unique = (base: string) => {
+    let name = base;
+    for (let n = 2; taken.has(name); n++) name = `${base}-${n}`;
+    taken.add(name);
+    return name;
+  };
+  const fallback = sample.splf.name.toLowerCase();
+  const pageGroups = groups.map((group, index) => unique(fileNameFor(def, group, index, fallback)));
+  return { pageGroups, spooledFile: spooledFile ? unique(spooledFileName(sample)) : null };
 }
 
 /** The HTML of a template: its own, or the starter template. */
