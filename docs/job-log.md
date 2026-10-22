@@ -132,7 +132,7 @@ time.
 |--------|---------|
 | Uploaded | The file is in the folder on the server. |
 | Test | Uploaded to the destination's test folder instead. |
-| Uploaded in run #N | An earlier run of the job uploaded it for the same spooled file, so it was not uploaded again. |
+| Uploaded in run #N | An earlier run of the job uploaded it for the same spooled file, with the same creation time, pages and name, so it was not uploaded again. |
 | Failed | Open the row to see why, with the server's own text under Details. A file the run did not try says "Not uploaded" and why. |
 
 A run that uploaded nothing says "This run uploaded no file."
@@ -163,7 +163,10 @@ With an SFTP destination, Retry uploads only the files that the
 destination has not uploaded yet to its folder on its server: "Uploaded
 1 file to /in/invoices on sftp.example.com, 5 were uploaded in run #12".
 So a setting of Add a number never makes a second copy of a file on
-retry.
+retry. A Retry that starts while another run is still uploading files of
+the same spooled file waits for it first. While the destination has a
+test folder, Retry uploads every file to it, also the ones uploaded for
+real before.
 
 ## Retention
 

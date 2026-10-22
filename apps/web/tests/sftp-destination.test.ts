@@ -316,6 +316,66 @@ describe('the SFTP destination', { timeout: 30_000 }, () => {
       expect((await deliveriesOf(second)).map((d) => d.status)).toEqual(Array(6).fill('already_sent'));
     });
 
+    it('records the creation time and pages, and uploads again for a new spooled file with a reused job number', async () => {
+      await start();
+      const jobId = await sftpJob();
+      const conn = new FakeConnection();
+      const first = await run(jobId, conn);
+      expect((await deliveriesOf(first))[0]).toMatchObject({ document: 'invoice-260101.pdf', splfCreated: sample.attributes.created, firstPage: 1, lastPage: 1 });
+
+      // A plain Retry of the same spooled file uploads nothing again.
+      const retry = await run(jobId, conn);
+      expect((await deliveriesOf(retry)).map((d) => d.status)).toEqual(Array(6).fill('already_sent'));
+
+      // The IBM i reused the job number: same job, name and number, another creation time.
+      const file = conn.samples.find((s) => s.splf.name === sample.splf.name)!;
+      file.attributes = { ...file.attributes, created: '2026-10-18T08:15:00' };
+      const second = await run(jobId, conn);
+      expect((await deliverStep(second)).note).toBe(`Uploaded 6 files to /in/invoices on 127.0.0.1 port ${server.port} (6 replaced), a copy kept in Spooldoc`);
+      expect((await deliveriesOf(second)).every((d) => d.status === 'sent' && d.splfCreated === '2026-10-18T08:15:00')).toBe(true);
+    });
+
+    /** A first run whose rows look as an earlier Spooldoc wrote them, at `sentAt`, with no creation time or pages. */
+    async function legacyRun(sentAt: Date): Promise<{ jobId: string; conn: FakeConnection; seq: number }> {
+      await start();
+      const jobId = await sftpJob();
+      const conn = new FakeConnection();
+      const first = await run(jobId, conn);
+      await db().update(runDeliveries).set({ splfCreated: null, firstPage: null, lastPage: null, sentAt });
+      return { jobId, conn, seq: (await runRow(first)).seq };
+    }
+
+    it('counts an older row without a creation time as uploaded when it was written after the spooled file was created', async () => {
+      // Ten hours before 21:40:38 read as UTC: still after it, on an IBM i 14 hours ahead of UTC.
+      const { jobId, conn, seq } = await legacyRun(new Date('2026-10-17T11:40:38Z'));
+      const second = await run(jobId, conn);
+      expect((await deliverStep(second)).note).toBe(`Uploaded 0 files to /in/invoices on 127.0.0.1 port ${server.port}, 6 were uploaded in run #${seq}, a copy kept in Spooldoc`);
+    });
+
+    it('does not count an older row from before the spooled file was created', async () => {
+      // The invoice sample was created 2026-10-17T21:40:38 on the IBM i's clock; these rows are from two days before.
+      const { jobId, conn } = await legacyRun(new Date('2026-10-15T12:00:00Z'));
+      const second = await run(jobId, conn);
+      expect((await deliverStep(second)).note).toBe(`Uploaded 6 files to /in/invoices on 127.0.0.1 port ${server.port} (6 replaced), a copy kept in Spooldoc`);
+    });
+
+    it('matches an older row on the name alone when the IBM i gave no creation time', async () => {
+      const { jobId, conn, seq } = await legacyRun(new Date('2020-01-01T00:00:00Z'));
+      const file = conn.samples.find((s) => s.splf.name === sample.splf.name)!;
+      file.attributes = { ...file.attributes, created: '' };
+      const second = await run(jobId, conn);
+      expect((await deliverStep(second)).note).toBe(`Uploaded 0 files to /in/invoices on 127.0.0.1 port ${server.port}, 6 were uploaded in run #${seq}, a copy kept in Spooldoc`);
+    });
+
+    it('uploads each file once when two runs of the same spooled file overlap', async () => {
+      await start();
+      const jobId = await sftpJob({ ifExists: 'suffix' });
+      const [a, b] = await Promise.all([run(jobId), run(jobId)]);
+      const statuses = [...(await deliveriesOf(a)), ...(await deliveriesOf(b))].map((d) => d.status).sort();
+      expect(statuses).toEqual([...Array(6).fill('already_sent'), ...Array(6).fill('sent')]);
+      expect(server.names('/in/invoices')).toEqual(INVOICES);
+    });
+
     it('uploads again after the folder of the destination changed', async () => {
       await start();
       server.folder('/in/other');
@@ -371,6 +431,25 @@ describe('the SFTP destination', { timeout: 30_000 }, () => {
         .where(eq(destinations.id, saved!.id));
       const real = await run(jobId);
       expect((await deliverStep(real)).note).toBe(`Uploaded 6 files to /in/invoices on 127.0.0.1 port ${server.port}, a copy kept in Spooldoc`);
+    });
+    it('takes every file, also those uploaded for real before', async () => {
+      await start();
+      const jobId = await sftpJob();
+      const first = await run(jobId);
+      const [saved] = await db().select().from(destinations).where(eq(destinations.kind, 'sftp'));
+      const config = saved!.config as SftpConfig;
+      await db()
+        .update(destinations)
+        .set({ config: { ...config, testFolder: '/test/in' } })
+        .where(eq(destinations.id, saved!.id));
+      const test = await run(jobId);
+      expect((await deliverStep(test)).note).toBe(`Uploaded 6 files to the test folder /test/in on 127.0.0.1 port ${server.port}`);
+      expect(server.names('/test/in')).toEqual(INVOICES);
+
+      // Taking the test folder out uploads nothing again: the first run uploaded each for real.
+      await db().update(destinations).set({ config }).where(eq(destinations.id, saved!.id));
+      const real = await run(jobId);
+      expect((await deliverStep(real)).note).toBe(`Uploaded 0 files to /in/invoices on 127.0.0.1 port ${server.port}, 6 were uploaded in run #${(await runRow(first)).seq}, a copy kept in Spooldoc`);
     });
   });
 

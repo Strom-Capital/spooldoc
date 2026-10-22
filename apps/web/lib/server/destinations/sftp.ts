@@ -1,10 +1,7 @@
 import 'server-only';
 
 import { redact } from '@spooldoc/ibmi';
-import { and, eq } from 'drizzle-orm';
 import { sftpConfigSchema, sftpServer, type SftpConfig, type SftpConfigView, type SftpSecretsInput } from '@/lib/destination-config';
-import { getDb } from '../db';
-import { runDeliveries, runs } from '../db/schema';
 import { decryptSecret, encryptSecret } from '../secrets';
 import {
   connectSftp,
@@ -25,8 +22,8 @@ import {
 import { StepError } from '../step-error';
 import type { DeliverInput, Destination } from './index';
 import { key, numbered, ownNames } from './names';
-import { deliveryFailed, deliveryRecorder, earlierText } from './deliveries';
-import { nFiles, storeRunFiles } from './store';
+import { deliveryFailed, deliveryLock, deliveryRecorder, documentFields, earlierDeliveries, earlierText, sentBefore, type DeliveredDocument } from './deliveries';
+import { nFiles, storeRunFiles, type RunFile } from './store';
 
 /** The secrets of an SFTP destination, kept encrypted in `destinations.secrets_enc`. */
 export interface SftpSecrets {
@@ -185,7 +182,10 @@ export const sftpConnector = { connect: (target: SftpTarget): Promise<SftpSessio
  * after the other. Spooldoc never creates the folder. With `keepCopy`, the files are kept
  * in Spooldoc first. A file an earlier run of the same job already uploaded for the same
  * spooled file, through this destination to this folder on this host, is not uploaded
- * again (a test upload does not count), so Retry uploads only the rest. A file that fails
+ * again, so Retry uploads only the rest: the same spooled file has the same creation time,
+ * and the file's page group the same pages. A test upload does not count, and with a test
+ * folder every file goes to it, whatever earlier runs uploaded. One run at a time uploads
+ * for a job and spooled file; a second waits for the first. A file that fails
  * fails alone, and the others still upload; a connection, sign-in or host key failure
  * stops the run, and the files not tried say why. Every file is recorded as it goes. The
  * step fails when any file failed, so the finish step does not run.
@@ -194,7 +194,7 @@ export function sftpDestination(config: SftpConfig, secrets: SftpSecrets, name: 
   return {
     kind: 'sftp',
     async deliver(input: DeliverInput) {
-      const { runId, files, job } = input;
+      const { runId, files, documents, job } = input;
       const hidden = sftpSecretValues(secrets);
       for (const secret of hidden) input.addSecret(secret);
       const clean = (text: string) => redact(text, hidden);
@@ -206,25 +206,14 @@ export function sftpDestination(config: SftpConfig, secrets: SftpSecrets, name: 
       const server = sftpServer(config);
       const where = test ? `the test folder ${folder} on ${server}` : `${folder} on ${server}`;
 
-      const db = getDb();
-      // Files uploaded for real by an earlier run of this job on this spooled file, through this
-      // destination. Which of them went to this host and folder is known once the folder is found.
-      const earlier = await db
-        .select({ document: runDeliveries.document, seq: runs.seq, to: runDeliveries.to })
-        .from(runDeliveries)
-        .innerJoin(runs, eq(runs.id, runDeliveries.runId))
-        .where(
-          and(
-            eq(runDeliveries.kind, 'sftp'),
-            eq(runDeliveries.jobId, job.id),
-            eq(runDeliveries.splfKey, job.splfKey),
-            eq(runDeliveries.destinationId, input.destinationId),
-            eq(runDeliveries.status, 'sent'),
-            eq(runDeliveries.test, false),
-          ),
-        )
-        .orderBy(runs.seq);
-      const sentIn = new Map<string, number>();
+      // The spooled file's creation time, as the run read it; "" when the IBM i did not give it.
+      const created = input.context.attributes.created;
+      // Each file as a document of its own: its name, with its page group's pages.
+      const pagesOf = new Map(documents.map((document) => [document.pageGroupIndex, document.pages]));
+      const asDocument = (file: RunFile): DeliveredDocument => ({ pageGroupIndex: file.pageGroupIndex, name: file.name, pages: pagesOf.get(file.pageGroupIndex) ?? null });
+      const fields = (file: RunFile) => documentFields(asDocument(file), created);
+      // The run each file was uploaded in before, for the files not uploaded again.
+      const sentIn = new Map<RunFile, number>();
 
       const record = deliveryRecorder(input, 'sftp');
 
@@ -244,8 +233,7 @@ export function sftpDestination(config: SftpConfig, secrets: SftpSecrets, name: 
       const stopAll = async (from: number, reason: { message: string; detail?: string }) => {
         for (const { file } of pending.slice(from)) {
           await record({
-            pageGroupIndex: file.pageGroupIndex,
-            document: file.name,
+            ...fields(file),
             to: '',
             test,
             status: 'failed',
@@ -256,7 +244,11 @@ export function sftpDestination(config: SftpConfig, secrets: SftpSecrets, name: 
         }
       };
 
+      const release = await deliveryLock('sftp', job, 'Another run of this job is uploading files of this spooled file. Retry when it has finished.');
       try {
+        // Files uploaded for real by earlier runs of this job on this spooled file, through this
+        // destination; none with a test folder. Which went to this host and folder is known once the folder is found.
+        const earlier = (await earlierDeliveries('sftp', job, test)).filter((row) => row.status === 'sent' && row.destinationId === input.destinationId);
         if (pending.length > 0) {
           if (!config.hostKey) {
             const message = `The host key of ${config.host} is not trusted yet. Open ${name} on the Destinations page, check the connection and trust the key.`;
@@ -275,17 +267,15 @@ export function sftpDestination(config: SftpConfig, secrets: SftpSecrets, name: 
 
           // Only an upload directly in this folder on this host counts.
           const inReal = `${config.host}:${inFolder(real, '')}`;
-          for (const row of earlier) {
-            const there = row.to.startsWith(inReal) && !row.to.slice(inReal.length).includes('/');
-            if (there && !sentIn.has(row.document)) sentIn.set(row.document, row.seq);
-          }
+          const here = earlier.filter((row) => row.to.startsWith(inReal) && !row.to.slice(inReal.length).includes('/'));
           for (const file of files) {
-            const before = sentIn.get(file.name);
+            const before = sentBefore(here, asDocument(file), created);
             if (before === undefined) continue;
             already++;
-            await record({ pageGroupIndex: file.pageGroupIndex, document: file.name, to: '', status: 'already_sent', sentInRun: before, size: file.content.byteLength });
+            sentIn.set(file, before.seq);
+            await record({ ...fields(file), to: '', status: 'already_sent', sentInRun: before.seq, size: file.content.byteLength });
           }
-          pending = pending.filter(({ file }) => !sentIn.has(file.name));
+          pending = pending.filter(({ file }) => !sentIn.has(file));
 
           // Names taken by this run, as a folder that ignores case compares them.
           const used = new Set(own.map(key));
@@ -326,7 +316,7 @@ export function sftpDestination(config: SftpConfig, secrets: SftpSecrets, name: 
           }
 
           for (const [index, { file }] of pending.entries()) {
-            const base = { pageGroupIndex: file.pageGroupIndex, document: file.name, test, size: file.content.byteLength };
+            const base = { ...fields(file), test, size: file.content.byteLength };
             const started = performance.now();
             try {
               const result = await uploadFile(s, real, names[index]!, file.content, {
@@ -366,11 +356,12 @@ export function sftpDestination(config: SftpConfig, secrets: SftpSecrets, name: 
         }
       } finally {
         session?.close();
+        await release();
       }
 
       if (failures.length > 0) throw deliveryFailed(`Uploaded ${uploaded + already} of ${nFiles(files.length)} to ${where}`, failures, 'Uploads');
       const extra = [replaced > 0 ? `${replaced} replaced` : '', added > 0 ? `${added} with a number added` : ''].filter(Boolean).join(', ');
-      const runsBefore = files.map((file) => sentIn.get(file.name)).filter((seq) => seq !== undefined);
+      const runsBefore = files.map((file) => sentIn.get(file)).filter((seq) => seq !== undefined);
       const before = earlierText(already, runsBefore, 'uploaded');
       const left =
         leftovers.length === 0
