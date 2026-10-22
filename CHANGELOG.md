@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0](https://github.com/Strom-Capital/spooldoc/compare/v0.4.0...v0.5.0) (2026-10-22)
+
+
+### Features
+
+* **web:** SFTP destination ([#134](https://github.com/Strom-Capital/spooldoc/issues/134)) ([b35becf](https://github.com/Strom-Capital/spooldoc/commit/b35becf0b22a5a161d6fa449f225da6199505cb3)), closes [#13](https://github.com/Strom-Capital/spooldoc/issues/13)
+
+
+### Bug Fixes
+
+* **web:** email address, error and preview fixes ([#139](https://github.com/Strom-Capital/spooldoc/issues/139)) ([b174069](https://github.com/Strom-Capital/spooldoc/commit/b1740699ca55c92d5680df525b38bf3ba3096182))
+* **web:** email already-sent edge cases ([#138](https://github.com/Strom-Capital/spooldoc/issues/138)) ([cadf183](https://github.com/Strom-Capital/spooldoc/commit/cadf183367f11486a9dd20e40b940409cff816b0))
+* **web:** email delivery edge cases ([#137](https://github.com/Strom-Capital/spooldoc/issues/137)) ([058e04b](https://github.com/Strom-Capital/spooldoc/commit/058e04b7d315e046b5277e59254d5a97888aa80c))
+* **web:** SFTP upload edge cases ([#136](https://github.com/Strom-Capital/spooldoc/issues/136)) ([be444ed](https://github.com/Strom-Capital/spooldoc/commit/be444ed80371593142021dc10e825e21399351da))
+* **web:** SFTP upload matches the spooled file's creation time ([#141](https://github.com/Strom-Capital/spooldoc/issues/141)) ([b4359fc](https://github.com/Strom-Capital/spooldoc/commit/b4359fcffd1d80dc01591629403d59cb1e1076da))
+* **web:** webhook delivery edge cases ([#140](https://github.com/Strom-Capital/spooldoc/issues/140)) ([8d16810](https://github.com/Strom-Capital/spooldoc/commit/8d16810f69a0e46208574498eb60aedf7c87a669))
+
 ## [0.4.0](https://github.com/Strom-Capital/spooldoc/compare/v0.3.1...v0.4.0) (2026-10-21)
 
 
