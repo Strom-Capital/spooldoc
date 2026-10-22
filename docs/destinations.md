@@ -139,7 +139,9 @@ Add one with **Add destination** on the Destinations page and pick
 **The test address.** While **Send all email to** is set, every email of
 every job that uses the destination goes only there. Cc and Bcc are
 dropped, the subject starts with `[Test]`, and a line at the top of the
-message names the addresses it would have gone to. A new email
+message names the addresses it would have gone to, and the Cc. The
+preview in the job shows Cc and Bcc struck through, as not sent in a
+test. A new email
 destination starts with your own address there, so you can try a job
 before any customer gets an email. The Destinations page shows
 "Test: all email goes to you@example.com" while it is set. Empty it to
@@ -153,9 +155,9 @@ filled in from the page group of each document:
 
 | Field | What it holds |
 |-------|---------------|
-| To | One or more addresses, separated by commas: `{d.pg.email}, orders@example.com`. Required. |
-| Cc, Bcc | Optional. Bcc to an archive mailbox is one fixed address. |
-| Reply-To | Optional, one address. |
+| To | One or more addresses, separated by commas or semicolons: `{d.pg.email}, orders@example.com`. An address can have a name, as in `John Smith <john@example.com>` or `"Smith, John" <john@example.com>`, and the email goes out with it. Required. |
+| Cc, Bcc | Optional, written like To. Bcc to an archive mailbox is one fixed address. |
+| Reply-To | Optional, one address, with or without a name. |
 | Subject | Such as `Invoice {d.pg.invoiceNo}`. Empty, the subject is the document's name. |
 | Message from | Text written here, or one of the job's HTML templates. |
 | Message | The text of the email, with fields, when the message is text. |
@@ -222,7 +224,8 @@ A missing or wrong address fails that document with what to fix:
 "invoice-260101: {d.pg.email} is empty", or
 '"J. SMITH" in To is not an email address'. In To, every tag needs a
 value, so a customer whose address is empty is never left out without a
-word. An empty Cc, Bcc or Reply-To is left out.
+word. A tag such as `{d.pg.emails[1]}` past the end of its list is not
+in the data. An empty Cc, Bcc or Reply-To is left out.
 
 The other documents are still sent. Then the run fails with "Sent 42 of
 43 emails" and the first reason, and the spooled file is not held, moved
@@ -239,8 +242,8 @@ every email for real.
 
 Errors of the mail server say what to check: a refused sign-in, a host
 or port that cannot be reached, a TLS setting that does not match the
-port, an email too large for the server, or an address the server
-refused. Through Microsoft 365 they name a wrong tenant ID, client ID or
+port, an email too large for the server, a recipient's mailbox that is
+full, or an address the server refused. Through Microsoft 365 they name a wrong tenant ID, client ID or
 secret, an expired secret, a missing Mail.Send permission, a mailbox the
 app may not send as or that does not exist, and throttling. When
 Microsoft 365 asks Spooldoc to wait a few seconds, it waits and tries

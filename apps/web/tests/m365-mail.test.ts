@@ -157,6 +157,20 @@ describe('the Graph message', () => {
     expect((graph.message.body as { content: string }).content).toContain('Your document is attached.');
   });
 
+  it('keeps the names of the addresses', () => {
+    const { email } = composeEmail({
+      spec: spec({ to: '{d.pg.contact}; orders@example.com', replyTo: 'Sales Team <sales@example.com>' }),
+      data: { pg: { contact: '"Smith, John" <john@example.com>' } },
+      document: 'd',
+      files: [],
+      from: 'invoices@contoso.example',
+      testAddress: null,
+    });
+    const graph = graphMessage(email!.message);
+    expect(graph.message.toRecipients).toEqual([{ emailAddress: { address: 'john@example.com', name: 'Smith, John' } }, { emailAddress: { address: 'orders@example.com' } }]);
+    expect(graph.message.replyTo).toEqual([{ emailAddress: { address: 'sales@example.com', name: 'Sales Team' } }]);
+  });
+
   it('turns data URI images into inline attachments the HTML points to with cid', () => {
     const html = `<html><body><img src="${png}" alt="Logo"><img src='${png}'><p>302.66</p></body></html>`;
     const { email } = composeEmail({ spec: spec({ bodyTemplateId: 'template-1' }), data: { pg: { email: 'buyer@example.com' } }, document: 'd', files: [], from: 'invoices@contoso.example', testAddress: null, templateHtml: html });
