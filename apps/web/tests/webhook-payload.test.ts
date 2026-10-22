@@ -53,9 +53,23 @@ describe('signing', () => {
   });
 
   it('gives a document the same id every time, and a test call another one', () => {
-    const input = { jobId: 'job-1', splfKey: 'QPRINT/4/123456/MYUSER/MYJOB', document: 'invoice-260101', test: false };
-    expect(webhookId(input)).toBe(webhookId(input));
+    const input = {
+      jobId: 'job-1',
+      splfKey: 'QPRINT/4/123456/MYUSER/MYJOB',
+      created: '2026-10-21T09:14:03',
+      pages: { first: 1, last: 2 },
+      document: 'invoice-260101',
+      test: false,
+    };
+    expect(webhookId(input)).toBe(webhookId({ ...input, pages: { first: 1, last: 2 } }));
     expect(webhookId(input)).not.toBe(webhookId({ ...input, document: 'invoice-260102' }));
     expect(webhookId(input)).not.toBe(webhookId({ ...input, test: true }));
+  });
+
+  it('gives a new spooled file with a reused job number new ids', () => {
+    const input = { jobId: 'job-1', splfKey: 'QPRINT/4/123456/MYUSER/MYJOB', created: '2026-10-21T09:14:03', pages: { first: 1, last: 2 }, document: 'invoice-260101', test: false };
+    expect(webhookId(input)).not.toBe(webhookId({ ...input, created: '2026-11-02T15:40:00' }));
+    expect(webhookId(input)).not.toBe(webhookId({ ...input, pages: { first: 1, last: 3 } }));
+    expect(webhookId({ ...input, pages: null })).not.toBe(webhookId(input));
   });
 });

@@ -67,6 +67,31 @@ describe('the email preview', () => {
     expect(view.fields.every((field) => field.path.startsWith('splf.'))).toBe(true);
   });
 
+  it('names a page group that shares its name with an earlier one as a run does, with a number', async () => {
+    const job = await emailJob([invoice]);
+    const [row] = await db().select().from(jobs);
+    const definition = fixtureText('invoice', 'definition.yaml').replace('name: "invoice-{d.pg.invoiceNo}"', 'name: "invoice"');
+    await db().update(jobs).set({ draft: { ...row!.draft, extract: { definition } } });
+    const view = await preview(job, { to: 'orders@example.com', attach: ['pdf'] }, { pageGroup: 2 });
+    expect(view.document).toBe('invoice-3');
+    expect(text(view.subject)).toBe('invoice-3');
+    expect(view.attachments).toEqual([{ name: 'invoice-3.pdf', format: 'pdf' }]);
+  });
+
+  it('names the attachments of a page group that shares its name as the run names its files, with two templates', async () => {
+    const cover: Templates[number] = { id: 'cover', name: 'Cover', kind: 'html', source: null, formats: ['pdf'] };
+    const job = await emailJob([invoice, cover]);
+    const [row] = await db().select().from(jobs);
+    const definition = fixtureText('invoice', 'definition.yaml').replace('name: "invoice-{d.pg.invoiceNo}"', 'name: "invoice"');
+    await db().update(jobs).set({ draft: { ...row!.draft, extract: { definition } } });
+    const view = await preview(job, { to: 'orders@example.com', attach: ['pdf'] }, { pageGroup: 1 });
+    // A run names them invoice-2.pdf and invoice-cover-2.pdf: the -2 goes on the file name, after the template's.
+    expect(view.attachments).toEqual([
+      { name: 'invoice-2.pdf', format: 'pdf' },
+      { name: 'invoice-cover-2.pdf', format: 'pdf' },
+    ]);
+  });
+
   it('shows the email of a page group, or the whole spooled file when asked, when the run sends both', async () => {
     const job = await emailJob([invoice, lines]);
     const email = { to: 'orders@example.com', attach: ['pdf', 'xlsx'] } satisfies Partial<EmailSpec>;

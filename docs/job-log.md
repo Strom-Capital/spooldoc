@@ -107,8 +107,8 @@ tries" or "No answer after 3 tries", then its status and the time.
 |--------|---------|
 | Sent | The receiver answered with a 2xx status. |
 | Test | Sent to the destination's test URL instead. |
-| Sent in run #N | An earlier run of the job sent it for the same spooled file, so it was not sent again. |
-| Failed | Open the row to see why, with the receiver's answer, its first 2 KB, under Details. |
+| Sent in run #N | An earlier run of the job sent it for the same spooled file, with the same creation time, pages and name, so it was not sent again. |
+| Failed | Open the row to see why, with the receiver's answer, its first 2 KB, under Details. A document the run did not try says "Not sent" and why. |
 
 A run that sent nothing says "This run sent no webhook call."
 
@@ -154,7 +154,10 @@ ones sent for real before.
 
 With a webhook destination, Retry sends only the documents that were not
 sent yet, each with the same `webhook-id` as before: "Sent 1 document to
-hooks.example.com, 5 were sent in run #12".
+hooks.example.com, 5 were sent in run #12". A Retry that starts while
+another run is still sending calls for the same spooled file waits for it
+first. While the destination has a test URL, Retry sends every document
+to it, also the ones sent for real before.
 
 With an SFTP destination, Retry uploads only the files that the
 destination has not uploaded yet to its folder on its server: "Uploaded

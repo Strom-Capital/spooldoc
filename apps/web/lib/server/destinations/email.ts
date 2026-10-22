@@ -1,49 +1,19 @@
 import 'server-only';
 
-import { and, eq } from 'drizzle-orm';
 import type { EmailConfig } from '@/lib/destination-config';
-import { getDb, getLocks } from '../db';
-import { runDeliveries, runs } from '../db/schema';
 import { addressList, composeEmail, formatOf, type EmailFormatting } from '../email-message';
 import { getFormats } from '../formats';
 import { fromHeader, mailErrorText, mailSecrets, mailSender, mailServer, NO_MAIL_SERVER, stopsSending } from '../mail';
 import { StepError } from '../step-error';
-import type { DeliverInput, Destination, RunDocument } from './index';
+import { deliveryFailed, deliveryLock, deliveryRecorder, documentFields, earlierDeliveries, earlierText, notSent, sentBefore, setDeliveryLockWait } from './deliveries';
+import type { DeliverInput, Destination } from './index';
 import { storeRunFiles } from './store';
 
 /** "1 email", "3 emails". */
 export const nEmails = (n: number): string => `${n} ${n === 1 ? 'email' : 'emails'}`;
 
-type DeliveryRow = typeof runDeliveries.$inferInsert;
-
-/** How long a deliver step waits for another run sending email for the same spooled file, and how often it asks. */
-const LOCK_WAIT = { limitMs: 5 * 60_000, pollMs: 1_000 };
-let lockWait = LOCK_WAIT;
-
 /** Change how long the email lock is waited for, for tests. Null puts back the defaults. */
-export function setEmailLockWait(next: { limitMs: number; pollMs: number } | null): void {
-  lockWait = next ?? LOCK_WAIT;
-}
-
-/**
- * Takes the lock that lets one run at a time send email for a job and spooled file, so a
- * second run reads what the first sent before it sends anything. The lock is a Postgres
- * advisory lock on the one connection the locks keep for the process, so waiting holds no
- * connection of the pool. Returns its release function, or fails the step when the wait
- * runs out.
- */
-async function emailLock(jobId: string, splfKey: string): Promise<() => Promise<void>> {
-  const key = `email:${jobId}:${splfKey}`;
-  const until = Date.now() + lockWait.limitMs;
-  for (;;) {
-    const release = await getLocks().tryLock(key);
-    if (release) return release;
-    if (Date.now() >= until) {
-      throw new StepError('deliver', 'Another run of this job is sending email for this spooled file. Retry when it has finished.');
-    }
-    await new Promise((resolve) => setTimeout(resolve, lockWait.pollMs));
-  }
-}
+export const setEmailLockWait = setDeliveryLockWait;
 
 /**
  * Sends one email per document through the mail server in Settings: To, Cc, Bcc,
@@ -75,43 +45,13 @@ export function emailDestination(config: EmailConfig): Destination {
       await storeRunFiles(runId, files);
       const formatting: EmailFormatting = { formats: await getFormats(), types: input.valueTypes };
 
-      const release = await emailLock(job.id, job.splfKey);
+      const release = await deliveryLock('email', job, 'Another run of this job is sending email for this spooled file. Retry when it has finished.');
       try {
-        const db = getDb();
         const test = config.testAddress;
         // The spooled file's creation time, as the run read it; "" when the IBM i did not give it.
         const created = input.context.attributes.created;
-        // Documents sent for real by an earlier run of this job on this spooled file, first run first.
-        const earlier = await db
-          .select({
-            document: runDeliveries.document,
-            to: runDeliveries.to,
-            splfCreated: runDeliveries.splfCreated,
-            firstPage: runDeliveries.firstPage,
-            lastPage: runDeliveries.lastPage,
-            seq: runs.seq,
-          })
-          .from(runDeliveries)
-          .innerJoin(runs, eq(runs.id, runDeliveries.runId))
-          .where(and(eq(runDeliveries.kind, 'email'), eq(runDeliveries.jobId, job.id), eq(runDeliveries.splfKey, job.splfKey), eq(runDeliveries.status, 'sent'), eq(runDeliveries.test, false)))
-          .orderBy(runs.seq);
-        /**
-         * The first earlier run that sent this document, and where it went. A document matches when
-         * the spooled file has the same creation time, and the page group the same pages and name:
-         * the IBM i reuses job numbers, and a newer job version can group the pages another way.
-         * Rows written before the creation time was recorded match on the name alone, as they did,
-         * so a Retry right after an upgrade does not send a second copy. With a test address, every
-         * document goes to it, so a template change can be checked on a spooled file already sent.
-         */
-        const sentBefore = (document: RunDocument): { seq: number; to: string } | undefined =>
-          test
-            ? undefined
-            : earlier.find(
-                (row) =>
-                  row.document === document.name &&
-                  (row.splfCreated === null ||
-                    (row.splfCreated === created && row.firstPage === (document.pages?.first ?? null) && row.lastPage === (document.pages?.last ?? null))),
-              );
+        // Documents sent for real by an earlier run of this job on this spooled file, first run first; none with a test address.
+        const earlier = await earlierDeliveries('email', job, test !== null);
 
         const attached = (index: number | null) =>
           files.filter((file) => {
@@ -127,8 +67,7 @@ export function emailDestination(config: EmailConfig): Destination {
           throw new StepError('deliver', 'No email to send: Attach picks none of the files the templates make. Change Attach in the Destination step of the job.');
         }
 
-        const record = (row: Omit<DeliveryRow, 'runId' | 'jobId' | 'splfKey' | 'destinationId' | 'kind'>) =>
-          db.insert(runDeliveries).values({ runId, jobId: job.id, splfKey: job.splfKey, destinationId: input.destinationId, kind: 'email', ...row });
+        const record = deliveryRecorder(input, 'email');
 
         const sender = mailSender(server);
         let sent = 0;
@@ -138,14 +77,8 @@ export function emailDestination(config: EmailConfig): Destination {
         let stopped: { message: string; detail?: string } | null = null;
         try {
           for (const document of emails) {
-            const base = {
-              pageGroupIndex: document.pageGroupIndex,
-              document: document.name,
-              splfCreated: created,
-              firstPage: document.pages?.first ?? null,
-              lastPage: document.pages?.last ?? null,
-            };
-            const before = sentBefore(document);
+            const base = documentFields(document, created);
+            const before = sentBefore(earlier, document, created);
             if (before !== undefined) {
               already++;
               runsBefore.add(before.seq);
@@ -153,7 +86,7 @@ export function emailDestination(config: EmailConfig): Destination {
               continue;
             }
             if (stopped) {
-              const message = `Not sent: ${stopped.message}`;
+              const message = notSent(stopped.message);
               failures.push({ message: `${document.name}: ${message}` });
               await record({ ...base, status: 'failed', error: message, detail: stopped.detail ?? null });
               continue;
@@ -191,15 +124,10 @@ export function emailDestination(config: EmailConfig): Destination {
         }
 
         const total = emails.length;
-        if (failures.length > 0) {
-          const first = failures[0]!;
-          const more = failures.length > 1 ? ` ${failures.length - 1} more failed; the Emails list of the run has each one.` : '';
-          throw new StepError('deliver', `Sent ${sent + already} of ${nEmails(total)}. ${first.message}${more}`, first.detail);
-        }
-        const earlierText =
-          already > 0 ? `, ${already} ${already === 1 ? 'was' : 'were'} sent in ${runsBefore.size === 1 ? `run #${[...runsBefore][0]}` : 'earlier runs'}` : '';
-        if (test) return `Sent ${nEmails(sent)} to the test address ${test}${earlierText}`;
-        return `Sent ${nEmails(sent)}${earlierText}`;
+        if (failures.length > 0) throw deliveryFailed(`Sent ${sent + already} of ${nEmails(total)}`, failures, 'Emails');
+        const before = earlierText(already, runsBefore, 'sent');
+        if (test) return `Sent ${nEmails(sent)} to the test address ${test}${before}`;
+        return `Sent ${nEmails(sent)}${before}`;
       } finally {
         await release();
       }

@@ -25,6 +25,7 @@ import {
 import { StepError } from '../step-error';
 import type { DeliverInput, Destination } from './index';
 import { key, numbered, ownNames } from './names';
+import { deliveryFailed, deliveryRecorder, earlierText } from './deliveries';
 import { nFiles, storeRunFiles } from './store';
 
 /** The secrets of an SFTP destination, kept encrypted in `destinations.secrets_enc`. */
@@ -179,8 +180,6 @@ function reasonOf(err: unknown, clean: (text: string) => string): { message: str
 /** Opens a connection. Tests replace it to count connections. */
 export const sftpConnector = { connect: (target: SftpTarget): Promise<SftpSession> => connectSftp(target) };
 
-type DeliveryRow = typeof runDeliveries.$inferInsert;
-
 /**
  * Uploads each file of a run to a folder on an SFTP server, over one connection, one file
  * after the other. Spooldoc never creates the folder. With `keepCopy`, the files are kept
@@ -227,8 +226,7 @@ export function sftpDestination(config: SftpConfig, secrets: SftpSecrets, name: 
         .orderBy(runs.seq);
       const sentIn = new Map<string, number>();
 
-      const record = (row: Omit<DeliveryRow, 'runId' | 'jobId' | 'splfKey' | 'destinationId' | 'kind'>) =>
-        db.insert(runDeliveries).values({ runId, jobId: job.id, splfKey: job.splfKey, destinationId: input.destinationId, kind: 'sftp', ...row });
+      const record = deliveryRecorder(input, 'sftp');
 
       const own = ownNames(files);
       let pending = files.map((file, index) => ({ file, name: own[index]!, index }));
@@ -370,19 +368,15 @@ export function sftpDestination(config: SftpConfig, secrets: SftpSecrets, name: 
         session?.close();
       }
 
-      if (failures.length > 0) {
-        const first = failures[0]!;
-        const more = failures.length > 1 ? ` ${failures.length - 1} more failed; the Uploads list of the run has each one.` : '';
-        throw new StepError('deliver', `Uploaded ${uploaded + already} of ${nFiles(files.length)} to ${where}. ${first.message}${more}`, first.detail);
-      }
+      if (failures.length > 0) throw deliveryFailed(`Uploaded ${uploaded + already} of ${nFiles(files.length)} to ${where}`, failures, 'Uploads');
       const extra = [replaced > 0 ? `${replaced} replaced` : '', added > 0 ? `${added} with a number added` : ''].filter(Boolean).join(', ');
-      const runsBefore = [...new Set(files.map((file) => sentIn.get(file.name)).filter((seq) => seq !== undefined))];
-      const earlierText = already > 0 ? `, ${already} ${already === 1 ? 'was' : 'were'} uploaded in ${runsBefore.length === 1 ? `run #${runsBefore[0]}` : 'earlier runs'}` : '';
+      const runsBefore = files.map((file) => sentIn.get(file.name)).filter((seq) => seq !== undefined);
+      const before = earlierText(already, runsBefore, 'uploaded');
       const left =
         leftovers.length === 0
           ? ''
           : `. ${leftovers.length === 1 ? `The replaced file was kept as ${leftovers[0]}` : `${leftovers.length} replaced files were kept, such as ${leftovers[0]}`}, since it could not be deleted. Delete ${leftovers.length === 1 ? 'it' : 'them'}`;
-      return `Uploaded ${nFiles(uploaded)} to ${where}${extra ? ` (${extra})` : ''}${earlierText}${config.keepCopy && !test ? ', a copy kept in Spooldoc' : ''}${left}`;
+      return `Uploaded ${nFiles(uploaded)} to ${where}${extra ? ` (${extra})` : ''}${before}${config.keepCopy && !test ? ', a copy kept in Spooldoc' : ''}${left}`;
     },
   };
 }

@@ -9,7 +9,7 @@ import { emptyWebhookSpec, webhookSpecSchema } from '@/lib/job-spec';
 import { getDb } from './db';
 import { destinations } from './db/schema';
 import { callFiles, openWebhookSecrets, webhookSecretValues, type WebhookTarget } from './destinations/webhook';
-import { fileNameFor, previewRenderer } from './documents';
+import { documentNames, previewRenderer } from './documents';
 import { errorResponse, json } from './http';
 import { draftPageGroup } from './job-preview';
 import type { JobRow } from './jobs';
@@ -83,7 +83,8 @@ export async function draftCall(job: JobRow, input: z.infer<typeof webhookCallSc
       return { response: json({ error: `Could not render the files of the call. ${message}`, ...(detail ? { detail } : {}) }, { status: isCarboneError(error) ? 503 : 422 }) };
     }
   }
-  const document = fileNameFor(def, groups[index]!, index, sample.splf.name.toLowerCase());
+  // Named as a run names it, so two page groups with the same name get -2, -3 here too.
+  const document = documentNames(def, groups, sample, false).pageGroups[index]!;
   const payload = webhookPayload({
     type: use === 'test' || target.toTestUrl ? 'document.test' : 'document.created',
     at: new Date(),
