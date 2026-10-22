@@ -226,28 +226,46 @@ describe("helpers", () => {
   });
 });
 
-describe("long error texts", () => {
-  const N = 50_000;
-  /** The shortest of a few runs, in ms, so a pause of the runner does not count. */
+/** The checks count CPU time, so a busy runner only makes them slower on the clock. */
+describe("long error texts", { timeout: 30_000 }, () => {
+  const N = 6_400;
+  const PARTS = 64;
+  /**
+   * The CPU time of one run, in ms. Unlike the time on the clock, it leaves out the
+   * time the test waits while other work on the runner has the CPU.
+   */
   const time = (fn: () => unknown): number => {
-    let best = Infinity;
-    for (let run = 0; run < 3; run++) {
-      const started = performance.now();
-      fn();
-      best = Math.min(best, performance.now() - started);
-    }
-    return best;
+    const started = process.cpuUsage();
+    fn();
+    const { user, system } = process.cpuUsage(started);
+    return (user + system) / 1000;
   };
   /**
    * Expects `fn` to take linear time in the length of its input, whatever the speed of
-   * the machine: four times the input may take at most eight times as long, where a
-   * quadratic search takes sixteen. Times under 1 ms count as 1 ms.
+   * the machine. One call on the whole input is timed against 64 calls on a 64th of
+   * it, so both do the same work: a linear search takes about as long either way, a
+   * quadratic one 64 times as long on the whole input. It may take at most eight times
+   * as long, which leaves noise room on both sides. Both inputs run once first, so
+   * warming up does not count. The runs take turns and the shortest of each counts,
+   * so garbage collection in one run does not count. Times under 1 ms count as 1 ms.
    */
   const linear = <T>(input: (n: number) => T, fn: (text: T) => unknown): void => {
-    const small = input(N / 4);
+    const small = input(N / PARTS);
     const large = input(N);
-    time(() => fn(small));
-    expect(time(() => fn(large)) / Math.max(time(() => fn(small)), 1)).toBeLessThan(8);
+    fn(small);
+    fn(large);
+    let whole = Infinity;
+    let parts = Infinity;
+    for (let run = 0; run < 5; run++) {
+      whole = Math.min(whole, time(() => fn(large)));
+      parts = Math.min(
+        parts,
+        time(() => {
+          for (let part = 0; part < PARTS; part++) fn(small);
+        }),
+      );
+    }
+    expect(whole / Math.max(parts, 1)).toBeLessThan(8);
   };
 
   it("reads an exception line with many spaces after the colon in linear time", () => {
