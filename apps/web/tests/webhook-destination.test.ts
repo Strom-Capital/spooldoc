@@ -371,10 +371,55 @@ describe('the webhook destination', () => {
     expect(again[0]!.headers['webhook-id']).toBe('msg_0123456789abcdef0123456789abcdef');
   });
 
-  it('names documents with the same name in the preview as the run does', async () => {
+  /** A first run of the invoice job whose rows look as an earlier Spooldoc wrote them, at `sentAt`, with invoice-260103 failed. */
+  async function legacyRun(sentAt: Date): Promise<{ jobId: string; conn: FakeConnection; seq: number }> {
+    const { jobId } = await webhookJob();
+    receiver.state.answer = (call) =>
+      (JSON.parse(call.body) as WebhookPayload).data.document.name === 'invoice-260103' ? new Response('no', { status: 422, statusText: 'Unprocessable Entity' }) : Response.json({});
+    const conn = new FakeConnection();
+    const first = await run(jobId, conn);
+    await db().update(runDeliveries).set({ splfCreated: null, firstPage: null, lastPage: null, sentAt });
+    await db().update(runDeliveries).set({ messageId: 'msg_0123456789abcdef0123456789abcdef' }).where(eq(runDeliveries.document, 'invoice-260103'));
+    receiver.state.answer = () => Response.json({});
+    return { jobId, conn, seq: (await runRow(first)).seq };
+  }
+
+  it('does not let an older row, from before the spooled file was created, count as sent or lend its id', async () => {
+    // The invoice sample was created 2026-10-17T21:40:38 on the IBM i's clock; these rows are from two days before.
+    const { jobId, conn } = await legacyRun(new Date('2026-10-15T12:00:00Z'));
+    const before = receiver.calls.length;
+    const second = await run(jobId, conn);
+    expect((await runRow(second)).steps.find((step) => step.step === 'deliver')?.note).toBe('Sent 6 documents to hooks.example.com');
+    const again = receiver.calls.slice(before);
+    expect(again).toHaveLength(6);
+    expect(again.map((call) => call.headers['webhook-id'])).not.toContain('msg_0123456789abcdef0123456789abcdef');
+  });
+
+  it('lets a row written after the spooled file was created count as sent and lend its id, whatever the time zone', async () => {
+    // Ten hours before 21:40:38 read as UTC: still after it, on an IBM i 14 hours ahead of UTC.
+    const { jobId, conn, seq } = await legacyRun(new Date('2026-10-17T11:40:38Z'));
+    const before = receiver.calls.length;
+    const second = await run(jobId, conn);
+    expect((await runRow(second)).steps.find((step) => step.step === 'deliver')?.note).toBe(`Sent 1 document to hooks.example.com, 5 were sent in run #${seq}`);
+    const again = receiver.calls.slice(before);
+    expect(again.map((call) => call.headers['webhook-id'])).toEqual(['msg_0123456789abcdef0123456789abcdef']);
+  });
+
+  it('matches an older row on the name alone when the IBM i gave no creation time', async () => {
+    const { jobId, conn } = await legacyRun(new Date('2020-01-01T00:00:00Z'));
+    const file = conn.samples.find((s) => s.splf.name === sample.splf.name)!;
+    file.attributes = { ...file.attributes, created: '' };
+    const before = receiver.calls.length;
+    await run(jobId, conn);
+    const again = receiver.calls.slice(before);
+    expect(again.map((call) => call.headers['webhook-id'])).toEqual(['msg_0123456789abcdef0123456789abcdef']);
+  });
+
+  it('names documents and files with the same name in the preview as the run does', async () => {
     const { jobId, spec } = await webhookJob();
     const definition = fixtureText('invoice', 'definition.yaml').replace('name: "invoice-{d.pg.invoiceNo}"', 'name: "invoice"');
-    const named: JobSpec = { ...spec, extract: { definition } };
+    const cover = { id: 'cover', name: 'Cover', kind: 'html', source: null, formats: ['pdf'] } as JobSpec['render']['templates'][number];
+    const named: JobSpec = { ...spec, extract: { definition }, render: { templates: [...spec.render.templates, cover] } };
     await db().insert(jobVersions).values({ jobId, number: 2, spec: named });
     const stored = await storeSample(serverId, { sample, warnings: [] });
     await db().update(jobs).set({ activeVersion: 2, draft: { ...named, preview: { sampleId: stored.id } } });
@@ -382,6 +427,8 @@ describe('the webhook destination', () => {
     const runId = await runJob({ jobId, version: 2, splf: sample.splf, trigger: 'manual' }, { conn: new FakeConnection(), host: 'ibmi.example.com', serverId, password: GOOD_PASSWORD });
     const names = (await deliveriesOf(runId)).map((d) => d.document);
     expect(names).toEqual(['invoice', 'invoice-2', 'invoice-3', 'invoice-4', 'invoice-5', 'invoice-6']);
+    const runFiles = receiver.payloads().map((payload) => payload.data.files.map((file) => file.name));
+    expect(runFiles[1]).toEqual(['invoice-2.pdf', 'invoice-cover-2.pdf']);
 
     const auth = await signedIn();
     for (const pageGroupIndex of [0, 2]) {
@@ -391,7 +438,9 @@ describe('the webhook destination', () => {
       );
       const view = (await response.json()) as WebhookPreviewView;
       expect(view.document).toBe(names[pageGroupIndex]);
-      expect((JSON.parse(view.body) as WebhookPayload).data.document.name).toBe(names[pageGroupIndex]);
+      const body = JSON.parse(view.body) as WebhookPayload;
+      expect(body.data.document.name).toBe(names[pageGroupIndex]);
+      expect(body.data.files.map((file) => file.name)).toEqual(runFiles[pageGroupIndex]);
     }
   });
 

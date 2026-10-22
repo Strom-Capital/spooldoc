@@ -25,6 +25,8 @@ export interface EarlierDelivery {
   splfCreated: string | null;
   firstPage: number | null;
   lastPage: number | null;
+  /** When the row was written. */
+  sentAt: Date;
   /** The run's number in the Job log. */
   seq: number;
 }
@@ -40,6 +42,7 @@ export async function earlierDeliveries(kind: string, job: DeliverInput['job']):
       splfCreated: runDeliveries.splfCreated,
       firstPage: runDeliveries.firstPage,
       lastPage: runDeliveries.lastPage,
+      sentAt: runDeliveries.sentAt,
       seq: runs.seq,
     })
     .from(runDeliveries)
@@ -56,18 +59,45 @@ export async function earlierDeliveries(kind: string, job: DeliverInput['job']):
     .orderBy(runs.seq);
 }
 
+/** The largest UTC offset a time zone has, +14:00. */
+const MAX_UTC_OFFSET_MS = 14 * 60 * 60 * 1000;
+
+/**
+ * The earliest moment a spooled file can have been created, or null when its creation
+ * time is "" or not a time. The IBM i gives the time on its own clock, `2026-10-17T21:40:38`,
+ * without a time zone, and Spooldoc does not know the system's offset. Read as UTC, the
+ * real moment is at most 14 hours earlier, the largest offset there is.
+ */
+export function earliestCreation(created: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/.exec(created);
+  if (!m) return null;
+  const [year, month, day, hour, minute, second] = m.slice(1).map(Number) as [number, number, number, number, number, number];
+  const utc = Date.UTC(year, month - 1, day, hour, minute, second);
+  const back = new Date(utc);
+  // A date such as 2026-02-31 rolls over: it is not a time.
+  if (back.getUTCMonth() !== month - 1 || back.getUTCDate() !== day || back.getUTCHours() !== hour || back.getUTCMinutes() !== minute) return null;
+  return utc - MAX_UTC_OFFSET_MS;
+}
+
 /**
  * True when an earlier row is about this document. A document matches when the spooled file
  * has the same creation time, and the page group the same pages and name: the IBM i reuses
- * job numbers, and a newer job version can group the pages another way. Rows written before
- * the creation time was recorded match on the name alone, as they did, so a Retry right
- * after an upgrade does not send a second copy.
+ * job numbers, and a newer job version can group the pages another way.
+ *
+ * Rows written before the creation time was recorded match on the name, so a Retry right
+ * after an upgrade does not send a second copy, but only when they were written after the
+ * spooled file could have been created: a delivery cannot come before its spooled file, so
+ * an older row is about an earlier spooled file with the same job number. With no creation
+ * time to compare, they match on the name alone.
  *
  * @param created - The spooled file's creation time, as the run read it
  */
 export function sameDocument(row: EarlierDelivery, document: RunDocument, created: string): boolean {
   if (row.document !== document.name) return false;
-  if (row.splfCreated === null) return true;
+  if (row.splfCreated === null) {
+    const earliest = earliestCreation(created);
+    return earliest === null || row.sentAt.getTime() >= earliest;
+  }
   return row.splfCreated === created && row.firstPage === (document.pages?.first ?? null) && row.lastPage === (document.pages?.last ?? null);
 }
 

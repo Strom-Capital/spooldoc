@@ -2,12 +2,12 @@ import { spooledFileData, templatePaths, type Definition } from '@spooldoc/core'
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { emailConfigSchema } from '@/lib/destination-config';
-import { emailDocuments, emailSpecSchema, FORMAT_FILES, perSpooledFile, spooledFileName, templateFileName } from '@/lib/job-spec';
+import { emailDocuments, emailSpecSchema, perSpooledFile, spooledFileName } from '@/lib/job-spec';
 import { assetNames, assetResolver } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
 import { getDb } from '@/lib/server/db';
 import { destinations } from '@/lib/server/db/schema';
-import { documentNames, previewRenderer } from '@/lib/server/documents';
+import { documentNames, previewRenderer, runFileNames } from '@/lib/server/documents';
 import {
   addressList,
   addressProblems,
@@ -118,13 +118,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const where = whole ? 'Whole spooled file' : `Page group ${index + 1}`;
   const problems = addressProblems(email, data, formatting).map((problem) => `${where}: ${problem}. This email will fail.`);
 
-  const attachments = templates
-    .filter((t) => perSpooledFile(t) === whole)
-    .flatMap((t) =>
-      t.formats
-        .filter((format) => email.attach.includes(format))
-        .map((format) => ({ name: `${templateFileName(document, templates, t)}.${FORMAT_FILES[format].extension}`, format })),
-    );
+  // Named as the run names the files.
+  const fileName = runFileNames(templates, def, groups, sample);
+  const attachments = templates.flatMap((t, templateIndex) =>
+    perSpooledFile(t) !== whole
+      ? []
+      : t.formats.filter((format) => email.attach.includes(format)).map((format) => ({ name: fileName(templateIndex, whole ? null : index, format), format })),
+  );
   const notices: string[] = [];
   if (whole && !sends.pageGroups) notices.push('One email for the whole spooled file. Page groups get no email, since Attach picks only its files.');
   // A run renders the message template for each page group only; the whole spooled file's email has the written message.

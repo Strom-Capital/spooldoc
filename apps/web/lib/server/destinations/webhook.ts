@@ -8,7 +8,7 @@ import { RESPONSE_LIMIT } from '../runs';
 import { retryAfterSeconds } from '../http';
 import { decryptSecret, encryptSecret } from '../secrets';
 import { webhookHeaders, webhookId, webhookPayload, type WebhookType } from '../webhook-payload';
-import { deliveryFailed, deliveryRecorder, documentFields, earlierDeliveries, earlierText, notSent, sentBefore } from './deliveries';
+import { deliveryFailed, deliveryRecorder, documentFields, earlierDeliveries, earlierText, notSent, sameDocument, sentBefore } from './deliveries';
 import type { DeliverInput, Destination, RunFile } from './index';
 import { storeRunFiles } from './store';
 
@@ -322,8 +322,8 @@ export function webhookDestination(config: WebhookConfig, secrets: WebhookSecret
           await record({ ...base, to, status: 'already_sent', sentInRun: before.seq });
           continue;
         }
-        // A call that failed before the creation time was recorded keeps its id on Retry.
-        const legacy = test ? undefined : earlier.findLast((row) => row.splfCreated === null && row.messageId !== null && row.document === document.name);
+        // A call of this spooled file that failed before the creation time was recorded keeps its id on Retry.
+        const legacy = test ? undefined : earlier.findLast((row) => row.splfCreated === null && row.messageId !== null && sameDocument(row, document, created));
         const id = legacy?.messageId ?? webhookId({ jobId: job.id, splfKey: job.splfKey, created, pages: document.pages, document: document.name, test });
         if (stopped) {
           const message = notSent(stopped.message);

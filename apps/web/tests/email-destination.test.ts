@@ -384,6 +384,18 @@ describe('the email destination in a run', () => {
     expect(deliveries.map((d) => d.status)).toEqual(Array(6).fill('already_sent'));
   });
 
+  it('sends again what a row from before the spooled file was created sent, as it was for an earlier spooled file', async () => {
+    const { jobId } = await emailJob();
+    const conn = new FakeConnection();
+    await run(jobId, conn);
+    // The invoice sample was created 2026-10-17T21:40:38; these rows are from two days before.
+    await db().update(runDeliveries).set({ splfCreated: null, firstPage: null, lastPage: null, sentAt: new Date('2026-10-15T12:00:00Z') });
+    sent = [];
+    const second = await run(jobId, conn);
+    expect(sent).toHaveLength(6);
+    expect(await deliverNote(second)).toBe('Sent 6 emails');
+  });
+
   describe('with an Excel template of the whole spooled file', () => {
     const templates = [
       { id: 'main', name: 'Invoice', kind: 'html', source: null, formats: ['pdf'] },

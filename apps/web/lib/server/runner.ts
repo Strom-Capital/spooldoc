@@ -31,12 +31,12 @@ import {
 } from '@spooldoc/core';
 import type { Connection } from '@spooldoc/ibmi';
 import { and, eq } from 'drizzle-orm';
-import { FORMAT_FILES, jobSpecSchema, perSpooledFile, spooledFileName, templateFileName, splfKey, type JobTemplate, type JobSpec, type Format } from '@/lib/job-spec';
+import { FORMAT_FILES, jobSpecSchema, perSpooledFile, splfKey, type JobTemplate, type JobSpec, type Format } from '@/lib/job-spec';
 import { assetNames, assetResolver } from './assets';
 import { getDb } from './db';
 import { jobs, jobVersions, runs, watchSeen, type RunStep } from './db/schema';
 import { destinationFor, type RunDocument, type RunFile } from './destinations';
-import { documentNames, documentRenderer, fileNameFor, templateHtml, type DocumentRenderer } from './documents';
+import { documentNames, documentRenderer, runFileNames, templateHtml, type DocumentRenderer } from './documents';
 import { fieldTypes } from './email-message';
 import { redact } from './http';
 import { connectServer, isConnectionError } from './ibmi';
@@ -287,13 +287,8 @@ export async function renderFiles(
   const only = options.pageGroup;
   const asset = await assetResolver();
   const assets = (await assetNames()).map((entry) => entry.name);
-  const names = new Set<string>();
-  const unique = (base: string, ext: string) => {
-    let name = `${base}.${ext}`;
-    for (let n = 2; names.has(name); n++) name = `${base}-${n}.${ext}`;
-    names.add(name);
-    return name;
-  };
+  // Every file's name as a run of the whole spooled file gives it, also when only one page group is rendered.
+  const fileName = runFileNames(spec.render.templates, def, groups, sample);
   const out: RunFile[] = [];
   // The email message of each page group, from the job's email body template.
   const bodies = new Map<number, string>();
@@ -310,21 +305,19 @@ export async function renderFiles(
     const prepared = await prepareTemplate(template, def, assets);
     // The documents to make: one of the whole spooled file, or one per page group.
     const documents = perSpooledFile(template)
-      ? [{ index: null, base: spooledFileName(sample), data: spooledFileData(groups, sample) as DocumentData, where: 'the spooled file' }]
+      ? [{ index: null, data: spooledFileData(groups, sample) as DocumentData, where: 'the spooled file' }]
       : groups.flatMap((group, index) =>
           only !== undefined && index !== only
             ? []
             : [
                 {
                   index,
-                  base: fileNameFor(def, group, index, sample.splf.name.toLowerCase()),
                   data: templateData(prepared.data, group, groups, sample) as DocumentData,
                   where: `page group ${index + 1}`,
                 },
               ],
         );
     for (const document of documents) {
-      const base = templateFileName(document.base, spec.render.templates, template);
       const file = { pageGroupIndex: document.index, template: template.name, templateIndex };
       const renderTo = async (format: Format): Promise<Uint8Array> => {
         try {
@@ -337,8 +330,7 @@ export async function renderFiles(
       };
       for (const format of formats) {
         const content = await renderTo(format);
-        const { extension, contentType } = FORMAT_FILES[format];
-        out.push({ ...file, name: unique(base, extension), contentType, content });
+        out.push({ ...file, name: fileName(templateIndex, document.index, format), contentType: FORMAT_FILES[format].contentType, content });
         if (format === 'html' && template.id === bodyTemplateId && document.index !== null) bodies.set(document.index, new TextDecoder().decode(content));
       }
       // The message template makes no HTML file of its own: its HTML is rendered for the email only.
