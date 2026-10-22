@@ -6,6 +6,7 @@ import { missingPrefixes, withFunctionPrefixes } from "../src/xlsx-formula.js";
 import { checkXlsx, readXlsx } from "../src/xlsx.js";
 import { loadFixture } from "./helpers/fixtures.js";
 import { testPng } from "./helpers/png.js";
+import { linear, TIMING } from "./helpers/linear.js";
 
 const logo = testPng(120, 40);
 const images = (name: string): DesignImage | undefined => (name === "logo" ? { data: logo, ...imageInfo(logo)! } : undefined);
@@ -427,11 +428,12 @@ describe("withFunctionPrefixes", () => {
     ]);
   });
 
-  it("reads a long formula in linear time", () => {
-    const start = performance.now();
+  it("reads a long formula in linear time", TIMING, () => {
     expect(withFunctionPrefixes("A".repeat(200_000))).toBe("A".repeat(200_000));
     expect(missingPrefixes(`${"_xlfn.".repeat(50_000)}A`)).toEqual([]);
     expect(withFunctionPrefixes(`${"SUM(".repeat(20_000)}XLOOKUP(1)`)).toBe(`${"SUM(".repeat(20_000)}_xlfn.XLOOKUP(1)`);
-    expect(performance.now() - start).toBeLessThan(1000);
+    linear((n) => "A".repeat(n), withFunctionPrefixes, 204_800);
+    linear((n) => `${"_xlfn.".repeat(n)}A`, missingPrefixes, 51_200);
+    linear((n) => `${"SUM(".repeat(n)}XLOOKUP(1)`, withFunctionPrefixes, 19_200);
   });
 });

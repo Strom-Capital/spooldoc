@@ -69,6 +69,15 @@ stand-in for Carbone's HTTP API. The tests against a real Carbone server
 run only when `SPOOLDOC_CARBONE_URL` is set, such as
 `SPOOLDOC_CARBONE_URL=http://localhost:4000 pnpm --filter @spooldoc/core test`.
 
+A test that checks speed never sets a time limit, since the time depends
+on the machine. It calls `linear` from the package's
+`tests/helpers/linear.ts`, which checks that the time grows with the
+input as linear code does: it compares CPU time on the whole input with
+CPU time on 64 parts of it, so a quadratic search fails on any machine.
+Give the test `TIMING`, a longer timeout for busy runners. Before you
+commit, make the code quadratic for a moment and check that the test
+fails.
+
 The Microsoft 365 sender is tested with `fetch` mocked, so no test calls
 Microsoft. To check it in the app without a tenant, start the stand-in
 for the token endpoint and Graph, and point the app at it with

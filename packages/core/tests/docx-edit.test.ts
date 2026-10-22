@@ -5,6 +5,7 @@ import { docxParts, DocxEditError, editDocx, mergeRuns, readDocxPart, rewriteDoc
 import { pdfPageCount } from "../src/render.js";
 import { loadFixture } from "./helpers/fixtures.js";
 import { testPng } from "./helpers/png.js";
+import { linear, TIMING } from "./helpers/linear.js";
 
 const W = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
 const BOLD = "<w:rPr><w:b/></w:rPr>";
@@ -168,11 +169,10 @@ describe("pdfPageCount", () => {
     expect(pdfPageCount(pdf("1 0 obj << /Type /Outlines /Count 40 >> endobj 2 0 obj << /Type /Pages /Count 3 >> endobj"))).toBe(3);
   });
 
-  it("stays fast on input made to slow a regular expression down", () => {
-    const hostile = new TextEncoder().encode(`/Count 9${"0".repeat(200_000)}${"/Count 9 ".repeat(20_000)}`);
-    const started = performance.now();
-    expect(pdfPageCount(hostile)).toBeNull();
-    expect(performance.now() - started).toBeLessThan(1000);
+  it("stays fast on input made to slow a regular expression down", TIMING, () => {
+    const hostile = (n: number) => new TextEncoder().encode(`/Count 9${"0".repeat(10 * n)}${"/Count 9 ".repeat(n)}`);
+    expect(pdfPageCount(hostile(20_000))).toBeNull();
+    linear(hostile, pdfPageCount, 6_400);
   });
 });
 
