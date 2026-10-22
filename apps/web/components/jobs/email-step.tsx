@@ -272,14 +272,33 @@ function EmailPreview({
         <HeaderRow label="To">
           <Filled key={key} segments={preview.to} flash={changed((v) => v.to)} />
         </HeaderRow>
+        {/* A test email goes to the test address only, so Cc and Bcc show as not sent. */}
         {preview.cc.length > 0 && (
           <HeaderRow label="Cc">
-            <Filled key={key} segments={preview.cc} flash={changed((v) => v.cc)} />
+            {preview.testAddress ? (
+              <span className="text-muted-foreground">
+                <span className="line-through">
+                  <Filled key={key} segments={preview.cc} flash={false} />
+                </span>{' '}
+                not sent in a test
+              </span>
+            ) : (
+              <Filled key={key} segments={preview.cc} flash={changed((v) => v.cc)} />
+            )}
           </HeaderRow>
         )}
         {preview.bcc.length > 0 && (
           <HeaderRow label="Bcc">
-            <Filled key={key} segments={preview.bcc} flash={changed((v) => v.bcc)} />
+            {preview.testAddress ? (
+              <span className="text-muted-foreground">
+                <span className="line-through">
+                  <Filled key={key} segments={preview.bcc} flash={false} />
+                </span>{' '}
+                not sent in a test
+              </span>
+            ) : (
+              <Filled key={key} segments={preview.bcc} flash={changed((v) => v.bcc)} />
+            )}
           </HeaderRow>
         )}
         {preview.replyTo.length > 0 && (

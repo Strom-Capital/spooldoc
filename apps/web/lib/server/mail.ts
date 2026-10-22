@@ -271,23 +271,30 @@ function smtpErrorText(error: unknown, server: SmtpServer): { message: string; d
   const detail = (err.response ?? raw).split('\n')[0]?.trim() || undefined;
   const at = `${server.host}:${server.port}`;
   const text = `${err.response ?? ''} ${raw}`.toLowerCase();
+  // The error's text is read for connection errors only, with no reply from the server: a refused recipient can mention TLS or a timeout too.
+  const connection = err.responseCode === undefined;
+  // An error at RCPT TO is about that recipient, not the message or the connection.
+  const recipient = err.command === 'RCPT TO' || (err.code === 'EENVELOPE' && err.command !== 'MAIL FROM');
+  const tooLarge = /\b5\.3\.4\b|too (large|big)|size limit|exceeds.*size|message size/.test(text);
+  const who = err.rejected?.join(', ') ?? err.recipient;
   let message: string;
   if (err.code === 'EAUTH' || err.responseCode === 535 || err.responseCode === 534) {
     message = 'The mail server refused the sign-in. Check the user name and password in Settings, under Mail server, or use an app password.';
   } else if (err.code === 'ENOAUTH' || err.responseCode === 530) {
     message = 'The mail server wants a sign-in. Enter the user name and password in Settings, under Mail server.';
-  } else if (err.code === 'EDNS' || /enotfound|eai_again/.test(text)) {
+  } else if (err.code === 'EDNS' || (connection && /enotfound|eai_again/.test(text))) {
     message = `Could not find the mail server ${server.host}. Check the host in Settings, under Mail server.`;
-  } else if (err.code === 'ETLS' || err.code === 'EREQUIRETLS' || /wrong version number|ssl routines|tls|certificate/.test(text)) {
+  } else if (err.code === 'ETLS' || err.code === 'EREQUIRETLS' || (connection && /wrong version number|ssl routines|tls|certificate/.test(text))) {
     message = `Could not set up a secure connection with ${at}. Port 465 usually takes TLS and port 587 STARTTLS. Check Security in Settings, under Mail server.`;
-  } else if (err.code === 'ETIMEDOUT' || /timed? ?out/.test(text)) {
+  } else if (err.code === 'ETIMEDOUT' || (connection && /timed? ?out/.test(text))) {
     message = `The mail server ${at} did not answer in time. Check the host and port, and that a firewall lets the Spooldoc server reach it.`;
-  } else if (err.code === 'ECONNECTION' || err.code === 'ESOCKET' || /econnrefused|econnreset/.test(text)) {
+  } else if (err.code === 'ECONNECTION' || err.code === 'ESOCKET' || (connection && /econnrefused|econnreset/.test(text))) {
     message = `Could not connect to the mail server ${at}. Check the host and port, and that a firewall lets the Spooldoc server reach it.`;
-  } else if (err.responseCode === 552 || /too (large|big)|size limit|exceeds.*size/.test(text)) {
+  } else if (recipient && ((err.responseCode === 552 && !tooLarge) || /\b5\.2\.2\b|mailbox (is )?full|quota/.test(text))) {
+    message = `The mailbox of ${who ?? 'a recipient'} is full, so the mail server did not take the email. Send it again later, or ask the recipient to make room.`;
+  } else if (err.responseCode === 552 || tooLarge) {
     message = "The email is too large for the mail server. Attach fewer formats, or ask the mail server's administrator for a larger limit.";
-  } else if (err.code === 'EENVELOPE' || (err.command === 'RCPT TO' && (err.responseCode ?? 0) >= 500)) {
-    const who = err.rejected?.join(', ') ?? err.recipient;
+  } else if (recipient && (err.code === 'EENVELOPE' || (err.responseCode ?? 0) >= 500)) {
     message = `The mail server refused ${who ? `the address ${who}` : 'an address'}. Check the address, or the job's To, Cc and Bcc.`;
   } else if (err.command === 'MAIL FROM' && (err.responseCode ?? 0) >= 500) {
     message = 'The mail server refused the From address. Use an address the mail server lets this user send from, in Settings, under Mail server.';

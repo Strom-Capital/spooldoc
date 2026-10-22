@@ -4,6 +4,7 @@ import { namePatternProblems, tagProblems, templatePaths, valueAt, type Definiti
 import { convert as convertHtml } from 'html-to-text';
 import juice from 'juice';
 import type { SendMailOptions } from 'nodemailer';
+import addressparser from 'nodemailer/lib/addressparser';
 import { isEmailAddress } from '@/lib/destination-config';
 import { EMAIL_FIELDS, EMAIL_TAG, parseEmailTag, type EmailField, type EmailTag } from '@/lib/email-fields';
 import { DEFAULT_FORMATS, formatC, formatD, formatN, formatPlainNumber, type Formats } from '@/lib/formats';
@@ -75,12 +76,18 @@ function stateOf(value: unknown, present: boolean): EmailValueState {
   return 'found';
 }
 
-/** True when the data has the path, even with an empty value. */
+/** True when the data has the path, even with an empty value. A list index past the end is not in the data. */
 function hasPath(data: unknown, path: string): boolean {
   const cut = path.lastIndexOf('.');
   const parent = cut === -1 ? data : valueAt(data, path.slice(0, cut));
-  const key = path.slice(cut + 1).replace(/\[\d+\]$/, '');
-  return parent !== null && typeof parent === 'object' && key in parent;
+  const [, key = '', indexes = ''] = /^(.*?)((?:\[\d+\])*)$/.exec(path.slice(cut + 1)) ?? [];
+  if (parent === null || typeof parent !== 'object' || !(key in parent)) return false;
+  let value: unknown = (parent as Record<string, unknown>)[key];
+  for (const [, index] of indexes.matchAll(/\[(\d+)\]/g)) {
+    if (!Array.isArray(value) || Number(index) >= value.length) return false;
+    value = value[Number(index)];
+  }
+  return true;
 }
 
 /** How email fields print values: the Formats of Settings, and the type of each field of the definition. */
@@ -164,18 +171,39 @@ function emptyText(expanded: { empty: string[]; missing: string[] }): string {
   return [...say(expanded.empty, 'empty'), ...say(expanded.missing, 'not in the data')].join(', and ');
 }
 
+/** An address as a header writes it, with its name if it has one: `john@example.com`, `John Smith <john@example.com>`, `"Smith, John" <john@example.com>`. */
+function mailboxText(name: string, address: string): string {
+  if (!name) return address;
+  return /^[\w !#$%&'*+\-/=?^`{|}~]+$/.test(name) ? `${name} <${address}>` : `"${name.replace(/["\\]/g, '\\$&')}" <${address}>`;
+}
+
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /**
- * The addresses of To, Cc, Bcc or Reply-To: the field with its tags filled in, split at
- * commas and semicolons, with the tags that had no value and the text that is not an
- * address.
+ * The addresses of To, Cc, Bcc or Reply-To: the field with its tags filled in, read by
+ * Nodemailer's address parser, with the tags that had no value and the text that is not an
+ * address. Commas and semicolons both separate addresses, and a quoted name keeps its own,
+ * so `"Smith, John" <john@example.com>; jane@example.com` is two. `addresses` has each
+ * mailbox as a header writes it, with its name quoted when it needs to be, so Nodemailer
+ * and Microsoft 365 read it back with the name; the job log and the test line show it.
  */
-export function addressList(text: string, data: unknown, formatting: EmailFormatting = PLAIN_FORMATTING): { addresses: string[]; empty: string[]; missing: string[]; invalid: string[] } {
+export function addressList(
+  text: string,
+  data: unknown,
+  formatting: EmailFormatting = PLAIN_FORMATTING,
+): { addresses: string[]; empty: string[]; missing: string[]; invalid: string[] } {
   const expanded = expandText(text, data, formatting);
-  const parts = expanded.text
-    .split(/[,;]/)
-    .map((part) => part.trim())
-    .filter(Boolean);
-  return { addresses: parts.filter(isEmailAddress), empty: expanded.empty, missing: expanded.missing, invalid: parts.filter((part) => !isEmailAddress(part)) };
+  const addresses: string[] = [];
+  const invalid: string[] = [];
+  for (const entry of addressparser(expanded.text, { flatten: true })) {
+    const address = entry.address.trim();
+    const name = entry.name.trim();
+    // A name goes with the address in angle brackets, or in parentheses after it: `a@example.com b@example.com` is not an address.
+    const named = !name || new RegExp(`<\\s*${escapeRegExp(address)}\\s*>`).test(expanded.text) || expanded.text.includes(`(${name})`);
+    if (address && isEmailAddress(address) && named) addresses.push(mailboxText(name, address));
+    else if (address || name) invalid.push(!address || !name ? address || name : named ? `${name} <${address}>` : `${address} ${name}`);
+  }
+  return { addresses, empty: expanded.empty, missing: expanded.missing, invalid };
 }
 
 /**
@@ -236,9 +264,10 @@ export function inlineHtml(html: string): string {
   return juice(html, { removeStyleTags: true, preserveMediaQueries: true, preserveFontFaces: false });
 }
 
-/** The line at the top of a test email: where it would have gone. */
-function testLine(wouldGoTo: string[]): string {
-  return `Test email from Spooldoc. Without the test address it would go to ${wouldGoTo.join(', ') || 'no address'}.`;
+/** The line at the top of a test email: where it would have gone, and who would have had a copy. */
+function testLine(wouldGoTo: string[], wouldCopy: string[]): string {
+  const copy = wouldCopy.length === 0 ? '' : `, with a copy to ${wouldCopy.join(', ')}`;
+  return `Test email from Spooldoc. Without the test address it would go to ${wouldGoTo.join(', ') || 'no address'}${copy}.`;
 }
 
 /** Puts a block right after `<body>`, or in front when there is none. */
@@ -263,13 +292,14 @@ export function emailSubject(spec: Pick<EmailSpec, 'subject'>, data: unknown, do
 /**
  * The message as HTML and as plain text: the job's text with its tags filled in, or the
  * HTML of its message template with the CSS inlined. With `wouldGoTo` (a test send), a
- * line at the top names the addresses it would have gone to.
+ * line at the top names the addresses it would have gone to, and the Cc in `wouldCopy`.
  */
 export function messageBody(input: {
   spec: Pick<EmailSpec, 'body'>;
   data: unknown;
   templateHtml?: string | null;
   wouldGoTo: string[] | null;
+  wouldCopy?: string[];
   formatting?: EmailFormatting;
 }): { html: string; text: string } {
   let html: string;
@@ -283,7 +313,7 @@ export function messageBody(input: {
     text = body.trim();
   }
   if (input.wouldGoTo) {
-    const line = testLine(input.wouldGoTo);
+    const line = testLine(input.wouldGoTo, input.wouldCopy ?? []);
     html = afterBody(
       html,
       `<p style="margin:0 0 16px;padding:8px 12px;background:#fff4d6;color:#5c4400;font-family:Arial,Helvetica,sans-serif;font-size:13px;border-radius:4px">${escapeHtml(line)}</p>`,
@@ -341,7 +371,7 @@ export function composeEmail(input: ComposeInput): { email: ComposedEmail; probl
 
   const test = input.testAddress;
   const subject = emailSubject(spec, data, input.document, test !== null, formatting);
-  const { html, text } = messageBody({ spec, data, templateHtml: input.templateHtml, wouldGoTo: test ? to.addresses : null, formatting });
+  const { html, text } = messageBody({ spec, data, templateHtml: input.templateHtml, wouldGoTo: test ? to.addresses : null, wouldCopy: cc.addresses, formatting });
   const attachments = input.files.filter((file) => {
     const format = formatOf(file.contentType);
     return format !== undefined && spec.attach.includes(format);

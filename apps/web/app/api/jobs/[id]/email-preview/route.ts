@@ -113,7 +113,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 
   const to = addressList(email.to, data, formatting).addresses;
-  const { html } = messageBody({ spec: email, data, templateHtml, wouldGoTo: testAddress ? to : null, formatting });
+  const cc = addressList(email.cc, data, formatting).addresses;
+  const { html } = messageBody({ spec: email, data, templateHtml, wouldGoTo: testAddress ? to : null, wouldCopy: cc, formatting });
   const subject = email.subject.trim() ? expandSegments(email.subject, data, formatting) : [{ text: emailSubject(email, data, document, false, formatting) }];
   const where = whole ? 'Whole spooled file' : `Page group ${index + 1}`;
   const problems = addressProblems(email, data, formatting).map((problem) => `${where}: ${problem}. This email will fail.`);

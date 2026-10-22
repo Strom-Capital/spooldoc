@@ -37,6 +37,49 @@ describe('email fields', () => {
     });
   });
 
+  it('keep the name of an address, with a comma or a semicolon in quotes', () => {
+    const named = { pg: { quoted: '"Smith, John" <john@example.com>', plain: 'John Smith <john@example.com>', semi: '"Smith; Jane" <jane@example.com>' } };
+    expect(addressList('{d.pg.plain}', named)).toMatchObject({ addresses: ['John Smith <john@example.com>'], invalid: [] });
+    expect(addressList('{d.pg.quoted}, orders@example.com', named)).toMatchObject({ addresses: ['"Smith, John" <john@example.com>', 'orders@example.com'], invalid: [] });
+    expect(addressList('Smith "Jr." <jr@example.com>', named)).toMatchObject({ addresses: ['"Smith Jr." <jr@example.com>'], invalid: [] });
+    expect(addressList('{d.pg.semi}; orders@example.com;archive@example.com', named)).toMatchObject({
+      addresses: ['"Smith; Jane" <jane@example.com>', 'orders@example.com', 'archive@example.com'],
+      invalid: [],
+    });
+  });
+
+  it('fail on text that is not an address, beside named and plain ones', () => {
+    expect(addressList('John Smith <john@example.com>, J. SMITH; orders@example.com', data)).toMatchObject({
+      addresses: ['John Smith <john@example.com>', 'orders@example.com'],
+      invalid: ['J. SMITH'],
+    });
+    expect(addressList('buyer@example.com orders@example.com', data).invalid).toEqual(['buyer@example.com orders@example.com']);
+    expect(addressList('John <john@>', data).invalid).toEqual(['John <john@>']);
+    expect(addressProblems(spec({ to: 'John Smith <john@example.com>, J. SMITH' }), data)).toEqual(['"J. SMITH" in To is not an email address']);
+  });
+
+  it('send a named To, Cc and Reply-To with their names', async () => {
+    const { email } = compose({ to: '"Smith, John" <john@example.com>', cc: 'Jane Doe <jane@example.com>; orders@example.com', replyTo: '"Sales, North" <sales@example.com>' });
+    expect(addressProblems(spec({ replyTo: '"Sales, North" <sales@example.com>' }), data)).toEqual([]);
+    expect(email!.to).toEqual(['"Smith, John" <john@example.com>']);
+    const sent = await asSent(email!.message);
+    expect(sent.to).toEqual([{ address: 'john@example.com', name: 'Smith, John' }]);
+    expect(sent.cc).toEqual([
+      { address: 'jane@example.com', name: 'Jane Doe' },
+      { address: 'orders@example.com', name: '' },
+    ]);
+    expect((sent as { replyTo?: unknown }).replyTo).toEqual([{ address: 'sales@example.com', name: 'Sales, North' }]);
+  });
+
+  it('read a list index past the end as not in the data', () => {
+    const lists = { pg: { emails: ['buyer@example.com', ''], contacts: [{ email: 'buyer@example.com' }] } };
+    expect(addressList('{d.pg.emails[0]}', lists)).toMatchObject({ addresses: ['buyer@example.com'], empty: [], missing: [] });
+    expect(addressList('{d.pg.emails[1]}', lists)).toMatchObject({ addresses: [], empty: ['{d.pg.emails[1]}'], missing: [] });
+    expect(addressList('{d.pg.emails[2]}', lists)).toMatchObject({ empty: [], missing: ['{d.pg.emails[2]}'] });
+    expect(addressList('{d.pg.contacts[0].email}', lists)).toMatchObject({ addresses: ['buyer@example.com'], missing: [] });
+    expect(addressList('{d.pg.contacts[1].email}', lists)).toMatchObject({ missing: ['{d.pg.contacts[1].email}'] });
+  });
+
   it('fail on an empty or missing field in To, and on text that is not an address', () => {
     expect(addressProblems(spec({ to: '{d.pg.empty}' }), data)).toEqual(['{d.pg.empty} is empty']);
     expect(addressProblems(spec({ to: '{d.pg.nope}, orders@example.com' }), data)).toEqual(['{d.pg.nope} is not in the data']);
@@ -80,8 +123,14 @@ describe('composing an email', () => {
     expect(sent.cc).toBeUndefined();
     expect(sent.bcc).toBeUndefined();
     expect(sent.subject).toBe('[Test] Invoice 260101');
-    expect(sent.text.split('\n')[0]).toBe('Test email from Spooldoc. Without the test address it would go to buyer@example.com.');
+    expect(sent.text.split('\n')[0]).toBe('Test email from Spooldoc. Without the test address it would go to buyer@example.com, with a copy to boss@example.com.');
     expect(sent.html).toContain('it would go to buyer@example.com');
+  });
+
+  it('with a test address, names the Cc it would have gone to', async () => {
+    const { email } = compose({ to: 'John Smith <{d.pg.email}>', cc: 'boss@example.com' }, 'you@example.com');
+    const sent = await asSent(email!.message);
+    expect(sent.text.split('\n')[0]).toBe('Test email from Spooldoc. Without the test address it would go to John Smith <buyer@example.com>, with a copy to boss@example.com.');
   });
 
   it("inlines a template's CSS, and turns data URI images into inline CID attachments", async () => {
@@ -129,6 +178,19 @@ describe('mail errors', () => {
     expect(mailErrorText(error({ code: 'EENVELOPE', command: 'RCPT TO', responseCode: 550, rejected: ['nobody@example.com'], response: '550 5.1.1 User unknown' }), server).message).toBe(
       "The mail server refused the address nobody@example.com. Check the address, or the job's To, Cc and Bcc.",
     );
+  });
+
+  it('tell a full mailbox from an email that is too large, by the command', () => {
+    expect(mailErrorText(error({ code: 'EENVELOPE', command: 'RCPT TO', responseCode: 552, rejected: ['full@example.com'], response: '552 5.2.2 Mailbox full' }), server).message).toBe(
+      'The mailbox of full@example.com is full, so the mail server did not take the email. Send it again later, or ask the recipient to make room.',
+    );
+    expect(mailErrorText(error({ code: 'EENVELOPE', command: 'RCPT TO', responseCode: 550, rejected: ['full@example.com'], response: '550 5.7.1 Recipient over quota' }), server).message).toMatch(
+      /^The mailbox of full@example.com is full/,
+    );
+    expect(mailErrorText(error({ code: 'EMESSAGE', command: 'DATA', responseCode: 552, response: '552 5.3.4 Message size exceeds fixed limit' }), server).message).toMatch(/^The email is too large/);
+    expect(
+      mailErrorText(error({ code: 'EENVELOPE', command: 'RCPT TO', responseCode: 550, rejected: ['nobody@example.com'], response: '550 5.7.1 TLS required for this recipient, timed out' }), server).message,
+    ).toBe("The mail server refused the address nobody@example.com. Check the address, or the job's To, Cc and Bcc.");
   });
 
   it('stop the run sending more only for errors of the server or the connection', () => {
