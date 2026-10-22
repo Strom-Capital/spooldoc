@@ -26,6 +26,14 @@ export interface SftpServerOptions {
   fsync?: boolean;
   /** Refuse every rename with permission denied, as some file transfer gateways do. */
   denyRename?: boolean;
+  /** Refuse every remove with permission denied. */
+  denyRemove?: boolean;
+  /** Paths a rename to fails with a plain failure. */
+  failRenameTo?: string[];
+  /** Paths whose STAT is refused with permission denied. */
+  denyStat?: string[];
+  /** Fail each write with a plain failure after this many bytes are written, as on a full disk. */
+  failAfterBytes?: number | null;
   /** Folders where writes are refused with permission denied. */
   deny?: string[];
   /** Stop answering after this many bytes are written. */
@@ -34,6 +42,8 @@ export interface SftpServerOptions {
   dropAfterFiles?: number | null;
   /** Refuse the SFTP subsystem. */
   noSftp?: boolean;
+  /** Never answer the request for the SFTP subsystem. */
+  ignoreSftp?: boolean;
   /** The home folder, where relative paths go. */
   home?: string;
 }
@@ -189,6 +199,7 @@ export class TestSftpServer {
         const session = acceptSession();
         session.on('sftp', (acceptSftp, reject) => {
           if (this.options.noSftp) return reject();
+          if (this.options.ignoreSftp) return;
           const sftp = acceptSftp();
           this.advertise(sftp);
           this.serve(sftp, client);
@@ -211,11 +222,12 @@ export class TestSftpServer {
   private serve(sftp: SFTPWrapper, client: Connection): void {
     const home = this.options.home ?? '/home/MYUSER';
     const resolve = (path: string) => normalize(path.startsWith('/') ? path : `${home}/${path}`);
-    const handles = new Map<string, { path: string; folder: boolean; listed: boolean }>();
+    // `listed` is how many entries of a folder READDIR has sent: 100 at a time, as servers do.
+    const handles = new Map<string, { path: string; folder: boolean; listed: number }>();
     let next = 0;
     const handleOf = (path: string, folder: boolean) => {
       const handle = Buffer.from(String(next++));
-      handles.set(handle.toString(), { path, folder, listed: false });
+      handles.set(handle.toString(), { path, folder, listed: 0 });
       return handle;
     };
     const denied = (path: string) => (this.options.deny ?? []).some((folder) => parentOf(path) === normalize(folder));
@@ -224,6 +236,7 @@ export class TestSftpServer {
       this.log.push(`${replace ? 'POSIX-RENAME' : 'RENAME'} ${from} ${to}`);
       const node = this.files.get(from);
       if (this.options.denyRename || denied(to)) return sftp.status(reqId, STATUS_CODE.PERMISSION_DENIED, 'Permission denied');
+      if (this.options.failRenameTo?.includes(to)) return sftp.status(reqId, STATUS_CODE.FAILURE, 'Failure');
       if (!node) return sftp.status(reqId, STATUS_CODE.NO_SUCH_FILE, 'No such file');
       if (this.files.has(to) && !replace) return sftp.status(reqId, STATUS_CODE.FAILURE, 'Failure');
       this.files.delete(from);
@@ -239,6 +252,7 @@ export class TestSftpServer {
     const stat = (reqId: number, path: string) => {
       const node = this.files.get(resolve(path));
       this.log.push(`STAT ${resolve(path)}`);
+      if (this.options.denyStat?.includes(resolve(path))) return sftp.status(reqId, STATUS_CODE.PERMISSION_DENIED, 'Permission denied');
       if (!node) return sftp.status(reqId, STATUS_CODE.NO_SUCH_FILE, 'No such file');
       sftp.attrs(reqId, attrs(node));
     };
@@ -262,6 +276,7 @@ export class TestSftpServer {
       if (!open || !node) return sftp.status(reqId, STATUS_CODE.FAILURE, 'Bad handle');
       this.written += data.length;
       if (this.options.hangAfterBytes != null && this.written > this.options.hangAfterBytes) return;
+      if (this.options.failAfterBytes != null && this.written > this.options.failAfterBytes) return sftp.status(reqId, STATUS_CODE.FAILURE, 'No space left on device');
       const end = offset + data.length;
       const grown = node.data.length >= end ? node.data : Buffer.concat([node.data, Buffer.alloc(end - node.data.length)]);
       data.copy(grown, offset);
@@ -296,19 +311,20 @@ export class TestSftpServer {
     sftp.on('READDIR', (reqId, handle) => {
       const open = handles.get(handle.toString());
       if (!open?.folder) return sftp.status(reqId, STATUS_CODE.FAILURE, 'Bad handle');
-      if (open.listed) return sftp.status(reqId, STATUS_CODE.EOF);
-      open.listed = true;
-      const names = this.names(open.path).map((name) => {
+      const all = this.names(open.path);
+      if (open.listed >= all.length + 1) return sftp.status(reqId, STATUS_CODE.EOF);
+      const page = [{ filename: '.', longname: '.', attrs: attrs(this.files.get(open.path)!) }, ...all.map((name) => {
         const node = this.files.get(normalize(`${open.path}/${name}`))!;
         return { filename: name, longname: name, attrs: attrs(node) };
-      });
-      sftp.name(reqId, [{ filename: '.', longname: '.', attrs: attrs(this.files.get(open.path)!) }, ...names]);
+      })].slice(open.listed, open.listed + 100);
+      open.listed += page.length;
+      sftp.name(reqId, page);
     });
     sftp.on('RENAME', (reqId, from, to) => rename(reqId, resolve(from), resolve(to), false));
     sftp.on('REMOVE', (reqId, path) => {
       const real = resolve(path);
       this.log.push(`REMOVE ${real}`);
-      if (denied(real)) return sftp.status(reqId, STATUS_CODE.PERMISSION_DENIED, 'Permission denied');
+      if (this.options.denyRemove || denied(real)) return sftp.status(reqId, STATUS_CODE.PERMISSION_DENIED, 'Permission denied');
       if (!this.files.has(real)) return sftp.status(reqId, STATUS_CODE.NO_SUCH_FILE, 'No such file');
       this.files.delete(real);
       sftp.status(reqId, STATUS_CODE.OK);

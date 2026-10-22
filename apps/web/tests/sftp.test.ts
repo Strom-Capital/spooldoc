@@ -148,6 +148,7 @@ describe('uploadFile', () => {
     session = null;
     await server?.stop();
     sftpTiming.opMs = 60_000;
+    sftpTiming.readyMs = 20_000;
   });
 
   async function open(options: ConstructorParameters<typeof TestSftpServer>[0] = {}) {
@@ -230,6 +231,75 @@ describe('uploadFile', () => {
     expect(error).toBeInstanceOf(SftpError);
     expect((error as SftpError).message).toMatch(/^127\.0\.0\.1 did not let Spooldoc rename \.a\.pdf\.[0-9a-f]{8}\.part to a\.pdf\. If the server refuses renames, turn off "Write each file under a temporary name first" on the destination\.$/);
     expect(server.names('/in')).toEqual([]);
+  });
+
+  it('keeps both files when the new one cannot be renamed in and the old one cannot be put back', async () => {
+    const s = await open({ posixRename: false, failRenameTo: ['/in/a.pdf'] });
+    server.file('/in/a.pdf', 'old');
+    const error = (await uploadFile(s, '/in', 'a.pdf', bytes, { ifExists: 'replace', tempName: true }).catch((e: unknown) => e)) as SftpError;
+    const names = server.names('/in');
+    const part = names.find((n) => n.endsWith('.part'))!;
+    const old = names.find((n) => n.endsWith('.old'))!;
+    expect(names).toEqual([part, old].sort());
+    expect(server.files.get(`/in/${part}`)?.data.toString()).toBe('%PDF new');
+    expect(server.files.get(`/in/${old}`)?.data.toString()).toBe('old');
+    expect(error.message).toBe(
+      `The new file could not be renamed to /in/a.pdf, and the old file could not be put back. The old file is now /in/${old} and the new one /in/${part}. Rename the one to keep to a.pdf.`,
+    );
+  });
+
+  describe('a write that fails after the open, without a temporary name', () => {
+    // More than one chunk, so the first write lands and a later one fails.
+    const big = Buffer.alloc(100 * 1024, 7);
+
+    it('deletes the incomplete file and says why with Fail the run', async () => {
+      const s = await open({ failAfterBytes: 40 * 1024 });
+      const error = (await uploadFile(s, '/in', 'a.pdf', big, { ifExists: 'fail', tempName: false }).catch((e: unknown) => e)) as SftpError;
+      expect(error.extra.taken).toBeUndefined();
+      expect(error.message).toBe("127.0.0.1 could not write /in/a.pdf. The server's own text is under Details.");
+      expect(error.detail).toContain('No space left on device');
+      expect(server.names('/in')).toEqual([]);
+    });
+
+    it('deletes the incomplete file and tries no other number with Add a number', async () => {
+      const s = await open({ failAfterBytes: 40 * 1024 });
+      const error = (await uploadFile(s, '/in', 'a.pdf', big, { ifExists: 'suffix', tempName: false }).catch((e: unknown) => e)) as SftpError;
+      expect(error.message).toBe("127.0.0.1 could not write /in/a.pdf. The server's own text is under Details.");
+      expect(server.names('/in')).toEqual([]);
+      expect(server.log.filter((line) => line.startsWith('OPEN '))).toEqual(['OPEN /in/a.pdf wx']);
+    });
+
+    it('says when the incomplete file cannot be deleted', async () => {
+      const s = await open({ failAfterBytes: 40 * 1024, denyRemove: true });
+      const error = (await uploadFile(s, '/in', 'a.pdf', big, { ifExists: 'fail', tempName: false }).catch((e: unknown) => e)) as SftpError;
+      expect(error.message).toBe("127.0.0.1 could not write /in/a.pdf. The server's own text is under Details. The incomplete file /in/a.pdf could not be deleted. Delete it.");
+      expect(server.names('/in')).toEqual(['a.pdf']);
+    });
+
+    it('says the file is incomplete with Replace', async () => {
+      const s = await open({ failAfterBytes: 40 * 1024 });
+      server.file('/in/a.pdf', 'old');
+      const error = (await uploadFile(s, '/in', 'a.pdf', big, { ifExists: 'replace', tempName: false }).catch((e: unknown) => e)) as SftpError;
+      expect(error.message).toBe("127.0.0.1 could not write /in/a.pdf. The server's own text is under Details. /in/a.pdf on 127.0.0.1 is incomplete now. Upload it again.");
+    });
+  });
+
+  it('ends a connection whose server never starts SFTP', async () => {
+    server = await new TestSftpServer({ publicKey: pair.publicKey, ignoreSftp: true }).start();
+    sftpTiming.readyMs = 1500;
+    const error = (await connectSftp({
+      host: '127.0.0.1',
+      port: server.port,
+      username: 'MYUSER',
+      auth: 'spooldoc-key',
+      privateKey: pair.privateKey,
+      hostKey: { type: 'ssh-ed25519', key: server.hostKeyBlob },
+    }).catch((e: unknown) => e)) as SftpError;
+    expect(error).toBeInstanceOf(SftpError);
+    expect(error.phase).toBe('sftp');
+    expect(error.message).toBe(
+      `127.0.0.1 signed in MYUSER on port ${server.port} but did not start SFTP within 2 seconds. Ask the server's admin to check that SFTP is on for the user.`,
+    );
   });
 
   it('ends a connection that stops answering', async () => {
