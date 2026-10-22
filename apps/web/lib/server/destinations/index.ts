@@ -3,13 +3,14 @@ import 'server-only';
 import type { DocumentData, ValueType } from '@spooldoc/core';
 import type { Connection } from '@spooldoc/ibmi';
 import { eq } from 'drizzle-orm';
-import { emailConfigSchema, ifsConfigSchema, webhookConfigSchema } from '@/lib/destination-config';
+import { emailConfigSchema, ifsConfigSchema, sftpConfigSchema, webhookConfigSchema } from '@/lib/destination-config';
 import type { EmailSpec, WebhookSpec } from '@/lib/job-spec';
 import type { DestinationView } from '@/lib/types';
 import { getDb } from '../db';
 import { destinations } from '../db/schema';
 import { emailDestination } from './email';
 import { ifsDestination } from './ifs';
+import { openSftpSecrets, sftpConfigView, sftpDestination } from './sftp';
 import { openWebhookSecrets, webhookDestination } from './webhook';
 import type { WebhookContext } from '../webhook-payload';
 import { nFiles, storeRunFiles, type RunFile } from './store';
@@ -51,7 +52,7 @@ export interface DeliverInput {
   addSecret(secret: string): void;
 }
 
-/** Where a run's documents go. New kinds (SFTP, S3) implement this. */
+/** Where a run's documents go. New kinds (such as S3) implement this. */
 export interface Destination {
   kind: string;
   /**
@@ -80,6 +81,7 @@ const KINDS: Record<string, (row: DestinationRow) => Destination> = {
   ifs: (row) => ifsDestination(ifsConfigSchema.parse(row.config)),
   email: (row) => emailDestination(emailConfigSchema.parse(row.config)),
   webhook: (row) => webhookDestination(webhookConfigSchema.parse(row.config), openWebhookSecrets(row.secretsEnc), row.name),
+  sftp: (row) => sftpDestination(sftpConfigSchema.parse(row.config), openSftpSecrets(row.secretsEnc), row.name),
 };
 
 /**
@@ -103,6 +105,9 @@ export async function destinationFor(id: string | null): Promise<Destination | n
     return build(row);
   } catch (error) {
     if (error instanceof Error && error.message.includes('SPOOLDOC_SECRET_KEY')) {
+      if (row.kind === 'sftp') {
+        throw new Error(`The key or password of the destination ${row.name} cannot be decrypted. Was SPOOLDOC_SECRET_KEY changed? Open it on the Destinations page, and make a new key or enter the password again.`);
+      }
       throw new Error(`The secrets of the destination ${row.name} cannot be decrypted. Was SPOOLDOC_SECRET_KEY changed? Open it on the Destinations page, rotate the secret and enter the header values again.`);
     }
     throw new Error(`The settings of the destination ${row.name} are not valid. Open it on the Destinations page and save it again.`);
@@ -112,7 +117,8 @@ export async function destinationFor(id: string | null): Promise<Destination | n
 /**
  * A destination row as the pages see it. IFS settings that are not valid show their folder
  * with the default choices, so the page can still list the destination and save it again.
- * A webhook shows its header names and whether it signs, never the secret or the values.
+ * A webhook shows its header names and whether it signs, never the secret or the values,
+ * and an SFTP destination its public key and host key fingerprint, never its secrets.
  */
 export function destinationView(row: typeof destinations.$inferSelect, jobs: DestinationView['jobs']): DestinationView {
   const base = { id: row.id, name: row.name, builtin: row.builtin, jobs };
@@ -138,6 +144,27 @@ export function destinationView(row: typeof destinations.$inferSelect, jobs: Des
       // Secrets that cannot be decrypted show no headers; a run says why.
     }
     return { ...base, kind: 'webhook', config: { ...config, headers, hasSecret } };
+  }
+  if (row.kind === 'sftp') {
+    const parsed = sftpConfigSchema.safeParse(row.config);
+    // Settings that are not valid show what they have, with the defaults, so the page can still list it and save it again.
+    const text = (value: unknown) => (typeof value === 'string' ? value : '');
+    const config = parsed.success
+      ? parsed.data
+      : {
+          host: text(row.config.host),
+          port: Number(row.config.port) || 22,
+          username: text(row.config.username),
+          auth: 'spooldoc-key' as const,
+          publicKey: null,
+          folder: text(row.config.folder),
+          testFolder: null,
+          ifExists: 'replace' as const,
+          keepCopy: true,
+          tempName: true,
+          hostKey: null,
+        };
+    return { ...base, kind: 'sftp', config: sftpConfigView(config, row.secretsEnc) };
   }
   return { ...base, kind: 'spooldoc', config: {} };
 }

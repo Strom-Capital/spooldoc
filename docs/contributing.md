@@ -98,6 +98,28 @@ It prints each call's headers and a short summary of its body, and
 answers 200. URLs such as `http://localhost:3406/spooldoc?fail=2` or
 `?status=401` fail on purpose; the script lists them.
 
+The SFTP destination is tested against an SSH server in the test
+process, with a file tree in memory (`apps/web/tests/helpers/sftp-server.ts`).
+To use one in the app, start the stand-in SFTP server. It serves a local
+folder on 127.0.0.1, prints its host key fingerprint, and takes a
+password or the keys in an `authorized_keys` file:
+
+```sh
+node apps/web/scripts/sftp-stand-in.mjs --folder /tmp/sftp --password secret
+```
+
+Add an SFTP destination for 127.0.0.1, port 2222, any user and a folder
+inside it, such as `/in`. `--no-posix-rename`, `--deny-rename` and
+`--slow` make it behave as some servers do; the script lists them. Its
+host key is new at every start, so a restart shows a changed key. To
+check against a real OpenSSH server, start one in a container and run
+the test that is skipped otherwise:
+
+```sh
+docker run -d --rm --name spooldoc-sftp -p 127.0.0.1:2224:22 atmoz/sftp MYUSER:pass:::in,test
+SFTP_OPENSSH_PORT=2224 pnpm --filter @spooldoc/web exec vitest run tests/sftp-openssh.test.ts
+```
+
 Add a fixture by printing the document with demo-spool, capturing it with
 the capture command (which scrubs the job user and number) and writing
 its definition, template and expected JSON next to the sample.
@@ -144,10 +166,13 @@ Then:
   map.
 - Add its fields to the destination dialog and its text to
   `destinationText`. Secrets, such as a webhook's signing secret and
-  header values, go encrypted in `destinations.secrets_enc` and never in
-  the view.
-- A kind that records one delivery per document, as email and webhook
-  do, writes `run_deliveries` rows with its `kind`, is listed in
+  header values, or an SFTP destination's key and password, go encrypted
+  in `destinations.secrets_enc` and never in the view.
+- A kind that writes files to a folder takes the names each file gets
+  from `lib/server/destinations/names.ts` (`ownNames`, `numbered`), so
+  every folder destination follows one case rule.
+- A kind that records one delivery per document or file, as email,
+  webhook and SFTP do, writes `run_deliveries` rows with its `kind`, is listed in
   `DELIVERY_KINDS` and `DeliveryKind`, and gets its words in `KIND_TEXT`
   of `components/run-deliveries.tsx`.
 - A call that changes the IBM i goes on the `Connection` interface, in

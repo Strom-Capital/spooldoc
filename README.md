@@ -70,12 +70,14 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
   the extraction report and fixes what is missing. It designs and edits Word
   and Excel templates too, looking at every page it renders. Use a local model, or
   turn on masking, to keep values on your network.
-- **Destinations**: a download in Spooldoc, a folder in the IFS, email or a
-  webhook. Email sends one email per document, to the address printed in it,
+- **Destinations**: a download in Spooldoc, a folder in the IFS, email, a
+  webhook or an SFTP server. Email sends one email per document, to the address printed in it,
   through your SMTP server or Microsoft 365. A webhook posts each document's
-  data and files as signed JSON to your URL. A test address or test URL sends
-  everything to you first.
-- **Job log**: every run with its steps, errors, files, emails and webhook calls;
+  data and files as signed JSON to your URL. SFTP uploads each file to a
+  folder on a server, with a key Spooldoc makes and a host key you trust. A
+  test address, URL or folder takes everything first.
+- **Job log**: every run with its steps, errors, files, emails, webhook calls
+  and uploads;
   retention you set.
 - **One Compose file**: the web app with its Java runtime, Postgres and
   Carbone, amd64 and arm64.
@@ -148,8 +150,8 @@ Spooldoc is young. The web app, the *SCS parser, text and XML extraction,
 HTML, PDF, DOCX and XLSX output and the Spooldoc download destination
 work and are tested against demo spooled files captured from PUB400. Jobs
 can also write their files to a folder in the IFS, email each document
-through an SMTP server or Microsoft 365, or post it to a webhook. Next: SFTP
-and S3 destinations, and more users and roles.
+through an SMTP server or Microsoft 365, post it to a webhook, or upload
+it to an SFTP server. Next: S3 destinations, and more users and roles.
 
 Until 1.0, a minor release (0.1 to 0.2) can include breaking changes. Read
 the [release notes](https://github.com/Strom-Capital/spooldoc/releases)

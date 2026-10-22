@@ -1,6 +1,6 @@
 'use client';
 
-import { DownloadIcon, FlaskConicalIcon, FolderIcon, MailIcon, PencilIcon, PlusIcon, SendIcon, Trash2Icon, WebhookIcon } from 'lucide-react';
+import { DownloadIcon, FlaskConicalIcon, FolderIcon, HardDriveUploadIcon, MailIcon, PencilIcon, PlusIcon, SendIcon, ShieldAlertIcon, Trash2Icon, WebhookIcon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { EmptyState, Loading } from '@/components/empty-state';
@@ -21,11 +21,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { api, errorText } from '@/lib/client/api';
-import { destinationText } from '@/lib/destination-config';
+import { destinationText, sftpTarget } from '@/lib/destination-config';
 import type { DestinationView } from '@/lib/types';
 import { DestinationDialog, type EditableDestination } from './destination-dialog';
 
-const KIND_ICON = { spooldoc: DownloadIcon, ifs: FolderIcon, email: MailIcon, webhook: WebhookIcon };
+const KIND_ICON = { spooldoc: DownloadIcon, ifs: FolderIcon, email: MailIcon, webhook: WebhookIcon, sftp: HardDriveUploadIcon };
 
 /** The destinations jobs can deliver to, with the jobs that use each, and add, edit and delete. */
 export function DestinationsPage() {
@@ -77,7 +77,7 @@ export function DestinationsPage() {
       {error && <ErrorNote className="mb-4">{error}</ErrorNote>}
       {destinations === null && !error && <Loading>Loading destinations...</Loading>}
       {destinations?.length === 0 && (
-        <EmptyState icon={SendIcon} title="No destinations yet" description="Add a folder in the IFS, email or a webhook, for jobs to deliver their documents to.">
+        <EmptyState icon={SendIcon} title="No destinations yet" description="Add a folder in the IFS, email, a webhook or an SFTP server, for jobs to deliver their documents to.">
           <Button onClick={() => setEditing('new')}>
             <PlusIcon />
             Add destination
@@ -111,7 +111,27 @@ export function DestinationsPage() {
                       </div>
                     </td>
                     <td className="px-3 py-2.5">
-                      {destination.kind === 'ifs' ? (
+                      {destination.kind === 'sftp' ? (
+                        <>
+                          <div className="break-all font-mono text-xs">{sftpTarget(destination.config)}</div>
+                          <div className="text-muted-foreground text-xs">
+                            {destination.config.port !== 22 && `Port ${destination.config.port}. `}
+                            {text.how}
+                          </div>
+                          {text.test && (
+                            <div className="flex items-center gap-1 text-amber-700 text-xs dark:text-amber-400">
+                              <FlaskConicalIcon className="size-3.5 shrink-0" aria-hidden />
+                              <span className="min-w-0 break-words">{text.test}</span>
+                            </div>
+                          )}
+                          {!destination.config.hostKey && (
+                            <div className="flex items-center gap-1 text-amber-700 text-xs dark:text-amber-400">
+                              <ShieldAlertIcon className="size-3.5 shrink-0" aria-hidden />
+                              <span className="min-w-0 break-words">Host key not trusted yet. Open it and check the connection.</span>
+                            </div>
+                          )}
+                        </>
+                      ) : destination.kind === 'ifs' ? (
                         <>
                           <div className="font-mono text-xs">{destination.config.folder}</div>
                           <div className="text-muted-foreground text-xs">On the job&apos;s server. {text.how}</div>
@@ -188,6 +208,8 @@ export function DestinationsPage() {
                 ? 'Spooldoc forgets the destination. Emails already sent stay sent. A destination that jobs deliver to cannot be deleted.'
                 : deleting?.kind === 'webhook'
                   ? 'Spooldoc forgets the destination, its signing secret and its headers. A destination that jobs deliver to cannot be deleted.'
+                  : deleting?.kind === 'sftp'
+                    ? 'Spooldoc forgets the destination and its key or password. Deleting it never touches the server or its files. Remove its public key from the server too. A destination that jobs deliver to cannot be deleted.'
                   : 'Spooldoc forgets the destination. The folder and the files in it stay on the IBM i. A destination that jobs deliver to cannot be deleted.'}
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -11,8 +11,8 @@ const nextConfig: NextConfig = {
   turbopack: { root: path.resolve(here, '../..') },
   outputFileTracingRoot: path.resolve(here, '../..'),
   // Loaded by Node at runtime, never bundled: the jt400 bridge starts a JVM through
-  // the native `java` addon.
-  serverExternalPackages: ['@spooldoc/ibmi', 'node-jt400', 'java'],
+  // the native `java` addon. ssh2 loads its optional native parts at runtime.
+  serverExternalPackages: ['@spooldoc/ibmi', 'node-jt400', 'java', 'ssh2'],
   async headers() {
     return [
       {

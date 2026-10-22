@@ -45,7 +45,8 @@ where a run stopped.
 4. **Deliver.** Every file goes to the job's destination: kept in
    Spooldoc's database, written to a folder in the IFS of the job's
    server, emailed, one email per document, through the mail server
-   in Settings, or posted to a URL, one signed webhook call per document.
+   in Settings, posted to a URL, one signed webhook call per document, or
+   uploaded to a folder on an SFTP server.
    See [Destinations](destinations.md).
 5. **Finish.** Only after every document was delivered, the spooled file
    is held, moved, deleted or left as it is. A finish that fails gives the
@@ -112,10 +113,10 @@ backup:
 | `jobs`, `job_versions` | Each job's editable draft and its saved versions |
 | `job_chats` | The agent's conversation for each job |
 | `samples` | Captured spooled files: raw bytes, attributes and parsed pages, for previews and runs |
-| `runs`, `run_files` | Every run with its steps, and the files kept in Spooldoc: by the Spooldoc download destination, by an IFS destination with Keep a copy in Spooldoc, or by an email or webhook destination |
-| `run_deliveries` | Every delivery a run made or tried, one per document with its destination kind, such as each email or webhook call, so Retry sends only the rest |
+| `runs`, `run_files` | Every run with its steps, and the files kept in Spooldoc: by the Spooldoc download destination, by an IFS destination with Keep a copy in Spooldoc, or by an email, webhook or SFTP destination |
+| `run_deliveries` | Every delivery a run made or tried, one per document with its destination kind, such as each email or webhook call, or one per file for an SFTP upload, so Retry sends only the rest |
 | `watch_seen` | Which spooled files each job has processed |
-| `destinations` | Where jobs deliver, with the secrets of a webhook (its signing secret and header values) encrypted |
+| `destinations` | Where jobs deliver, with the secrets of a webhook (its signing secret and header values) and of an SFTP destination (its key or password) encrypted, and the host key an SFTP destination trusts |
 | `assets` | Logos, images and fonts for templates |
 | `template_files` | Uploaded Word and Excel templates. A row never changes, so a version keeps the file it was saved with |
 | `settings`, `ai_providers` | Intervals, retention, number, date and currency formats, the mail server with its password encrypted, and the agent's model per provider with its key encrypted |

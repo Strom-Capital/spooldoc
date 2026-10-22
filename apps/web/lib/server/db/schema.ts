@@ -175,13 +175,14 @@ export const destinations = pgTable(
     config: jsonb('config').$type<Record<string, unknown>>().notNull().default({}),
     /**
      * Secrets of the destination, encrypted with `encryptSecret`, never sent to the page.
-     * For a webhook: JSON `{ signingSecret, headers: { [name]: value } }`.
+     * For a webhook: JSON `{ signingSecret, headers: { [name]: value } }`. For SFTP: JSON
+     * `{ privateKey, passphrase, password }`.
      */
     secretsEnc: text('secrets_enc'),
     builtin: boolean('builtin').notNull().default(false),
     ...timestamps,
   },
-  (t) => [check('destinations_kind_check', sql`${t.kind} in ('spooldoc', 'ifs', 'email', 'webhook')`)],
+  (t) => [check('destinations_kind_check', sql`${t.kind} in ('spooldoc', 'ifs', 'email', 'webhook', 'sftp')`)],
 );
 
 /** A pipeline from an output queue to a destination. `draft` is the spec being edited. */
@@ -368,12 +369,14 @@ export const runDeliveries = pgTable(
     error: text('error'),
     /** The mail server's own text behind `error`, or the receiver's answer for a webhook call. */
     detail: text('detail'),
-    /** For a webhook call: the receiver's HTTP status, the tries made and how long the last took. */
+    /** For a webhook call: the receiver's HTTP status, the tries made and how long the last took. For an upload, `ms` is how long it took. */
     httpStatus: integer('http_status'),
     attempts: integer('attempts'),
     ms: integer('ms'),
     /** For a webhook call: the start of the receiver's answer, at most 2 KB and one more character to tell it was cut. */
     response: text('response'),
+    /** For an upload: the size of the file in bytes. */
+    size: integer('size'),
     sentAt: timestamp('sent_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

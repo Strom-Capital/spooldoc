@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { api, errorText, shownError, type ShownError } from '@/lib/client/api';
-import { shortUrl } from '@/lib/destination-config';
+import { sftpServer, shortUrl } from '@/lib/destination-config';
 import { deleteNotice, filterParams, splfKey, startsDeleting, triggerStatuses } from '@/lib/job-spec';
 import type { RunView, SpooledFileView } from '@/lib/types';
 import { useJob } from './job-provider';
@@ -204,7 +204,7 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
           : 'Files are left as they are.';
   // Writing to the IFS changes the IBM i, so it is named before it happens.
   const destination = destinations.find((d) => d.id === activeSpec?.destination.destinationId);
-  // Sending email or a webhook call reaches outside systems, so it is named too, and where it goes while testing.
+  // Sending email, a webhook call or an upload reaches outside systems, so it is named too, and where it goes while testing.
   const deliverText =
     destination?.kind === 'ifs'
       ? `Documents will be written to ${destination.config.folder} on the IBM i. `
@@ -216,7 +216,11 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
           ? destination.config.testUrl
             ? `Each document is sent to the test URL ${shortUrl(destination.config.testUrl)}. `
             : `Each document is sent to ${shortUrl(destination.config.url)}. `
-          : '';
+          : destination?.kind === 'sftp'
+            ? destination.config.testFolder
+              ? `Documents will be uploaded to the test folder ${destination.config.testFolder} on ${sftpServer(destination.config)}. `
+              : `Documents will be uploaded to ${destination.config.folder} on ${sftpServer(destination.config)}. `
+            : '';
 
   async function onRun() {
     setBusy(true);

@@ -417,6 +417,200 @@ A receiver with a certificate from your own certificate authority needs
 that authority added to Spooldoc; see
 [Certificates](configuration.md#certificates).
 
+## SFTP
+
+An SFTP destination uploads each file of a run to a folder on an SFTP
+server: the invoices to the bank, the delivery notes to an EDI partner.
+Add one with **Add destination** on the Destinations page and pick
+**SFTP**. It has a name, the server and its port, the user, how to sign
+in, a folder, an optional test folder and three settings.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/destination-sftp-dark.png">
+    <img src="assets/destination-sftp-light.png" alt="The New destination dialog with SFTP picked is filled in for sftp.example.com as MYUSER, with the public key line of the key Spooldoc made and the folder /in/invoices. The Connection box below lists each step of the check: reached the host on port 22, the trusted ED25519 host key with its fingerprint, signed in as MYUSER with the key, and both folders found." width="900">
+  </picture>
+</p>
+
+**The server** is a host name or an IP address, such as
+`sftp.example.com`, without `sftp://`, a user or a port. The port is 22
+by default.
+
+### Signing in
+
+**Key Spooldoc makes** is the default. Spooldoc makes an Ed25519 key
+pair when you pick it, and the dialog shows the public key line with a
+Copy button:
+
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... spooldoc Invoices to bank
+```
+
+Add this line to `~/.ssh/authorized_keys` of the user on the server, or
+send it to the server's admin. The private key never leaves Spooldoc: it
+is stored encrypted and never sent to the browser. For a server that
+refuses Ed25519, **Make an RSA key instead** makes an RSA 4096 key. To
+change the key of a saved destination, open it and pick **Make a new
+key**. Runs use the new key once you save, so add it to the server
+first. The old key stays on the server until its admin removes it.
+
+**Your key** takes a private key you have: paste it, or pick **Choose
+file**. Spooldoc reads OpenSSH, PEM and PuTTY keys, with the passphrase
+when the key has one. Once saved, the dialog shows the key's type and
+fingerprint; leave the box empty to keep it.
+
+**Password** signs in with a password. Spooldoc also gives it when the
+server asks for it as a prompt (keyboard-interactive), as many servers
+do. The password is sent only to the server and user it was entered
+for: change the server, the port or the user, and the dialog asks for it
+again.
+
+### The host key
+
+Every SSH server has a host key, and Spooldoc trusts exactly one per
+destination. It never takes a key on its own.
+
+**Check connection** in the dialog connects and prints each step as it
+goes: the host and port it reached and how long that took, the host
+key, the sign-in and the folders. A new destination stops at **New host
+key**, before it signs in, so a password is never sent to a server
+Spooldoc does not know. The line shows the key's type and its
+fingerprint, as `ssh-keygen -l` prints it:
+
+```
+ED25519 256 SHA256:7Ld9b2qWm0rXo4TzVc8NfKe1Hs6JyPa3UgBiD5lQuE4
+```
+
+Compare it with the server's own before you trust it. On the server:
+
+```sh
+ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+Or from another machine:
+
+```sh
+ssh-keyscan -p 22 sftp.example.com | ssh-keygen -lf -
+```
+
+When they match, pick **Trust this key**. The check runs on, and the
+key shows as trusted. Save the destination to keep it. You can save
+before that, and the Destinations page then says "Host key not trusted
+yet"; a run fails at once and says what to do.
+
+**A changed host key** fails every run with both fingerprints: the one
+Spooldoc trusts and the one the server showed. If the server's admin
+changed it, open the destination, check the connection and pick
+**Trust the new key**. If not, do not: something may be between Spooldoc
+and the server. A change of the server or the port forgets the trusted
+key.
+
+### The folder
+
+**The folder** is on the server, such as `/in/invoices`. A folder that
+does not start with `/` is in the user's home folder.
+
+**Spooldoc never creates the folder.** When it does not exist, the run
+fails with "The folder /in/invoices does not exist on sftp.example.com",
+before any file is written. Check connection finds it, or says it is
+missing, before the first run.
+
+**Upload all files to** is the test folder, such as `/test/in`. While it
+is set, runs and Upload test write there instead, marked as a test, and
+the Destinations page and the destination step say "Test". An upload to
+the test folder does not count as uploaded, so taking the test folder
+out uploads every file again for real.
+
+**When a file with the same name exists**, the destination does one of
+three things, as the [IFS folder](#ifs-folder) does:
+
+| Setting | What happens |
+|---------|--------------|
+| Replace | The old file is replaced. This is the default. |
+| Fail the run | The run fails and says which file is in the way. Every name is checked first, so nothing is uploaded. |
+| Add a number | The file gets the first free number: `invoice-260101-2.pdf`, then `invoice-260101-3.pdf`. |
+
+When two files of one run have names that differ only in case, the
+second gets a number, so a server that ignores case keeps both.
+
+**Write each file under a temporary name first** is on by default. Each
+file is uploaded as `.invoice-260101.pdf.1a2b3c4d.part`, synced when the
+server can, and renamed when it is whole, so a program that watches the
+folder sees whole files only. Have it skip names that start with a dot.
+Replace uses the server's atomic rename (`posix-rename@openssh.com`,
+which OpenSSH has). On a server without it, the old file is renamed
+aside to a name that ends in `.old`, the new one renamed in, and the old
+one deleted; if the new one cannot take its place, the old one is put
+back. Turn the setting off for a server that refuses renames, or that
+picks up each file as soon as it is closed: some managed file transfer
+gateways do both. Each file is then uploaded under its own name.
+
+**Keep a copy in Spooldoc** is on by default, as for an IFS folder. The
+files can then be downloaded from the job log, even when the upload
+fails.
+
+### When the server is an IBM i
+
+An IBM i can be the SFTP server, through its SSH server:
+
+- Start it with `STRTCPSVR SERVER(*SSHD)`.
+- The user profile needs a home folder, such as
+  `CHGUSRPRF USRPRF(MYUSER) HOMEDIR('/home/MYUSER')`. The public key line
+  goes in `/home/MYUSER/.ssh/authorized_keys`.
+- The SSH server ignores a key file that others can change. Set
+  `chmod 755` on the home folder, `700` on `.ssh` and `600` on
+  `authorized_keys`.
+
+To deliver to the IBM i a job reads from, use an [IFS folder](#ifs-folder)
+destination instead: it tags each file with its CCSID, which SFTP cannot.
+
+### The folder view and Upload test
+
+In the job's destination step, beside the page group, the folder on the
+server is listed live: the folder runs write to, or the test folder in
+test mode. The page group's files are placed among the files already
+there, in the order the server sorts them, each tagged with what a run
+will do: New, Replaces the file from 14 Oct, Becomes
+`invoice-260101-2.pdf`, or Fails the run. Three files show on each side;
+a gap says how many it skips and opens 50 at a time. The listing is read
+once a minute, so stepping through page groups does not reconnect;
+refresh it with the button in its corner. A folder of more than 5,000
+files is read in part, and the view says so.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/sftp-step-dark.png">
+    <img src="assets/sftp-step-light.png" alt="The destination step of an invoice job uploads to SFTP. Beside the page group stepper, the test folder MYUSER@sftp.example.com:/test/in is listed with earlier invoices around invoice-260101.pdf, which Upload test has just uploaded, with its size and time. Below the listing, Upload test and the line Test: files go to /test/in." width="900">
+  </picture>
+</p>
+
+**Upload test** renders the page group from the draft and uploads its
+files to the test folder now, with the destination's same-name setting
+and temporary names. The rows turn solid as the files land, with their
+size and time. It records nothing in the job log. Without a test folder
+the button is off: set one on the destination first, so a test never
+lands where the receiver picks up files.
+
+### When an upload fails
+
+A run opens one connection and uploads the files one after the other.
+
+| What happens | What the run does |
+|--------------|-------------------|
+| The host is not found, refuses the connection, or does not answer within 20 seconds | Uploads nothing. Each file says "Not uploaded" and why. |
+| The host key is not trusted yet, or changed | Uploads nothing, and signs in to nothing. |
+| The server does not take the key or the password | Uploads nothing. With a key, the message says where the public key goes. |
+| The folder is missing or is a file | Uploads nothing. |
+| One file cannot be written, such as when the user may not write to the folder or a name is taken | That file fails; the others are still uploaded. |
+| The connection drops, or the server stops answering for 60 seconds | The files not tried yet say "Not uploaded" and why. |
+
+The run then fails with "Uploaded 5 of 6 files to /in/invoices on
+sftp.example.com" and the first reason, and the spooled file is not held,
+moved or deleted. The server's own text is under Details. The
+[job log](job-log.md#uploads) lists every file with where it went. After
+fixing the cause, [Retry](job-log.md#retry) uploads only the files that
+were not uploaded yet, so Add a number never makes a second copy.
+
 ## Writing a destination
 
 A destination is one small interface in
