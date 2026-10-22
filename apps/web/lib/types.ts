@@ -458,7 +458,7 @@ export interface SftpFolderView {
   pageGroup: number;
   pageGroups: number;
   /** The page group's files, as a run names them, with what a run does to each. */
-  files: { name: string; outcome: SftpOutcome }[];
+  files: { name: string; outcome: SftpOutcome; whole?: boolean }[];
   /** The files in the folder, sorted by name; at most `SFTP_LIST_LIMIT`. */
   entries: SftpEntryView[];
   /** The folder holds more entries than were read. */
@@ -470,7 +470,8 @@ export interface SftpFolderView {
 export interface SftpUploadTestView {
   folder: string;
   ms: number;
-  files: { name: string; finalName: string; size: number; ms: number; error?: string; detail?: string }[];
+  /** `whole` is a file of the whole spooled file, such as an Excel workbook of every page group. */
+  files: { name: string; finalName: string; size: number; ms: number; error?: string; detail?: string; whole?: boolean }[];
 }
 
 /** An item of Needs attention on Home, to dismiss or bring back. */

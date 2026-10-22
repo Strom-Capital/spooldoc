@@ -114,7 +114,10 @@ export function DestinationsPage() {
                       {destination.kind === 'sftp' ? (
                         <>
                           <div className="break-all font-mono text-xs">{sftpTarget(destination.config)}</div>
-                          <div className="text-muted-foreground text-xs">{text.how}</div>
+                          <div className="text-muted-foreground text-xs">
+                            {destination.config.port !== 22 && `Port ${destination.config.port}. `}
+                            {text.how}
+                          </div>
                           {text.test && (
                             <div className="flex items-center gap-1 text-amber-700 text-xs dark:text-amber-400">
                               <FlaskConicalIcon className="size-3.5 shrink-0" aria-hidden />

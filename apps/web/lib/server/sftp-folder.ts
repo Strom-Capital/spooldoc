@@ -5,7 +5,7 @@ import { redact } from '@spooldoc/ibmi';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { sftpConfigSchema, sftpTarget, type IfExists, type SftpConfig } from '@/lib/destination-config';
-import { FORMAT_FILES, perSpooledFile, templateFileName, type JobSpec } from '@/lib/job-spec';
+import { FORMAT_FILES, perSpooledFile, spooledFileName, templateFileName, type JobSpec } from '@/lib/job-spec';
 import type { SftpEntryView, SftpFolderView, SftpOutcome, SftpUploadTestView } from '@/lib/types';
 import { getDb } from './db';
 import { destinations } from './db/schema';
@@ -69,25 +69,28 @@ async function pickDestination(
 }
 
 /**
- * The names of a page group's files, as a run names them, without rendering: each
- * template of a page group in each of its formats, the first template's files named after
- * the document, the others after the template too.
+ * The names of the files a run uploads with a page group, as the runner names them,
+ * without rendering: each template of a page group in each of its formats, the first
+ * template's files named after the document, the others after the template too. Then the
+ * files of the whole spooled file, such as an Excel workbook of every page group, named
+ * after the spooled file: a run uploads them once, so every page group shows them.
  */
-export function pageGroupFileNames(spec: JobSpec, def: Definition, group: Record<string, unknown>, index: number, sample: Sample): string[] {
-  const base = fileNameFor(def, group, index, sample.splf.name.toLowerCase());
+export function pageGroupFileNames(spec: JobSpec, def: Definition, group: Record<string, unknown>, index: number, sample: Sample): { name: string; whole: boolean }[] {
   const names = new Set<string>();
-  const out: string[] = [];
-  for (const template of spec.render.templates) {
-    if (perSpooledFile(template)) continue;
+  const out: { name: string; whole: boolean }[] = [];
+  const add = (base: string, template: JobSpec['render']['templates'][number], whole: boolean) => {
     const name = templateFileName(base, spec.render.templates, template);
     for (const format of template.formats) {
       const extension = FORMAT_FILES[format].extension;
       let file = `${name}.${extension}`;
       for (let n = 2; names.has(file); n++) file = `${name}-${n}.${extension}`;
       names.add(file);
-      out.push(file);
+      out.push({ name: file, whole });
     }
-  }
+  };
+  const base = fileNameFor(def, group, index, sample.splf.name.toLowerCase());
+  for (const template of spec.render.templates) if (!perSpooledFile(template)) add(base, template, false);
+  for (const template of spec.render.templates) if (perSpooledFile(template)) add(spooledFileName(sample), template, true);
   return out;
 }
 
@@ -168,7 +171,8 @@ export async function sftpFolder(job: JobRow, input: z.infer<typeof sftpFolderSc
     listings.set(id, listing);
   }
 
-  const names = pageGroupFileNames(draft, def, groups[index]!, index, sample);
+  const named = pageGroupFileNames(draft, def, groups[index]!, index, sample);
+  const names = named.map((file) => file.name);
   const files: Pick<SftpEntry, 'name' | 'mtime'>[] = listing.entries.filter((entry) => !entry.folder);
   if (listing.truncated) {
     // A folder read in part may hold a name past the part read: look each one up.
@@ -199,7 +203,7 @@ export async function sftpFolder(job: JobRow, input: z.infer<typeof sftpFolderSc
     ifExists: config.ifExists,
     pageGroup: index,
     pageGroups: groups.length,
-    files: outcomes(names, files, config.ifExists).map((outcome, at) => ({ name: names[at]!, outcome })),
+    files: outcomes(names, files, config.ifExists).map((outcome, at) => ({ name: names[at]!, outcome, ...(named[at]!.whole ? { whole: true } : {}) })),
     entries: [...listing.entries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)).map(entryView),
     truncated: listing.truncated,
     readAt: new Date(listing.readAt).toISOString(),
@@ -232,12 +236,22 @@ export async function sftpUploadTest(job: JobRow, input: z.infer<typeof sftpFold
   let files;
   try {
     files = (await renderFiles(draft, def, groups, sample, { render, pageGroup: index })).files.filter((file) => file.pageGroupIndex === index);
+    // The files of the whole spooled file, such as an Excel workbook of every page group:
+    // a run uploads them with the page groups' files, so the test does too. Only those
+    // templates render here; the others make no file.
+    if (draft.render.templates.some(perSpooledFile)) {
+      const whole = { ...draft, render: { ...draft.render, templates: draft.render.templates.map((template) => (perSpooledFile(template) ? template : { ...template, formats: [] })) } };
+      files.push(...(await renderFiles(whole, def, groups, sample, { render })).files.filter((file) => file.pageGroupIndex === null));
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const detail = error instanceof StepError || isCarboneError(error) ? error.detail : undefined;
     return json({ error: `Could not render the files. ${message}`, ...(detail ? { detail } : {}) }, { status: isCarboneError(error) ? 503 : 422 });
   }
 
+  if (files.length === 0) {
+    return errorResponse(422, 'The templates make no files for this page group, so there is nothing to upload. Add a format to a template in the Render step.');
+  }
   const hidden = sftpSecretValues(secrets);
   const clean = (text: string) => redact(text, hidden);
   const started = performance.now();
@@ -258,7 +272,7 @@ export async function sftpUploadTest(job: JobRow, input: z.infer<typeof sftpFold
           }
           const result = await uploadFile(session, real, own[at]!, file.content, { ifExists: config.ifExists, tempName: config.tempName, avoid: used, first });
           used.add(key(result.finalName));
-          view.files.push({ name: file.name, finalName: result.finalName, size: file.content.byteLength, ms: Math.round(performance.now() - begun) });
+          view.files.push({ name: file.name, finalName: result.finalName, size: file.content.byteLength, ms: Math.round(performance.now() - begun), ...(file.pageGroupIndex === null ? { whole: true } : {}) });
         } catch (err) {
           const detail = err instanceof SftpError ? err.detail : undefined;
           view.files.push({

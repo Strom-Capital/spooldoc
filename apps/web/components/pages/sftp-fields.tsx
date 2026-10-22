@@ -242,21 +242,21 @@ function ConnectionBox({
                       {untrusted.type} {untrusted.bits}
                     </span>
                   </CheckLine>
-                  <div className="flex flex-col gap-1 pr-3 pl-[calc(0.75rem+0.875rem+0.5rem)]">
+                  <div className="flex min-w-0 flex-col gap-1 pr-3 pl-[calc(0.75rem+0.875rem+0.5rem)] [overflow-wrap:anywhere]">
                     {changed && untrusted.trustedFingerprint && (
-                      <div className="text-destructive">
+                      <div className="min-w-0 break-all text-destructive">
                         <span className="font-sans">Trusted </span>
                         {untrusted.trustedFingerprint}
                       </div>
                     )}
-                    <div className={cn(changed && 'text-destructive')}>
+                    <div className={cn('min-w-0 break-all', changed && 'text-destructive')}>
                       {changed && <span className="font-sans">Now </span>}
                       {untrusted.fingerprint}
                     </div>
                     {view?.compare && (
                       <div className="flex min-w-0 items-center gap-1 font-sans text-muted-foreground">
                         <span className="min-w-0">
-                          Compare it on the server: <code className="font-mono text-foreground">{view.compare}</code>
+                          Compare it on the server: <code className="break-all font-mono text-foreground">{view.compare}</code>
                         </span>
                         <CopyButton text={view.compare} label="Copy the command" hint="Copy the command to the clipboard" className="shrink-0" />
                       </div>

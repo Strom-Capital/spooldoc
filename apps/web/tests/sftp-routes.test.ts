@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { SftpConfig } from '@/lib/destination-config';
-import { emptySpec } from '@/lib/job-spec';
+import { emptySpec, type JobSpec } from '@/lib/job-spec';
 import { destinations, jobs, runDeliveries } from '@/lib/server/db/schema';
 import { openSftpSecrets, sealSftpSecrets } from '@/lib/server/destinations/sftp';
 import { storeSample } from '@/lib/server/samples';
@@ -202,7 +202,7 @@ describe('adding and changing an SFTP destination', () => {
 });
 
 describe('the step folder view and Upload test', { timeout: 30_000 }, () => {
-  async function sftpJob(change: Partial<SftpConfig> = {}): Promise<{ jobId: string; destinationId: string }> {
+  async function sftpJob(change: Partial<SftpConfig> = {}, templates?: (base: JobSpec['render']['templates']) => JobSpec['render']['templates']): Promise<{ jobId: string; destinationId: string }> {
     const serverId = await insertServer();
     const sample = await storeSample(serverId, { sample: loadSample('invoice'), warnings: [] });
     const key = await makeKey();
@@ -217,7 +217,12 @@ describe('the step folder view and Upload test', { timeout: 30_000 }, () => {
       })
       .returning();
     const base = emptySpec({ serverId, library: 'MYLIB', queue: 'MYOUTQ', destinationId: destination!.id });
-    const draft = { ...base, extract: { definition: fixtureText('invoice', 'definition.yaml') }, preview: { sampleId: sample.id } };
+    const draft = {
+      ...base,
+      extract: { definition: fixtureText('invoice', 'definition.yaml') },
+      preview: { sampleId: sample.id },
+      render: { ...base.render, templates: templates ? templates(base.render.templates) : base.render.templates },
+    };
     const [job] = await db().insert(jobs).values({ name: 'MYJOB', draft }).returning();
     return { jobId: job!.id, destinationId: destination!.id };
   }
@@ -281,5 +286,31 @@ describe('the step folder view and Upload test', { timeout: 30_000 }, () => {
     // In test mode the view lists the test folder.
     const view = await folder(jobId, { pageGroupIndex: 2 });
     expect(view.view).toMatchObject({ testMode: true, folder: '/test/in', files: [{ name: 'invoice-260103.pdf', outcome: { kind: 'replaces' } }] });
+  });
+
+  const workbook = { id: 'lines', name: 'Lines', kind: 'xlsx' as const, fileId: null, scope: 'splf' as const, formats: ['xlsx' as const] };
+
+  it('places and uploads the workbook of the whole spooled file when it is the only template', async () => {
+    const { jobId } = await sftpJob({ testFolder: '/test/in' }, () => [workbook]);
+    const view = await folder(jobId, { pageGroupIndex: 3 });
+    expect(view.view.files).toEqual([{ name: 'spdinvoice.xlsx', outcome: { kind: 'new' }, whole: true }]);
+    const result = await uploadTest(jobId, { pageGroupIndex: 3 });
+    expect(result.status).toBe(200);
+    expect(result.view.files).toEqual([expect.objectContaining({ name: 'spdinvoice.xlsx', finalName: 'spdinvoice.xlsx', whole: true })]);
+    expect(server.names('/test/in')).toEqual(['spdinvoice.xlsx']);
+  });
+
+  it('places the workbook of the whole spooled file after the page group files, on every page group', async () => {
+    const { jobId } = await sftpJob({ testFolder: '/test/in' }, (templates) => [...templates, workbook]);
+    for (const pageGroupIndex of [0, 5]) {
+      const view = await folder(jobId, { pageGroupIndex });
+      expect(view.view.files.map((file) => [file.name, file.whole === true])).toEqual([
+        [`invoice-26010${pageGroupIndex + 1}.pdf`, false],
+        ['spdinvoice-lines.xlsx', true],
+      ]);
+    }
+    const result = await uploadTest(jobId, { pageGroupIndex: 0 });
+    expect(result.view.files.map((file) => file.finalName)).toEqual(['invoice-260101.pdf', 'spdinvoice-lines.xlsx']);
+    expect(server.names('/test/in')).toEqual(['invoice-260101.pdf', 'spdinvoice-lines.xlsx']);
   });
 });

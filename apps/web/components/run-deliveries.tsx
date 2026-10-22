@@ -156,7 +156,7 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 font-medium">Document</th>
+                <th className="px-3 py-2 font-medium">{upload ? 'File' : 'Document'}</th>
                 <th className="w-px whitespace-nowrap px-3 py-2 font-medium">Status</th>
                 <th className="hidden w-px whitespace-nowrap px-3 py-2 text-right font-medium sm:table-cell">Time</th>
               </tr>

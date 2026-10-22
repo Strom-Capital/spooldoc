@@ -29,13 +29,19 @@ const EXPAND = 50;
 const LAND_MS = 120;
 
 /** A row of the folder: a file already there, or a file of the page group with what a run does to it. */
-type Row = { kind: 'entry'; name: string; entry: SftpEntryView } | { kind: 'own'; name: string; file: string; outcome: SftpOutcome };
+type Row = { kind: 'entry'; name: string; entry: SftpEntryView } | { kind: 'own'; name: string; file: string; outcome: SftpOutcome; whole: boolean };
 
 const byName = (a: { name: string }, b: { name: string }) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
 
 /** The folder's rows in the order the server sorts them, with the page group's files placed among them. */
 function folderRows(view: SftpFolderView): Row[] {
-  const own: Row[] = view.files.map((file) => ({ kind: 'own', name: file.outcome.kind === 'becomes' ? file.outcome.name : file.name, file: file.name, outcome: file.outcome }));
+  const own: Row[] = view.files.map((file) => ({
+    kind: 'own',
+    name: file.outcome.kind === 'becomes' ? file.outcome.name : file.name,
+    file: file.name,
+    outcome: file.outcome,
+    whole: file.whole === true,
+  }));
   // A file a run replaces, or that fails it, is the page group's row.
   const merged = new Set(view.files.filter((file) => file.outcome.kind === 'replaces' || file.outcome.kind === 'fails').map((file) => file.name.toLowerCase()));
   const entries: Row[] = view.entries.filter((entry) => !merged.has(entry.name.toLowerCase())).map((entry) => ({ kind: 'entry', name: entry.name, entry }));
@@ -149,6 +155,7 @@ function FolderRow({ row, landed }: { row: Row; landed: SftpUploadTestView['file
       </span>
       <span className={cn('min-w-0 flex-1 font-sans', fails || landed?.error ? 'text-destructive' : 'text-primary')}>
         {landed?.error ? 'Failed' : done ? 'Uploaded' : outcomeText(row.outcome)}
+        {row.whole && <span className="ml-2 text-muted-foreground">Of the whole spooled file</span>}
       </span>
       {done && (
         <span className="tabular shrink-0 font-sans text-muted-foreground">
@@ -227,6 +234,9 @@ function FolderBox({
       />
       <div className="flex flex-col py-2">
         {empty && <p className="px-3 pb-1 font-sans text-muted-foreground">The folder is empty.</p>}
+        {view.files.length === 0 && (
+          <p className="px-3 pb-1 font-sans text-muted-foreground">The templates make no files for this page group, so a run uploads nothing.</p>
+        )}
         {out.map((item) =>
           item.kind === 'gap' ? (
             <div key={`gap${item.start}`} className="flex min-h-5 items-center border-transparent border-l-2 px-3 font-sans">
