@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { docsHeadings, docsHref, docsImageSize, docsNav, docsPage, docsSections, rewriteDocsMarkdown } from '../src/index.js';
 import type { DocsOptions } from '../src/index.js';
+import { linear, TIMING } from './helpers/linear.js';
 
 const folder = fileURLToPath(new URL('../../../docs', import.meta.url));
 const options: DocsOptions = { folder, repository: 'https://github.com/Strom-Capital/spooldoc', version: '1.2.3' };
@@ -159,33 +160,44 @@ describe('docs', () => {
     expect(tags?.text).not.toMatch(/\]\(|<\w/);
   });
 
-  it('reads long hostile text in linear time', () => {
+  it('reads long hostile text in linear time', TIMING, () => {
     const hostile = [
-      '['.repeat(50000),
-      '[]('.repeat(50000),
-      '](]('.repeat(50000),
-      '<'.repeat(50000),
-      '\n'.repeat(50000) + 'x',
-      `| ${' '.repeat(50000)}x`,
-      `- ${'\n'.repeat(50000)}x`,
-      `a: ${' '.repeat(50000)}\r`,
+      (n: number) => '['.repeat(n),
+      (n: number) => '[]('.repeat(n),
+      (n: number) => '](]('.repeat(n),
+      (n: number) => '<'.repeat(n),
+      (n: number) => '\n'.repeat(n) + 'x',
+      (n: number) => `| ${' '.repeat(n)}x`,
+      (n: number) => `- ${'\n'.repeat(n)}x`,
+      (n: number) => `a: ${' '.repeat(n)}\r`,
     ];
-    const started = performance.now();
     expect(docsHeadings('# a' + ' '.repeat(50000) + 'b')).toEqual([{ depth: 1, text: 'a' + ' '.repeat(50000) + 'b', id: expect.any(String) }]);
     expect(docsHeadings('# a' + ' '.repeat(50000) + '#'.repeat(50000) + ' '.repeat(50000))[0]?.text).toBe('a');
     expect(docsHeadings('# ' + '['.repeat(50000))).toHaveLength(1);
-    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'spooldoc-docs-'));
-    try {
+    linear((n) => '# a' + ' '.repeat(n) + 'b', docsHeadings, 51_200);
+    linear((n) => '# a' + ' '.repeat(n) + '#'.repeat(n) + ' '.repeat(n), docsHeadings, 51_200);
+    linear((n) => '# ' + '['.repeat(n), docsHeadings, 51_200);
+    const temps: string[] = [];
+    /** A docs folder with one page of every hostile text. */
+    const folderOf = (n: number): DocsOptions => {
+      const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'spooldoc-docs-'));
+      temps.push(temp);
       fs.writeFileSync(path.join(temp, 'README.md'), '## Group\n\n| [Page](page.md) | A page |\n');
-      fs.writeFileSync(path.join(temp, 'page.md'), `---\ntitle: Page\ndescription: A page\n---\n\n${hostile.join('\n\n')}\n`);
-      const local: DocsOptions = { ...options, folder: temp };
-      expect(docsSections(local).length).toBeGreaterThan(0);
+      fs.writeFileSync(path.join(temp, 'page.md'), `---\ntitle: Page\ndescription: A page\n---\n\n${hostile.map((text) => text(n)).join('\n\n')}\n`);
+      return { ...options, folder: temp };
+    };
+    try {
+      expect(docsSections(folderOf(50000)).length).toBeGreaterThan(0);
       for (const text of hostile) {
-        rewriteDocsMarkdown(text, local);
+        linear(text, (markdown) => rewriteDocsMarkdown(markdown, options), 51_200);
       }
+      // A new version for each call, so docsPage reads the page again instead of taking it from its cache.
+      let version = 0;
+      linear(folderOf, (local) => docsSections({ ...local, version: String(version++) }), 51_200);
     } finally {
-      fs.rmSync(temp, { recursive: true, force: true });
+      for (const temp of temps) {
+        fs.rmSync(temp, { recursive: true, force: true });
+      }
     }
-    expect(performance.now() - started).toBeLessThan(2000);
   });
 });

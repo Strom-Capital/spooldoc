@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cssPageSize, pageLayout } from "../src/pagesize.js";
+import { linear, TIMING } from "./helpers/linear.js";
 
 const page = (rule: string) => `<html><head><style>${rule} body { margin: 0 }</style></head><body></body></html>`;
 
@@ -27,15 +28,17 @@ describe("pageLayout", () => {
     expect(cssPageSize(page("@page :first { size: landscape }"))).toBeUndefined();
   });
 
-  it("skips commented-out rules, and stays fast on many unclosed comments", () => {
+  it("skips commented-out rules, and stays fast on many unclosed comments", TIMING, () => {
     expect(cssPageSize("<style>/* @page { size: A4 landscape } */ @page { size: A4 } /* x */</style>")).toBe("A4");
     expect(cssPageSize("<style>@page { size: A4 } /* not closed @page { size: A3 }</style>")).toBe("A3");
     expect(cssPageSize("<style>İİ @PAGE { margin: 1cm; Size: A4 landscape !important; size: A3 }</style>")).toBe("A4 landscape");
-    const started = performance.now();
     expect(cssPageSize("/*".repeat(100_000))).toBeUndefined();
     expect(cssPageSize("@page{{|".repeat(100_000))).toBeUndefined();
     expect(cssPageSize(`@page { size: ${"9".repeat(100_000)}x 1mm }`)).toBe(`${"9".repeat(100_000)}x 1mm`);
     expect(pageLayout(`<style>@page { size: ${"9".repeat(100_000)}x 1mm }</style>`).landscape).toBe(false);
-    expect(performance.now() - started).toBeLessThan(1000);
+    linear((n) => "/*".repeat(n), cssPageSize, 102_400);
+    linear((n) => "@page{{|".repeat(n), cssPageSize, 102_400);
+    linear((n) => `@page { size: ${"9".repeat(n)}x 1mm }`, cssPageSize, 102_400);
+    linear((n) => `<style>@page { size: ${"9".repeat(n)}x 1mm }</style>`, pageLayout, 102_400);
   });
 });

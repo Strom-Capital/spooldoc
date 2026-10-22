@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { classifyError, ConnectionError, guidance, isConnectionLost, messageIdOf, redact, summarize, toConnectionError } from "../src/index.js";
+import { linear, TIMING } from "./helpers/linear.js";
 
 const PASSWORD = "s3cret!Pw";
 
@@ -226,70 +227,31 @@ describe("helpers", () => {
   });
 });
 
-/** The checks count CPU time, so a busy runner only makes them slower on the clock. */
-describe("long error texts", { timeout: 30_000 }, () => {
+describe("long error texts", TIMING, () => {
   const N = 6_400;
-  const PARTS = 64;
-  /**
-   * The CPU time of one run, in ms. Unlike the time on the clock, it leaves out the
-   * time the test waits while other work on the runner has the CPU.
-   */
-  const time = (fn: () => unknown): number => {
-    const started = process.cpuUsage();
-    fn();
-    const { user, system } = process.cpuUsage(started);
-    return (user + system) / 1000;
-  };
-  /**
-   * Expects `fn` to take linear time in the length of its input, whatever the speed of
-   * the machine. One call on the whole input is timed against 64 calls on a 64th of
-   * it, so both do the same work: a linear search takes about as long either way, a
-   * quadratic one 64 times as long on the whole input. It may take at most eight times
-   * as long, which leaves noise room on both sides. Both inputs run once first, so
-   * warming up does not count. The runs take turns and the shortest of each counts,
-   * so garbage collection in one run does not count. Times under 1 ms count as 1 ms.
-   */
-  const linear = <T>(input: (n: number) => T, fn: (text: T) => unknown): void => {
-    const small = input(N / PARTS);
-    const large = input(N);
-    fn(small);
-    fn(large);
-    let whole = Infinity;
-    let parts = Infinity;
-    for (let run = 0; run < 5; run++) {
-      whole = Math.min(whole, time(() => fn(large)));
-      parts = Math.min(
-        parts,
-        time(() => {
-          for (let part = 0; part < PARTS; part++) fn(small);
-        }),
-      );
-    }
-    expect(whole / Math.max(parts, 1)).toBeLessThan(8);
-  };
 
   it("reads an exception line with many spaces after the colon in linear time", () => {
-    linear((n) => `a.AError:${" ".repeat(n)}`, summarize);
+    linear((n) => `a.AError:${" ".repeat(n)}`, summarize, N);
     expect(summarize("java.io.IOException:   inner text")).toBe("inner text");
   });
 
   it("looks for an object name in linear time", () => {
-    linear((n) => "#".repeat(n), (text) => guidance("notfound", text));
-    linear((n) => "#".repeat(n), (text) => guidance("authority", text));
+    linear((n) => "#".repeat(n), (text) => guidance("notfound", text), N);
+    linear((n) => "#".repeat(n), (text) => guidance("authority", text), N);
     expect(guidance("notfound", "CPF2105 Object MYOUTQ in MYLIB type *OUTQ not found.", undefined, {})).toMatch(/^Output queue MYLIB\/MYOUTQ does not exist/);
   });
 
   it("looks for a disabled profile in linear time", () => {
     const text = (n: number) => "profile ".repeat(n);
-    linear(text, (t) => classifyError(t));
-    linear(text, (t) => classifyError(t, "IFS /home/docs/out"));
-    linear(text, (t) => guidance("auth", t));
+    linear(text, (t) => classifyError(t), N);
+    linear(text, (t) => classifyError(t, "IFS /home/docs/out"), N);
+    linear(text, (t) => guidance("auth", t), N);
     expect(classifyError("User profile DEMOUSER is disabled.")).toBe("auth");
     expect(guidance("auth", "The profile DEMOUSER is disabled.", undefined, { user: "demouser" })).toMatch(/^The user profile DEMOUSER is disabled/);
   });
 
   it("looks for an unknown user profile in linear time", () => {
-    linear((n) => "user profile ".repeat(n), (text) => guidance("auth", text));
+    linear((n) => "user profile ".repeat(n), (text) => guidance("auth", text), N);
     expect(guidance("auth", "User profile DEMOUSER not found.", undefined, { user: "demouser", host: "ibmi.example.com" })).toBe(
       "There is no user profile DEMOUSER on ibmi.example.com. Check the user on the Servers page.",
     );
