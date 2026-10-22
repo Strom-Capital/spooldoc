@@ -63,11 +63,23 @@ export const ASSET_TAG = /\{asset\(\s*(['"])([^'"{}]*)\1\s*\)\}/g;
 
 const MAX_TAG = 1000;
 
-/** The 1-based line of an index in `text`. */
-function lineAt(text: string, index: number): number {
-  let line = 1;
-  for (let i = text.indexOf("\n"); i !== -1 && i < index; i = text.indexOf("\n", i + 1)) line++;
-  return line;
+/**
+ * Finds the 1-based line of an index in `text`. It reads the newlines once, so a
+ * template with many problems takes linear time, not one scan of the text per problem.
+ */
+function lineFinder(text: string): (index: number) => number {
+  const newlines: number[] = [];
+  for (let i = text.indexOf("\n"); i !== -1; i = text.indexOf("\n", i + 1)) newlines.push(i);
+  return (index) => {
+    let low = 0;
+    let high = newlines.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (newlines[mid]! < index) low = mid + 1;
+      else high = mid;
+    }
+    return low + 1;
+  };
 }
 
 /** A short version of a snippet for a message. */
@@ -342,8 +354,9 @@ export function tagProblems(text: string, known: Set<string> | undefined, option
  */
 export function checkTemplate(template: string, def?: Definition | null, options: CheckOptions = {}): TemplateProblem[] {
   const problems: TemplateProblem[] = [];
+  const lineAt = lineFinder(template);
   const add = (index: number, message: string): void => {
-    problems.push({ line: lineAt(template, index), message });
+    problems.push({ line: lineAt(index), message });
   };
 
   const spans = nunjucksSpans(template);
