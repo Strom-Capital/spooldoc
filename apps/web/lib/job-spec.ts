@@ -136,6 +136,19 @@ export function perSpooledFile(template: TemplateContent): boolean {
   return template.kind === 'xlsx' && template.scope === 'splf';
 }
 
+/**
+ * Which emails a run sends, as the email destination decides: one for the whole spooled
+ * file when Attach picks a format of one of its templates, and one per page group when
+ * Attach picks a format of a page group template, or no format of the whole spooled file
+ * either. So with Attach empty, each page group gets the message alone.
+ */
+export function emailDocuments(templates: JobTemplate[], attach: Format[]): { pageGroups: boolean; spooledFile: boolean } {
+  const picked = (template: JobTemplate) => template.formats.some((format) => attach.includes(format));
+  const spooledFile = templates.some((template) => perSpooledFile(template) && picked(template));
+  const pageGroups = !spooledFile || templates.some((template) => !perSpooledFile(template) && picked(template));
+  return { pageGroups, spooledFile };
+}
+
 const templateFields = {
   id: z.string().regex(TEMPLATE_ID, 'Use lowercase letters, digits and dashes for a template id'),
   name: z.string().trim().min(1, 'Name the template').max(40, 'Use at most 40 characters for a template name'),

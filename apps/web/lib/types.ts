@@ -336,9 +336,12 @@ export interface EmailSegment {
 
 /** The email of one document of the preview spooled file, as the job's destination step shows it. Nothing is sent. */
 export interface EmailPreviewView {
-  /** The page group shown, 0-based, and how many there are. */
-  pageGroup: number;
+  /** The page group shown, 0-based, or null for the email of the whole spooled file; and how many page groups there are. */
+  pageGroup: number | null;
   pageGroups: number;
+  /** Whether the run sends an email per page group, and one of the whole spooled file. */
+  pageGroupEmails: boolean;
+  spooledFileEmail: boolean;
   /** The document's file name without extension. */
   document: string;
   /** The From of every email, from Settings; null when no mail server is set. */
@@ -358,6 +361,8 @@ export interface EmailPreviewView {
   testAddress: string | null;
   /** Why this email would not be sent, such as an empty address. */
   problems: string[];
+  /** What to know about this email that is not a problem, such as page groups getting no email. */
+  notices: string[];
   /** Tags of any field that are not fields of the definition, with a hint. */
   unknownTags: string[];
   /** The fields an email can read, such as `pg.invoiceNo`, with their value in this page group, for Insert field. */

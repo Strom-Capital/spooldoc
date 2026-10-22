@@ -180,7 +180,10 @@ one. From is always the address in Settings.
 Beside the fields, the step shows the email of one page group as it will
 be sent: From, To, Subject, the files and the message. Previous and Next
 step through the page groups, so you can watch To and Subject change from
-customer to customer. Nothing is sent from the preview.
+customer to customer. When the run also sends an email for the whole
+spooled file, Next after the last page group shows that one, filled in
+from `{d.splf...}`. When page groups get no email, the preview shows only
+the whole spooled file's email. Nothing is sent from the preview.
 
 <p align="center">
   <picture>
@@ -204,7 +207,9 @@ email of their own, and only when Attach picks their format. That email
 has no page group, so its fields can read only `{d.splf...}`. When Attach
 picks only formats of the whole spooled file, that one email is all the
 run sends: the page groups get no email, since it would have no file, and
-the preview says so. With Attach empty, each page group still gets its
+the preview says so. The whole spooled file's email always has the
+message written under **Message**, since a message template makes one
+page group's message. With Attach empty, each page group still gets its
 email, with nothing attached. A copy of
 every file is kept in Spooldoc, so the job log can show what was mailed.
 Through Microsoft 365, each file can be up to 3 MB and the whole email up
