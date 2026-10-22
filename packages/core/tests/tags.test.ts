@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { checkTemplate, nunjucksSpans, problemText, renamedRootProblem, templatePaths, templateTags, templateUses } from "../src/tags.js";
 import { FIXTURES, loadFixture } from "./helpers/fixtures.js";
+import { linear, TIMING } from "./helpers/linear.js";
 
 const { definition } = loadFixture("invoice");
 const page = (body: string) => `<!doctype html>\n<html>\n<body>\n${body}\n</body>\n</html>`;
@@ -76,6 +77,10 @@ describe("checkTemplate", () => {
   it("writes problems one per line", () => {
     expect(problemText([{ line: 3, message: "A." }, { line: 9, message: "B." }])).toBe("Line 3: A.\nLine 9: B.");
   });
+
+  it("finds the line of each problem in a long template on one line in linear time", TIMING, () => {
+    linear((n) => `${"{#".repeat(n)}${"<p>x</p>".repeat(8 * n)}`, (template) => checkTemplate(template, null), 6_400);
+  });
 });
 
 describe("templateTags and templateUses", () => {
@@ -128,12 +133,12 @@ describe("nunjucksSpans", () => {
     ]);
   });
 
-  it("stays fast on many openers without a closer", () => {
-    const started = performance.now();
+  it("stays fast on many openers without a closer", TIMING, () => {
     for (const opener of ["{{", "{%", "{#", "{{{{a"]) {
       expect(nunjucksSpans(opener.repeat(50_000))).toEqual([]);
       expect(checkTemplate(`${opener.repeat(50_000)}{{ doc.a }}`, null).length).toBeGreaterThan(0);
+      linear((n) => opener.repeat(n), nunjucksSpans, 51_200);
+      linear((n) => `${opener.repeat(n)}{{ doc.a }}`, (template) => checkTemplate(template, null), 12_800);
     }
-    expect(performance.now() - started).toBeLessThan(1000);
   });
 });
