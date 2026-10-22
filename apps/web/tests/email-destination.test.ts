@@ -2,8 +2,9 @@ import { createServer, type AddressInfo, type Socket } from 'node:net';
 import { eq } from 'drizzle-orm';
 import nodemailer, { type SendMailOptions } from 'nodemailer';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { emailSpecSchema, emptySpec, type EmailSpec, type JobSpec } from '@/lib/job-spec';
+import { emailSpecSchema, emptySpec, splfKey as splfKeyOf, type EmailSpec, type JobSpec } from '@/lib/job-spec';
 import { destinations, jobs, jobVersions, runDeliveries, runs, settings } from '@/lib/server/db/schema';
+import { setEmailLockWait } from '@/lib/server/destinations/email';
 import { addressList, addressProblems, composeEmail, emailSpecProblems, htmlToText, inlineHtml } from '@/lib/server/email-message';
 import { mailErrorText, mailSender, setMailSender, stopsSending, updateMail, type SmtpServer } from '@/lib/server/mail';
 import { runJob } from '@/lib/server/runner';
@@ -11,7 +12,7 @@ import { runViews } from '@/lib/server/runs';
 
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, GOOD_PASSWORD, loadSample } from './helpers/fake-connection';
-import { db, insertServer } from './helpers/fixtures';
+import { db, insertServer, testDb } from './helpers/fixtures';
 
 const data = { pg: { email: 'buyer@example.com', invoiceNo: '260101', empty: '', contact: 'J. SMITH' }, splf: { name: 'SPDINVOICE' } };
 const spec = (change: Partial<EmailSpec> = {}): EmailSpec => emailSpecSchema.parse({ to: '{d.pg.email}', ...change });
@@ -270,17 +271,21 @@ describe('the email destination in a run', () => {
   let sent: SendMailOptions[];
   /** Recipients the stand-in mail server refuses. */
   let refused: Set<string>;
+  /** How long the stand-in mail server takes to take each email. */
+  let delayMs: number;
 
   beforeEach(async () => {
     await resetTables(db());
     serverId = await insertServer();
     sent = [];
     refused = new Set();
+    delayMs = 0;
     await updateMail({ host: 'smtp.example.com', port: 587, security: 'starttls', user: 'mailer', password: 'mail-Passw0rd', from: 'invoices@example.com', fromName: 'Example Co' });
     const json = nodemailer.createTransport({ jsonTransport: true });
     setMailSender(() => ({
       async sendMail(message) {
         const to = (message.to as string[])[0]!;
+        if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
         if (refused.has(to)) throw Object.assign(new Error('Can not send mail'), { code: 'EENVELOPE', command: 'RCPT TO', responseCode: 550, rejected: [to], response: '550 5.1.1 User unknown' });
         sent.push(message);
         return json.sendMail(message);
@@ -288,7 +293,10 @@ describe('the email destination in a run', () => {
     }));
   });
 
-  afterEach(() => setMailSender(null));
+  afterEach(() => {
+    setMailSender(null);
+    setEmailLockWait(null);
+  });
 
   /** An invoice job with an active version that emails each invoice to `<customerNo>@example.com` and holds the file. */
   async function emailJob(
@@ -384,6 +392,57 @@ describe('the email destination in a run', () => {
     const [row] = await db().select().from(runs).where(eq(runs.id, runId));
     return row!.steps.find((step) => step.step === 'deliver')?.note;
   };
+
+  it('sends every email to the test address, even the ones a real run sent, and a later real run still skips those', async () => {
+    const { jobId } = await emailJob();
+    const conn = new FakeConnection();
+    const first = await run(jobId, conn);
+    expect(sent).toHaveLength(6);
+
+    await db().update(destinations).set({ config: { testAddress: 'you@example.com' } }).where(eq(destinations.kind, 'email'));
+    sent = [];
+    const test = await run(jobId, conn);
+    expect(sent.map((message) => message.to)).toEqual(Array(6).fill(['you@example.com']));
+    expect(await deliverNote(test)).toBe('Sent 6 emails to the test address you@example.com');
+    const deliveries = await db().select().from(runDeliveries).where(eq(runDeliveries.runId, test));
+    expect(deliveries.map((d) => [d.status, d.test])).toEqual(Array(6).fill(['sent', true]));
+
+    await db().update(destinations).set({ config: { testAddress: null } }).where(eq(destinations.kind, 'email'));
+    sent = [];
+    const [firstRun] = await db().select().from(runs).where(eq(runs.id, first));
+    const last = await run(jobId, conn);
+    expect(sent).toHaveLength(0);
+    expect(await deliverNote(last)).toBe(`Sent 0 emails, 6 were sent in run #${firstRun!.seq}`);
+  });
+
+  it('sends each email once when two runs of the job deliver the same spooled file at the same time', async () => {
+    const { jobId } = await emailJob();
+    setEmailLockWait({ limitMs: 30_000, pollMs: 10 });
+    delayMs = 5;
+    const conn = new FakeConnection();
+    const [one, two] = await Promise.all([run(jobId, conn), run(jobId, conn)]);
+    expect(sent.map((message) => message.to)).toEqual(['10001', '10003', '10002', '10004', '10008', '10006'].map((n) => [`${n}@example.com`]));
+    const statuses = async (runId: string) => (await db().select().from(runDeliveries).where(eq(runDeliveries.runId, runId))).map((d) => d.status);
+    expect([await statuses(one), await statuses(two)]).toContainEqual(Array(6).fill('sent'));
+    expect([await statuses(one), await statuses(two)]).toContainEqual(Array(6).fill('already_sent'));
+  });
+
+  it('fails the deliver step, sending nothing, when another run keeps sending email for the spooled file too long', async () => {
+    const { jobId } = await emailJob();
+    setEmailLockWait({ limitMs: 30, pollMs: 10 });
+    const release = await testDb().locks.tryLock(`email:${jobId}:${splfKeyOf(sample.splf)}`);
+    try {
+      const conn = new FakeConnection();
+      const runId = await run(jobId, conn);
+      const [row] = await db().select().from(runs).where(eq(runs.id, runId));
+      expect(row!.status).toBe('failed');
+      expect(row!.error).toBe('Another run of this job is sending email for this spooled file. Retry when it has finished.');
+      expect(sent).toHaveLength(0);
+      expect(conn.actions()).toEqual([]);
+    } finally {
+      await release?.();
+    }
+  });
 
   it('records the creation time and pages of each email, and a plain Retry sends none again', async () => {
     const { jobId } = await emailJob();

@@ -141,9 +141,11 @@ every job that uses the destination goes only there. Cc and Bcc are
 dropped, the subject starts with `[Test]`, and a line at the top of the
 message names the addresses it would have gone to, and the Cc. The
 preview in the job shows Cc and Bcc struck through, as not sent in a
-test. A new email
-destination starts with your own address there, so you can try a job
-before any customer gets an email. The Destinations page shows
+test. Every document is sent to the test address, even one an earlier
+run already sent for real, so you can check a template change on a
+spooled file that was delivered. A new email destination starts with
+your own address there, so you can try a job before any customer gets
+an email. The Destinations page shows
 "Test: all email goes to you@example.com" while it is set. Empty it to
 send to the addresses each job sets.
 
@@ -238,7 +240,14 @@ document the same pages and name. So a new spooled file whose job number
 the IBM i reused, or a newer job version that groups the pages another
 way, sends its emails again. An email sent to the
 test address does not count as sent, so taking the test address out sends
-every email for real.
+for real every email that was not sent for real yet.
+
+One run at a time sends email for a job and spooled file. When Retry or
+Run now starts while another run is still sending, it waits for that run
+to finish, then sends only what is left. After 5 minutes it stops
+waiting, and the run fails with "Another run of this job is sending
+email for this spooled file. Retry when it has finished." Nothing is sent
+twice.
 
 Errors of the mail server say what to check: a refused sign-in, a host
 or port that cannot be reached, a TLS setting that does not match the
