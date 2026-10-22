@@ -205,7 +205,10 @@ export const NO_MAIL_SERVER = 'No mail server is set. Set one in Settings, under
 
 /**
  * A sender for the mail server: one SMTP connection per run or test, closed by `close`,
- * or Microsoft Graph as the mailbox in From, with a cached token.
+ * or Microsoft Graph as the mailbox in From, with a cached token. The SMTP connection is
+ * pooled, so a run signs in once instead of once per email. A refused recipient resets the
+ * session and the connection goes on; other errors close it, and the next email opens a
+ * new one. After 100 emails the pool opens a fresh connection.
  */
 export function mailSender(server: MailServer): MailSender {
   if (override) return override(server);
@@ -214,6 +217,8 @@ export function mailSender(server: MailServer): MailSender {
     return { sendMail: (message) => graphSendMail(account, message) };
   }
   return nodemailer.createTransport({
+    pool: true,
+    maxConnections: 1,
     host: server.host,
     port: server.port,
     secure: server.security === 'tls',

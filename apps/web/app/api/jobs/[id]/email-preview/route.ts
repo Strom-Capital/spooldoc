@@ -101,8 +101,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const to = addressList(email.to, data, formatting).addresses;
   const { html } = messageBody({ spec: email, data, templateHtml, wouldGoTo: testAddress ? to : null, formatting });
   const subject = email.subject.trim() ? expandSegments(email.subject, data, formatting) : [{ text: emailSubject(email, data, document, false, formatting) }];
-  const problems = addressProblems(email, data, formatting).map((problem) => `Page group ${index + 1}: ${problem}. This email will fail.`);
-
   const attachments = draft.render.templates
     .filter((t) => !perSpooledFile(t))
     .flatMap((t) =>
@@ -110,6 +108,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         .filter((format) => email.attach.includes(format))
         .map((format) => ({ name: `${templateFileName(document, draft.render.templates, t)}.${FORMAT_FILES[format].extension}`, format })),
     );
+  // As a run decides: a page group gets no email when Attach picks files of the whole spooled file but none of its own.
+  const wholeOnly = attachments.length === 0 && draft.render.templates.some((t) => perSpooledFile(t) && t.formats.some((format) => email.attach.includes(format)));
+  const problems = wholeOnly
+    ? ['Page groups get no email: Attach picks only files of the whole spooled file, so one email goes out for the whole spooled file.']
+    : addressProblems(email, data, formatting).map((problem) => `Page group ${index + 1}: ${problem}. This email will fail.`);
 
   const view: EmailPreviewView = {
     pageGroup: index,

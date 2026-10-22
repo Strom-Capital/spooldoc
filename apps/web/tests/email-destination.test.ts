@@ -1,10 +1,11 @@
+import { createServer, type AddressInfo, type Socket } from 'node:net';
 import { eq } from 'drizzle-orm';
 import nodemailer, { type SendMailOptions } from 'nodemailer';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emailSpecSchema, emptySpec, type EmailSpec, type JobSpec } from '@/lib/job-spec';
 import { destinations, jobs, jobVersions, runDeliveries, runs, settings } from '@/lib/server/db/schema';
 import { addressList, addressProblems, composeEmail, emailSpecProblems, htmlToText, inlineHtml } from '@/lib/server/email-message';
-import { mailErrorText, setMailSender, stopsSending, updateMail, type SmtpServer } from '@/lib/server/mail';
+import { mailErrorText, mailSender, setMailSender, stopsSending, updateMail, type SmtpServer } from '@/lib/server/mail';
 import { runJob } from '@/lib/server/runner';
 import { runViews } from '@/lib/server/runs';
 
@@ -136,6 +137,71 @@ describe('mail errors', () => {
   });
 });
 
+describe('the SMTP sender', () => {
+  /** A small SMTP server on localhost that counts its connections and refuses one recipient. */
+  async function smtpServer(refuse: string): Promise<{ port: number; connections: () => number; close: () => Promise<void> }> {
+    let connections = 0;
+    const sockets = new Set<Socket>();
+    const server = createServer((socket) => {
+      connections++;
+      sockets.add(socket);
+      socket.on('close', () => sockets.delete(socket));
+      let data = false;
+      let buffer = '';
+      socket.write('220 smtp.example.com ESMTP\r\n');
+      socket.on('data', (chunk) => {
+        buffer += chunk.toString('utf8');
+        let end: number;
+        while ((end = buffer.indexOf('\r\n')) >= 0) {
+          const line = buffer.slice(0, end);
+          buffer = buffer.slice(end + 2);
+          if (data) {
+            if (line === '.') {
+              data = false;
+              socket.write('250 2.0.0 Queued\r\n');
+            }
+            continue;
+          }
+          const command = line.toUpperCase();
+          if (command.startsWith('EHLO')) socket.write('250-smtp.example.com\r\n250 8BITMIME\r\n');
+          else if (command.startsWith('RCPT') && line.includes(refuse)) socket.write('550 5.1.1 User unknown\r\n');
+          else if (command === 'DATA') {
+            data = true;
+            socket.write('354 Go ahead\r\n');
+          } else if (command === 'QUIT') socket.end('221 Bye\r\n');
+          else socket.write('250 OK\r\n');
+        }
+      });
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    return {
+      port: (server.address() as AddressInfo).port,
+      connections: () => connections,
+      close: async () => {
+        for (const socket of sockets) socket.destroy();
+        await new Promise<void>((resolve) => server.close(() => resolve()));
+      },
+    };
+  }
+
+  it('sends every email of a run over one connection, and a refused recipient does not fail the emails after it', async () => {
+    const smtp = await smtpServer('nobody@example.com');
+    const sender = mailSender({ sender: 'smtp', host: '127.0.0.1', port: smtp.port, security: 'none', user: null, password: null, from: 'invoices@example.com', fromName: null });
+    const message = (to: string) => ({ from: 'invoices@example.com', to, subject: 'Invoice', text: 'Your document is attached.' });
+    try {
+      await sender.sendMail(message('buyer@example.com'));
+      const refused = await sender.sendMail(message('nobody@example.com')).catch((error: unknown) => error);
+      expect(refused).toMatchObject({ code: 'EENVELOPE', responseCode: 550, command: 'RCPT TO' });
+      expect(stopsSending(refused)).toBe(false);
+      await sender.sendMail(message('orders@example.com'));
+      expect(smtp.connections()).toBe(1);
+    } finally {
+      sender.close?.();
+      await smtp.close();
+    }
+  });
+});
+
 describe('the email destination in a run', () => {
   const sample = loadSample('invoice');
   let serverId: string;
@@ -163,20 +229,26 @@ describe('the email destination in a run', () => {
   afterEach(() => setMailSender(null));
 
   /** An invoice job with an active version that emails each invoice to `<customerNo>@example.com` and holds the file. */
-  async function emailJob(testAddress: string | null = null): Promise<{ jobId: string; spec: JobSpec }> {
+  async function emailJob(
+    testAddress: string | null = null,
+    change: { definition?: string; templates?: JobSpec['render']['templates']; to?: string; attach?: EmailSpec['attach'] } = {},
+  ): Promise<{ jobId: string; spec: JobSpec }> {
     const [destination] = await db().insert(destinations).values({ kind: 'email', name: 'Invoices by email', config: { testAddress } }).returning();
+    const base = emptySpec({ serverId, library: 'MYLIB', queue: 'EMAIL', destinationId: destination!.id });
+    const email = emailSpecSchema.parse({ to: change.to ?? '{d.pg.customerNo}@example.com', subject: 'Invoice {d.pg.invoiceNo}', ...(change.attach ? { attach: change.attach } : {}) });
     const spec: JobSpec = {
-      ...emptySpec({ serverId, library: 'MYLIB', queue: 'EMAIL', destinationId: destination!.id }),
-      extract: { definition: fixtureText('invoice', 'definition.yaml') },
-      destination: { destinationId: destination!.id, email: emailSpecSchema.parse({ to: '{d.pg.customerNo}@example.com', subject: 'Invoice {d.pg.invoiceNo}' }), webhook: null },
+      ...base,
+      extract: { definition: change.definition ?? fixtureText('invoice', 'definition.yaml') },
+      render: change.templates ? { templates: change.templates } : base.render,
+      destination: { destinationId: destination!.id, email, webhook: null },
     };
     const [job] = await db().insert(jobs).values({ name: 'Invoices', draft: spec, activeVersion: 1 }).returning();
     await db().insert(jobVersions).values({ jobId: job!.id, number: 1, spec });
     return { jobId: job!.id, spec };
   }
 
-  const run = async (jobId: string, conn: FakeConnection) =>
-    runJob({ jobId, version: 1, splf: sample.splf, trigger: 'manual' }, { conn, host: 'ibmi.example.com', serverId, password: GOOD_PASSWORD });
+  const run = async (jobId: string, conn: FakeConnection, version = 1) =>
+    runJob({ jobId, version, splf: sample.splf, trigger: 'manual' }, { conn, host: 'ibmi.example.com', serverId, password: GOOD_PASSWORD });
 
   it('sends one email per invoice with its PDF, records each, and then holds the file', async () => {
     const { jobId } = await emailJob();
@@ -242,6 +314,103 @@ describe('the email destination in a run', () => {
     sent = [];
     await run(jobId, conn);
     expect(sent.map((message) => message.to)).toEqual(['10001', '10003', '10002', '10004', '10008', '10006'].map((n) => [`${n}@example.com`]));
+  });
+
+  /** The invoice spooled file of the connection, to change its attributes as a later one would have them. */
+  const invoiceFile = (conn: FakeConnection) => conn.samples.find((s) => s.splf.name === sample.splf.name)!;
+  const deliverNote = async (runId: string) => {
+    const [row] = await db().select().from(runs).where(eq(runs.id, runId));
+    return row!.steps.find((step) => step.step === 'deliver')?.note;
+  };
+
+  it('records the creation time and pages of each email, and a plain Retry sends none again', async () => {
+    const { jobId } = await emailJob();
+    const conn = new FakeConnection();
+    const first = await run(jobId, conn);
+    const deliveries = await db().select().from(runDeliveries).where(eq(runDeliveries.runId, first));
+    expect(deliveries[0]).toMatchObject({ document: 'invoice-260101', splfCreated: sample.attributes.created, firstPage: 1, lastPage: 1 });
+    expect(deliveries.every((d) => d.firstPage !== null && d.lastPage !== null)).toBe(true);
+
+    sent = [];
+    const [firstRun] = await db().select().from(runs).where(eq(runs.id, first));
+    const second = await run(jobId, conn);
+    expect(sent).toHaveLength(0);
+    expect(await deliverNote(second)).toBe(`Sent 0 emails, 6 were sent in run #${firstRun!.seq}`);
+  });
+
+  it('sends again to a new spooled file that has the same job number, name and number, but another creation time', async () => {
+    const { jobId } = await emailJob();
+    const conn = new FakeConnection();
+    await run(jobId, conn);
+    const file = invoiceFile(conn);
+    file.attributes = { ...file.attributes, created: '2026-10-18T08:15:00' };
+    sent = [];
+    const second = await run(jobId, conn);
+    expect(sent).toHaveLength(6);
+    expect(await deliverNote(second)).toBe('Sent 6 emails');
+  });
+
+  it('sends again when a newer job version groups the pages another way, even where the names are the same', async () => {
+    // Without an output name, the documents are named spdinvoice-1, spdinvoice-2 and so on.
+    const definition = fixtureText('invoice', 'definition.yaml').replace(/^output:[\s\S]*$/m, '');
+    const { jobId, spec: first } = await emailJob(null, { definition });
+    const conn = new FakeConnection();
+    await run(jobId, conn);
+    expect(sent).toHaveLength(6);
+
+    // Skipping the first page moves every page group, so spdinvoice-1 is now another invoice.
+    const regrouped = definition.replace(/^text:\n/m, 'text:\n  skipFirstPage: true\n');
+    await db().insert(jobVersions).values({ jobId, number: 2, spec: { ...first, extract: { definition: regrouped } } });
+    sent = [];
+    const second = await run(jobId, conn, 2);
+    const deliveries = await db().select().from(runDeliveries).where(eq(runDeliveries.runId, second));
+    expect(deliveries.length).toBeGreaterThan(0);
+    expect(deliveries.map((d) => d.status)).toEqual(Array(deliveries.length).fill('sent'));
+    expect(deliveries[0]).toMatchObject({ document: 'spdinvoice-1', firstPage: 2 });
+    expect(sent).toHaveLength(deliveries.length);
+  });
+
+  it('still skips by name what a run before the creation time was recorded sent', async () => {
+    const { jobId } = await emailJob();
+    const conn = new FakeConnection();
+    await run(jobId, conn);
+    await db().update(runDeliveries).set({ splfCreated: null, firstPage: null, lastPage: null });
+    const file = invoiceFile(conn);
+    file.attributes = { ...file.attributes, created: '' };
+    sent = [];
+    const second = await run(jobId, conn);
+    expect(sent).toHaveLength(0);
+    const deliveries = await db().select().from(runDeliveries).where(eq(runDeliveries.runId, second));
+    expect(deliveries.map((d) => d.status)).toEqual(Array(6).fill('already_sent'));
+  });
+
+  describe('with an Excel template of the whole spooled file', () => {
+    const templates = [
+      { id: 'main', name: 'Invoice', kind: 'html', source: null, formats: ['pdf'] },
+      { id: 'lines', name: 'Lines', kind: 'xlsx', fileId: null, scope: 'splf', formats: ['xlsx'] },
+    ] as JobSpec['render']['templates'];
+    const attachedNames = () => sent.map((message) => ((message.attachments ?? []) as { filename: string }[]).map((file) => file.filename));
+
+    it('sends only the email of the whole spooled file when Attach picks only its files', async () => {
+      const { jobId } = await emailJob(null, { templates, to: 'orders@example.com', attach: ['xlsx'] });
+      const runId = await run(jobId, new FakeConnection());
+      expect(attachedNames()).toEqual([['spdinvoice-lines.xlsx']]);
+      expect(await deliverNote(runId)).toBe('Sent 1 email');
+    });
+
+    it('sends one email per page group, with nothing attached, when Attach is empty', async () => {
+      const { jobId } = await emailJob(null, { templates, to: 'orders@example.com', attach: [] });
+      await run(jobId, new FakeConnection());
+      expect(attachedNames()).toEqual(Array(6).fill([]));
+    });
+
+    it('sends an email per page group and one of the whole spooled file when Attach picks files of both', async () => {
+      const { jobId } = await emailJob(null, { templates, to: 'orders@example.com', attach: ['pdf', 'xlsx'] });
+      await run(jobId, new FakeConnection());
+      expect(attachedNames()).toHaveLength(7);
+      expect(attachedNames()[0]).toEqual(['invoice-260101.pdf']);
+      expect(attachedNames().at(-1)).toEqual(['spdinvoice-lines.xlsx']);
+    });
   });
 
   it('fails before sending when no mail server is set', async () => {

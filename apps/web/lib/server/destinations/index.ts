@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { DocumentData, ValueType } from '@spooldoc/core';
+import type { DocumentData, PageRange, ValueType } from '@spooldoc/core';
 import type { Connection } from '@spooldoc/ibmi';
 import { eq } from 'drizzle-orm';
 import { emailConfigSchema, ifsConfigSchema, sftpConfigSchema, webhookConfigSchema } from '@/lib/destination-config';
@@ -23,6 +23,11 @@ export interface RunDocument {
   pageGroupIndex: number | null;
   /** The document's file name without extension, such as `invoice-260101`. */
   name: string;
+  /**
+   * The pages of the page group; null for the document of the whole spooled file. XML page
+   * groups can share a page.
+   */
+  pages: PageRange | null;
   data: DocumentData;
   /** The HTML of the job's email body template for this document, when the email's message is one. */
   html?: string | null;
