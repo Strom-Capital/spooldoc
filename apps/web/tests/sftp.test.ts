@@ -280,7 +280,7 @@ describe('uploadFile', () => {
       const s = await open({ failAfterBytes: 40 * 1024 });
       server.file('/in/a.pdf', 'old');
       const error = (await uploadFile(s, '/in', 'a.pdf', big, { ifExists: 'replace', tempName: false }).catch((e: unknown) => e)) as SftpError;
-      expect(error.message).toBe("127.0.0.1 could not write /in/a.pdf. The server's own text is under Details. /in/a.pdf on 127.0.0.1 is incomplete now. Upload it again.");
+      expect(error.message).toBe("127.0.0.1 could not write /in/a.pdf. The server's own text is under Details. /in/a.pdf on 127.0.0.1 is incomplete now. Retry the run to upload it again.");
     });
   });
 

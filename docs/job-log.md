@@ -153,9 +153,10 @@ sent yet, each with the same `webhook-id` as before: "Sent 1 document to
 hooks.example.com, 5 were sent in run #12".
 
 With an SFTP destination, Retry uploads only the files that the
-destination has not uploaded yet to its folder on its server: "Uploaded 1 file to /in/invoices on sftp.example.com, 5
-were uploaded in run #12". So a setting of Add a number never makes a
-second copy of a file on retry.
+destination has not uploaded yet to its folder on its server: "Uploaded
+1 file to /in/invoices on sftp.example.com, 5 were uploaded in run #12".
+So a setting of Add a number never makes a second copy of a file on
+retry.
 
 ## Retention
 

@@ -295,7 +295,7 @@ export async function sftpUploadTest(job: JobRow, input: z.infer<typeof sftpFold
           });
           if (session.closed) {
             // The files not tried say why, as in a run.
-            const reason = err instanceof SftpError ? err.message : clean(err instanceof Error ? err.message : String(err));
+            const reason = err instanceof SftpError ? (err.extra.reason ?? err.message) : clean(err instanceof Error ? err.message : String(err));
             for (const [later, other] of files.slice(at + 1).entries()) {
               view.files.push({
                 name: other.name,

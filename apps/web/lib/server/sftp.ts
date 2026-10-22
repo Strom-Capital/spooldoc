@@ -202,14 +202,15 @@ export type SftpPhase = 'reach' | 'hostKey' | 'signIn' | 'sftp' | 'work';
 
 /**
  * An SFTP failure in plain words, with what to do. `stops` is true when the connection is
- * gone, so the files not tried yet would fail too.
+ * gone, so the files not tried yet would fail too. `reason` is the message without notes
+ * about this file, for the files not tried.
  */
 export class SftpError extends Error {
   constructor(
     message: string,
     readonly phase: SftpPhase,
     readonly detail?: string,
-    readonly extra: { stops?: boolean; taken?: boolean; keepPart?: boolean; seenHostKey?: Buffer; reachMs?: number } = {},
+    readonly extra: { stops?: boolean; taken?: boolean; keepPart?: boolean; reason?: string; seenHostKey?: Buffer; reachMs?: number } = {},
   ) {
     super(message);
   }
@@ -772,7 +773,7 @@ export async function uploadFile(s: SftpSession, folder: string, name: string, b
       return err;
     } catch (unlinkErr) {
       if (isNoSuchFile(unlinkErr)) return err;
-      return new SftpError(`${err.message} The incomplete file ${path(file)} could not be deleted. Delete it.`, err.phase, err.detail, err.extra);
+      return new SftpError(`${err.message} The incomplete file ${path(file)} could not be deleted. Delete it.`, err.phase, err.detail, { ...err.extra, reason: err.message });
     }
   };
   const rename = (from: string, to: string) => s.call<void>(doing, (done) => s.sftp.rename(path(from), path(to), done));
@@ -784,7 +785,10 @@ export async function uploadFile(s: SftpSession, folder: string, name: string, b
         await writeWhole(path(name), 'w');
       } catch (err) {
         if (!(err instanceof SftpError) || !afterOpen.has(err)) throw err;
-        throw new SftpError(`${err.message} ${path(name)} on ${host} is incomplete now. Upload it again.`, err.phase, err.detail, err.extra);
+        throw new SftpError(`${err.message} ${path(name)} on ${host} is incomplete now. Retry the run to upload it again.`, err.phase, err.detail, {
+          ...err.extra,
+          reason: err.message,
+        });
       }
       return { finalName: name, replaced };
     }

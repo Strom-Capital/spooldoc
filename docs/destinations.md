@@ -594,9 +594,9 @@ then looked up one by one; when a lookup fails, the view says why.
 files to the test folder now, with the destination's same-name setting
 and temporary names. The rows turn solid as the files land, with their
 size and time. When the connection drops, the files not tried yet say
-"Not uploaded" and why. It records nothing in the job log. Without a test folder
-the button is off: set one on the destination first, so a test never
-lands where the receiver picks up files.
+"Not uploaded" and why. It records nothing in the job log. Without a
+test folder the button is off: set one on the destination first, so a
+test never lands where the receiver picks up files.
 
 ### When an upload fails
 

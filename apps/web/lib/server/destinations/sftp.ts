@@ -167,12 +167,13 @@ export function resolveSftp(
 export const notUploaded = (message: string) => `Not uploaded: ${message}`;
 
 /** A failure in plain words, without secrets. */
-function reasonOf(err: unknown, clean: (text: string) => string): { message: string; detail?: string; stops: boolean; taken: boolean } {
+function reasonOf(err: unknown, clean: (text: string) => string): { message: string; detail?: string; stops: boolean; taken: boolean; rest: string } {
   if (err instanceof SftpError) {
     // Spooldoc's own words name no secret, and a short password would garble them; the server's text is cleaned.
-    return { message: err.message, detail: err.detail === undefined ? undefined : clean(err.detail), stops: err.stops, taken: !!err.extra.taken };
+    return { message: err.message, detail: err.detail === undefined ? undefined : clean(err.detail), stops: err.stops, taken: !!err.extra.taken, rest: err.extra.reason ?? err.message };
   }
-  return { message: clean(err instanceof Error ? err.message : String(err)), stops: true, taken: false };
+  const message = clean(err instanceof Error ? err.message : String(err));
+  return { message, stops: true, taken: false, rest: message };
 }
 
 /** Opens a connection. Tests replace it to count connections. */
@@ -185,9 +186,10 @@ type DeliveryRow = typeof runDeliveries.$inferInsert;
  * after the other. Spooldoc never creates the folder. With `keepCopy`, the files are kept
  * in Spooldoc first. A file an earlier run of the same job already uploaded for the same
  * spooled file, through this destination to this folder on this host, is not uploaded
- * again (a test upload does not count), so Retry uploads only the rest. A file that fails fails alone, and the others still upload; a connection,
- * sign-in or host key failure stops the run, and the files not tried say why. Every file
- * is recorded as it goes. The step fails when any file failed, so the finish step does not run.
+ * again (a test upload does not count), so Retry uploads only the rest. A file that fails
+ * fails alone, and the others still upload; a connection, sign-in or host key failure
+ * stops the run, and the files not tried say why. Every file is recorded as it goes. The
+ * step fails when any file failed, so the finish step does not run.
  */
 export function sftpDestination(config: SftpConfig, secrets: SftpSecrets, name: string): Destination {
   return {
@@ -356,8 +358,9 @@ export function sftpDestination(config: SftpConfig, secrets: SftpSecrets, name: 
               await record({ ...base, to: `${config.host}:${inFolder(real, tried)}`, status: 'failed', ms, error: reason.message, detail: reason.detail ?? null });
               if (reason.stops) {
                 const rest = pending.slice(index + 1);
-                for (const { file: other } of rest) failures.push({ message: `${other.name}: ${notUploaded(reason.message)}` });
-                await stopAll(index + 1, reason);
+                // The files not tried get the reason the connection went, without notes about this file.
+                for (const { file: other } of rest) failures.push({ message: `${other.name}: ${notUploaded(reason.rest)}` });
+                await stopAll(index + 1, { message: reason.rest, detail: reason.detail });
                 break;
               }
             }

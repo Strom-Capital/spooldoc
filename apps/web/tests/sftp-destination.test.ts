@@ -395,6 +395,17 @@ describe('the SFTP destination', { timeout: 30_000 }, () => {
       expect(deliveries.slice(1).every((d) => d.error!.startsWith('Not uploaded: 127.0.0.1 stopped answering'))).toBe(true);
     });
 
+    it('keeps the note about an incomplete file on that file, and gives the others only the reason', async () => {
+      await start({ hangAfterBytes: 0 });
+      sftpTiming.opMs = 300;
+      const runId = await run(await sftpJob({ tempName: false, ifExists: 'fail' }));
+      const deliveries = await deliveriesOf(runId);
+      expect(deliveries[0]!.error).toBe(
+        '127.0.0.1 stopped answering while Spooldoc uploaded invoice-260101.pdf. The incomplete file /in/invoices/invoice-260101.pdf could not be deleted. Delete it.',
+      );
+      expect(deliveries.slice(1).map((d) => d.error)).toEqual(Array(5).fill('Not uploaded: 127.0.0.1 stopped answering while Spooldoc uploaded invoice-260101.pdf.'));
+    });
+
     it('opens one connection per run', async () => {
       await start();
       const connect = vi.spyOn(sftpConnector, 'connect');
