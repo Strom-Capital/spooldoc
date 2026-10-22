@@ -202,14 +202,15 @@ export type SftpPhase = 'reach' | 'hostKey' | 'signIn' | 'sftp' | 'work';
 
 /**
  * An SFTP failure in plain words, with what to do. `stops` is true when the connection is
- * gone, so the files not tried yet would fail too.
+ * gone, so the files not tried yet would fail too. `reason` is the message without notes
+ * about this file, for the files not tried.
  */
 export class SftpError extends Error {
   constructor(
     message: string,
     readonly phase: SftpPhase,
     readonly detail?: string,
-    readonly extra: { stops?: boolean; taken?: boolean; seenHostKey?: Buffer; reachMs?: number } = {},
+    readonly extra: { stops?: boolean; taken?: boolean; keepPart?: boolean; reason?: string; seenHostKey?: Buffer; reachMs?: number } = {},
   ) {
     super(message);
   }
@@ -418,9 +419,11 @@ export function connectSftp(target: SftpTarget): Promise<SftpSession> {
 
   return new Promise<SftpSession>((resolve, reject) => {
     let settled = false;
+    let sftpTimer: ReturnType<typeof setTimeout> | undefined;
     const fail = (err: unknown) => {
       if (settled) return;
       settled = true;
+      clearTimeout(sftpTimer);
       client.destroy();
       if (err instanceof SftpError) return reject(err);
       const { message, detail } = sftpErrorText(err, ctx);
@@ -438,7 +441,20 @@ export function connectSftp(target: SftpTarget): Promise<SftpSession> {
     });
     client.on('ready', () => {
       ctx.phase = 'sftp';
+      // readyTimeout ends at the sign-in: a server that never answers the SFTP request is ended here.
+      sftpTimer = setTimeout(() => {
+        fail(
+          new SftpError(
+            `${host} signed in ${username} on port ${port} but did not start SFTP within ${Math.round(sftpTiming.readyMs / 1000)} seconds. Ask the server's admin to check that SFTP is on for the user.`,
+            'sftp',
+            undefined,
+            { reachMs },
+          ),
+        );
+      }, sftpTiming.readyMs);
       client.sftp((err, sftp) => {
+        clearTimeout(sftpTimer);
+        if (settled) return;
         if (err) {
           return fail(new SftpError(`${host} does not offer SFTP to ${username}. Ask the server's admin to allow SFTP for the user.`, 'sftp', err.message));
         }
@@ -540,13 +556,16 @@ export const inFolder = (folder: string, name: string): string => (folder === '/
 const S_IFMT = 0o170000;
 const S_IFDIR = 0o040000;
 
+/** True when an SFTP call failed because nothing is at the path. */
+export const isNoSuchFile = (err: unknown): boolean => (err as { code?: unknown } | null)?.code === STATUS.NO_SUCH_FILE;
+
 /** What is at a path: a folder, a file, or nothing. */
 export async function statPath(s: SftpSession, path: string, doing: string): Promise<'folder' | 'file' | null> {
   try {
     const stats = await s.call<{ mode: number }>(doing, (done) => s.sftp.stat(path, done));
     return (stats.mode & S_IFMT) === S_IFDIR ? 'folder' : 'file';
   } catch (err) {
-    if ((err as { code?: unknown }).code === STATUS.NO_SUCH_FILE) return null;
+    if (isNoSuchFile(err)) return null;
     throw err;
   }
 }
@@ -708,6 +727,13 @@ export async function uploadFile(s: SftpSession, folder: string, name: string, b
     return out;
   };
 
+  /** Errors of `writeWhole` after the open: the file is there, but not whole. */
+  const afterOpen = new WeakSet<SftpError>();
+  const written = (err: unknown, file: string): SftpError => {
+    const error = fail(err, 'write', file);
+    afterOpen.add(error);
+    return error;
+  };
   /** Open, write in chunks, sync when the server can, and close. */
   const writeWhole = async (file: string, flags: 'w' | 'wx') => {
     let handle: Buffer;
@@ -732,12 +758,22 @@ export async function uploadFile(s: SftpSession, folder: string, name: string, b
       if (s.fsync) await s.call(doing, (done) => s.sftp.ext_openssh_fsync(handle, done));
     } catch (err) {
       await s.call(doing, (done) => s.sftp.close(handle, done)).catch(() => undefined);
-      throw fail(err, 'write', file);
+      throw written(err, file);
     }
     try {
       await s.call(doing, (done) => s.sftp.close(handle, done));
     } catch (err) {
-      throw fail(err, 'write', file);
+      throw written(err, file);
+    }
+  };
+  /** The error of a write that failed after Spooldoc created the file, after the incomplete file is deleted. */
+  const removeWritten = async (err: SftpError, file: string): Promise<SftpError> => {
+    try {
+      await s.call(doing, (done) => s.sftp.unlink(path(file), done));
+      return err;
+    } catch (unlinkErr) {
+      if (isNoSuchFile(unlinkErr)) return err;
+      return new SftpError(`${err.message} The incomplete file ${path(file)} could not be deleted. Delete it.`, err.phase, err.detail, { ...err.extra, reason: err.message });
     }
   };
   const rename = (from: string, to: string) => s.call<void>(doing, (done) => s.sftp.rename(path(from), path(to), done));
@@ -745,7 +781,15 @@ export async function uploadFile(s: SftpSession, folder: string, name: string, b
   if (!options.tempName) {
     if (options.ifExists === 'replace') {
       const replaced = await exists(name);
-      await writeWhole(path(name), 'w');
+      try {
+        await writeWhole(path(name), 'w');
+      } catch (err) {
+        if (!(err instanceof SftpError) || !afterOpen.has(err)) throw err;
+        throw new SftpError(`${err.message} ${path(name)} on ${host} is incomplete now. Retry the run to upload it again.`, err.phase, err.detail, {
+          ...err.extra,
+          reason: err.message,
+        });
+      }
       return { finalName: name, replaced };
     }
     for (const candidate of candidates()) {
@@ -753,7 +797,10 @@ export async function uploadFile(s: SftpSession, folder: string, name: string, b
         await writeWhole(path(candidate), 'wx');
         return { finalName: candidate, replaced: false };
       } catch (err) {
+        // The open took the name, so it was free: the write failed, not the name.
+        if (err instanceof SftpError && afterOpen.has(err)) throw await removeWritten(err, candidate);
         if (err instanceof SftpError && err.stops) throw err;
+        // Only an open that fails can mean another file has the name.
         if (!(await exists(candidate))) throw err;
         if (options.ifExists === 'fail') throw takenError(candidate);
       }
@@ -774,7 +821,7 @@ export async function uploadFile(s: SftpSession, folder: string, name: string, b
   };
   /** The error, after the part file is deleted. */
   const failed = async (err: SftpError): Promise<SftpError> => {
-    if (err.stops) return err;
+    if (err.stops || err.extra.keepPart) return err;
     const note = await removePart();
     return note ? new SftpError(`${err.message}${note}`, err.phase, err.detail, err.extra) : err;
   };
@@ -839,7 +886,8 @@ export async function uploadFile(s: SftpSession, folder: string, name: string, b
             `The new file could not be renamed to ${path(name)}, and the old file could not be put back. The old file is now ${path(old)} and the new one ${path(part)}. Rename the one to keep to ${name}.`,
             'work',
             (err as Error).message,
-            { stops: false },
+            // The part file is the new file now: it is kept.
+            { stops: false, keepPart: true },
           );
         }
         throw new SftpError(`The new file could not be renamed to ${path(name)}. The old file is back in place, unchanged.`, 'work', (err as Error).message, { stops: false });

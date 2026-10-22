@@ -306,6 +306,51 @@ describe('the SFTP destination', { timeout: 30_000 }, () => {
       expect(secondRows.filter((d) => d.status === 'already_sent').map((d) => [d.document, d.sentInRun])).toEqual(INVOICES.slice(0, 3).map((name) => [name, (row.seq ?? 0) - 1]));
       expect(server.names('/in/invoices')).toEqual(INVOICES);
     });
+
+    it('skips the files uploaded to the same folder on the same host', async () => {
+      await start();
+      const jobId = await sftpJob();
+      const first = await run(jobId);
+      const second = await run(jobId);
+      expect((await deliverStep(second)).note).toBe(`Uploaded 0 files to /in/invoices on 127.0.0.1 port ${server.port}, 6 were uploaded in run #${(await runRow(first)).seq}, a copy kept in Spooldoc`);
+      expect((await deliveriesOf(second)).map((d) => d.status)).toEqual(Array(6).fill('already_sent'));
+    });
+
+    it('uploads again after the folder of the destination changed', async () => {
+      await start();
+      server.folder('/in/other');
+      const jobId = await sftpJob();
+      await run(jobId);
+      const [saved] = await db().select().from(destinations).where(eq(destinations.kind, 'sftp'));
+      await db()
+        .update(destinations)
+        .set({ config: { ...(saved!.config as SftpConfig), folder: '/in/other' } })
+        .where(eq(destinations.id, saved!.id));
+      const second = await run(jobId);
+      expect((await deliverStep(second)).note).toBe(`Uploaded 6 files to /in/other on 127.0.0.1 port ${server.port}, a copy kept in Spooldoc`);
+      expect(server.names('/in/other')).toEqual(INVOICES);
+    });
+
+    it('uploads again after the job switched to another destination', async () => {
+      await start();
+      const jobId = await sftpJob();
+      await run(jobId);
+      // Another destination to the same folder: what the first one uploaded does not count for it.
+      const [saved] = await db().select().from(destinations).where(eq(destinations.kind, 'sftp'));
+      const [other] = await db()
+        .insert(destinations)
+        .values({ kind: 'sftp', name: 'MYSFTP2', config: saved!.config, secretsEnc: saved!.secretsEnc })
+        .returning();
+      const [version] = await db().select().from(jobVersions).where(eq(jobVersions.jobId, jobId));
+      const spec = version!.spec as JobSpec;
+      await db()
+        .insert(jobVersions)
+        .values({ jobId, number: 2, spec: { ...spec, destination: { ...spec.destination, destinationId: other!.id } } });
+      await db().update(jobs).set({ activeVersion: 2 }).where(eq(jobs.id, jobId));
+      const second = await runJob({ jobId, version: 2, splf: sample.splf, trigger: 'manual' }, { conn: new FakeConnection(), host: 'ibmi.example.com', serverId, password: GOOD_PASSWORD });
+      expect((await deliverStep(second)).note).toBe(`Uploaded 6 files to /in/invoices on 127.0.0.1 port ${server.port} (6 replaced), a copy kept in Spooldoc`);
+      expect((await deliveriesOf(second)).every((d) => d.status === 'sent' && d.destinationId === other!.id)).toBe(true);
+    });
   });
 
   describe('the test folder', () => {
@@ -348,6 +393,17 @@ describe('the SFTP destination', { timeout: 30_000 }, () => {
       expect((await deliverStep(runId)).error).toMatch(/invoice-260101\.pdf: 127\.0\.0\.1 stopped answering while Spooldoc uploaded invoice-260101\.pdf\. 5 more failed/);
       const deliveries = await deliveriesOf(runId);
       expect(deliveries.slice(1).every((d) => d.error!.startsWith('Not uploaded: 127.0.0.1 stopped answering'))).toBe(true);
+    });
+
+    it('keeps the note about an incomplete file on that file, and gives the others only the reason', async () => {
+      await start({ hangAfterBytes: 0 });
+      sftpTiming.opMs = 300;
+      const runId = await run(await sftpJob({ tempName: false, ifExists: 'fail' }));
+      const deliveries = await deliveriesOf(runId);
+      expect(deliveries[0]!.error).toBe(
+        '127.0.0.1 stopped answering while Spooldoc uploaded invoice-260101.pdf. The incomplete file /in/invoices/invoice-260101.pdf could not be deleted. Delete it.',
+      );
+      expect(deliveries.slice(1).map((d) => d.error)).toEqual(Array(5).fill('Not uploaded: 127.0.0.1 stopped answering while Spooldoc uploaded invoice-260101.pdf.'));
     });
 
     it('opens one connection per run', async () => {

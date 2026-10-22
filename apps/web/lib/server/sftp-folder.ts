@@ -10,14 +10,14 @@ import type { SftpEntryView, SftpFolderView, SftpOutcome, SftpUploadTestView } f
 import { getDb } from './db';
 import { destinations } from './db/schema';
 import { key, numbered, ownNames } from './destinations/names';
-import { openSftpSecrets, sftpConnector, sftpSecretValues, sftpTargetOf, type SftpSecrets } from './destinations/sftp';
+import { notUploaded, openSftpSecrets, sftpConnector, sftpSecretValues, sftpTargetOf, type SftpSecrets } from './destinations/sftp';
 import { fileNameFor, previewRenderer } from './documents';
 import { errorResponse, json } from './http';
 import { draftPageGroup } from './job-preview';
 import type { JobRow } from './jobs';
 import { CARBONE_NOT_CONNECTED } from './render';
 import { renderFiles } from './runner';
-import { findFolder, inFolder, listFolder, SftpError, statPath, uploadFile, type SftpEntry } from './sftp';
+import { findFolder, inFolder, isNoSuchFile, listFolder, SftpError, sftpErrorText, statPath, uploadFile, type SftpEntry } from './sftp';
 import { StepError } from './step-error';
 
 /** A folder view or an Upload test, from the job builder. */
@@ -183,9 +183,19 @@ export async function sftpFolder(job: JobRow, input: z.infer<typeof sftpFolderSc
         const session = await sftpConnector.connect(sftpTargetOf(config, destination.secrets));
         try {
           for (const name of missing) {
-            const stats = await session.call<{ mtime: number } | null>(`looked for ${name}`, (done) =>
-              session.sftp.stat(inFolder(listing!.real, name), (err, value) => done(null, err ? null : value)),
-            );
+            const path = inFolder(listing.real, name);
+            let stats: { mtime: number } | null;
+            try {
+              stats = await session.call<{ mtime: number }>(`looked for ${name}`, (done) => session.sftp.stat(path, done));
+            } catch (err) {
+              // Only a name that is not there is not there; any other error is said.
+              if (!isNoSuchFile(err)) {
+                if (err instanceof SftpError) throw err;
+                const { message, detail } = sftpErrorText(err, { ...session.ctx, op: { action: 'read', path, folder: listing.real } });
+                throw new SftpError(message, 'work', detail);
+              }
+              stats = null;
+            }
             if (stats) files.push({ name, mtime: stats.mtime });
           }
         } finally {
@@ -283,7 +293,22 @@ export async function sftpUploadTest(job: JobRow, input: z.infer<typeof sftpFold
             error: err instanceof SftpError ? err.message : clean(err instanceof Error ? err.message : String(err)),
             ...(detail ? { detail: clean(detail) } : {}),
           });
-          if (session.closed) break;
+          if (session.closed) {
+            // The files not tried say why, as in a run.
+            const reason = err instanceof SftpError ? (err.extra.reason ?? err.message) : clean(err instanceof Error ? err.message : String(err));
+            for (const [later, other] of files.slice(at + 1).entries()) {
+              view.files.push({
+                name: other.name,
+                finalName: own[at + 1 + later]!,
+                size: other.content.byteLength,
+                ms: 0,
+                error: notUploaded(reason),
+                ...(detail ? { detail: clean(detail) } : {}),
+                ...(other.pageGroupIndex === null ? { whole: true } : {}),
+              });
+            }
+            break;
+          }
         }
       }
     } finally {

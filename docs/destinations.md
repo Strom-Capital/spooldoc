@@ -541,9 +541,14 @@ Replace uses the server's atomic rename (`posix-rename@openssh.com`,
 which OpenSSH has). On a server without it, the old file is renamed
 aside to a name that ends in `.old`, the new one renamed in, and the old
 one deleted; if the new one cannot take its place, the old one is put
-back. Turn the setting off for a server that refuses renames, or that
-picks up each file as soon as it is closed: some managed file transfer
-gateways do both. Each file is then uploaded under its own name.
+back. If the old one cannot be put back either, both files are kept, and
+the message names them. Turn the setting off for a server that refuses
+renames, or that picks up each file as soon as it is closed: some managed
+file transfer gateways do both. Each file is then uploaded under its own
+name. When a write fails partway, that file fails with the reason.
+Spooldoc deletes the incomplete file it made, or says to delete it. With
+Replace, the old file was already overwritten, so the message says the
+file on the server is incomplete.
 
 **Keep a copy in Spooldoc** is on by default, as for an IFS folder. The
 files can then be downloaded from the job log, even when the upload
@@ -575,7 +580,8 @@ will do: New, Replaces the file from 14 Oct, Becomes
 a gap says how many it skips and opens 50 at a time. The listing is read
 once a minute, so stepping through page groups does not reconnect;
 refresh it with the button in its corner. A folder of more than 5,000
-files is read in part, and the view says so.
+files is read in part, and the view says so. The page group's files are
+then looked up one by one; when a lookup fails, the view says why.
 
 <p align="center">
   <picture>
@@ -587,9 +593,10 @@ files is read in part, and the view says so.
 **Upload test** renders the page group from the draft and uploads its
 files to the test folder now, with the destination's same-name setting
 and temporary names. The rows turn solid as the files land, with their
-size and time. It records nothing in the job log. Without a test folder
-the button is off: set one on the destination first, so a test never
-lands where the receiver picks up files.
+size and time. When the connection drops, the files not tried yet say
+"Not uploaded" and why. It records nothing in the job log. Without a
+test folder the button is off: set one on the destination first, so a
+test never lands where the receiver picks up files.
 
 ### When an upload fails
 
@@ -600,8 +607,9 @@ A run opens one connection and uploads the files one after the other.
 | The host is not found, refuses the connection, or does not answer within 20 seconds | Uploads nothing. Each file says "Not uploaded" and why. |
 | The host key is not trusted yet, or changed | Uploads nothing, and signs in to nothing. |
 | The server does not take the key or the password | Uploads nothing. With a key, the message says where the public key goes. |
+| The server signs in but does not start SFTP within 20 seconds | Uploads nothing. |
 | The folder is missing or is a file | Uploads nothing. |
-| One file cannot be written, such as when the user may not write to the folder or a name is taken | That file fails; the others are still uploaded. |
+| One file cannot be written, such as when the user may not write to the folder, a name is taken or the disk is full | That file fails; the others are still uploaded. |
 | The connection drops, or the server stops answering for 60 seconds | The files not tried yet say "Not uploaded" and why. |
 
 The run then fails with "Uploaded 5 of 6 files to /in/invoices on
@@ -609,7 +617,10 @@ sftp.example.com" and the first reason, and the spooled file is not held,
 moved or deleted. The server's own text is under Details. The
 [job log](job-log.md#uploads) lists every file with where it went. After
 fixing the cause, [Retry](job-log.md#retry) uploads only the files that
-were not uploaded yet, so Add a number never makes a second copy.
+this destination has not uploaded yet to this folder on this server, so
+Add a number never makes a second copy. After the job moves to another
+destination, or the destination to another server or folder, every file
+is uploaded again.
 
 ## Writing a destination
 

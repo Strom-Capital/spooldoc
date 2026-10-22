@@ -252,6 +252,21 @@ describe('the step folder view and Upload test', { timeout: 30_000 }, () => {
     expect(server.connections).toBe(2);
   });
 
+  it('looks up each name past a folder read in part, and says when a lookup fails', async () => {
+    for (let n = 1; n <= 5001; n++) server.file(`/in/invoices/a-${String(n).padStart(5, '0')}.pdf`);
+    server.file('/in/invoices/invoice-260101.pdf', 'old', 1_760_400_000);
+    const { jobId } = await sftpJob();
+    const found = await folder(jobId, { pageGroupIndex: 0 });
+    expect(found.status).toBe(200);
+    expect(found.view.truncated).toBe(true);
+    expect(found.view.files).toEqual([{ name: 'invoice-260101.pdf', outcome: { kind: 'replaces', mtime: new Date(1_760_400_000_000).toISOString() } }]);
+
+    server.options.denyStat = ['/in/invoices/invoice-260101.pdf'];
+    const denied = await folder(jobId, { pageGroupIndex: 0 });
+    expect(denied.status).toBe(502);
+    expect(denied.view).toMatchObject({ error: "MYUSER may not read /in/invoices/invoice-260101.pdf on 127.0.0.1. Ask the server's admin for access to the folder." });
+  });
+
   it('tags each file by the same-name rule', () => {
     const entries = [{ name: 'a.pdf', mtime: 1 }, { name: 'a-2.pdf', mtime: 1 }];
     expect(outcomes(['a.pdf', 'b.pdf'], entries, 'replace')).toEqual([{ kind: 'replaces', mtime: new Date(1000).toISOString() }, { kind: 'new' }]);
@@ -286,6 +301,17 @@ describe('the step folder view and Upload test', { timeout: 30_000 }, () => {
     // In test mode the view lists the test folder.
     const view = await folder(jobId, { pageGroupIndex: 2 });
     expect(view.view).toMatchObject({ testMode: true, folder: '/test/in', files: [{ name: 'invoice-260103.pdf', outcome: { kind: 'replaces' } }] });
+  });
+
+  it('says why the files after a dropped connection were not uploaded', async () => {
+    const { jobId } = await sftpJob({ testFolder: '/test/in' }, (templates) => [...templates, workbook]);
+    // The connection ends after the first file is written, before it is renamed into place.
+    server.options.dropAfterFiles = 1;
+    const result = await uploadTest(jobId, { pageGroupIndex: 0 });
+    expect(result.status).toBe(502);
+    expect(result.view.files.map((file) => file.name)).toEqual(['invoice-260101.pdf', 'spdinvoice-lines.xlsx']);
+    expect(result.view.files[0]!.error).toMatch(/^127\.0\.0\.1 closed the connection/);
+    expect(result.view.files[1]).toMatchObject({ finalName: 'spdinvoice-lines.xlsx', whole: true, error: `Not uploaded: ${result.view.files[0]!.error}` });
   });
 
   const workbook = { id: 'lines', name: 'Lines', kind: 'xlsx' as const, fileId: null, scope: 'splf' as const, formats: ['xlsx' as const] };
