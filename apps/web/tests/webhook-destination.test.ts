@@ -371,6 +371,27 @@ describe('the webhook destination', () => {
     expect(again[0]!.headers['webhook-id']).toBe('msg_0123456789abcdef0123456789abcdef');
   });
 
+  it('sends each document once when two runs of the same spooled file overlap', async () => {
+    const { jobId } = await webhookJob();
+    const [a, b] = await Promise.all([run(jobId), run(jobId)]);
+    expect(receiver.calls).toHaveLength(6);
+    const statuses = [...(await deliveriesOf(a)), ...(await deliveriesOf(b))].map((d) => d.status).sort();
+    expect(statuses).toEqual([...Array(6).fill('already_sent'), ...Array(6).fill('sent')]);
+  });
+
+  it('in test mode, sends every document to the test URL, also those sent for real before', async () => {
+    const { jobId } = await webhookJob();
+    const first = await run(jobId);
+    await db().update(destinations).set({ config: { url: URL_IN_USE, testUrl: TEST_URL } }).where(eq(destinations.kind, 'webhook'));
+    await run(jobId);
+    expect(receiver.calls.slice(6).map((call) => call.url)).toEqual(Array(6).fill(TEST_URL));
+    // Taking the test URL out sends nothing again: the first run sent each for real.
+    await db().update(destinations).set({ config: { url: URL_IN_USE, testUrl: null } }).where(eq(destinations.kind, 'webhook'));
+    const third = await run(jobId);
+    expect(receiver.calls).toHaveLength(12);
+    expect((await runRow(third)).steps.find((step) => step.step === 'deliver')?.note).toBe(`Sent 0 documents to hooks.example.com, 6 were sent in run #${(await runRow(first)).seq}`);
+  });
+
   /** A first run of the invoice job whose rows look as an earlier Spooldoc wrote them, at `sentAt`, with invoice-260103 failed. */
   async function legacyRun(sentAt: Date): Promise<{ jobId: string; conn: FakeConnection; seq: number }> {
     const { jobId } = await webhookJob();

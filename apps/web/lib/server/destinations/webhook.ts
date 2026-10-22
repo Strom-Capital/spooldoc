@@ -8,7 +8,7 @@ import { RESPONSE_LIMIT } from '../runs';
 import { retryAfterSeconds } from '../http';
 import { decryptSecret, encryptSecret } from '../secrets';
 import { webhookHeaders, webhookId, webhookPayload, type WebhookType } from '../webhook-payload';
-import { deliveryFailed, deliveryRecorder, documentFields, earlierDeliveries, earlierText, notSent, sameDocument, sentBefore } from './deliveries';
+import { deliveryFailed, deliveryLock, deliveryRecorder, documentFields, earlierDeliveries, earlierText, notSent, sameDocument, sentBefore } from './deliveries';
 import type { DeliverInput, Destination, RunFile } from './index';
 import { storeRunFiles } from './store';
 
@@ -276,9 +276,11 @@ export function callFiles(files: RunFile[], pageGroupIndex: number | null, forma
  * and the files in the formats the job picks, signed with the destination's secret. The
  * files are kept in Spooldoc first, so the download works too. A document an earlier run
  * of the same job already sent for the same spooled file is not sent again (a test call
- * does not count), so Retry sends only the rest, with the same `webhook-id`. Every call is
- * recorded as it goes. When the host cannot be reached, the rest are not tried. When any
- * fails, the step fails after the others are sent, so the finish step does not run.
+ * does not count), so Retry sends only the rest, with the same `webhook-id`. With a test
+ * URL, every document goes to it, whatever earlier runs sent. One run at a time calls for
+ * a job and spooled file; a second waits for the first. Every call is recorded as it goes.
+ * When the host cannot be reached, the rest are not tried. When any fails, the step fails
+ * after the others are sent, so the finish step does not run.
  */
 export function webhookDestination(config: WebhookConfig, secrets: WebhookSecrets, name: string): Destination {
   return {
@@ -297,64 +299,69 @@ export function webhookDestination(config: WebhookConfig, secrets: WebhookSecret
       const type: WebhookType = test ? 'document.test' : 'document.created';
       const formats = webhookFormats(input);
 
-      // The spooled file's creation time, as the run read it; "" when the IBM i did not give it.
-      const created = context.attributes.created;
-      // Calls of earlier runs of this job on this spooled file, first run first.
-      const earlier = await earlierDeliveries('webhook', job);
+      const release = await deliveryLock('webhook', job, 'Another run of this job is sending webhook calls for this spooled file. Retry when it has finished.');
+      try {
+        // The spooled file's creation time, as the run read it; "" when the IBM i did not give it.
+        const created = context.attributes.created;
+        // Calls of earlier runs of this job on this spooled file, first run first; none in test mode.
+        const earlier = await earlierDeliveries('webhook', job, test);
 
-      // A call per page group; the whole spooled file's document only when one of its files goes.
-      const calls = documents.filter((document) => document.pageGroupIndex !== null || callFiles(files, null, formats).length > 0);
-      const pageGroups = documents.filter((document) => document.pageGroupIndex !== null).length;
-      const to = urlWithoutQuery(target.url);
-      const record = deliveryRecorder(input, 'webhook');
+        // A call per page group; the whole spooled file's document only when one of its files goes.
+        const calls = documents.filter((document) => document.pageGroupIndex !== null || callFiles(files, null, formats).length > 0);
+        const pageGroups = documents.filter((document) => document.pageGroupIndex !== null).length;
+        const to = urlWithoutQuery(target.url);
+        const record = deliveryRecorder(input, 'webhook');
 
-      let sent = 0;
-      let already = 0;
-      const runsBefore = new Set<number>();
-      const failures: { message: string; detail?: string }[] = [];
-      let stopped: { message: string; detail?: string } | null = null;
-      for (const document of calls) {
-        const base = documentFields(document, created);
-        const before = sentBefore(earlier, document, created);
-        if (before !== undefined) {
-          already++;
-          runsBefore.add(before.seq);
-          await record({ ...base, to, status: 'already_sent', sentInRun: before.seq });
-          continue;
+        let sent = 0;
+        let already = 0;
+        const runsBefore = new Set<number>();
+        const failures: { message: string; detail?: string }[] = [];
+        let stopped: { message: string; detail?: string } | null = null;
+        for (const document of calls) {
+          const base = documentFields(document, created);
+          const before = sentBefore(earlier, document, created);
+          if (before !== undefined) {
+            already++;
+            runsBefore.add(before.seq);
+            await record({ ...base, to, status: 'already_sent', sentInRun: before.seq });
+            continue;
+          }
+          // A call of this spooled file that failed before the creation time was recorded keeps its id on Retry.
+          const legacy = test ? undefined : earlier.findLast((row) => row.splfCreated === null && row.messageId !== null && sameDocument(row, document, created));
+          const id = legacy?.messageId ?? webhookId({ jobId: job.id, splfKey: job.splfKey, created, pages: document.pages, document: document.name, test });
+          if (stopped) {
+            const message = notSent(stopped.message);
+            failures.push({ message: `${document.name}: ${message}` });
+            await record({ ...base, to, test, status: 'failed', messageId: id, attempts: 0, error: message, detail: stopped.detail ?? null });
+            continue;
+          }
+          const payload = webhookPayload({ type, at: new Date(), document, pageGroups, context, files: callFiles(files, document.pageGroupIndex, formats) });
+          const result = await postWebhook(target, { id, body: JSON.stringify(payload) });
+          const answer = {
+            httpStatus: result.status,
+            attempts: result.attempts,
+            ms: result.ms,
+            response: result.response === null ? null : clean(result.response),
+            messageId: id,
+          };
+          if (result.ok) {
+            sent++;
+            await record({ ...base, to, test, status: 'sent', ...answer });
+            continue;
+          }
+          const message = clean(result.error!.message);
+          const detail = result.error!.detail === undefined ? undefined : clean(result.error!.detail);
+          failures.push({ message: `${document.name}: ${message}`, detail });
+          await record({ ...base, to, test, status: 'failed', ...answer, error: message, detail: detail ?? null });
+          if (result.error!.stops) stopped = { message, detail };
         }
-        // A call of this spooled file that failed before the creation time was recorded keeps its id on Retry.
-        const legacy = test ? undefined : earlier.findLast((row) => row.splfCreated === null && row.messageId !== null && sameDocument(row, document, created));
-        const id = legacy?.messageId ?? webhookId({ jobId: job.id, splfKey: job.splfKey, created, pages: document.pages, document: document.name, test });
-        if (stopped) {
-          const message = notSent(stopped.message);
-          failures.push({ message: `${document.name}: ${message}` });
-          await record({ ...base, to, test, status: 'failed', messageId: id, attempts: 0, error: message, detail: stopped.detail ?? null });
-          continue;
-        }
-        const payload = webhookPayload({ type, at: new Date(), document, pageGroups, context, files: callFiles(files, document.pageGroupIndex, formats) });
-        const result = await postWebhook(target, { id, body: JSON.stringify(payload) });
-        const answer = {
-          httpStatus: result.status,
-          attempts: result.attempts,
-          ms: result.ms,
-          response: result.response === null ? null : clean(result.response),
-          messageId: id,
-        };
-        if (result.ok) {
-          sent++;
-          await record({ ...base, to, test, status: 'sent', ...answer });
-          continue;
-        }
-        const message = clean(result.error!.message);
-        const detail = result.error!.detail === undefined ? undefined : clean(result.error!.detail);
-        failures.push({ message: `${document.name}: ${message}`, detail });
-        await record({ ...base, to, test, status: 'failed', ...answer, error: message, detail: detail ?? null });
-        if (result.error!.stops) stopped = { message, detail };
+
+        const where = test ? `the test URL ${shortUrl(target.url)}` : host;
+        if (failures.length > 0) throw deliveryFailed(`Sent ${sent + already} of ${nDocuments(calls.length)} to ${where}`, failures, 'Webhook calls');
+        return `Sent ${nDocuments(sent)} to ${where}${earlierText(already, runsBefore, 'sent')}`;
+      } finally {
+        await release();
       }
-
-      const where = test ? `the test URL ${shortUrl(target.url)}` : host;
-      if (failures.length > 0) throw deliveryFailed(`Sent ${sent + already} of ${nDocuments(calls.length)} to ${where}`, failures, 'Webhook calls');
-      return `Sent ${nDocuments(sent)} to ${where}${earlierText(already, runsBefore, 'sent')}`;
     },
   };
 }

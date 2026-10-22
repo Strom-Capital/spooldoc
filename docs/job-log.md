@@ -146,11 +146,18 @@ processed, so the watcher never runs a file a second time on its own.
 
 With an email destination, Retry sends only the emails that were not sent
 yet. The ones an earlier run sent show as "Sent in run #N", and the
-Deliver step says so: "Sent 1 email, 42 were sent in run #12".
+Deliver step says so: "Sent 1 email, 42 were sent in run #12". A Retry
+that starts while another run is still sending email for the same
+spooled file waits for it first, so no email goes out twice. While the
+destination has a test address, Retry sends every email to it, also the
+ones sent for real before.
 
 With a webhook destination, Retry sends only the documents that were not
 sent yet, each with the same `webhook-id` as before: "Sent 1 document to
-hooks.example.com, 5 were sent in run #12".
+hooks.example.com, 5 were sent in run #12". A Retry that starts while
+another run is still sending calls for the same spooled file waits for it
+first. While the destination has a test URL, Retry sends every document
+to it, also the ones sent for real before.
 
 With an SFTP destination, Retry uploads only the files that the
 destination has not uploaded yet to its folder on its server: "Uploaded

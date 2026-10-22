@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { and, eq, inArray } from 'drizzle-orm';
-import { getDb } from '../db';
+import { getDb, getLocks } from '../db';
 import { runDeliveries, runs } from '../db/schema';
 import { StepError } from '../step-error';
 import type { DeliverInput, RunDocument } from './index';
@@ -31,8 +31,44 @@ export interface EarlierDelivery {
   seq: number;
 }
 
-/** The deliveries, sent or failed, of earlier runs of this job on this spooled file through a kind of destination, first run first. */
-export async function earlierDeliveries(kind: string, job: DeliverInput['job']): Promise<EarlierDelivery[]> {
+/** How long a deliver step waits for another run delivering the same spooled file, and how often it asks. */
+const LOCK_WAIT = { limitMs: 5 * 60_000, pollMs: 1_000 };
+let lockWait = LOCK_WAIT;
+
+/** Change how long the delivery lock is waited for, for tests. Null puts back the defaults. */
+export function setDeliveryLockWait(next: { limitMs: number; pollMs: number } | null): void {
+  lockWait = next ?? LOCK_WAIT;
+}
+
+/**
+ * Takes the lock that lets one run at a time deliver a job's spooled file through a kind of
+ * destination, so a second run reads what the first delivered before it delivers anything.
+ * Take it before `earlierDeliveries`, and keep it until every delivery is recorded. The lock
+ * is a Postgres advisory lock on the one connection the locks keep for the process, so
+ * waiting holds no connection of the pool. Returns its release function.
+ *
+ * @param busy - The step's error when the wait runs out, such as "Another run of this job is sending email ..."
+ * @throws StepError when another run holds the lock for longer than the wait
+ */
+export async function deliveryLock(kind: string, job: DeliverInput['job'], busy: string): Promise<() => Promise<void>> {
+  const key = `${kind}:${job.id}:${job.splfKey}`;
+  const until = Date.now() + lockWait.limitMs;
+  for (;;) {
+    const release = await getLocks().tryLock(key);
+    if (release) return release;
+    if (Date.now() >= until) throw new StepError('deliver', busy);
+    await new Promise((resolve) => setTimeout(resolve, lockWait.pollMs));
+  }
+}
+
+/**
+ * The deliveries, sent or failed, of earlier runs of this job on this spooled file through a
+ * kind of destination, first run first. None while the destination is in test mode: then
+ * every document goes to the test address or URL, even one sent for real before, so a
+ * template change can be checked on a spooled file that was delivered.
+ */
+export async function earlierDeliveries(kind: string, job: DeliverInput['job'], test: boolean): Promise<EarlierDelivery[]> {
+  if (test) return [];
   return getDb()
     .select({
       document: runDeliveries.document,
