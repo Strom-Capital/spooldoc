@@ -1,6 +1,6 @@
 {
   "name": "@spooldoc/docs",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Spooldoc docs reader: the guides in docs/, read for the app and the website",
   "license": "MIT",
   "repository": {
