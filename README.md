@@ -21,14 +21,14 @@ Website, docs and blog: [spooldoc.com](https://spooldoc.com).
 
 Spooldoc watches the output queues of your IBM i, splits each spooled file
 into page groups and reads each into JSON with a definition you write in
-YAML, makes documents of them with ordinary HTML templates (PDF or HTML),
-Word templates (DOCX or PDF) or Excel templates (XLSX or PDF), and
-delivers the files. The JSON
-keeps reading the page and laying out the document apart, so a template
-never deals with lines and columns and a new look is just a new template. The
-agent proposes the definition and the template from a sample spooled
-file; you check the extracted fields next to the page and refine with the agent or
-by hand. Every run is logged.
+YAML. Lookups add what the page does not print, such as the customer's
+email address, from Db2 for i. Templates in HTML, Word or Excel make PDF,
+HTML, DOCX or XLSX files, sent by email, webhook or SFTP, saved to the IFS
+or kept for download. The JSON keeps reading the page and laying out the
+document apart, so a template never deals with lines and columns and a new
+look is a new template. The agent proposes the definition and the template
+from a sample spooled file; you check the extracted fields next to the page
+and refine with the agent or by hand. Every run is logged.
 
 Watch the [90-second overview](https://youtu.be/WNuRqe9Do6o) or the
 [five-minute walkthrough](https://youtu.be/TK0a1nvhn1Q) on YouTube.
