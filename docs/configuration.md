@@ -77,7 +77,7 @@ Under Settings, for the whole app:
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/settings-dark.png">
-    <img src="assets/settings-light.png" alt="The Settings page shows Rendering with Carbone connected, its URL and Spooldoc's public key, Formats set to 1 234,56, 29.10.2026 and EUR, the Mail server with its host, security, port, user name, a saved password and the From address, the Agent with its provider, model, effort and usage, and the Watching and Retention settings." width="900">
+    <img src="assets/settings-light.png" alt="The Settings page shows Rendering with Carbone connected, its URL and Spooldoc's public key, Formats set to 1 234,56, 29.10.2026 and EUR, the Mail server with its host, security, port, user name, a saved password and the From address, Alerts sending to two addresses with the time of the last alert, the Agent with its provider, model, effort and usage, and the Watching and Retention settings." width="900">
   </picture>
 </p>
 
@@ -234,8 +234,9 @@ alert, but a server or queue that has a problem at that moment does.
 Dismissing an item in Needs attention hides it from the Home page and
 does not stop its alert.
 
-Each alert links to the run, job, queue or server it is about when
-`APP_URL` is set, since Spooldoc needs it to write the address. See
+When `APP_URL` is set, each alert links to the page it is about: the
+job's runs in the Job log, the job, the output queue, or the Servers
+page. Spooldoc needs `APP_URL` to write the address. See
 [Environment variables](#environment-variables).
 
 **Send test alert** sends a test email to the saved addresses and says
