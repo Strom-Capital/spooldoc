@@ -39,7 +39,7 @@ has changes.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/job-builder-dark.png">
-    <img src="assets/job-builder-light.png" alt="The job builder with the extract step open shows the six pipeline steps across the top, the sample invoice page with field hits highlighted on the left, and the definition editor on the right." width="900">
+    <img src="assets/job-builder-light.png" alt="The job builder with the extract step open shows the seven pipeline steps across the top, with Lookups between Extract and Render, the sample invoice page with field hits highlighted on the left, and the definition editor on the right." width="900">
   </picture>
 </p>
 

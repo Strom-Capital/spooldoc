@@ -5,6 +5,7 @@ import PostList from '../components/PostList.astro';
 import Shot from '../components/Shot.astro';
 import SiteVideo from '../components/SiteVideo.astro';
 import { FEATURES, QUICK_START, SHOTS } from '../lib/features';
+import { ICONS } from '../lib/icons';
 import { assetSize, siteVersion } from '../lib/docs';
 import { docsUrl, links, url } from '../lib/links';
 import { zoomLabel } from '../lib/imageLinks';
@@ -122,7 +123,10 @@ const tour = [
         {FEATURES.map((feature) => (
           <li>
             <a class="card" href={url(`/features/#${feature.id}`)}>
-              <h3>{feature.title}</h3>
+              <h3>
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" set:html={ICONS[feature.icon]} />
+                {feature.title}
+              </h3>
               <p>{feature.summary}</p>
             </a>
           </li>
@@ -172,11 +176,16 @@ const tour = [
   .tour-item p { margin: 0; }
 
   .grid { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+  /* Nine features: three rows of three, the reading side (servers, definitions, lookups) first.
+     In two columns the odd last card takes the whole row, so none stands alone. */
   @media (min-width: 600px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (min-width: 1000px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (min-width: 600px) and (max-width: 899.98px) { .grid > li:last-child:nth-child(odd) { grid-column: 1 / -1; } }
+  @media (min-width: 900px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   .card { display: block; height: 100%; padding: var(--space-5); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.8); background: var(--card); color: var(--foreground); text-decoration: none; transition: border-color 0.15s; }
   .card:hover { border-color: var(--primary); }
-  .card h3 { margin: 0 0 var(--space-2); }
+  /* The icon sits before the title, as in the app's pipeline cards, on its first line. */
+  .card h3 { display: flex; align-items: flex-start; gap: var(--space-2); margin: 0 0 var(--space-2); }
+  .card h3 svg { flex: none; margin-top: 0.1em; color: var(--primary); }
   .card p { margin: 0; color: var(--muted-foreground); font-size: 0.95rem; }
   .more { margin: var(--space-5) 0 0; font-weight: 500; }
 </style>

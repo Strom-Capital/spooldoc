@@ -5,10 +5,14 @@
  *
  * Paragraphs may hold `<code>` and links: they are written here, never user input.
  */
+import type { IconName } from './icons';
+
 export interface Feature {
   /** The section's anchor on /features. */
   id: string;
   title: string;
+  /** The icon the app shows for it: in the sidebar, the pipeline or the agent's button. */
+  icon: IconName;
   /** One sentence for the grid on the home page. */
   summary: string;
   /** A few short paragraphs for /features. */
@@ -39,7 +43,7 @@ export const SHOTS = {
   'queue-files':
     'The spooled files of one output queue, under the path Queues, the server and the queue, with the four filters above the list and one held spooled file with its number, job, user data, pages, width and length, and when it was created.',
   'job-builder':
-    'The job builder with the extract step open shows the six pipeline steps across the top, the sample invoice page with field hits highlighted on the left, and the definition editor on the right.',
+    'The job builder with the extract step open shows the seven pipeline steps across the top, with Lookups between Extract and Render, the sample invoice page with field hits highlighted on the left, and the definition editor on the right.',
   'xml-definition':
     'The extract step of a job whose spooled file holds XML: the page with its elements highlighted on the left, and the definition with source: xml, the page group element FORM, its fields and its repeating lines on the right.',
   'template-preview':
@@ -51,6 +55,10 @@ export const SHOTS = {
   'ai-assistant':
     'The agent panel beside the workbench shows the suggested prompts, one per kind of template, and the message box.',
   jobs: 'The Jobs page lists five jobs with their server, queue, mode, version and last run: three watching and two run on demand, three of them deleting their spooled files after delivery, and one whose last run failed.',
+  'lookups-step':
+    'The Lookups step of a pick list job lists the lookups customer and product, both ready. The customer form shows the SQL SELECT NAME, EMAIL, LANG FROM MYLIB.CUSTOMERS WHERE CUSTNO = :customerNo with the value 10001 after the parameter. Beside it, the Test tab shows the parameter with its VARCHAR(10) type, the one row found with the customer\'s name, email address and language, and the three tags templates write, each with a copy button.',
+  'lookups-row':
+    'The row lookup product runs once per row of lines, with the SQL SELECT DESCRIPTION FROM MYLIB.ITEMS WHERE ITEMNO = :item AND LANG = :customer.LANG and the values D-4001 and FI after the parameters. The Test tab says it ran with row 1 of lines, lists :item from d.pg.lines[0].item and :customer.LANG from d.pg.customer.LANG, shows the Finnish description found, and the tag {d.pg.lines[i].product.DESCRIPTION}.',
   trigger:
     'The trigger step of a job set to Watching: the watcher runs ready files and the files already on the queue too, and the queue is watched by polling every 30 seconds, with Set up real-time below.',
   finish:
@@ -121,6 +129,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'servers-and-queues',
     title: 'Servers and queues',
+    icon: 'server',
     summary: 'Your programs print as they always have. You add the IBM i and pick its output queues.',
     body: [
       'Spooldoc reads what your programs already print. It connects through jt400 over the host server ports, so nothing is installed on the IBM i and no program changes.',
@@ -137,6 +146,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'definitions',
     title: 'Definitions in YAML',
+    icon: 'file-json',
     summary: 'A definition reads each page into JSON: fields, tables, records and page groups.',
     body: [
       'A definition is a short YAML document that reads the pages of a spooled file into JSON. Fields are found by label, pattern or position. Tables, multi-line records and split keys cover page groups printed back to back, such as one invoice each. XML in a spooled file is read too.',
@@ -148,8 +158,23 @@ export const FEATURES: Feature[] = [
     code: { code: DEFINITION_EXAMPLE, lang: 'yaml', title: 'YAML, the start of the definition shown below', place: 'beside' },
   },
   {
+    id: 'lookups',
+    title: 'Lookups from Db2 for i',
+    icon: 'database',
+    summary: 'The email address an invoice does not print comes from Db2 for i, with no program change.',
+    body: [
+      'Many printed documents leave out something the document needs, most often the customer\'s email address. A lookup reads it from Db2 for i instead, so the program and its spooled file stay as they are.',
+      'A lookup is one SELECT. It takes values the definition read, such as the customer number, as bound parameters, never written into the SQL, and runs on a read-only connection. Its rows join the page group\'s data, so templates and email fields use them like any field: <code>{d.pg.customer.EMAIL}</code>.',
+      'A lookup can run once per row of a table, such as the description of each item, and use the columns of an earlier one, such as the customer\'s language. When no row is found, the run stops, warns or leaves the columns empty, as you choose.',
+      'Test runs a lookup on the job\'s server with the values of the page group shown: each parameter with its Db2 for i type, the rows, and the tags to copy. A version is saved only with lookups that were tested.',
+    ],
+    shots: ['lookups-step', 'lookups-row'],
+    docs: [{ slug: 'lookups', title: 'Lookups' }],
+  },
+  {
     id: 'templates',
     title: 'Templates you already know',
+    icon: 'file-text',
     summary: 'HTML, Word or Excel with Carbone tags, rendered to PDF, HTML, DOCX or XLSX.',
     body: [
       'A template is an HTML page, a Word document made in Word or an Excel workbook made in Excel, with <a href="https://carbone.io">Carbone</a> tags such as <code>{d.pg.invoiceNo}</code>. Each page group becomes a document through every template of the job, in that template\'s formats.',
@@ -165,6 +190,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'agent',
     title: 'The agent',
+    icon: 'mouse-pointer-click',
     summary: 'The agent drafts the definition and the template from a sample. You decide.',
     body: [
       'The agent sits beside the job builder. From a sample spooled file it writes the definition, reads the extraction report and fixes what is missing. Then it writes a template and renders it: HTML, or a Word or Excel template it designs or edits, looking at every page it renders.',
@@ -177,10 +203,10 @@ export const FEATURES: Feature[] = [
   {
     id: 'jobs',
     title: 'Jobs as pipelines',
+    icon: 'workflow',
     summary: 'Source, trigger, extract, lookups, render, destination, finish. Saved as versions.',
     body: [
       'A job takes the spooled files of one output queue to a destination. The job builder shows it as seven steps: source, trigger, extract, lookups, render, destination and finish. The draft saves as you type.',
-      'When the spooled file does not print what a document needs, such as the customer\'s email address, a lookup reads it from Db2 for i: one SELECT with values the definition read as bound parameters, on a read-only connection. Templates and email fields use its columns like any field, such as <code>{d.pg.customer.EMAIL}</code>. Test runs it with the values of the page group shown before a version can be saved.',
       'Saving a version takes a fixed copy of the draft, with a note of what changed. Runs use the active version, and every run is logged against the version it used. Restore an older version to go back.',
       'Run a job on demand on the files you pick, or let it watch the queue. Watching works by polling, or in real time through a data queue that Spooldoc creates only when you turn real-time watching on. When the documents are delivered, the finish step holds, moves, deletes or leaves the spooled file. Delete asks first.',
     ],
@@ -193,6 +219,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'job-log',
     title: 'Job log',
+    icon: 'scroll-text',
     summary: 'Every run is on the record, with its steps, errors and files.',
     body: [
       'Every run of every job is in the job log: the version it used, the spooled file, what started it, its status and the files it delivered. Open a run to see its steps: capture, extract, lookups when the job has some, render, deliver and finish.',
@@ -206,6 +233,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'destinations',
     title: 'Download, IFS, email, webhooks and SFTP',
+    icon: 'send',
     summary: 'Files go to a download in Spooldoc, a folder in the IFS, by email to the address printed in each document, to your URL as signed JSON, or to a folder on an SFTP server.',
     body: [
       'The built-in destination keeps every file in Spooldoc, ready to download from the run in the job log.',
@@ -221,6 +249,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'compose',
     title: 'One Compose file',
+    icon: 'container',
     summary: 'The web app, Postgres and Carbone, on amd64 and arm64.',
     body: [
       'The Compose file starts the published image with a Postgres database and a Carbone server. The image holds the web app and the Java runtime for jt400, and runs on amd64 and arm64.',
