@@ -5,10 +5,14 @@
  *
  * Paragraphs may hold `<code>` and links: they are written here, never user input.
  */
+import type { IconName } from './icons';
+
 export interface Feature {
   /** The section's anchor on /features. */
   id: string;
   title: string;
+  /** The icon the app shows for it: in the sidebar, the pipeline or the agent's button. */
+  icon: IconName;
   /** One sentence for the grid on the home page. */
   summary: string;
   /** A few short paragraphs for /features. */
@@ -125,6 +129,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'servers-and-queues',
     title: 'Servers and queues',
+    icon: 'server',
     summary: 'Your programs print as they always have. You add the IBM i and pick its output queues.',
     body: [
       'Spooldoc reads what your programs already print. It connects through jt400 over the host server ports, so nothing is installed on the IBM i and no program changes.',
@@ -141,6 +146,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'definitions',
     title: 'Definitions in YAML',
+    icon: 'file-json',
     summary: 'A definition reads each page into JSON: fields, tables, records and page groups.',
     body: [
       'A definition is a short YAML document that reads the pages of a spooled file into JSON. Fields are found by label, pattern or position. Tables, multi-line records and split keys cover page groups printed back to back, such as one invoice each. XML in a spooled file is read too.',
@@ -154,6 +160,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'lookups',
     title: 'Lookups from Db2 for i',
+    icon: 'database',
     summary: 'The email address an invoice does not print comes from Db2 for i, with no program change.',
     body: [
       'Many printed documents leave out something the document needs, most often the customer\'s email address. A lookup reads it from Db2 for i instead, so the program and its spooled file stay as they are.',
@@ -167,6 +174,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'templates',
     title: 'Templates you already know',
+    icon: 'file-text',
     summary: 'HTML, Word or Excel with Carbone tags, rendered to PDF, HTML, DOCX or XLSX.',
     body: [
       'A template is an HTML page, a Word document made in Word or an Excel workbook made in Excel, with <a href="https://carbone.io">Carbone</a> tags such as <code>{d.pg.invoiceNo}</code>. Each page group becomes a document through every template of the job, in that template\'s formats.',
@@ -182,6 +190,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'agent',
     title: 'The agent',
+    icon: 'mouse-pointer-click',
     summary: 'The agent drafts the definition and the template from a sample. You decide.',
     body: [
       'The agent sits beside the job builder. From a sample spooled file it writes the definition, reads the extraction report and fixes what is missing. Then it writes a template and renders it: HTML, or a Word or Excel template it designs or edits, looking at every page it renders.',
@@ -194,6 +203,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'jobs',
     title: 'Jobs as pipelines',
+    icon: 'workflow',
     summary: 'Source, trigger, extract, lookups, render, destination, finish. Saved as versions.',
     body: [
       'A job takes the spooled files of one output queue to a destination. The job builder shows it as seven steps: source, trigger, extract, lookups, render, destination and finish. The draft saves as you type.',
@@ -209,6 +219,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'job-log',
     title: 'Job log',
+    icon: 'scroll-text',
     summary: 'Every run is on the record, with its steps, errors and files.',
     body: [
       'Every run of every job is in the job log: the version it used, the spooled file, what started it, its status and the files it delivered. Open a run to see its steps: capture, extract, lookups when the job has some, render, deliver and finish.',
@@ -222,6 +233,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'destinations',
     title: 'Download, IFS, email, webhooks and SFTP',
+    icon: 'send',
     summary: 'Files go to a download in Spooldoc, a folder in the IFS, by email to the address printed in each document, to your URL as signed JSON, or to a folder on an SFTP server.',
     body: [
       'The built-in destination keeps every file in Spooldoc, ready to download from the run in the job log.',
@@ -237,6 +249,7 @@ export const FEATURES: Feature[] = [
   {
     id: 'compose',
     title: 'One Compose file',
+    icon: 'container',
     summary: 'The web app, Postgres and Carbone, on amd64 and arm64.',
     body: [
       'The Compose file starts the published image with a Postgres database and a Carbone server. The image holds the web app and the Java runtime for jt400, and runs on amd64 and arm64.',
