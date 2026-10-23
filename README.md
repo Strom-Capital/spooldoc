@@ -153,8 +153,8 @@ work and are tested against demo spooled files captured from PUB400. Jobs
 can also write their files to a folder in the IFS, email each document
 through an SMTP server or Microsoft 365, post it to a webhook, or upload
 it to an SFTP server. Alerts by email say when a run fails or watching
-stops, and when it works again. Next: S3 destinations, webhook alerts,
-and more users and roles.
+stops, and when it works again. Next: S3 destinations, and more users
+and roles.
 
 Until 1.0, a minor release (0.1 to 0.2) can include breaking changes. Read
 the [release notes](https://github.com/Strom-Capital/spooldoc/releases)
