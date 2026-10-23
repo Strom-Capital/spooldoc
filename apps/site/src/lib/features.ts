@@ -39,7 +39,7 @@ export const SHOTS = {
   'queue-files':
     'The spooled files of one output queue, under the path Queues, the server and the queue, with the four filters above the list and one held spooled file with its number, job, user data, pages, width and length, and when it was created.',
   'job-builder':
-    'The job builder with the extract step open shows the six pipeline steps across the top, the sample invoice page with field hits highlighted on the left, and the definition editor on the right.',
+    'The job builder with the extract step open shows the seven pipeline steps across the top, with Lookups between Extract and Render, the sample invoice page with field hits highlighted on the left, and the definition editor on the right.',
   'xml-definition':
     'The extract step of a job whose spooled file holds XML: the page with its elements highlighted on the left, and the definition with source: xml, the page group element FORM, its fields and its repeating lines on the right.',
   'template-preview':
@@ -51,6 +51,8 @@ export const SHOTS = {
   'ai-assistant':
     'The agent panel beside the workbench shows the suggested prompts, one per kind of template, and the message box.',
   jobs: 'The Jobs page lists five jobs with their server, queue, mode, version and last run: three watching and two run on demand, three of them deleting their spooled files after delivery, and one whose last run failed.',
+  'lookups-step':
+    'The Lookups step of a pick list job lists the lookups customer and product, both ready. The customer form shows the SQL SELECT NAME, EMAIL, LANG FROM MYLIB.CUSTOMERS WHERE CUSTNO = :customerNo with the value 10001 after the parameter. Beside it, the Test tab shows the parameter with its VARCHAR(10) type, the one row found with the customer\'s name, email address and language, and the three tags templates write, each with a copy button.',
   trigger:
     'The trigger step of a job set to Watching: the watcher runs ready files and the files already on the queue too, and the queue is watched by polling every 30 seconds, with Set up real-time below.',
   finish:
@@ -184,7 +186,7 @@ export const FEATURES: Feature[] = [
       'Saving a version takes a fixed copy of the draft, with a note of what changed. Runs use the active version, and every run is logged against the version it used. Restore an older version to go back.',
       'Run a job on demand on the files you pick, or let it watch the queue. Watching works by polling, or in real time through a data queue that Spooldoc creates only when you turn real-time watching on. When the documents are delivered, the finish step holds, moves, deletes or leaves the spooled file. Delete asks first.',
     ],
-    shots: ['jobs', 'trigger', 'finish'],
+    shots: ['jobs', 'lookups-step', 'trigger', 'finish'],
     docs: [
       { slug: 'jobs', title: 'Jobs' },
       { slug: 'lookups', title: 'Lookups' },

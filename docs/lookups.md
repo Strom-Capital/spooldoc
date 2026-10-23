@@ -48,6 +48,13 @@ Write the email destination's To as `{d.pg.customer.EMAIL}`. **Insert
 field** in the Destination step lists the lookup's columns. A template
 writes the same tag, such as `<p>{d.pg.customer.NAME}</p>`.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/lookups-step-dark.png">
+    <img src="assets/lookups-step-light.png" alt="The Lookups step of a pick list job lists the lookups customer and product, both ready. The customer form shows the SQL SELECT NAME, EMAIL, LANG FROM MYLIB.CUSTOMERS WHERE CUSTNO = :customerNo with the value 10001 after the parameter. Beside it, the Test tab shows the parameter with its VARCHAR(10) type, the one row found with the customer's name, email address and language, and the three tags templates write, each with a copy button." width="900">
+  </picture>
+</p>
+
 The columns keep the names Db2 for i gives them: `EMAIL`. Give a column
 another name with `AS`, and a lowercase one in quotes:
 `EMAIL AS "email"`. A column made from an expression needs a name too,
@@ -98,6 +105,16 @@ A parameter of a row lookup can also name a field of the page group. When
 a column of the row and a field of the page group have the same name,
 rename one of them in the definition.
 
+A row lookup can read an earlier lookup too. With `:customer.LANG`, each
+item gets its description in the customer's language:
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/lookups-row-dark.png">
+    <img src="assets/lookups-row-light.png" alt="The row lookup product runs once per row of lines, with the SQL SELECT DESCRIPTION FROM MYLIB.ITEMS WHERE ITEMNO = :item AND LANG = :customer.LANG and the values D-4001 and FI after the parameters. The Test tab says it ran with row 1 of lines, lists :item from d.pg.lines[0].item and :customer.LANG from d.pg.customer.LANG, shows the Finnish description found, and the tag {d.pg.lines[i].product.DESCRIPTION}." width="900">
+  </picture>
+</p>
+
 ## One row or all rows
 
 **One row** adds the row as an object: `{d.pg.customer.EMAIL}`. When the
@@ -124,9 +141,16 @@ A later lookup that reads a column of one that found no row does not run
 in that page group, or that row: with `:customer.LANG`, a `product`
 lookup has no language to look up with. Its columns are left empty, and
 it adds no warning of its own. The earlier lookup's warning says what it
-left empty: "No row in customer for customerNo 10007 (pick-list-700005).
+left empty: "No row in customer for customerNo 10007 (picklist-700005).
 product is left empty." When the earlier lookup stops the run, the later
 one never runs.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/lookups-miss-dark.png">
+    <img src="assets/lookups-miss-light.png" alt="Page group 5 of a pick list job, whose customer number 10007 is not in the customer table. The Test of customer shows the parameter and No row found, says a run leaves the columns empty, and warns: No row in customer for customerNo 10007 (picklist-700005). product is left empty. The customer lookup and the Lookups step in the pipeline show the amber dot of a lookup worth a look." width="900">
+  </picture>
+</p>
 
 A parameter whose field is empty on the page is different: it is bound
 as NULL and the lookup runs. A condition such as `CUSTNO = :customerNo`
