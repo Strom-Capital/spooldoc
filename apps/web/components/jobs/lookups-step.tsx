@@ -22,6 +22,7 @@ import { ApiError, api, shownError, type ShownError } from '@/lib/client/api';
 import type { LookupsPreview } from '@/lib/client/render';
 import type { LookupTestView } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { currentColumns, testedColumns } from '@/lib/client/lookups';
 import { useJob } from './job-provider';
 import { DraftStatus, NoSample, StepHeader } from './workbench-steps';
 
@@ -94,6 +95,8 @@ function parameterHints(values: ReadonlyMap<string, unknown>, known: readonly st
       true,
     );
   return [
+    // The pane is narrow: long lines wrap, so the end of the statement and its values stay in view.
+    EditorView.lineWrapping,
     ViewPlugin.fromClass(
       class {
         decorations: DecorationSet;
@@ -143,7 +146,7 @@ function parameterScope(lookup: Lookup, index: number, lookups: readonly Lookup[
   const known = new Set<string>(scopes.flatMap(single));
   for (const earlier of lookups.slice(0, index)) {
     if (earlier.result !== 'one' || (earlier.for !== undefined && earlier.for !== lookup.for)) continue;
-    for (const column of earlier.checked?.columns ?? []) known.add(`${earlier.name}.${column.name}`);
+    for (const column of testedColumns(earlier)) known.add(`${earlier.name}.${column.name}`);
   }
   const values = new Map<string, unknown>();
   for (const { name } of sqlParameters(lookup.sql)) {
@@ -470,7 +473,8 @@ function LookupForm({
               One SELECT. Write a field of the page group as a parameter, such as :customerNo. Its value is bound, never written into the SQL.
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
+          {/* One above the other: the pane is often too narrow for both, and the texts stay whole. */}
+          <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={id('rows')}>Rows</Label>
               <Select value={lookup.result} onValueChange={(value) => onChange({ result: value as Lookup['result'] }, false)} disabled={readOnly}>
@@ -549,7 +553,9 @@ function TestPane({
   const name = lookup.name.trim() || `Lookup ${index + 1}`;
   const stale = outcome !== undefined && outcome.sql !== lookup.sql;
   const view = outcome?.view;
-  const columns = view?.columns ?? lookup.checked?.columns ?? [];
+  // Columns of a Test of other SQL are not this lookup's any more.
+  const columns = currentColumns(lookup, outcome);
+  const columnsStale = columns.length === 0 && (lookup.checked?.columns.length ?? 0) > 0;
   const traces = (preview?.traces ?? []).filter((t) => t.lookup === lookup.name);
   const misses = (preview?.misses ?? []).filter((m) => m.lookup === lookup.name);
   const previewError = preview?.error && (preview.error.lookup === undefined || preview.error.lookup === lookup.name) ? preview.error : undefined;
@@ -659,6 +665,7 @@ function TestPane({
         </ul>
       )}
 
+      {columnsStale && <p className="text-muted-foreground text-xs">Test this lookup to see its columns and their tags.</p>}
       {columns.length > 0 && LOOKUP_NAME.test(lookup.name) && (
         <section aria-labelledby="test-tags">
           <h3 id="test-tags" className="mb-1 font-medium">
