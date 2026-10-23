@@ -193,6 +193,7 @@ export const FEATURES: Feature[] = [
     body: [
       'Every run of every job is in the job log: the version it used, the spooled file, what started it, its status and the files it delivered. Open a run to see its steps: capture, extract, render, deliver and finish.',
       'A failed run says which step failed and why, in IBM i terms: the object, the authority and the command that fixes it. The IBM i\'s own message is kept under Details. Failed runs show under Needs attention on the Home page.',
+      'With alerts on, you get one email when a run fails or watching stops, and one when it works again.',
       'Retry runs the same spooled file again with the active version. Runs are kept for 90 days by default, and you set how long.',
     ],
     shots: ['job-log', 'job-log-failed'],

@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { splfKey } from '@/lib/job-spec';
-import { jobs, runFiles, runs, samples, settings, watchSeen } from '@/lib/server/db/schema';
+import { alerts, jobs, runFiles, runs, samples, settings, watchSeen } from '@/lib/server/db/schema';
 import { resetTables } from './helpers/db';
 import { loadSample } from './helpers/fake-connection';
 import { db, insertJob, insertServer, testDb } from './helpers/fixtures';
@@ -81,7 +81,7 @@ describe('cleanUp', () => {
     await insertRun({ startedAt: daysAgo(31), finishedAt: daysAgo(31), number: 1 });
     const recent = await insertRun({ startedAt: daysAgo(29), finishedAt: daysAgo(29), number: 2 });
 
-    expect(await cleanUp(30, NOW)).toEqual({ runs: 1, samples: 1, templateFiles: 0, agentUsage: 0 });
+    expect(await cleanUp(30, NOW)).toEqual({ runs: 1, samples: 1, templateFiles: 0, agentUsage: 0, alerts: 0 });
 
     expect(await ids(db().select({ id: runs.id }).from(runs))).toEqual([recent.runId]);
     expect((await db().select({ runId: runFiles.runId }).from(runFiles)).map((r) => r.runId)).toEqual([recent.runId]);
@@ -103,7 +103,7 @@ describe('cleanUp', () => {
     const cutOff = await insertRun({ startedAt: daysAgo(400), finishedAt: null, number: 1 });
     const running = await insertRun({ startedAt: new Date(NOW.getTime() - 60_000), finishedAt: null, number: 2 });
 
-    expect(await cleanUp(30, NOW)).toEqual({ runs: 0, samples: 0, templateFiles: 0, agentUsage: 0 });
+    expect(await cleanUp(30, NOW)).toEqual({ runs: 0, samples: 0, templateFiles: 0, agentUsage: 0, alerts: 0 });
     const rows = await db().select().from(runs);
     expect(rows.find((r) => r.id === cutOff.runId)).toMatchObject({ status: 'failed', finishedAt: NOW, error: expect.stringMatching(/cut off/) });
     expect(rows.find((r) => r.id === running.runId)).toMatchObject({ status: 'running', finishedAt: null });
@@ -126,7 +126,7 @@ describe('cleanUp', () => {
     const { sampleId } = await insertRun({ startedAt: daysAgo(1), finishedAt: daysAgo(1), number: 1 });
     await db().delete(jobs).where(eq(jobs.id, jobId));
 
-    expect(await cleanUp(30, NOW)).toEqual({ runs: 0, samples: 1, templateFiles: 0, agentUsage: 0 });
+    expect(await cleanUp(30, NOW)).toEqual({ runs: 0, samples: 1, templateFiles: 0, agentUsage: 0, alerts: 0 });
     expect(await db().select().from(samples).where(eq(samples.id, sampleId))).toEqual([]);
   });
 
@@ -140,8 +140,18 @@ describe('cleanUp', () => {
       .set({ draft: { ...job!.draft, preview: { sampleId: used } } })
       .where(eq(jobs.id, jobId));
 
-    expect(await cleanUp(30, NOW)).toEqual({ runs: 0, samples: 1, templateFiles: 0, agentUsage: 0 });
+    expect(await cleanUp(30, NOW)).toEqual({ runs: 0, samples: 1, templateFiles: 0, agentUsage: 0, alerts: 0 });
     expect(await ids(db().select({ id: samples.id }).from(samples))).toEqual([used, fresh].sort());
+  });
+
+  it('deletes alerts that closed before the retention, and keeps open ones however old', async () => {
+    const alert = (key: string, openedAt: Date, resolvedAt: Date | null) => ({ key, kind: 'job', subjectId: jobId, title: 'MYJOB', path: `/jobs/${jobId}`, openedAt, resolvedAt });
+    await db()
+      .insert(alerts)
+      .values([alert('job:old', daysAgo(40), daysAgo(31)), alert('job:recent', daysAgo(40), daysAgo(29)), alert('job:open', daysAgo(400), null)]);
+
+    expect(await cleanUp(30, NOW)).toEqual({ runs: 0, samples: 0, templateFiles: 0, agentUsage: 0, alerts: 1 });
+    expect((await db().select({ key: alerts.key }).from(alerts)).map((a) => a.key).sort()).toEqual(['job:open', 'job:recent']);
   });
 
   it('deletes in batches when there is a lot to delete', async () => {
@@ -156,7 +166,7 @@ describe('cleanUp', () => {
     }));
     await db().insert(runs).values(values);
 
-    expect(await cleanUp(30, NOW)).toEqual({ runs: 1201, samples: 0, templateFiles: 0, agentUsage: 0 });
+    expect(await cleanUp(30, NOW)).toEqual({ runs: 1201, samples: 0, templateFiles: 0, agentUsage: 0, alerts: 0 });
     expect(await db().select().from(runs)).toEqual([]);
   });
 
@@ -168,7 +178,7 @@ describe('cleanUp', () => {
     expect(await db().select().from(runs)).toHaveLength(1);
 
     await release!();
-    expect(await cleanUp(30, NOW)).toEqual({ runs: 1, samples: 1, templateFiles: 0, agentUsage: 0 });
+    expect(await cleanUp(30, NOW)).toEqual({ runs: 1, samples: 1, templateFiles: 0, agentUsage: 0, alerts: 0 });
   });
 });
 
@@ -192,7 +202,7 @@ describe('watcher cleanup', () => {
 
     await watcher.tick();
     expect(await ids(db().select({ id: runs.id }).from(runs))).toEqual([kept.runId]);
-    expect(watcher.cleanup).toEqual({ at: NOW.toISOString(), runs: 1, samples: 1, templateFiles: 0, agentUsage: 0 });
+    expect(watcher.cleanup).toEqual({ at: NOW.toISOString(), runs: 1, samples: 1, templateFiles: 0, agentUsage: 0, alerts: 0 });
 
     await insertRun({ startedAt: daysAgo(20), finishedAt: daysAgo(20), number: 3 });
     clock += 30 * 60_000;

@@ -295,10 +295,12 @@ export interface SettingsView {
   retentionDays: number;
   watching: { realtime: number; polled: number };
   /** The last cleanup of old runs by this server process, if it did one. */
-  cleanup: { at: string; runs: number; samples: number; templateFiles: number; agentUsage: number; error?: string } | null;
+  cleanup: { at: string; runs: number; samples: number; templateFiles: number; agentUsage: number; alerts: number; error?: string } | null;
   ai: AiSettingsView;
   rendering: RenderingView;
   mail: MailView;
+  /** Where alerts go when a run fails or watching stops. */
+  alerts: AlertsView;
   /** How numbers, amounts and dates print in documents and email fields. */
   formats: Formats;
 }
@@ -321,6 +323,16 @@ export interface MailView {
   fromName: string;
   /** The picked sender has what it needs (a host, or a tenant, client ID and secret) and a From address, so email can be sent. */
   configured: boolean;
+}
+
+/** Where alerts go, and how the last try to send one went, as Settings shows it. */
+export interface AlertsView {
+  /** The addresses, comma separated. Empty means alerts are off. */
+  to: string;
+  /** When the last alert email was sent. */
+  sentAt: string | null;
+  /** Why the last alert email could not be sent, with the mail server's own text, and when the next try is. */
+  error: { message: string; detail: string | null; at: string; nextTryAt: string } | null;
 }
 
 /** A value an email field reads, and whether it has one: as the extraction report colors fields. */

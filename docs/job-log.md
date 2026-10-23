@@ -32,6 +32,8 @@ until they are dismissed, as do servers that cannot be reached, jobs whose
 watcher reports an error, and queues that are polled because real-time
 watching stopped. What fails before a run exists, such as a server the
 watcher cannot reach, is also in the [server log](configuration.md#server-log).
+With [alerts](configuration.md#alerts) on, each of them is also sent by
+email, once when it starts and once when it is fixed.
 
 ## Runs cut off by a restart
 
@@ -174,6 +176,7 @@ Settings holds how long runs are kept: 90 days by default, 1 to 3650. Once
 an hour the watcher deletes runs that finished longer ago, with their
 captured spooled files and delivered files, preview samples no job
 uses, uploaded Word and Excel templates that no draft or version uses,
-and the agent's [usage](agent.md#usage) records from before then. The record of which spooled files were processed is kept, so a file
+the agent's [usage](agent.md#usage) records from before then, and
+[alerts](configuration.md#alerts) that were fixed before then. The record of which spooled files were processed is kept, so a file
 is not run again after its run is gone. Runs are deleted in small batches
 so no single delete holds its locks for long.
