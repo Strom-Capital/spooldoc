@@ -19,7 +19,7 @@ export const SITE_DESCRIPTION =
 
 /** The brand guide's 75-word description: the home page's lead, its JSON-LD and llms.txt. */
 export const LONG_DESCRIPTION =
-  'Spooldoc turns IBM i spooled files into documents. It watches your output queues and reads each spooled file into JSON with a definition you write in YAML. Templates in HTML, Word or Excel make PDF, HTML, DOCX or XLSX files, delivered to a download or a folder in the IFS. The agent proposes the first definition and template from a sample; you check every value next to the page. Nothing is installed on the IBM i. MIT licensed.';
+  'Spooldoc turns IBM i spooled files into documents. It watches your output queues and reads each spooled file into JSON with a YAML definition. Lookups add what the page does not print from Db2 for i. Templates in HTML, Word or Excel make PDF, HTML, DOCX or XLSX files, sent by email, webhook or SFTP, or saved to the IFS. The agent proposes the first definition and template from a sample; you check every value. Nothing is installed on the IBM i. MIT licensed.';
 
 /** Absolute URL for a path on this site. */
 function abs(path: string, site: URL): string {
