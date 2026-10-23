@@ -4,8 +4,7 @@ import { namePatternProblems, tagProblems, templatePaths, valueAt, type Definiti
 import { convert as convertHtml } from 'html-to-text';
 import juice from 'juice';
 import type { SendMailOptions } from 'nodemailer';
-import addressparser from 'nodemailer/lib/addressparser';
-import { isEmailAddress } from '@/lib/destination-config';
+import { parseAddresses } from '@/lib/addresses';
 import { EMAIL_FIELDS, EMAIL_TAG, parseEmailTag, type EmailField, type EmailTag } from '@/lib/email-fields';
 import { DEFAULT_FORMATS, formatC, formatD, formatN, formatPlainNumber, type Formats } from '@/lib/formats';
 import { FORMAT_FILES, formatList, perSpooledFile, type EmailSpec, type Format, type JobTemplate } from '@/lib/job-spec';
@@ -171,21 +170,11 @@ function emptyText(expanded: { empty: string[]; missing: string[] }): string {
   return [...say(expanded.empty, 'empty'), ...say(expanded.missing, 'not in the data')].join(', and ');
 }
 
-/** An address as a header writes it, with its name if it has one: `john@example.com`, `John Smith <john@example.com>`, `"Smith, John" <john@example.com>`. */
-function mailboxText(name: string, address: string): string {
-  if (!name) return address;
-  return /^[\w !#$%&'*+\-/=?^`{|}~]+$/.test(name) ? `${name} <${address}>` : `"${name.replace(/["\\]/g, '\\$&')}" <${address}>`;
-}
-
-const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 /**
  * The addresses of To, Cc, Bcc or Reply-To: the field with its tags filled in, read by
- * Nodemailer's address parser, with the tags that had no value and the text that is not an
- * address. Commas and semicolons both separate addresses, and a quoted name keeps its own,
- * so `"Smith, John" <john@example.com>; jane@example.com` is two. `addresses` has each
- * mailbox as a header writes it, with its name quoted when it needs to be, so Nodemailer
- * and Microsoft 365 read it back with the name; the job log and the test line show it.
+ * `parseAddresses`, with the tags that had no value and the text that is not an address.
+ * `addresses` has each mailbox as a header writes it, so Nodemailer and Microsoft 365 read
+ * it back with the name; the job log and the test line show it.
  */
 export function addressList(
   text: string,
@@ -193,16 +182,7 @@ export function addressList(
   formatting: EmailFormatting = PLAIN_FORMATTING,
 ): { addresses: string[]; empty: string[]; missing: string[]; invalid: string[] } {
   const expanded = expandText(text, data, formatting);
-  const addresses: string[] = [];
-  const invalid: string[] = [];
-  for (const entry of addressparser(expanded.text, { flatten: true })) {
-    const address = entry.address.trim();
-    const name = entry.name.trim();
-    // A name goes with the address in angle brackets, or in parentheses after it: `a@example.com b@example.com` is not an address.
-    const named = !name || new RegExp(`<\\s*${escapeRegExp(address)}\\s*>`).test(expanded.text) || expanded.text.includes(`(${name})`);
-    if (address && isEmailAddress(address) && named) addresses.push(mailboxText(name, address));
-    else if (address || name) invalid.push(!address || !name ? address || name : named ? `${name} <${address}>` : `${address} ${name}`);
-  }
+  const { addresses, invalid } = parseAddresses(expanded.text);
   return { addresses, empty: expanded.empty, missing: expanded.missing, invalid };
 }
 

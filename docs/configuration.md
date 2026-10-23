@@ -72,11 +72,12 @@ Under Settings, for the whole app:
 | Agent | None | The provider, key, model and effort of the agent. See [Agent](agent.md#choosing-a-model). The section also shows the agent's [usage](agent.md#usage) this month and last month. |
 | Formats | `1,234.56`, `YYYY-MM-DD` | How numbers, amounts and dates print in documents and email fields. See [Formats](#formats). |
 | Mail server | None | The SMTP server email destinations send through. See [Mail server](#mail-server). |
+| Alerts | Off | The addresses that get an email when a run fails or watching stops. See [Alerts](#alerts). |
 
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/settings-dark.png">
-    <img src="assets/settings-light.png" alt="The Settings page shows Rendering with Carbone connected, its URL and Spooldoc's public key, Formats set to 1 234,56, 29.10.2026 and EUR, the Mail server with its host, security, port, user name, a saved password and the From address, the Agent with its provider, model, effort and usage, and the Watching and Retention settings." width="900">
+    <img src="assets/settings-light.png" alt="The Settings page shows Rendering with Carbone connected, its URL and Spooldoc's public key, Formats set to 1 234,56, 29.10.2026 and EUR, the Mail server with its host, security, port, user name, a saved password and the From address, Alerts sending to two addresses with the time of the last alert, the Agent with its provider, model, effort and usage, and the Watching and Retention settings." width="900">
   </picture>
 </p>
 
@@ -199,6 +200,58 @@ it may not, the message says so, such as "Microsoft 365 does not let the
 app send as invoices@contoso.example", with Microsoft's own text under
 Details. A wrong tenant ID, client ID or secret, a missing permission
 and a mailbox that does not exist each get their own message.
+
+## Alerts
+
+Spooldoc can email you when something needs attention, so you do not have
+to watch the Home page. Enter the addresses under Settings, **Alerts**,
+in **Email alerts to**, separated by commas, and save. Empty turns alerts
+off. Alerts send through the [mail server](#mail-server), so set that
+first.
+
+An alert covers what Needs attention on the Home page lists:
+
+| Problem | When it alerts | When it is fixed |
+|---------|----------------|------------------|
+| A run fails or ends with a warning | At once | A later run of the same job succeeds, or the job is deleted |
+| A server cannot be reached, or its sign-on failed | After 5 minutes | Spooldoc reaches the server again |
+| A job cannot process new spooled files, such as while Carbone does not work | After 5 minutes | The job's watcher works again |
+| An output queue is polled because real-time watching stopped | After 5 minutes | Real-time watching works again |
+
+A server, job or queue problem that is fixed within 5 minutes sends
+nothing, so a short break in the connection does not wake anyone up.
+
+Each problem sends one email when it starts and one when it is fixed,
+and nothing in between. More failed runs of the same job, while its
+first failure is not fixed, send nothing. When a run of the job succeeds,
+the note says so and counts the runs that failed: "MYJOB works again.
+Run 131 succeeded at 10:05 UTC. 3 runs failed since 09:14 UTC." Spooldoc
+checks every 30 seconds, and puts everything that started or was fixed
+since the last check into one email. Times are in UTC.
+
+Alerts start when you turn them on: runs that finished before do not
+alert, but a server or queue that has a problem at that moment does.
+Dismissing an item in Needs attention hides it from the Home page and
+does not stop its alert.
+
+When `APP_URL` is set, each alert links to the page it is about: the
+job's runs in the Job log, the job, the output queue, or the Servers
+page. Spooldoc needs `APP_URL` to write the address. See
+[Environment variables](#environment-variables).
+
+**Send test alert** sends a test email to the saved addresses and says
+what happened, the same way as **Send test email** under Mail server.
+
+When an alert cannot be sent, nothing is lost: Spooldoc tries again 5
+minutes later with everything that is still waiting. Settings shows why
+under Alerts, such as "Could not send alerts at 10:05: The mail server
+refused the sign-in.", with the time of the next try and the mail
+server's own text under Details. The [server log](#server-log) has a
+warning the first time each error shows, and a line when alerts send
+again. While it works, Settings shows when the last alert was sent.
+
+With several instances, each one checks for alerts, and a database lock
+lets one check at a time, so an alert is sent once.
 
 ## Certificates
 

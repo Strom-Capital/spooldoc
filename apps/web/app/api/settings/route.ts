@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { AI_PROVIDER_IDS, EFFORT_IDS } from '@/lib/ai-providers';
+import { alertsSchema } from '@/lib/alerts-config';
+import { getAlertsView, updateAlerts } from '@/lib/server/alerts';
 import { guard } from '@/lib/server/auth';
 import { invalidResponse, json, readJson } from '@/lib/server/http';
 import { formatsSchema } from '@/lib/formats';
@@ -62,11 +64,12 @@ const settingsSchema = z
     rendering: renderingSchema,
     mail: mailSettingsSchema,
     formats: formatsSchema,
+    alerts: alertsSchema,
   })
   .partial();
 
 async function view(): Promise<Response> {
-  return json({ ...(await getSettings()), watching: watchStatus(), cleanup: cleanupStatus(), ai: await getAiSettings(), rendering: await getRendering(), mail: await getMailView(), formats: await getFormats() });
+  return json({ ...(await getSettings()), watching: watchStatus(), cleanup: cleanupStatus(), ai: await getAiSettings(), rendering: await getRendering(), mail: await getMailView(), formats: await getFormats(), alerts: await getAlertsView() });
 }
 
 /** The watcher intervals, the retention, how many queues are watched or polled, the chat model and the Carbone connection (never a key). */
@@ -91,7 +94,7 @@ export async function PUT(request: Request): Promise<Response> {
   if ('response' in body) {
     return body.response;
   }
-  const { ai, rendering, mail, formats, ...change } = body.data;
+  const { ai, rendering, mail, formats, alerts, ...change } = body.data;
   const mailProblem = mail ? await mailChangeProblem(mail) : null;
   if (mailProblem) {
     return invalidResponse(mailProblem, ['mail', 'clientSecret']);
@@ -101,6 +104,9 @@ export async function PUT(request: Request): Promise<Response> {
   }
   if (formats) {
     await updateFormats(formats);
+  }
+  if (alerts) {
+    await updateAlerts(alerts.to);
   }
   if (mail) {
     await updateMail(mail);

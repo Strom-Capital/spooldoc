@@ -78,7 +78,8 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
   test address, URL or folder takes everything first.
 - **Job log**: every run with its steps, errors, files, emails, webhook calls
   and uploads;
-  retention you set.
+  retention you set. An email alert when a run fails or watching stops,
+  and one when it is fixed.
 - **One Compose file**: the web app with its Java runtime, Postgres and
   Carbone, amd64 and arm64.
 
@@ -151,7 +152,9 @@ HTML, PDF, DOCX and XLSX output and the Spooldoc download destination
 work and are tested against demo spooled files captured from PUB400. Jobs
 can also write their files to a folder in the IFS, email each document
 through an SMTP server or Microsoft 365, post it to a webhook, or upload
-it to an SFTP server. Next: S3 destinations, and more users and roles.
+it to an SFTP server. Alerts by email say when a run fails or watching
+stops, and when it works again. Next: S3 destinations, webhook alerts,
+and more users and roles.
 
 Until 1.0, a minor release (0.1 to 0.2) can include breaking changes. Read
 the [release notes](https://github.com/Strom-Capital/spooldoc/releases)

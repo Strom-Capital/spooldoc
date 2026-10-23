@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Spinner } from '@/components/ui/spinner';
 import { Switch } from '@/components/ui/switch';
 import { AI_PROVIDERS, aiProvider, DEFAULT_LOCAL_BASE_URL, EFFORTS, type AiProviderId, type Effort } from '@/lib/ai-providers';
+import { alertAddressProblem } from '@/lib/alerts-config';
 import { api, errorText, isAbort, shownError, type ShownError } from '@/lib/client/api';
 import { usageText } from '@/lib/client/format';
 import {
@@ -33,7 +34,7 @@ import {
   type NumberLang,
 } from '@/lib/formats';
 import { MAIL_SENDER_LABEL, MAIL_SENDERS, SMTP_DEFAULT_PORT, SMTP_SECURITY, SMTP_SECURITY_LABEL, type MailSenderKind, type SmtpSecurity } from '@/lib/mail-config';
-import type { AgentUsageView, AiSettingsView, CarboneCheck, MailView, RenderingView, SettingsView, UsageMonth } from '@/lib/types';
+import type { AgentUsageView, AiSettingsView, AlertsView, CarboneCheck, MailView, RenderingView, SettingsView, UsageMonth } from '@/lib/types';
 
 type Unit = 's' | 'min';
 
@@ -825,6 +826,113 @@ function MailSection({ saved, draft, onChange }: { saved: MailView; draft: MailD
   );
 }
 
+/** The alert addresses as edited. */
+interface AlertsDraft {
+  to: string;
+}
+
+const alertsDraft = (saved: AlertsView): AlertsDraft => ({ to: saved.to });
+
+/** The `alerts` part of a settings change, or undefined when nothing changed. */
+function alertsChange(saved: AlertsView, draft: AlertsDraft) {
+  const to = draft.to.trim();
+  return to === saved.to ? undefined : { to };
+}
+
+/** Who gets an email when a run fails or watching stops, a test alert, and how the last alert went. */
+function AlertsSection({ saved, draft, mailReady, onChange }: { saved: AlertsView; draft: AlertsDraft; mailReady: boolean; onChange(draft: AlertsDraft): void }) {
+  const [sending, setSending] = useState(false);
+  const [result, setResult] = useState<{ ok: true; to: string } | { ok: false; error: ShownError } | null>(null);
+  const changed = alertsChange(saved, draft) !== undefined;
+  const problem = alertAddressProblem(draft.to);
+
+  async function onTest() {
+    setSending(true);
+    setResult(null);
+    try {
+      const sent = await api<{ to: string }>('/api/settings/alerts', { method: 'POST' });
+      setResult({ ok: true, to: sent.to });
+    } catch (err) {
+      setResult({ ok: false, error: shownError(err) });
+    } finally {
+      setSending(false);
+    }
+  }
+
+  const error = saved.error;
+  return (
+    <section id="alerts" className="scroll-mt-4 rounded-lg border p-5">
+      <h2 className="font-semibold">Alerts</h2>
+      <p className="mt-0.5 mb-5 text-muted-foreground text-sm">
+        Email when a run fails or ends with a warning, a server cannot be reached, or a queue is polled because real-time watching stopped. One email when a
+        problem starts and one when it is fixed.{' '}
+        <DocsLink page="configuration" anchor="alerts">
+          How alerts work
+        </DocsLink>
+      </p>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="alerts-to">Email alerts to</Label>
+        <Input
+          id="alerts-to"
+          value={draft.to}
+          onChange={(event) => onChange({ ...draft, to: event.target.value })}
+          placeholder="ops@example.com"
+          aria-invalid={!!problem || undefined}
+          aria-describedby="alerts-to-hint"
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <p id="alerts-to-hint" className={problem ? 'text-destructive text-xs' : 'text-muted-foreground text-xs'}>
+          {problem ?? 'Addresses separated by commas. Empty turns alerts off.'}
+        </p>
+        {!mailReady && (
+          <p className="text-muted-foreground text-xs">
+            Alerts send through the mail server.{' '}
+            <a href="#mail" className="font-medium text-primary underline-offset-4 hover:underline">
+              Set one above.
+            </a>
+          </p>
+        )}
+      </div>
+      <div className="mt-5 flex flex-col gap-2 border-t pt-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <Hint
+            text={
+              changed
+                ? 'Save your changes first: the test alert goes to the saved addresses.'
+                : !mailReady
+                  ? 'Set a mail server above, and save, first: alerts send through it.'
+                  : !saved.to
+                    ? 'Enter the addresses, and save, first.'
+                    : `Send a test alert to ${saved.to}, to check that alerts arrive.`
+            }
+          >
+            <Button type="button" variant="outline" size="sm" onClick={() => void onTest()} disabled={sending || changed || !mailReady || !saved.to}>
+              {sending ? <Spinner /> : <SendIcon />}
+              Send test alert
+            </Button>
+          </Hint>
+          {result?.ok && (
+            <span className="flex items-center gap-1.5 text-emerald-700 text-sm dark:text-emerald-400" role="status">
+              <CheckIcon className="size-4" aria-hidden />
+              Test alert sent to {result.to}.
+            </span>
+          )}
+        </div>
+        {result && !result.ok && <ErrorNote detail={result.error.detail}>{result.error.message}</ErrorNote>}
+        {error ? (
+          <ErrorNote detail={error.detail ?? undefined}>
+            Could not send alerts at {new Date(error.at).toLocaleString()}: {/[.!?]$/.test(error.message) ? error.message : `${error.message}.`} The next try
+            is at {new Date(error.nextTryAt).toLocaleTimeString()}.
+          </ErrorNote>
+        ) : (
+          saved.sentAt && <p className="text-muted-foreground text-xs">Last alert sent at {new Date(saved.sentAt).toLocaleString()}.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** The formats as edited. An empty currency is the number format's own. */
 interface FormatsDraft {
   numberFormat: NumberLang;
@@ -921,6 +1029,7 @@ function cleanupText(cleanup: NonNullable<SettingsView['cleanup']>): string {
     samples,
     cleanup.templateFiles > 0 && `${cleanup.templateFiles} unused Word ${cleanup.templateFiles === 1 ? 'template' : 'templates'}`,
     cleanup.agentUsage > 0 && `${cleanup.agentUsage} agent usage ${cleanup.agentUsage === 1 ? 'record' : 'records'}`,
+    cleanup.alerts > 0 && `${cleanup.alerts} closed ${cleanup.alerts === 1 ? 'alert' : 'alerts'}`,
   ].filter((part): part is string => typeof part === 'string');
   return `The last cleanup, at ${at}, deleted ${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}.`;
 }
@@ -934,6 +1043,7 @@ export function SettingsPage() {
   const [rendering, setRendering] = useState<RenderingDraft | null>(null);
   const [mail, setMail] = useState<MailDraft | null>(null);
   const [formats, setFormats] = useState<FormatsDraft | null>(null);
+  const [alerts, setAlerts] = useState<AlertsDraft | null>(null);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -946,8 +1056,8 @@ export function SettingsPage() {
         setAi(aiDraft(data.ai, data.ai.provider));
         setRendering(renderingDraft(data.rendering));
         setMail(mailDraft(data.mail));
-      setFormats(formatsDraft(data.formats));
         setFormats(formatsDraft(data.formats));
+        setAlerts(alertsDraft(data.alerts));
       },
       (err) => setError(errorText(err)),
     );
@@ -972,21 +1082,23 @@ export function SettingsPage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (!draft || !ai || !rendering || !mail || !formats || !settings) return;
+    if (!draft || !ai || !rendering || !mail || !formats || !alerts || !settings) return;
     setBusy(true);
     setError(null);
     try {
       const change = renderingChange(settings.rendering, rendering);
       const mailPart = mailChange(settings.mail, mail);
+      const alertsPart = alertsChange(settings.alerts, alerts);
       const data = await api<SettingsView>('/api/settings', {
         method: 'PUT',
-        body: { ...draft, ai: aiChange(ai), ...(change ? { rendering: change } : {}), ...(mailPart ? { mail: mailPart } : {}), formats },
+        body: { ...draft, ai: aiChange(ai), ...(change ? { rendering: change } : {}), ...(mailPart ? { mail: mailPart } : {}), ...(alertsPart ? { alerts: alertsPart } : {}), formats },
       });
       setSettings(data);
       setAi(aiDraft(data.ai, data.ai.provider));
       setRendering(renderingDraft(data.rendering));
       setMail(mailDraft(data.mail));
       setFormats(formatsDraft(data.formats));
+      setAlerts(alertsDraft(data.alerts));
       if (change && !data.rendering.check?.ok) {
         toast.error('Saved the settings, but Carbone does not work yet', { description: data.rendering.check?.error });
       } else {
@@ -1007,11 +1119,12 @@ export function SettingsPage() {
       {!draft && !error && (
         <Loading>Loading settings...</Loading>
       )}
-      {draft && ai && rendering && mail && formats && settings && (
+      {draft && ai && rendering && mail && formats && alerts && settings && (
         <form onSubmit={onSubmit} className="flex flex-col gap-6">
           <RenderingSection saved={settings.rendering} draft={rendering} busy={checking} onChange={setRendering} onCheck={() => void onCheck()} />
           <FormatsSection draft={formats} onChange={setFormats} />
           <MailSection saved={settings.mail} draft={mail} onChange={setMail} />
+          <AlertsSection saved={settings.alerts} draft={alerts} mailReady={settings.mail.configured} onChange={setAlerts} />
           <AiSection saved={settings.ai} ai={ai} onChange={setAi} />
           <section className="rounded-lg border p-5">
             <h2 className="font-semibold">Watching</h2>

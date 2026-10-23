@@ -446,6 +446,17 @@ export const settings = pgTable(
     dateFormat: text('date_format').notNull().default('YYYY-MM-DD'),
     /** The ISO 4217 code `formatC` prints; null is the number format's own, as Carbone does without one. */
     currency: text('currency'),
+    /** Where alerts go: email addresses separated by commas. Null turns alerts off. */
+    alertTo: text('alert_to'),
+    /** When alerts were turned on: only runs that finish after it alert. */
+    alertsSince: timestamp('alerts_since', { withTimezone: true }),
+    /** When the last alert email was sent. */
+    alertSentAt: timestamp('alert_sent_at', { withTimezone: true }),
+    /** Why the last alert email could not be sent, and when; cleared when one is sent. */
+    alertError: text('alert_error'),
+    /** The mail server's own text behind `alertError`. */
+    alertErrorDetail: text('alert_error_detail'),
+    alertErrorAt: timestamp('alert_error_at', { withTimezone: true }),
     ...timestamps,
   },
   (t) => [
@@ -558,4 +569,51 @@ export const agentUsage = pgTable(
     costUsd: numeric('cost_usd', { precision: 18, scale: 10, mode: 'number' }),
   },
   (t) => [index('agent_usage_created_idx').on(t.createdAt), index('agent_usage_job_created_idx').on(t.jobId, t.createdAt)],
+);
+
+/** How an alert closed, for its note in the email. */
+export type AlertResolution =
+  | { kind: 'fixed' }
+  | { kind: 'deleted' }
+  /** A run alert closed by a run that succeeded. */
+  | { kind: 'success'; seq: number; at: string };
+
+/**
+ * A problem that Needs attention lists, as alerts see it: opened when it shows up, closed
+ * when it is gone. The alerts check (see alerts.ts) sends one email when it opens and one
+ * when it closes. `key` is `run:<jobId>`, `server:<id>`, `job:<id>` or `queue:<id>`, and only
+ * one row per key is open. Not a foreign key to what it is about: a deleted job closes its
+ * alert, and the closing still says so. Closed rows are deleted after the retention.
+ */
+export const alerts = pgTable(
+  'alerts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    key: text('key').notNull(),
+    kind: text('kind').notNull(),
+    /** What the alert is about: the job (of a run or job alert), the server, or the queue_health row. */
+    subjectId: uuid('subject_id').notNull(),
+    /** What it is about, as the email names it: the job, the server, or `MYLIB/MYOUTQ on MYSERVER`. */
+    title: text('title').notNull(),
+    error: text('error'),
+    /** The app page about it, such as `/jobs/<id>`. */
+    path: text('path').notNull(),
+    /** When the problem started: the first failed run, or when the error was first seen. */
+    openedAt: timestamp('opened_at', { withTimezone: true }).notNull(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+    resolution: jsonb('resolution').$type<AlertResolution>(),
+    openSentAt: timestamp('open_sent_at', { withTimezone: true }),
+    resolveSentAt: timestamp('resolve_sent_at', { withTimezone: true }),
+    /** For a run alert: the latest failed or warning run. Not a foreign key, so the retention can delete it. */
+    runId: uuid('run_id'),
+    /** For a run alert: how many runs failed or ended with a warning since it opened. */
+    runs: integer('runs').notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex('alerts_open_key_idx')
+      .on(t.key)
+      .where(sql`${t.resolvedAt} is null`),
+    index('alerts_resolved_idx').on(t.resolvedAt),
+    check('alerts_kind_check', sql`${t.kind} in ('run', 'server', 'job', 'queue')`),
+  ],
 );
