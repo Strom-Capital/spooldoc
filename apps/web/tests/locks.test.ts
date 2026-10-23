@@ -24,6 +24,17 @@ describe.skipIf(!url)('session locks (TEST_DATABASE_URL)', () => {
     await again!();
   });
 
+  it('frees the lock in the database on release', async () => {
+    const locks = sessionLocks(one);
+    const release = await locks.tryLock('test:free');
+    await release!();
+    const [row] = await three<{ n: number }[]>`
+      select count(*)::int as n from pg_locks
+      where locktype = 'advisory' and database = (select oid from pg_database where datname = current_database())
+        and objid = (hashtext('test:free')::bigint & 4294967295)`;
+    expect(row!.n).toBe(0);
+  });
+
   it('holds many locks on one connection, leaving the pool free', async () => {
     const locks = sessionLocks(three);
     const releases = await Promise.all(Array.from({ length: 20 }, (_, i) => locks.tryLock(`test:many:${i}`)));
