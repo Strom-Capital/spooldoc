@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.0](https://github.com/Strom-Capital/spooldoc/compare/v0.5.0...v0.6.0) (2026-10-23)
+
+
+### Features
+
+* **ibmi:** read-only queries on Connection ([#153](https://github.com/Strom-Capital/spooldoc/issues/153)) ([bbc6d42](https://github.com/Strom-Capital/spooldoc/commit/bbc6d42ca4a6f5f088d43921f04f5e7e3f376ed7))
+* lookups from Db2 for i ([#155](https://github.com/Strom-Capital/spooldoc/issues/155)) ([e20a8b8](https://github.com/Strom-Capital/spooldoc/commit/e20a8b8ed419b51c84f612ffb294acc50c83c008))
+* **web:** email alerts when a run fails or watching stops ([#147](https://github.com/Strom-Capital/spooldoc/issues/147)) ([9b011b6](https://github.com/Strom-Capital/spooldoc/commit/9b011b6b9b2b06fc3c7492fc0186db21a56dadee))
+
+
+### Bug Fixes
+
+* **core:** find the line of each template problem in linear time ([#145](https://github.com/Strom-Capital/spooldoc/issues/145)) ([e923dc3](https://github.com/Strom-Capital/spooldoc/commit/e923dc3f9cc825dd5c24eda21469f8e85218d4b5))
+* **web:** release advisory locks again ([#148](https://github.com/Strom-Capital/spooldoc/issues/148)) ([39057cd](https://github.com/Strom-Capital/spooldoc/commit/39057cdffef2f9c3154cc6b7537f999197a2b95d))
+* **web:** send the saved mail server password only to its server and user ([#146](https://github.com/Strom-Capital/spooldoc/issues/146)) ([94e3568](https://github.com/Strom-Capital/spooldoc/commit/94e35684a133d2e5ee0301d14af64fbe11aa6d35))
+
 ## [0.5.0](https://github.com/Strom-Capital/spooldoc/compare/v0.4.0...v0.5.0) (2026-10-22)
 
 
