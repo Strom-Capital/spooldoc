@@ -94,7 +94,7 @@ export async function PUT(request: Request): Promise<Response> {
   const { ai, rendering, mail, formats, ...change } = body.data;
   const mailProblem = mail ? await mailChangeProblem(mail) : null;
   if (mailProblem) {
-    return invalidResponse(mailProblem, ['mail', 'clientSecret']);
+    return invalidResponse(mailProblem.message, mailProblem.path);
   }
   if (Object.keys(change).length > 0) {
     await updateSettings(change);

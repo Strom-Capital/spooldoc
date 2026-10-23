@@ -49,7 +49,9 @@ Everything is in Postgres:
   can read one back, and keys are removed from error messages.
 - **The mail server password** and **the Microsoft 365 client secret**
   are stored the same way, decrypted only to send, never returned by the
-  API, and removed from error messages. The Microsoft 365 access token
+  API, and removed from error messages. The saved mail server password
+  is sent only to the server, port and user it was entered for: a change
+  to any of them needs the password again. The Microsoft 365 access token
   is kept in memory only, until shortly before it expires.
 - **Captured spooled files** and **delivered files** are in clear text,
   for previews, runs and downloads. Protect the database like the spooled
