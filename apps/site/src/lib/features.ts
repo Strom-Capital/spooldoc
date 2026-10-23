@@ -53,6 +53,8 @@ export const SHOTS = {
   jobs: 'The Jobs page lists five jobs with their server, queue, mode, version and last run: three watching and two run on demand, three of them deleting their spooled files after delivery, and one whose last run failed.',
   'lookups-step':
     'The Lookups step of a pick list job lists the lookups customer and product, both ready. The customer form shows the SQL SELECT NAME, EMAIL, LANG FROM MYLIB.CUSTOMERS WHERE CUSTNO = :customerNo with the value 10001 after the parameter. Beside it, the Test tab shows the parameter with its VARCHAR(10) type, the one row found with the customer\'s name, email address and language, and the three tags templates write, each with a copy button.',
+  'lookups-row':
+    'The row lookup product runs once per row of lines, with the SQL SELECT DESCRIPTION FROM MYLIB.ITEMS WHERE ITEMNO = :item AND LANG = :customer.LANG and the values D-4001 and FI after the parameters. The Test tab says it ran with row 1 of lines, lists :item from d.pg.lines[0].item and :customer.LANG from d.pg.customer.LANG, shows the Finnish description found, and the tag {d.pg.lines[i].product.DESCRIPTION}.',
   trigger:
     'The trigger step of a job set to Watching: the watcher runs ready files and the files already on the queue too, and the queue is watched by polling every 30 seconds, with Set up real-time below.',
   finish:
@@ -150,6 +152,19 @@ export const FEATURES: Feature[] = [
     code: { code: DEFINITION_EXAMPLE, lang: 'yaml', title: 'YAML, the start of the definition shown below', place: 'beside' },
   },
   {
+    id: 'lookups',
+    title: 'Lookups from Db2 for i',
+    summary: 'The email address an invoice does not print comes from Db2 for i, with no program change.',
+    body: [
+      'Many printed documents leave out something the document needs, most often the customer\'s email address. A lookup reads it from Db2 for i instead, so the program and its spooled file stay as they are.',
+      'A lookup is one SELECT. It takes values the definition read, such as the customer number, as bound parameters, never written into the SQL, and runs on a read-only connection. Its rows join the page group\'s data, so templates and email fields use them like any field: <code>{d.pg.customer.EMAIL}</code>.',
+      'A lookup can run once per row of a table, such as the description of each item, and use the columns of an earlier one, such as the customer\'s language. When no row is found, the run stops, warns or leaves the columns empty, as you choose.',
+      'Test runs a lookup on the job\'s server with the values of the page group shown: each parameter with its Db2 for i type, the rows, and the tags to copy. A version is saved only with lookups that were tested.',
+    ],
+    shots: ['lookups-step', 'lookups-row'],
+    docs: [{ slug: 'lookups', title: 'Lookups' }],
+  },
+  {
     id: 'templates',
     title: 'Templates you already know',
     summary: 'HTML, Word or Excel with Carbone tags, rendered to PDF, HTML, DOCX or XLSX.',
@@ -182,11 +197,10 @@ export const FEATURES: Feature[] = [
     summary: 'Source, trigger, extract, lookups, render, destination, finish. Saved as versions.',
     body: [
       'A job takes the spooled files of one output queue to a destination. The job builder shows it as seven steps: source, trigger, extract, lookups, render, destination and finish. The draft saves as you type.',
-      'When the spooled file does not print what a document needs, such as the customer\'s email address, a lookup reads it from Db2 for i: one SELECT with values the definition read as bound parameters, on a read-only connection. Templates and email fields use its columns like any field, such as <code>{d.pg.customer.EMAIL}</code>. Test runs it with the values of the page group shown before a version can be saved.',
       'Saving a version takes a fixed copy of the draft, with a note of what changed. Runs use the active version, and every run is logged against the version it used. Restore an older version to go back.',
       'Run a job on demand on the files you pick, or let it watch the queue. Watching works by polling, or in real time through a data queue that Spooldoc creates only when you turn real-time watching on. When the documents are delivered, the finish step holds, moves, deletes or leaves the spooled file. Delete asks first.',
     ],
-    shots: ['jobs', 'lookups-step', 'trigger', 'finish'],
+    shots: ['jobs', 'trigger', 'finish'],
     docs: [
       { slug: 'jobs', title: 'Jobs' },
       { slug: 'lookups', title: 'Lookups' },
