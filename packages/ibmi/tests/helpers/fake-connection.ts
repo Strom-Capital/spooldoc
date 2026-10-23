@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { sampleSchema, type Sample, type SpooledFileAttributes, type SpooledFileId } from "@spooldoc/core";
 import {
+  assertSingleQuery,
   ConnectionError,
   type CommandResult,
   type Connection,
@@ -8,6 +9,13 @@ import {
   type IfsWriteOptions,
   type IfsWriteResult,
   type OutputQueue,
+  type QueryColumn,
+  type QueryDescription,
+  type QueryOptions,
+  type QueryParam,
+  type QueryParameter,
+  type QueryResult,
+  type QueryRow,
   type QueueFileCount,
   type SpooledFileEntry,
   type SystemInfo,
@@ -41,6 +49,11 @@ export class FakeConnection implements Connection {
   readonly folders = new Set<string>(["/"]);
   /** Methods that throw this error when called. */
   readonly failures = new Map<string, Error>();
+  /** What `query` and `describeQuery` answer for a statement, before rows are cut to `maxRows`. */
+  queryAnswer: (sql: string, params: readonly QueryParam[]) => { columns: QueryColumn[]; rows: QueryRow[]; parameters?: QueryParameter[] } = () => ({
+    columns: [],
+    rows: [],
+  });
   closed = false;
   constructor(
     names: readonly FixtureName[] = FIXTURES,
@@ -142,6 +155,25 @@ export class FakeConnection implements Connection {
     if (replaced && ifExists === "fail") throw new ConnectionError("exists", `${path} is already there. It was not replaced.`);
     this.ifs.set(path, { bytes: new Uint8Array(bytes), ccsid });
     return { replaced };
+  }
+
+  /** Refuses what the real one refuses before the IBM i, then answers with `queryAnswer`. */
+  async query(sql: string, params: readonly QueryParam[], { maxRows }: QueryOptions): Promise<QueryResult> {
+    this.calls.push("query");
+    const failure = this.failures.get("query");
+    if (failure) throw failure;
+    assertSingleQuery(sql);
+    const { columns, rows } = this.queryAnswer(sql, params);
+    return { columns, rows: rows.slice(0, maxRows), truncated: rows.length > maxRows };
+  }
+
+  async describeQuery(sql: string): Promise<QueryDescription> {
+    this.calls.push("describeQuery");
+    const failure = this.failures.get("describeQuery");
+    if (failure) throw failure;
+    assertSingleQuery(sql);
+    const { columns, parameters } = this.queryAnswer(sql, []);
+    return { columns, parameters: parameters ?? [] };
   }
 
   async close(): Promise<void> {

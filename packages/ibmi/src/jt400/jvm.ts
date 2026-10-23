@@ -191,6 +191,9 @@ function tracked(key: string, creds: Credentials, first: Entry): Connection {
     runCommand: (command) => write((conn) => conn.runCommand(command), "the command ran"),
     ifsStat: (path) => read((conn) => conn.ifsStat(path)),
     writeIfsFile: (path, bytes, options) => write((conn) => conn.writeIfsFile(path, bytes, options), `${path} was written`),
+    // A query runs read only, so it is a read: tried once more after a drop.
+    query: (sql, params, options) => read((conn) => conn.query(sql, params, options)),
+    describeQuery: (sql) => read((conn) => conn.describeQuery(sql)),
     close: () => closeConnection(key),
   };
 }

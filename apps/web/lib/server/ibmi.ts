@@ -14,6 +14,8 @@ const STATUS: Record<ConnectionErrorCode, number> = {
   notfound: 404,
   authority: 403,
   exists: 409,
+  query: 400,
+  timeout: 504,
   other: 500,
 };
 
@@ -161,6 +163,8 @@ function recorded(conn: Connection, server: ServerRow, password: string): Connec
     runCommand: (command) => note(conn.runCommand(command)),
     ifsStat: (path) => note(conn.ifsStat(path)),
     writeIfsFile: (path, bytes, options) => note(conn.writeIfsFile(path, bytes, options)),
+    query: (sql, params, options) => note(conn.query(sql, params, options)),
+    describeQuery: (sql) => note(conn.describeQuery(sql)),
     close: () => conn.close(),
   };
 }

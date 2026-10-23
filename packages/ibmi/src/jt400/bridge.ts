@@ -37,13 +37,49 @@ export function loadJava(): JavaModule {
  */
 export const LOGIN_TIMEOUT_SECONDS = 15;
 
+/** How a JDBC connection is opened. */
+export interface JdbcOptions {
+  /**
+   * Open it for queries only: the jt400 driver refuses any statement but SELECT, WITH and
+   * VALUES (JDBC property `access`), cancels a query that runs past its timeout, and returns
+   * dates and times in ISO format, so their text does not depend on the job.
+   */
+  readOnly?: boolean;
+}
+
+/**
+ * The jt400 JDBC driver properties for a connection, without the password. Values are
+ * strings, as the driver wants them. TCP keepalive lets the socket notice a dropped network
+ * instead of waiting on it.
+ */
+export function jdbcProperties(user: string, options: JdbcOptions = {}): Record<string, string> {
+  const props: Record<string, string> = { user, naming: "sql", "login timeout": String(LOGIN_TIMEOUT_SECONDS), "keep alive": "true" };
+  if (options.readOnly) {
+    // "cancel" ends a query at its timeout; the default, "qqrytimlmt", only refuses one
+    // whose estimated time is over the limit.
+    Object.assign(props, { access: "read only", "query timeout mechanism": "cancel", "date format": "iso", "time format": "iso", "decimal separator": "." });
+  }
+  return props;
+}
+
 /** Opens a JDBC connection through node-jt400. This starts the JVM on first use. */
 export async function openJdbc(host: string, user: string, password: string): Promise<Jt400Db> {
   const { connect } = await import("node-jt400");
-  // Every key is passed to the jt400 JDBC driver as a property, whose values must be strings.
-  // TCP keepalive lets the socket notice a dropped network instead of waiting on it.
-  const db = await connect({ host, user, password, naming: "sql", "login timeout": String(LOGIN_TIMEOUT_SECONDS), "keep alive": "true" });
+  // Every key is passed to the jt400 JDBC driver as a property.
+  const db = await connect({ host, password, ...jdbcProperties(user) });
   return db as unknown as Jt400Db;
+}
+
+/**
+ * Opens a plain `java.sql.Connection` with the jt400 driver, for what node-jt400 does not
+ * expose: a query timeout, parameter metadata, and preparing without running. The JVM
+ * must be started with jt400 on its classpath, which `openJdbc` does.
+ */
+export async function openJavaJdbc(host: string, user: string, password: string, options: JdbcOptions = {}, java: JavaModule = loadJava()): Promise<JavaObject> {
+  const props = new (java.import("java.util.Properties"))();
+  for (const [key, value] of Object.entries({ ...jdbcProperties(user, options), password })) props.setPropertySync(key, value);
+  const driver = new (java.import("com.ibm.as400.access.AS400JDBCDriver"))();
+  return driver.connect(`jdbc:as400://${host}`, props);
 }
 
 /** Copies a Java `byte[]` (an `Int8Array`, an array of numbers or a Buffer) into a `Uint8Array`. */

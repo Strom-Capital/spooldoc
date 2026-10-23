@@ -20,8 +20,9 @@ import {
   type SystemInfo,
 } from "../connection.js";
 import { toConnectionError } from "../errors.js";
+import { QUERY_CONTEXT } from "../query.js";
 import { writeIfsFileSafely, type IfsFileOps } from "./ifs-write.js";
-import { javaBytes, LOGIN_TIMEOUT_SECONDS, loadJava, openJdbc, plain, readAllSync, writeAllAsync, type JavaObject, type Jt400Db } from "./bridge.js";
+import { javaBytes, LOGIN_TIMEOUT_SECONDS, loadJava, openJavaJdbc, openJdbc, plain, readAllSync, writeAllAsync, type JavaObject, type Jt400Db } from "./bridge.js";
 import {
   mapQueueFileCountRow,
   mapQueueRow,
@@ -32,6 +33,7 @@ import {
   spooledFilesQuery,
   type Row,
 } from "./sql.js";
+import { describeQuery, runQuery } from "./query.js";
 
 type AttrKind = "int" | "float" | "string";
 const GETTERS: Record<AttrKind, string> = {
@@ -60,8 +62,9 @@ export function ifsPath(ref: QueueRef, type: "OUTQ" | "DTAQ"): string {
 }
 
 /**
- * Opens a connection with jt400: JDBC through node-jt400 for the SQL lists, and a
- * separate `AS400` object for the print services that read spooled files.
+ * Opens a connection with jt400: JDBC through node-jt400 for the SQL lists, a separate
+ * `AS400` object for the print services that read spooled files, and, on the first query,
+ * a second JDBC connection opened read only.
  * Every error is a `ConnectionError` without the password.
  */
 export async function openJt400Connection(creds: Credentials): Promise<Connection> {
@@ -256,6 +259,30 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
     writeIfsFileSafely(ifsOps, path, bytes, options);
 
   let closed = false;
+  // Opened on the first query and kept until close. A failed open is tried again next time.
+  let queryDb: Promise<JavaObject> | undefined;
+  const readOnlyDb = (): Promise<JavaObject> => {
+    if (queryDb) return queryDb;
+    const opening = openJavaJdbc(creds.host, creds.user, creds.password, { readOnly: true }).then((conn: JavaObject) => {
+      if (!conn) throw new Error(`The jt400 driver did not open a connection to ${creds.host}`);
+      return conn;
+    });
+    queryDb = opening;
+    opening.catch(() => {
+      if (queryDb === opening) queryDb = undefined;
+    });
+    return opening;
+  };
+  const onQuery = async <T>(run: (conn: JavaObject) => Promise<T>): Promise<T> => {
+    if (closed) throw new ConnectionError("other", `The connection to ${creds.host} was closed. Try again.`);
+    try {
+      return await run(await readOnlyDb());
+    } catch (err) {
+      // The check before the IBM i says what is wrong in full already.
+      throw err instanceof ConnectionError ? fail(err) : fail(err, QUERY_CONTEXT);
+    }
+  };
+
   return {
     describe,
     async listOutputQueues(filter) {
@@ -288,9 +315,16 @@ export async function openJt400Connection(creds: Credentials): Promise<Connectio
     runCommand,
     ifsStat,
     writeIfsFile,
+    query: (sql, params, options) => onQuery((conn) => runQuery(conn, sql, params, options)),
+    describeQuery: (sql) => onQuery((conn) => describeQuery(conn, sql)),
     async close() {
       if (closed) return;
       closed = true;
+      const readOnly = queryDb;
+      queryDb = undefined;
+      await readOnly
+        ?.then((conn: JavaObject) => conn.close())
+        .catch(() => undefined);
       try {
         system.disconnectAllServicesSync();
       } catch {

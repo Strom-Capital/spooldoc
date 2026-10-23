@@ -1,4 +1,5 @@
 import { ConnectionError, type ConnectionErrorCode } from "./connection.js";
+import { QUERY_CONTEXT } from "./query.js";
 
 /**
  * A connection that was open and is not any more: the JDBC states 08003 and 08S01, or the
@@ -44,13 +45,36 @@ const IFS_RULES: [ConnectionErrorCode, RegExp][] = [
 /** Whether a context is about the IFS, such as "IFS /home/docs/out/invoice-1001.pdf". */
 const isIfs = (context?: string): boolean => context?.startsWith("IFS ") ?? false;
 
+/** A read-only connection refusing a statement: the jt400 driver's JD42505, an access mismatch. */
+const REFUSED = /\b42505\b|Connection authorization failure/i;
+/** A value that does not convert to the type of its parameter marker. */
+const WRONG_TYPE = /SQL0420|SQL0302|SQL0180|SQL0181|\b07006\b|\b22018\b|Data type mismatch/i;
+/** A statement that is not valid SQL. */
+const SYNTAX = /SQL0104|SQL0199|SQL0010|SQL0084|\b42601\b/i;
+/** A column that is not in the tables of the query. */
+const NO_COLUMN = /SQL0206|\b42703\b/i;
+
+/**
+ * Rules for a query (context `QUERY_CONTEXT`), before the general ones. A canceled query
+ * is a timeout, not a dropped connection, so it is not tried again. SQL0206 says "not
+ * found" too, so it is a query problem before the general rules take it for a missing object.
+ */
+const QUERY_RULES: [ConnectionErrorCode, RegExp][] = [
+  ["timeout", /SQL0952|SQL0666|\bHY008\b|Operation cancell?ed|Processing of the SQL statement ended/i],
+  ["query", new RegExp([REFUSED, WRONG_TYPE, SYNTAX, NO_COLUMN].map((re) => re.source).join("|"), "i")],
+  ...RULES,
+];
+
+/** Whether a context is a query on the read-only connection. */
+const isQuery = (context?: string): boolean => context === QUERY_CONTEXT;
+
 /**
  * Classifies an error text into a `ConnectionError` code.
  *
- * @param context - What was being done; an IFS call is classified with its own rules
+ * @param context - What was being done; an IFS call and a query are classified with their own rules
  */
 export function classifyError(text: string, context?: string): ConnectionErrorCode {
-  for (const [code, re] of isIfs(context) ? IFS_RULES : RULES) if (re.test(text)) return code;
+  for (const [code, re] of isIfs(context) ? IFS_RULES : isQuery(context) ? QUERY_RULES : RULES) if (re.test(text)) return code;
   return "other";
 }
 
@@ -234,17 +258,19 @@ export function guidance(code: ConnectionErrorCode, text: string, context?: stri
       }
       const object = objectOf(text);
       if (object) {
-        const kind = OBJECT_TYPES[object.type] ?? `object (${object.type})`;
+        const kind = isQuery(context) && object.type === "*FILE" ? "table or view" : (OBJECT_TYPES[object.type] ?? `object (${object.type})`);
         return `${Profile} is not authorized to ${kind} ${object.library}/${object.name}. A security officer can grant it, for example with GRTOBJAUT OBJ(${object.library}/${object.name}) OBJTYPE(${object.type}) USER(${user ?? "name"}) AUT(*USE).`;
       }
       const library = libraryOf(text);
       if (library) {
         return `${Profile} is not authorized to library ${library}. A security officer can grant it with GRTOBJAUT OBJ(${library}) OBJTYPE(*LIB) USER(${user ?? "name"}) AUT(*USE).`;
       }
-      return `${Profile} is not authorized to ${context ? lowerFirst(context) : "an object Spooldoc needs"}. A security officer can grant it; the details name the object.`;
+      const what = isQuery(context) ? "an object in the query" : context ? lowerFirst(context) : "an object Spooldoc needs";
+      return `${Profile} is not authorized to ${what}. A security officer can grant it; the details name the object.`;
     }
 
     case "notfound": {
+      if (isQuery(context)) return queryNotFound(text, system, user);
       if (isIfs(context)) {
         const { folder } = ifsTarget(context!);
         return `The folder ${folder} does not exist on ${system}. Create it, or change the destination's folder.`;
@@ -270,9 +296,56 @@ export function guidance(code: ConnectionErrorCode, text: string, context?: stri
       return undefined;
     }
 
+    case "query":
+      return queryProblem(text);
+
+    case "timeout":
+      return `The query ran longer than its time limit, so ${system} canceled it. Make it faster, for example with an index over the columns in its WHERE clause, or have it read fewer rows.`;
+
     default:
       return undefined;
   }
+}
+
+/** What to say about a statement that Db2 for i or the driver refused. */
+function queryProblem(text: string): string | undefined {
+  if (REFUSED.test(text)) {
+    return "The query would change data, and the read-only connection refused it. A lookup runs one SELECT statement only.";
+  }
+  if (NO_COLUMN.test(text)) {
+    const column = /Column (?:or global variable )?(\S+) not found/i.exec(text)?.[1];
+    const which = column ? `Column ${column} is` : "A column in the query is";
+    return `${which} not in the tables of the query. Check its name, and qualify it with its table when the query joins tables.`;
+  }
+  if (WRONG_TYPE.test(text)) {
+    return "A value given to a parameter of the query does not fit its type, such as letters where Db2 for i expects a number. Check the field that fills each parameter, or CAST the parameter in the query.";
+  }
+  if (/SQL0010/i.test(text)) return "The query has a string constant without its closing quote. Check the quotes in the statement.";
+  if (SYNTAX.test(text)) {
+    const token = /Token (\S+) was not valid|Keyword (\S+) not expected/i.exec(text)?.slice(1).find(Boolean);
+    if (token) return `The query is not valid SQL: Db2 for i did not expect ${token} there. Check the statement near ${token}.`;
+    return "The query is not valid SQL. Check the statement; the details show where Db2 for i stopped.";
+  }
+  return undefined;
+}
+
+/**
+ * What to say about a missing table, view or library in a query. Db2 for i names it as
+ * "X in LIB type *FILE", where LIB can be *LIBL or *N. The connection uses SQL naming, so
+ * a name without a library is looked for in the library named after the user profile.
+ */
+function queryNotFound(text: string, system: string, user?: string): string {
+  const m = /([A-Z0-9_$#@.]{1,128}) in ([*A-Z0-9_$#@]{1,10}) type (\*[A-Z]{1,10})/i.exec(text);
+  const name = m?.[1]?.toUpperCase();
+  const library = m?.[2]?.toUpperCase();
+  const type = m?.[3]?.toUpperCase();
+  if (name && type === "*LIB") return `Library ${name} does not exist on ${system}. Check the library in the query.`;
+  if (name && library && type === "*FILE") {
+    const where = library.startsWith("*") ? name : `${library}/${name}`;
+    const unqualified = library === user ? ` A name without a library is looked for in library ${user}, so qualify it, such as MYLIB.${name}.` : "";
+    return `Table or view ${where} does not exist on ${system}. Check its name and library in the query.${unqualified}`;
+  }
+  return `A table, view or function in the query does not exist on ${system}. Check the names in the query; the details name the missing one.`;
 }
 
 /**
