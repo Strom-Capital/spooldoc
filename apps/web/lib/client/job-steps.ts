@@ -1,14 +1,15 @@
 /** A pipeline step of the job builder. */
-export type Step = 'source' | 'trigger' | 'extract' | 'render' | 'destination' | 'finish';
+export type Step = 'source' | 'trigger' | 'extract' | 'lookups' | 'render' | 'destination' | 'finish';
 
 /** The steps in pipeline order. */
-export const STEPS: readonly Step[] = ['source', 'trigger', 'extract', 'render', 'destination', 'finish'];
+export const STEPS: readonly Step[] = ['source', 'trigger', 'extract', 'lookups', 'render', 'destination', 'finish'];
 
 /** The name of each step, as the pipeline and the Back and Next buttons show it. */
 export const STEP_TITLE: Record<Step, string> = {
   source: 'Source',
   trigger: 'Trigger',
   extract: 'Extract',
+  lookups: 'Lookups',
   render: 'Render',
   destination: 'Destination',
   finish: 'Finish',

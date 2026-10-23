@@ -58,6 +58,7 @@ export function draftStore(jobId: string, userId: string | null = null): DraftSt
   return {
     readDefinition: async () => (await read()).extract.definition,
     readTemplates: async () => (await read()).render.templates,
+    readLookups: async () => (await read()).lookups,
     writeDefinition: (yaml) => updateDraft(jobId, (draft) => ({ ...draft, extract: { ...draft.extract, definition: yaml } })),
     writeHtml: async (templateId, html) => {
       await changeTemplates((templates) => {

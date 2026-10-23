@@ -15,12 +15,17 @@ const STATUS_CLASS = {
   missing: 'bg-destructive/15 text-destructive',
 } as const;
 
-/** The extracted page groups as JSON, with warnings and the field hits of the current page group. */
-export function JsonView() {
+/**
+ * The extracted page groups as JSON, with warnings and the field hits of the current page
+ * group. `withLookups` shows the page group with the values its lookups added, as
+ * templates get it, once the preview ran them.
+ */
+export function JsonView({ withLookups = false }: { withLookups?: boolean }) {
   const { render, pageGroupIndex, selectedHit, setSelectedHit } = useWorkbench();
   const listRef = useRef<HTMLUListElement>(null);
   const extract = render?.extract;
-  const group = extract?.pageGroups[pageGroupIndex] ?? extract?.pageGroups[0];
+  const looked = withLookups && render?.pageGroup === pageGroupIndex ? render.lookups?.pageGroup : undefined;
+  const group = looked ?? extract?.pageGroups[pageGroupIndex] ?? extract?.pageGroups[0];
   const code = useMemo(() => (group ? JSON.stringify(group, null, 2) : ''), [group]);
   const hits = useMemo(() => (extract?.hits ?? []).filter((hit) => hit.pageGroup === pageGroupIndex), [extract, pageGroupIndex]);
   const selectedKey = selectedHit ? hitKey(selectedHit) : null;

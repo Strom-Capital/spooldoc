@@ -26,10 +26,12 @@ import {
   resolveCodePage,
   starterTemplate,
   templateData,
+  templateUses,
   type AssetResolver,
   type CodePageSource,
   type Definition,
   type ExtractResult,
+  type Lookup,
   type Sample,
   type TemplateProblem,
 } from '@spooldoc/core';
@@ -37,6 +39,7 @@ import type { XlsxScope } from '@/lib/job-spec';
 import type { TemplateFileView } from '@/lib/types';
 import { getConfig } from './config';
 import type { DocumentRenderer } from './documents';
+import type { LookupsPreview } from './lookups';
 import { templateFileView, type TemplateFileRow } from './template-files';
 
 /** A sample as the browser gets it: everything but the raw bytes. */
@@ -107,8 +110,18 @@ export interface RenderResult {
   pageGroup: number;
   /** Why the definition's `match` rules do not accept this file (runs skip such files). */
   mismatch?: string[];
+  /** The job's lookups for page group `pageGroup`, when it has some. */
+  lookups?: LookupsPreview;
   errors: string[];
 }
+
+/** Runs a job's lookups for some page groups of a preview; null when the job has none. See `previewLookups`. */
+export type PreviewLookupRunner = (
+  def: Definition,
+  groups: Record<string, unknown>[],
+  only: number[],
+  names: string[],
+) => Promise<{ groups: Record<string, unknown>[]; preview: LookupsPreview } | null>;
 
 /** A template's content for `renderSample`: HTML (null for the starter template), or a Word or Excel file (null for the starter). */
 export type SampleTemplate =
@@ -127,6 +140,8 @@ export interface RenderInput {
   assets?: string[];
   /** Renders the document; null when Carbone is not connected, so the render is not tried. */
   renderer: DocumentRenderer | null;
+  /** The job's lookups: the template check knows their paths, and `run` adds their values. */
+  lookups?: { list: readonly Lookup[]; run: PreviewLookupRunner };
 }
 
 /**
@@ -220,10 +235,21 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
     errors.push(`Extraction failed: ${message(error)}`);
     return result;
   }
-  const pageGroups = result.extract.pageGroups;
+  let pageGroups = result.extract.pageGroups;
   result.names = pageGroups.map((group, i) => documentName(def, group, i));
   const index = Math.min(Math.max(0, Math.trunc(input.pageGroup ?? 0)), Math.max(0, pageGroups.length - 1));
   result.pageGroup = index;
+  const lookups = input.lookups?.list ?? [];
+  // The lookups run for the page group shown first, so the Lookups step has them whatever the template says.
+  if (input.lookups && lookups.length > 0 && pageGroups[index]) {
+    const looked = await input.lookups.run(def, pageGroups, [index], result.names);
+    if (looked) {
+      result.lookups = looked.preview;
+      // The document still renders, without the lookups' values; the header lists why.
+      if (looked.preview.error) errors.push(`Lookups: ${looked.preview.error.message}`);
+      else pageGroups = looked.groups;
+    }
+  }
   const group = pageGroups[index];
   if (!group || !result.template) {
     return result;
@@ -231,7 +257,7 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
 
   let prepared: Prepared;
   if (input.template.kind === 'html' && html !== undefined && result.template.kind === 'html') {
-    const problems = checkTemplate(html, def, { assets: input.assets });
+    const problems = checkTemplate(html, def, { assets: input.assets, lookups });
     if (problems.length > 0) {
       result.template.problems = problems;
       result.template.error = problemText(problems);
@@ -248,7 +274,7 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
       errors.push(message(error));
       return result;
     }
-    const problems = checkDocx(prepared.read, def);
+    const problems = checkDocx(prepared.read, def, { lookups });
     if (problems.length > 0) {
       result.template.problems = problems;
       result.template.error = docxProblemText(problems);
@@ -266,7 +292,7 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
       return result;
     }
     result.template.noPageSetup = sheetsWithoutPageSetup(prepared.read);
-    const problems = checkXlsx(prepared.read, def, scope);
+    const problems = checkXlsx(prepared.read, def, scope, { lookups });
     if (problems.length > 0) {
       result.template.problems = problems;
       result.template.error = xlsxProblemText(problems);
@@ -281,16 +307,24 @@ export async function renderSample(sample: Sample, input: RenderInput): Promise<
     result.carbone = { error: CARBONE_NOT_CONNECTED };
     return result;
   }
+  // A template that reads every page group gets the lookups of every page group, as a run does.
+  const readsAll = prepared.kind === 'xlsx' && prepared.scope === 'splf' ? true : templateUses(prepared.kind === 'html' ? prepared.html : prepared.read.text, 'pgs');
+  if (readsAll && input.lookups && lookups.length > 0 && result.lookups && !result.lookups.error && pageGroups.length > 1) {
+    const looked = await input.lookups.run(def, result.extract.pageGroups, pageGroups.map((_, i) => i), result.names);
+    if (looked?.preview.error) result.lookups.error = looked.preview.error;
+    else if (looked) pageGroups = looked.groups;
+  }
+  const shown = pageGroups[index]!;
   try {
     if (prepared.kind === 'html') {
-      const out = await input.renderer({ template: prepared.html, data: templateData(prepared.html, group, pageGroups, sample), format: 'html', asset: input.asset });
+      const out = await input.renderer({ template: prepared.html, data: templateData(prepared.html, shown, pageGroups, sample), format: 'html', asset: input.asset });
       result.html = Buffer.from(out).toString('utf8');
     } else if (prepared.kind === 'docx') {
-      const data = templateData(prepared.read, group, pageGroups, sample);
+      const data = templateData(prepared.read, shown, pageGroups, sample);
       const out = await input.renderer({ kind: 'docx', template: prepared.bytes, data, format: 'pdf', converter: docxConverter(prepared.read) });
       result.pdf = Buffer.from(out).toString('base64');
     } else {
-      const data = prepared.scope === 'splf' ? spooledFileData(pageGroups, sample) : templateData(prepared.read, group, pageGroups, sample);
+      const data = prepared.scope === 'splf' ? spooledFileData(pageGroups, sample) : templateData(prepared.read, shown, pageGroups, sample);
       const out = await input.renderer({ kind: 'xlsx', template: prepared.bytes, data, format: 'pdf' });
       result.pdf = Buffer.from(out).toString('base64');
     }

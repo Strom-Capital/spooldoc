@@ -51,6 +51,7 @@ import { JobProvider, useJob } from './job-provider';
 import { PipelineStrip } from './pipeline-strip';
 import { StepNavProvider } from './step-nav';
 import { useStepStatuses } from './use-step-statuses';
+import { LookupsStep } from './lookups-step';
 import { ExtractStep, JobChat, JobWorkbench, RenderStep } from './workbench-steps';
 
 /** The job builder: the pipeline, the selected step, and the agent. */
@@ -97,6 +98,7 @@ function Builder() {
               {step === 'source' && <SourceInspector />}
               {step === 'trigger' && <TriggerInspector />}
               {step === 'extract' && <ExtractStep />}
+              {step === 'lookups' && <LookupsStep />}
               {step === 'render' && <RenderStep />}
               {step === 'destination' && <DestinationInspector />}
               {step === 'finish' && <FinishInspector />}

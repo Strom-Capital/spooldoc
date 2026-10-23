@@ -1,3 +1,4 @@
+import { lookupsSchema } from '@spooldoc/core/lookups';
 import { XLSX_SCOPES, type XlsxScope } from '@spooldoc/core/xlsx-scope';
 import { z } from 'zod';
 
@@ -367,6 +368,8 @@ export const jobSpecSchema = z.object({
     })
     .default({ mode: 'manual', backlog: false, includeHeld: false }),
   extract: z.object({ definition: z.string().max(200_000).default('') }).default({ definition: '' }),
+  /** Queries against Db2 for i that add values to each page group, between extract and render. */
+  lookups: lookupsSchema.default([]),
   render: z
     .object({ templates: z.array(templateSchema).min(1, 'Add at least one template') })
     .default(() => ({ templates: [firstTemplate()] })),
@@ -454,6 +457,7 @@ export const draftPatchSchema = z.object({
   source: jobSpecSchema.shape.source.removeDefault().optional(),
   trigger: jobSpecSchema.shape.trigger.removeDefault().optional(),
   extract: jobSpecSchema.shape.extract.removeDefault().optional(),
+  lookups: jobSpecSchema.shape.lookups.removeDefault().optional(),
   render: jobSpecSchema.shape.render.removeDefault().optional(),
   destination: jobSpecSchema.shape.destination.removeDefault().optional(),
   finish: jobSpecSchema.shape.finish.removeDefault().optional(),

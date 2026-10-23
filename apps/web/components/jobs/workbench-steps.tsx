@@ -40,6 +40,7 @@ export function JobWorkbench({ children }: { children: React.ReactNode }) {
       jobId={job.id}
       sampleId={spec.preview.sampleId}
       yaml={spec.extract.definition}
+      lookups={spec.lookups}
       content={template}
       templateId={template.id}
       setTemplateId={setPicked}
@@ -58,7 +59,7 @@ export function JobWorkbench({ children }: { children: React.ReactNode }) {
  * spooled file to its page group, then on Extract the page and on Render the template.
  * Problems show under it.
  */
-function StepHeader({ page, template }: { page?: boolean; template?: React.ReactNode }) {
+export function StepHeader({ page, template }: { page?: boolean; template?: React.ReactNode }) {
   const { render, loading, error } = useWorkbench();
   const groups = (render?.extract?.pageGroups.length ?? 0) > 0;
   const pages = (render?.sample.pages.length ?? 0) > 0;
@@ -92,7 +93,7 @@ function StepHeader({ page, template }: { page?: boolean; template?: React.React
 }
 
 /** Whether the definition and template are saved to the draft, at the end of the tab row. */
-function DraftStatus() {
+export function DraftStatus() {
   return (
     <span className="text-muted-foreground text-xs">
       <SaveStatus />
@@ -108,7 +109,7 @@ function PathSlash() {
   );
 }
 
-function NoSample() {
+export function NoSample() {
   const { spec } = useJob();
   const ready = spec.source.serverId && spec.source.queue;
   return (
@@ -173,7 +174,7 @@ export function RenderStep() {
                 onChange={setTab}
                 end={<DraftStatus />}
               />
-              <div className="min-h-0 flex-1">{current === 'json' ? <JsonView /> : <TemplateEditor />}</div>
+              <div className="min-h-0 flex-1">{current === 'json' ? <JsonView withLookups /> : <TemplateEditor />}</div>
             </div>
           }
           right={<HtmlPreview fileName={(name) => templateFileName(name, spec.render.templates, template)} />}

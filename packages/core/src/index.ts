@@ -7,6 +7,8 @@ export * from "./extract.js";
 export * from "./xmlspool.js";
 export * from "./template.js";
 export * from "./tags.js";
+export * from "./lookup-spec.js";
+export * from "./lookups.js";
 export * from "./docx.js";
 export * from "./docx-design.js";
 export * from "./docx-edit.js";

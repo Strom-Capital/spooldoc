@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, errorText } from '@/lib/client/api';
+import type { Lookup } from '@spooldoc/core/lookups';
 import { perSpooledFile, type TemplateContent, type XlsxScope } from '@/lib/job-spec';
 import { groupOfPage, type FieldHit, type RenderResult } from '@/lib/client/render';
 
@@ -76,6 +77,7 @@ export function WorkbenchProvider({
   jobId,
   sampleId,
   yaml,
+  lookups,
   content,
   templateId,
   setTemplateId,
@@ -88,6 +90,8 @@ export function WorkbenchProvider({
   jobId: string;
   sampleId: string | null;
   yaml: string;
+  /** The job's lookups, saved or not; the render runs the tested ones. */
+  lookups: Lookup[];
   content: TemplateContent;
   templateId: string;
   setTemplateId(id: string): void;
@@ -125,7 +129,7 @@ export function WorkbenchProvider({
   const renderedGroup = perSpooledFile(content) ? 0 : pageGroupIndex;
 
   // Text changes render after a pause; a new file, page group, template, kind, file or scope, or a reload, at once.
-  const text = useDebounced(JSON.stringify({ yaml, ...templateRequest, templateId }), RENDER_DELAY_MS, `${templateId}:${content.kind}:${fileId}:${scope}`);
+  const text = useDebounced(JSON.stringify({ yaml, lookups, ...templateRequest, templateId }), RENDER_DELAY_MS, `${templateId}:${content.kind}:${fileId}:${scope}`);
   const requestKey = JSON.stringify([jobId, sampleId, renderedGroup, nonce, text]);
 
   useEffect(() => {

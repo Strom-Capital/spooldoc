@@ -1,4 +1,5 @@
 import type { Definition } from "./definition.js";
+import { lookupDataPaths, type Lookup } from "./lookup-spec.js";
 
 /** Nunjucks syntax in a text: `{{ }}`, `{% %}` or `{# #}`, with what is between the delimiters. */
 export interface NunjucksSpan {
@@ -53,6 +54,8 @@ export interface TemplateProblem {
 export interface CheckOptions {
   /** The uploaded asset names. Without it, `{asset('name')}` is not checked. */
   assets?: readonly string[];
+  /** The job's lookups: the paths they add, with the columns their last Test found. */
+  lookups?: readonly Lookup[];
 }
 
 /** Where a tag can start: `{d.`, `{d[`, `{d:`, `{d}`, the same for `c` and `o`, `{#`, `{$` and `{t(`. */
@@ -206,9 +209,9 @@ const SPLF_FIELDS = ["name", "number", "jobName", "jobUser", "jobNumber"];
 /**
  * Every data path a template can use with this definition: `pg`, the page group, with
  * its fields and lists, the same under `pgs[]`, every page group, and `splf`, the
- * spooled file.
+ * spooled file. With lookups, also the paths they add, such as `pg.customer.EMAIL`.
  */
-export function templatePaths(def: Definition): Set<string> {
+export function templatePaths(def: Definition, lookups: readonly Lookup[] = []): Set<string> {
   const fields: string[] = [];
   const lists: { name: string; columns: string[] }[] = [];
   if (def.source === "text" && def.text) {
@@ -227,6 +230,7 @@ export function templatePaths(def: Definition): Set<string> {
       paths.add(`${root}.${l.name}`);
       for (const c of l.columns) paths.add(`${root}.${l.name}[].${c}`);
     }
+    for (const l of lookupDataPaths(lookups)) paths.add(`${root}.${l.path}`);
   }
   return paths;
 }
@@ -381,7 +385,7 @@ export function checkTemplate(template: string, def?: Definition | null, options
     add(m.index, `Write an asset as {asset('name')}, with the name in single quotes: ${short(template.slice(m.index, m.index + 40))}`);
   }
 
-  const known = def ? templatePaths(def) : undefined;
+  const known = def ? templatePaths(def, options.lookups) : undefined;
   for (const problem of tagProblems(template, known)) add(problem.index, problem.message);
 
   const seen = new Set<string>();

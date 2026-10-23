@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { namePatternProblems, tagProblems, templatePaths, valueAt, type Definition, type ValueType } from '@spooldoc/core';
+import { lookupDataPaths, namePatternProblems, tagProblems, templatePaths, valueAt, type Definition, type Lookup, type ValueType } from '@spooldoc/core';
 import { convert as convertHtml } from 'html-to-text';
 import juice from 'juice';
 import type { SendMailOptions } from 'nodemailer';
@@ -17,10 +17,10 @@ import type { EmailSegment, EmailValueState } from '@/lib/types';
  * HTML, formats under Attach that no template makes, and `{d.pg...}` tags in the email of
  * the whole spooled file, which has no page group.
  */
-export function emailSpecProblems(spec: EmailSpec, def: Definition | null, templates: JobTemplate[]): string[] {
+export function emailSpecProblems(spec: EmailSpec, def: Definition | null, templates: JobTemplate[], lookups: readonly Lookup[] = []): string[] {
   const problems: string[] = [];
   if (!spec.to.trim()) problems.push('Enter To, the address each email goes to.');
-  const known = def ? templatePaths(def) : undefined;
+  const known = def ? templatePaths(def, lookups) : undefined;
   const fields = (Object.keys(EMAIL_FIELDS) as EmailField[]).filter((field) => field !== 'body' || spec.bodyTemplateId === null);
   for (const field of fields) {
     const text = spec[field];
@@ -99,14 +99,19 @@ export interface EmailFormatting {
 /** The defaults of Settings, with no field types. */
 export const PLAIN_FORMATTING: EmailFormatting = { formats: DEFAULT_FORMATS, types: {} };
 
-/** The type of each field of a definition that has one, by path: `pg.dueDate` is `date`. */
-export function fieldTypes(def: Definition | null): Record<string, ValueType> {
+/**
+ * The type of each field of a definition that has one, by path: `pg.dueDate` is `date`.
+ * With lookups, also the type of each column a lookup of one row per page group adds, such
+ * as `pg.customer.SINCE`.
+ */
+export function fieldTypes(def: Definition | null, lookups: readonly Lookup[] = []): Record<string, ValueType> {
   const types: Record<string, ValueType> = { 'splf.number': 'number' };
   if (def?.source === 'text' && def.text) {
     for (const field of def.text.fields ?? []) if (field.type) types[`pg.${field.name}`] = field.type;
   } else if (def?.xml) {
     for (const [name, value] of Object.entries(def.xml.fields ?? {})) if (typeof value === 'object' && value.type) types[`pg.${name}`] = value.type;
   }
+  for (const { path, type } of lookupDataPaths(lookups)) if (type && !path.includes('[]')) types[`pg.${path}`] = type;
   return types;
 }
 

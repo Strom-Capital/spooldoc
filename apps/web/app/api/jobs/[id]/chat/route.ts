@@ -88,7 +88,7 @@ export async function POST(request: Request, { params }: Context): Promise<Respo
   const { model, info, reasoning, secrets } = chat;
   const assets = await assetNames();
   const templateFile = getTemplateFile;
-  const words = await fileTemplates(draft.render.templates, draft.extract.definition, getTemplateFile);
+  const words = await fileTemplates(draft.render.templates, draft.extract.definition, getTemplateFile, draft.lookups);
   const safe = (error: unknown): string => redact(error, secrets).replace(KEY_PATTERN, '***');
   // The thread's start marks where this chat's usage begins. Without it the chat still
   // works; only the panel's total for this chat is missing.

@@ -37,7 +37,7 @@ function input(overrides: Partial<StepStatusInput> = {}): StepStatusInput {
 describe('stepStatuses', () => {
   it('has every step ready for a complete job with a good render', () => {
     const statuses = stepStatuses(input());
-    expect(statuses).toEqual({ source: 'ok', trigger: 'ok', extract: 'ok', render: 'ok', destination: 'ok', finish: 'ok' });
+    expect(statuses).toEqual({ source: 'ok', trigger: 'ok', extract: 'ok', lookups: 'ok', render: 'ok', destination: 'ok', finish: 'ok' });
     expect(allReady(statuses)).toBe(true);
   });
 
@@ -48,6 +48,20 @@ describe('stepStatuses', () => {
     expect(statuses.render).toBe('unset');
     expect(statuses.destination).toBe('unset');
     expect(allReady(statuses)).toBe(false);
+  });
+
+  it('has Lookups ready with none, a problem for one untested or failing, and worth a look for one that found no row', () => {
+    const sql = 'SELECT EMAIL FROM MYLIB.CUSTOMERS WHERE CUSTNO = :customerNo';
+    const tested = { name: 'customer', sql, result: 'one' as const, missing: 'warn' as const, checked: { sql, columns: [{ name: 'EMAIL', type: 'string' as const }] } };
+    const withLookups = (lookups: JobSpec['lookups'], lookupsPreview?: RenderResult['lookups']) =>
+      stepStatuses(input({ spec: { ...readySpec(), lookups }, render: rendered(lookupsPreview ? { lookups: lookupsPreview } : {}) })).lookups;
+    const preview = { traces: [], misses: [], problems: [], ran: ['customer'] };
+    expect(withLookups([])).toBe('ok');
+    expect(withLookups([tested], preview)).toBe('ok');
+    expect(withLookups([{ ...tested, checked: undefined }], preview)).toBe('error');
+    expect(withLookups([{ ...tested, sql: `${sql} AND 1 = 1` }], preview)).toBe('error');
+    expect(withLookups([tested], { ...preview, error: { message: 'Could not run customer: MYLIB.CUSTOMERS was not found (SQL0204).', lookup: 'customer' } })).toBe('error');
+    expect(withLookups([tested], { ...preview, misses: [{ lookup: 'customer', pageGroup: 0, text: 'No row in customer for customerNo 10042' }] })).toBe('warn');
   });
 
   it('warns about the source when its server has an error', () => {

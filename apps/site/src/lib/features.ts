@@ -177,21 +177,25 @@ export const FEATURES: Feature[] = [
   {
     id: 'jobs',
     title: 'Jobs as pipelines',
-    summary: 'Source, trigger, extract, render, destination, finish. Saved as versions.',
+    summary: 'Source, trigger, extract, lookups, render, destination, finish. Saved as versions.',
     body: [
-      'A job takes the spooled files of one output queue to a destination. The job builder shows it as six steps: source, trigger, extract, render, destination and finish. The draft saves as you type.',
+      'A job takes the spooled files of one output queue to a destination. The job builder shows it as seven steps: source, trigger, extract, lookups, render, destination and finish. The draft saves as you type.',
+      'When the spooled file does not print what a document needs, such as the customer\'s email address, a lookup reads it from Db2 for i: one SELECT with values the definition read as bound parameters, on a read-only connection. Templates and email fields use its columns like any field, such as <code>{d.pg.customer.EMAIL}</code>. Test runs it with the values of the page group shown before a version can be saved.',
       'Saving a version takes a fixed copy of the draft, with a note of what changed. Runs use the active version, and every run is logged against the version it used. Restore an older version to go back.',
       'Run a job on demand on the files you pick, or let it watch the queue. Watching works by polling, or in real time through a data queue that Spooldoc creates only when you turn real-time watching on. When the documents are delivered, the finish step holds, moves, deletes or leaves the spooled file. Delete asks first.',
     ],
     shots: ['jobs', 'trigger', 'finish'],
-    docs: [{ slug: 'jobs', title: 'Jobs' }],
+    docs: [
+      { slug: 'jobs', title: 'Jobs' },
+      { slug: 'lookups', title: 'Lookups' },
+    ],
   },
   {
     id: 'job-log',
     title: 'Job log',
     summary: 'Every run is on the record, with its steps, errors and files.',
     body: [
-      'Every run of every job is in the job log: the version it used, the spooled file, what started it, its status and the files it delivered. Open a run to see its steps: capture, extract, render, deliver and finish.',
+      'Every run of every job is in the job log: the version it used, the spooled file, what started it, its status and the files it delivered. Open a run to see its steps: capture, extract, lookups when the job has some, render, deliver and finish.',
       'A failed run says which step failed and why, in IBM i terms: the object, the authority and the command that fixes it. The IBM i\'s own message is kept under Details. Failed runs show under Needs attention on the Home page.',
       'With alerts on, you get one email when a run fails or watching stops, and one when it works again.',
       'Retry runs the same spooled file again with the active version. Runs are kept for 90 days by default, and you set how long.',
@@ -206,7 +210,7 @@ export const FEATURES: Feature[] = [
     body: [
       'The built-in destination keeps every file in Spooldoc, ready to download from the run in the job log.',
       'An IFS destination writes each file to a folder on the job\'s IBM i, where programs can pick it up. Each file is tagged with the right CCSID and is never half written. When a file with the same name exists, the destination replaces it, adds a number or fails the run, as you choose.',
-      'An email destination sends one email per document through your SMTP server or Microsoft 365. To, Subject and the message take fields such as <code>{d.pg.email}</code>, so each invoice goes to the customer on it, with its PDF attached. The message can be the document itself, from an HTML template. The job builder shows the email of each page group before anything is sent, and a test address sends every email to you first.',
+      'An email destination sends one email per document through your SMTP server or Microsoft 365. To, Subject and the message take fields such as <code>{d.pg.email}</code>, so each invoice goes to the customer on it, with its PDF attached. When the address is not printed, a lookup reads it from Db2 for i. The message can be the document itself, from an HTML template. The job builder shows the email of each page group before anything is sent, and a test address sends every email to you first.',
       'A webhook destination posts one call per document to your URL: JSON with the fields the definition read and the files in the formats you pick, signed the Standard Webhooks way so the receiver can check it came from Spooldoc. The job builder shows the call of each page group with the real values, and Send test posts it and shows the answer. A test URL takes every call while you try it.',
       'An SFTP destination uploads each file to a folder on a server, such as a bank or an EDI partner. Spooldoc makes the key and shows the public key line to add to the server. Check connection prints each step with its real values and stops at a new host key until you compare its fingerprint and trust it. In the job builder, the folder on the server is listed live with the page group\'s files placed in it, each tagged with what a run will do, and Upload test puts them in a test folder. Each file is written under a temporary name and renamed when it is whole.',
       'The spooled file is held, moved or deleted only after every file was delivered. When an email, a call or an upload fails, the job log lists each one with its status, and Retry sends only the ones not sent yet.',

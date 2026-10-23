@@ -1,4 +1,17 @@
-import type { CodePageSource, DocxProblem, ExtractResult, FieldHit, PageRange, Sample, SamplePage, TemplateProblem, XlsxProblem } from '@spooldoc/core';
+import type {
+  CodePageSource,
+  DocxProblem,
+  ExtractResult,
+  FieldHit,
+  LookupMiss,
+  LookupProblem,
+  LookupTrace,
+  PageRange,
+  Sample,
+  SamplePage,
+  TemplateProblem,
+  XlsxProblem,
+} from '@spooldoc/core';
 import type { XlsxScope } from '@/lib/job-spec';
 import type { TemplateFileView } from '@/lib/types';
 
@@ -42,7 +55,24 @@ export interface RenderResult {
   pageGroup: number;
   /** Why the definition's `match` rules do not accept this file (runs skip such files). */
   mismatch?: string[];
+  /** The job's lookups for the page group shown, when it has some. */
+  lookups?: LookupsPreview;
   errors: string[];
+}
+
+/** What the preview shows of the lookups of one page group. Mirrors lib/server/lookups.ts. */
+export interface LookupsPreview {
+  /** Each time a lookup ran for the page group shown. */
+  traces: LookupTrace[];
+  /** Lookups that found no row in it and warn. */
+  misses: LookupMiss[];
+  /** What is wrong with the lookups, checked without the IBM i. */
+  problems: LookupProblem[];
+  /** The lookups that ran: the ones before the first that is untested. */
+  ran: string[];
+  /** The page group shown, with the lookups' values. */
+  pageGroup?: Record<string, unknown>;
+  error?: { message: string; lookup?: string; code?: string; detail?: string };
 }
 
 /** Dense text lines of a page: blank lines filled in, padded to `width`. Same as core's `pageText`. */

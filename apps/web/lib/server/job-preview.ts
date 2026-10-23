@@ -1,11 +1,12 @@
 import 'server-only';
 
-import { extract, parseDefinition, type Definition, type Sample } from '@spooldoc/core';
+import { documentName, extract, parseDefinition, type Definition, type Sample } from '@spooldoc/core';
 import { z } from 'zod';
 import { findTemplate, jobSpecSchema, XLSX_SCOPES, type JobTemplate, type JobSpec, type TemplateContent, type XlsxScope } from '@/lib/job-spec';
 import { sampleTemplate } from './documents';
 import { errorResponse } from './http';
 import type { JobRow } from './jobs';
+import { previewLookups, type LookupsPreview } from './lookups';
 import type { SampleTemplate } from './render';
 import { getSample } from './samples';
 import { TEMPLATE_FILE_GONE } from './template-files';
@@ -25,6 +26,8 @@ export interface DraftPageGroup {
   groups: Record<string, unknown>[];
   /** The page group asked for, or the last when there are fewer. */
   index: number;
+  /** The lookups of that page group, or null when the job has none. */
+  lookups: LookupsPreview | null;
 }
 
 /**
@@ -54,7 +57,17 @@ export async function draftPageGroup(job: JobRow, input: { sampleId?: string; pa
   if (groups.length === 0) {
     return { response: errorResponse(422, `The definition finds no page groups in this spooled file, so there is no ${what.replace(/^the /, '')} to show.`) };
   }
-  return { draft, sample, def, groups, index: Math.min(input.pageGroup ?? 0, groups.length - 1) };
+  const index = Math.min(input.pageGroup ?? 0, groups.length - 1);
+  // The page group gets its lookups' values, as a run gives them. When they cannot run, the preview goes on without them.
+  const looked = await previewLookups(
+    draft.source.serverId,
+    draft.lookups,
+    def,
+    groups,
+    [index],
+    groups.map((group, i) => documentName(def, group, i)),
+  );
+  return { draft, sample, def, groups: looked && !looked.preview.error ? looked.groups : groups, index, lookups: looked?.preview ?? null };
 }
 
 const MAX_TEXT = 2_000_000;

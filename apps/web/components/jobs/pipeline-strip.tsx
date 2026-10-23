@@ -5,6 +5,7 @@ import '@xyflow/react/dist/style.css';
 import { Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps } from '@xyflow/react';
 import {
   CheckCheckIcon,
+  DatabaseIcon,
   FileJsonIcon,
   FileTextIcon,
   InboxIcon,
@@ -13,11 +14,13 @@ import {
   SendIcon,
   type LucideIcon,
 } from 'lucide-react';
+import { lookupUntested, type Lookup } from '@spooldoc/core/lookups';
 import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useAppInfo } from '@/components/app-info';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
 import { STEP_TITLE, STEPS } from '@/lib/client/job-steps';
+import type { RenderResult } from '@/lib/client/render';
 import { missingFields, type StepStatus } from '@/lib/client/step-status';
 import { contentLabel, formatList, hasOwnContent, type TemplateContent } from '@/lib/job-spec';
 import { cn } from '@/lib/utils';
@@ -113,7 +116,7 @@ const TOTAL_WIDTH = STEPS.length * NODE_WIDTH + (STEPS.length - 1) * GAP;
 
 /**
  * Fit the steps whenever the strip changes size (the sidebars or the window). When all
- * six do not fit at a readable size, start at Source and let the strip be dragged.
+ * seven do not fit at a readable size, start at Source and let the strip be dragged.
  */
 function FitOnResize() {
   const { setViewport } = useReactFlow();
@@ -187,6 +190,14 @@ function useSteps(): StepInfo[] {
       status: statuses.extract,
     },
     {
+      step: 'lookups',
+      title: STEP_TITLE.lookups,
+      icon: DatabaseIcon,
+      detail: lookupsDetail(spec.lookups),
+      sub: lookupsSub(spec.lookups, render),
+      status: statuses.lookups,
+    },
+    {
       step: 'render',
       title: STEP_TITLE.render,
       icon: FileTextIcon,
@@ -237,13 +248,37 @@ function useSteps(): StepInfo[] {
   ];
 }
 
+/** "None", "customer" or "2 lookups". */
+function lookupsDetail(lookups: readonly Lookup[]): string {
+  if (lookups.length === 0) return 'None';
+  if (lookups.length === 1) return lookups[0]!.name.trim() || 'Lookup 1';
+  return `${lookups.length} lookups`;
+}
+
+/** The first problem, "Once per row of lines", or "3 rows in this page group". */
+function lookupsSub(lookups: readonly Lookup[], render: RenderResult | null): string | undefined {
+  if (lookups.length === 0) return undefined;
+  const untested = lookups.find(lookupUntested);
+  if (untested) return `Test ${untested.name.trim() || 'the lookup'}`;
+  const preview = render?.lookups;
+  if (preview?.problems[0]) return preview.problems[0].message;
+  if (preview?.error) return preview.error.message;
+  if (preview?.misses[0]) return preview.misses[0].text;
+  if (lookups.length === 1 && lookups[0]!.for) return `Once per row of ${lookups[0]!.for}`;
+  if (preview && preview.traces.length > 0) {
+    const rows = preview.traces.reduce((sum, trace) => sum + trace.rows, 0);
+    return `${rows} ${rows === 1 ? 'row' : 'rows'} in this page group`;
+  }
+  return undefined;
+}
+
 /** What a template has as its content, for the Render step's summary. */
 function contentName(template: TemplateContent): string {
   return contentLabel(template.kind, hasOwnContent(template));
 }
 
 /**
- * The job as a pipeline: six fixed steps joined left to right. Clicking a step opens
+ * The job as a pipeline: seven fixed steps joined left to right. Clicking a step opens
  * it in the inspector below. Steps cannot be moved or connected.
  */
 export function PipelineStrip() {

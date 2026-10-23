@@ -262,13 +262,15 @@ export const samples = pgTable(
 
 /** One step of a run, as stored in `runs.steps`. */
 export interface RunStep {
-  step: 'capture' | 'extract' | 'render' | 'deliver' | 'finish';
+  step: 'capture' | 'extract' | 'lookup' | 'render' | 'deliver' | 'finish';
   ok: boolean;
   ms: number;
   error?: string;
   /** The system's own text behind `error`, such as Carbone's message, kept for support. */
   detail?: string;
   note?: string;
+  /** What went wrong without stopping the run, such as a lookup that found no row. */
+  warnings?: string[];
 }
 
 /** One processing of one spooled file by a job version. */

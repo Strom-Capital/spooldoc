@@ -7,6 +7,7 @@ import { fileNameFor, previewRenderer, tryDefinition } from '@/lib/server/docume
 import { errorResponse, json, readJson } from '@/lib/server/http';
 import { draftAndSample, previewTemplate, previewTemplateFields } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
+import { previewLookupRunner, previewLookups } from '@/lib/server/lookups';
 import { CARBONE_NOT_CONNECTED, renderSample } from '@/lib/server/render';
 
 export const dynamic = 'force-dynamic';
@@ -67,7 +68,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const asset = await assetResolver();
   const assets = (await assetNames()).map((entry) => entry.name);
   // Checks the template and renders it first (HTML, or a PDF of a Word or Excel template), so a file is only made from a template that works.
-  const result = await renderSample(sample, { yaml, template: content, pageGroup, asset, assets, renderer });
+  const result = await renderSample(sample, { yaml, template: content, pageGroup, asset, assets, renderer, lookups: previewLookupRunner(draft.source.serverId, draft.lookups) });
   if (result.carbone) {
     return json({ error: result.carbone.error, ...(result.carbone.detail ? { detail: result.carbone.detail } : {}) }, { status: 503 });
   }
@@ -77,7 +78,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       { status: 422 },
     );
   }
-  const pageGroups = result.extract.pageGroups;
+  let pageGroups = result.extract.pageGroups;
   if (pageGroup >= pageGroups.length) {
     return errorResponse(
       400,
@@ -90,6 +91,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return json({ error: 'Nothing to render.', templateErrors: result.errors }, { status: 422 });
   }
   const wholeFile = content.kind === 'xlsx' && content.scope === 'splf';
+  // The file gets the lookups' values, as the preview showed them; they come from the preview's cache.
+  const lookupDef = tryDefinition(yaml);
+  if (lookupDef && draft.lookups.length > 0) {
+    const only = wholeFile ? pageGroups.map((_, i) => i) : [pageGroup];
+    const looked = await previewLookups(draft.source.serverId, draft.lookups, lookupDef, pageGroups, only, result.names ?? []);
+    if (looked && !looked.preview.error) pageGroups = looked.groups;
+  }
   const filename = templateFileName(
     wholeFile ? spooledFileName(sample) : fileNameFor(tryDefinition(yaml), pageGroups[pageGroup] ?? {}, pageGroup, sample.splf.name.toLowerCase()),
     draft.render.templates,
