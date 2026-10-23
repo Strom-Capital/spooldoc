@@ -128,7 +128,7 @@ or use an app password." The server's own text is under Details.
 | Host | The SMTP server, such as `smtp.example.com`. The Spooldoc server connects to it, so it must be reachable from there. Empty turns email off. |
 | Security | STARTTLS (usually port 587), TLS (usually port 465), or None, for a relay on your own network. |
 | Port | Follows Security unless you change it. |
-| User name and password | Optional: a server that takes email without a sign-in needs neither. The password is stored encrypted and never shown again. Some services want an app password here. |
+| User name and password | Optional: a server that takes email without a sign-in needs neither. The password is stored encrypted and never shown again. Some services want an app password here. A new host, port or user name needs the password again: the saved one is sent only to the server, port and user it was entered for. |
 | From address and From name | Every email comes from this address. Use one the server lets the user send from. |
 
 ### Microsoft 365

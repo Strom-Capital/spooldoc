@@ -123,12 +123,30 @@ export async function getMailView(): Promise<MailView> {
   };
 }
 
-/** Why the change cannot be saved: Microsoft 365 with a tenant and no client secret, given or saved. Null when it can. */
-export async function mailChangeProblem(input: MailSettingsInput): Promise<string | null> {
+/**
+ * Why the change cannot be saved, and the field it is about. Null when it can.
+ *
+ * - Microsoft 365 with a tenant and no client secret, given or saved.
+ * - An SMTP host, port or user name that is not the saved one, with the saved password
+ *   kept. The saved password is only ever sent to the server, port and user it was
+ *   entered for.
+ */
+export async function mailChangeProblem(input: MailSettingsInput): Promise<{ message: string; path: string[] } | null> {
   const change = mailSettingsSchema.parse(input);
-  if (change.sender !== 'm365' || !change.tenantId || change.clientSecret) return null;
+  if (change.sender === 'smtp') {
+    const keepsPassword = change.password === undefined || change.password === '';
+    if (!change.host || !change.user || !keepsPassword) return null;
+    const row = await readRow();
+    const port = change.port ?? SMTP_DEFAULT_PORT[change.security];
+    const savedPort = row.smtpPort ?? SMTP_DEFAULT_PORT[row.smtpSecurity as SmtpSecurity];
+    const targetChanged = change.host.toLowerCase() !== row.smtpHost?.toLowerCase() || port !== savedPort || change.user !== row.smtpUser;
+    return row.smtpPasswordEnc !== null && targetChanged ? { message: 'Enter the password again for the new server or user.', path: ['mail', 'password'] } : null;
+  }
+  if (!change.tenantId || change.clientSecret) return null;
   const row = await readRow();
-  return row.m365SecretEnc === null || change.clientSecret === null ? 'Enter the client secret, the value from Certificates & secrets in the app registration.' : null;
+  return row.m365SecretEnc === null || change.clientSecret === null
+    ? { message: 'Enter the client secret, the value from Certificates & secrets in the app registration.', path: ['mail', 'clientSecret'] }
+    : null;
 }
 
 /**

@@ -46,6 +46,34 @@ describe('the mail server in Settings', () => {
   });
 
   it.each([
+    ['host', { host: 'smtp.attacker.example' }],
+    ['port', { port: 2525 }],
+    ['security, which moves the port', { security: 'tls', port: null }],
+    ['user', { user: 'someone-else' }],
+  ])('sends the saved password only to its server and user: a new %s needs it again', async (_, target) => {
+    await put({ mail });
+    for (const password of [undefined, '']) {
+      const response = await put({ mail: { ...mail, ...target, password } });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: 'Enter the password again for the new server or user.', field: 'mail.password' });
+    }
+    const [row] = await db().select({ host: settings.smtpHost, port: settings.smtpPort, user: settings.smtpUser }).from(settings);
+    expect(row).toEqual({ host: 'smtp.example.com', port: 587, user: 'mailer' });
+    // With the password entered again, the change is saved.
+    const saved = await put({ mail: { ...mail, ...target, password: 'new-Passw0rd' } });
+    expect(saved.status).toBe(200);
+    expect(((await saved.json()) as SettingsView).mail.hasPassword).toBe(true);
+  });
+
+  it('keeps the saved password for the same server in other letter case, and takes a new server without a sign-in', async () => {
+    await put({ mail });
+    expect((await put({ mail: { ...mail, host: 'SMTP.Example.com', password: undefined } })).status).toBe(200);
+    const relay = await put({ mail: { ...mail, host: 'relay.example.com', user: '', password: undefined } });
+    expect(relay.status).toBe(200);
+    expect(((await relay.json()) as SettingsView).mail).toMatchObject({ host: 'relay.example.com', user: '', hasPassword: false });
+  });
+
+  it.each([
     [{ ...mail, from: 'not an address' }, 'Enter the From address, such as invoices@example.com'],
     [{ ...mail, from: '' }, 'Enter the From address, such as invoices@example.com'],
     [{ ...mail, host: 'smtp://smtp.example.com' }, 'Enter the host name alone, such as smtp.example.com'],

@@ -566,6 +566,9 @@ type MailFieldsProps = { saved: MailView; draft: MailDraft; onChange(draft: Mail
 
 /** The SMTP server: host, security, port, and the sign-in. */
 function SmtpFields({ saved, draft, onChange }: MailFieldsProps) {
+  // The saved password is only sent to the server, port and user it was entered for.
+  const newTarget = draft.host.trim().toLowerCase() !== saved.host.toLowerCase() || draft.port.trim() !== String(saved.port) || draft.user.trim() !== saved.user;
+  const keepsSaved = saved.hasPassword && !draft.removePassword && !newTarget;
   return (
     <>
       <div className="flex flex-col gap-1.5 sm:col-span-2">
@@ -641,7 +644,7 @@ function SmtpFields({ saved, draft, onChange }: MailFieldsProps) {
           type="password"
           value={draft.password}
           onChange={(event) => onChange({ ...draft, password: event.target.value, removePassword: false })}
-          placeholder={saved.hasPassword && !draft.removePassword ? 'Saved. Leave empty to keep it.' : undefined}
+          placeholder={keepsSaved ? 'Saved. Leave empty to keep it.' : undefined}
           autoComplete="new-password"
           disabled={!draft.user.trim()}
         />
@@ -651,7 +654,9 @@ function SmtpFields({ saved, draft, onChange }: MailFieldsProps) {
               ? 'The saved password is removed when you save.'
               : !draft.user.trim()
                 ? 'Enter the user name first. A server that takes email without a sign-in needs neither.'
-                : 'Stored encrypted on the server and never shown again. Some services want an app password here.'}
+                : saved.hasPassword && newTarget
+                  ? 'Enter the password again for the new server or user. The saved one is only sent to the server, port and user it was entered for.'
+                  : 'Stored encrypted on the server and never shown again. Some services want an app password here.'}
           </p>
           {saved.hasPassword && (
             <Hint text={draft.removePassword ? 'Keep the saved password after all.' : 'Remove the saved password when you save. Nothing changes until then.'}>
