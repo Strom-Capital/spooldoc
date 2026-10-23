@@ -160,7 +160,7 @@ it to an SFTP server. Alerts by email say when a run fails or watching
 stops, and when it works again. Lookups read values the spooled file does
 not print, such as a customer's email address, from Db2 for i, read only.
 Next: lookup tables kept in Spooldoc, the agent writing lookups, S3
-destinations, webhook alerts, and more users and roles.
+destinations, and more users and roles.
 
 Until 1.0, a minor release (0.1 to 0.2) can include breaking changes. Read
 the [release notes](https://github.com/Strom-Capital/spooldoc/releases)
