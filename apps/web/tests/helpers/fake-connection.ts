@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { sampleSchema, type Sample, type SpooledFileAttributes, type SpooledFileId } from '@spooldoc/core';
 import {
+  assertSingleQuery,
   ConnectionError,
   type CommandResult,
   type Connection,
@@ -8,6 +9,13 @@ import {
   type IfsWriteOptions,
   type IfsWriteResult,
   type OutputQueue,
+  type QueryColumn,
+  type QueryDescription,
+  type QueryOptions,
+  type QueryParam,
+  type QueryParameter,
+  type QueryResult,
+  type QueryRow,
   type QueueFileCount,
   type QueueFileCountFilter,
   type QueueRef,
@@ -60,6 +68,16 @@ export class FakeConnection implements Connection {
   readonly folders = new Set<string>(['/']);
   /** What `runCommand` answers. */
   commandResult: (command: string) => CommandResult = () => ({ ok: true, messages: [] });
+  /**
+   * What `query` and `describeQuery` answer for a statement: its columns, all its rows
+   * (`query` cuts them to `maxRows` and says so) and its parameter markers. Set `failures`
+   * for `query` or `describeQuery` to test an error, such as a ConnectionError with code
+   * "query" or "timeout".
+   */
+  queryAnswer: (sql: string, params: readonly QueryParam[]) => { columns: QueryColumn[]; rows: QueryRow[]; parameters?: QueryParameter[] } = () => ({
+    columns: [],
+    rows: [],
+  });
   closed = false;
 
   private record(method: string, ...args: unknown[]): void {
@@ -185,6 +203,21 @@ export class FakeConnection implements Connection {
     if (old) this.ifs.delete(old);
     this.ifs.set(path, { bytes: new Uint8Array(bytes), ccsid: options.ccsid });
     return { replaced: old !== undefined };
+  }
+
+  /** Refuses what the real one refuses before the IBM i, then answers with `queryAnswer`. */
+  async query(sql: string, params: readonly QueryParam[], options: QueryOptions): Promise<QueryResult> {
+    this.record('query', sql, params, options);
+    assertSingleQuery(sql);
+    const { columns, rows } = this.queryAnswer(sql, params);
+    return { columns, rows: rows.slice(0, options.maxRows), truncated: rows.length > options.maxRows };
+  }
+
+  async describeQuery(sql: string): Promise<QueryDescription> {
+    this.record('describeQuery', sql);
+    assertSingleQuery(sql);
+    const { columns, parameters } = this.queryAnswer(sql, []);
+    return { columns, parameters: parameters ?? [] };
   }
 
   async close(): Promise<void> {

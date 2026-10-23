@@ -116,9 +116,68 @@ export interface CommandResult {
   messages: { id: string; text: string }[];
 }
 
+/** A value bound to a `?` parameter marker of a query. Numbers are bound as text. */
+export type QueryParam = string | number | null;
+
+/** Limits for `query`. */
+export interface QueryOptions {
+  /** The most rows to return. One more is fetched to tell whether there were more. */
+  maxRows: number;
+  /** How long Db2 for i may run the query before it is canceled. */
+  timeoutSeconds: number;
+}
+
+/** A column of a query, as Db2 for i describes it. */
+export interface QueryColumn {
+  /** The column name, or its label from `AS`. */
+  name: string;
+  /** The Db2 for i type name, such as CHAR, VARCHAR, DECIMAL, INTEGER, DATE or TIMESTAMP. */
+  type: string;
+  /** The length of a character column, or the digits of a number. */
+  precision: number;
+  /** The digits after the decimal point; 0 for other types. */
+  scale: number;
+  /** Whether the column can be null; null when Db2 for i does not say. */
+  nullable: boolean | null;
+}
+
+/** A `?` parameter marker of a query, as Db2 for i describes it. */
+export interface QueryParameter {
+  /** The Db2 for i type the value is converted to, such as DECIMAL or CHAR. */
+  type: string;
+  precision: number;
+  scale: number;
+  nullable: boolean | null;
+}
+
+/**
+ * A result row by column name. Every value is Db2 for i's text for it: numbers such as
+ * `1234.50`, dates as `2026-10-23`, times as `10:15:00` and timestamps as
+ * `2026-10-23 10:15:00.000000`. Trailing blanks of fixed-length character columns (CHAR,
+ * NCHAR, GRAPHIC) are removed; other text is as stored. A later column with the same
+ * name as an earlier one replaces its value, so give such columns an `AS` label.
+ */
+export type QueryRow = Record<string, string | null>;
+
+/** What `query` returns. */
+export interface QueryResult {
+  columns: QueryColumn[];
+  /** At most `maxRows` rows. */
+  rows: QueryRow[];
+  /** True when the query had more rows than `maxRows`; the rest were not read. */
+  truncated: boolean;
+}
+
+/** What `describeQuery` returns. */
+export interface QueryDescription {
+  columns: QueryColumn[];
+  /** The `?` markers in order. */
+  parameters: QueryParameter[];
+}
+
 /**
  * A connection to an IBM i that can list output queues, read spooled files, act on them
- * after processing, read data queues and run CL commands.
+ * after processing, read data queues, run CL commands and run read-only queries.
  */
 export interface Connection {
   describe(): Promise<SystemInfo>;
@@ -157,11 +216,31 @@ export interface Connection {
    * @throws ConnectionError with code "exists" when `ifExists` is "fail" and the name is taken
    */
   writeIfsFile(path: string, bytes: Uint8Array, options: IfsWriteOptions): Promise<IfsWriteResult>;
+  /**
+   * Run one SELECT, VALUES or WITH statement with `?` markers bound to `params`, on a
+   * second JDBC connection opened read only, which the driver refuses any other statement
+   * on. Db2 for i cancels the query after `timeoutSeconds`.
+   *
+   * @throws ConnectionError with code "query" when the statement is not a single query or
+   *   Db2 for i rejects it, and "timeout" when it ran too long
+   */
+  query(sql: string, params: readonly QueryParam[], options: QueryOptions): Promise<QueryResult>;
+  /**
+   * Check a statement without running it: that it is a single query (QSYS2.PARSE_STATEMENT),
+   * and what columns and parameter markers it has (from preparing it). No rows are read.
+   *
+   * @throws ConnectionError with code "query" when it is not a single query or not valid
+   */
+  describeQuery(sql: string): Promise<QueryDescription>;
   close(): Promise<void>;
 }
 
-/** Why a connection call failed. "exists": an IFS file with the name is there already. */
-export type ConnectionErrorCode = "auth" | "host" | "notfound" | "authority" | "exists" | "other";
+/**
+ * Why a connection call failed. "exists": an IFS file with the name is there already.
+ * "query": the SQL of a query is not a single query, or Db2 for i rejects it.
+ * "timeout": a query ran longer than its time limit and was canceled.
+ */
+export type ConnectionErrorCode = "auth" | "host" | "notfound" | "authority" | "exists" | "query" | "timeout" | "other";
 
 /**
  * A failed connection call. The message says what went wrong and, where Spooldoc knows,
