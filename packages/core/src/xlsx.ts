@@ -1,5 +1,6 @@
 import { unzipSync } from "fflate";
 import type { Definition, ValueType } from "./definition.js";
+import { lookupDataPaths, type Lookup } from "./lookup-spec.js";
 import { short, tagParts, tagProblems, templatePaths, templateTags } from "./tags.js";
 import { fieldLabel, MAX_TEMPLATE_FILE_BYTES, starterLayout, type StarterBlock, type StarterColumn } from "./template.js";
 import { decodeXml, isOle, isZip, xmlAttribute } from "./xml.js";
@@ -486,12 +487,13 @@ export function xlsxHardRefresh(template: XlsxTemplate): boolean {
 }
 
 /** The type of every field and column, by the path the check compares (`pg.lines[].amount`). */
-function fieldTypes(def: Definition): Map<string, ValueType> {
+function fieldTypes(def: Definition, lookups: readonly Lookup[]): Map<string, ValueType> {
   const { fields, blocks } = starterLayout(def);
   const types = new Map<string, ValueType>();
   for (const root of ["pg", "pgs[]"]) {
     for (const f of fields) if (f.type) types.set(`${root}.${f.name}`, f.type);
     for (const b of blocks) for (const c of b.columns) if (c.type) types.set(`${root}.${b.name}[].${c.name}`, c.type);
+    for (const l of lookupDataPaths(lookups)) if (l.type) types.set(`${root}.${l.path}`, l.type);
   }
   return types;
 }
@@ -531,9 +533,14 @@ const asTag = (path: string, type?: ValueType): string => xlsxValueTag(`d.${path
  *
  * @returns The problems sheet by sheet, cell by cell; empty when the template is fine
  */
-export function checkXlsx(template: XlsxTemplate, def?: Definition | null, scope: XlsxScope = "splf"): XlsxProblem[] {
-  const known = def ? templatePaths(def) : undefined;
-  const types = def ? fieldTypes(def) : new Map<string, ValueType>();
+export function checkXlsx(
+  template: XlsxTemplate,
+  def?: Definition | null,
+  scope: XlsxScope = "splf",
+  options: { lookups?: readonly Lookup[] } = {},
+): XlsxProblem[] {
+  const known = def ? templatePaths(def, options.lookups) : undefined;
+  const types = def ? fieldTypes(def, options.lookups ?? []) : new Map<string, ValueType>();
   const problems: XlsxProblem[] = [];
   const seen = new Set<string>();
   const add = (sheet: string, ref: string, message: string): void => {

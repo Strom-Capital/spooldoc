@@ -5,6 +5,7 @@ import '@xyflow/react/dist/style.css';
 import { Handle, MarkerType, Position, ReactFlow, useReactFlow, useStore, type Edge, type Node, type NodeProps } from '@xyflow/react';
 import {
   CheckCheckIcon,
+  DatabaseIcon,
   FileJsonIcon,
   FileTextIcon,
   InboxIcon,
@@ -13,11 +14,13 @@ import {
   SendIcon,
   type LucideIcon,
 } from 'lucide-react';
+import type { Lookup } from '@spooldoc/core/lookups';
 import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useAppInfo } from '@/components/app-info';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
 import { STEP_TITLE, STEPS } from '@/lib/client/job-steps';
+import { lookupsSub, previewFor } from '@/lib/client/lookups';
 import { missingFields, type StepStatus } from '@/lib/client/step-status';
 import { contentLabel, formatList, hasOwnContent, type TemplateContent } from '@/lib/job-spec';
 import { cn } from '@/lib/utils';
@@ -113,7 +116,7 @@ const TOTAL_WIDTH = STEPS.length * NODE_WIDTH + (STEPS.length - 1) * GAP;
 
 /**
  * Fit the steps whenever the strip changes size (the sidebars or the window). When all
- * six do not fit at a readable size, start at Source and let the strip be dragged.
+ * seven do not fit at a readable size, start at Source and let the strip be dragged.
  */
 function FitOnResize() {
   const { setViewport } = useReactFlow();
@@ -137,7 +140,7 @@ function FitOnResize() {
 /** Title, detail line and status of each step, from the spec and the latest render. */
 function useSteps(): StepInfo[] {
   const { spec, job, servers, destinations } = useJob();
-  const { render, sampleId, templateId } = useWorkbench();
+  const { render, sampleId, templateId, pageGroupIndex } = useWorkbench();
   const { rendering } = useAppInfo();
   const { statuses } = useStepStatuses();
   const server = servers.find((s) => s.id === spec.source.serverId);
@@ -185,6 +188,14 @@ function useSteps(): StepInfo[] {
             : 'Pick a spooled file',
       sub: extract ? (missing > 0 ? `${missing} missing ${missing === 1 ? 'field' : 'fields'}` : 'Every field found') : undefined,
       status: statuses.extract,
+    },
+    {
+      step: 'lookups',
+      title: STEP_TITLE.lookups,
+      icon: DatabaseIcon,
+      detail: lookupsDetail(spec.lookups),
+      sub: lookupsSub(spec.lookups, previewFor(render, pageGroupIndex)),
+      status: statuses.lookups,
     },
     {
       step: 'render',
@@ -237,13 +248,20 @@ function useSteps(): StepInfo[] {
   ];
 }
 
+/** "None", "customer" or "2 lookups". */
+function lookupsDetail(lookups: readonly Lookup[]): string {
+  if (lookups.length === 0) return 'None';
+  if (lookups.length === 1) return lookups[0]!.name.trim() || 'Lookup 1';
+  return `${lookups.length} lookups`;
+}
+
 /** What a template has as its content, for the Render step's summary. */
 function contentName(template: TemplateContent): string {
   return contentLabel(template.kind, hasOwnContent(template));
 }
 
 /**
- * The job as a pipeline: six fixed steps joined left to right. Clicking a step opens
+ * The job as a pipeline: seven fixed steps joined left to right. Clicking a step opens
  * it in the inspector below. Steps cannot be moved or connected.
  */
 export function PipelineStrip() {

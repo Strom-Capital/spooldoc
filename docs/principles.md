@@ -11,14 +11,17 @@ this page and says why.
 
 ## Nothing changes on the IBM i unless the user asks
 
-Spooldoc reads what programs already print. It installs nothing and asks
-for no program changes. It creates a data queue only when the user turns
+Spooldoc reads what programs already print, and the Db2 for i tables a
+job's lookups name, read only. It installs nothing and asks for no
+program changes. It creates a data queue only when the user turns
 on real-time watching, and it holds, moves or deletes a spooled file only
 as the job's finish step says. It writes files to the IFS only through an
 IFS destination the user set up, and only in the folder chosen there.
 
 In practice:
 
+- A lookup runs one SELECT on a read-only connection, with its values
+  bound as parameters. See [Lookups](lookups.md).
 - An action that changes the IBM i is named in the UI before it happens:
   the object, and what will be done to it.
 - An action that destroys something on the IBM i, such as deleting

@@ -1,3 +1,4 @@
+import { lookupsSchema } from '@spooldoc/core';
 import { z } from 'zod';
 import { assetNames, assetResolver } from '@/lib/server/assets';
 import { guard } from '@/lib/server/auth';
@@ -5,6 +6,7 @@ import { previewRenderer } from '@/lib/server/documents';
 import { errorResponse, json, readJson } from '@/lib/server/http';
 import { draftAndSample, previewTemplate, previewTemplateFields } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
+import { previewLookupRunner } from '@/lib/server/lookups';
 import { renderSample } from '@/lib/server/render';
 
 export const dynamic = 'force-dynamic';
@@ -15,6 +17,8 @@ const renderSchema = z.object({
   /** Unsaved editor text; missing means the draft's. */
   yaml: z.string().max(MAX_TEXT).optional(),
   ...previewTemplateFields,
+  /** Unsaved lookups; missing means the draft's. */
+  lookups: lookupsSchema.optional(),
   pageGroup: z.number().int().nonnegative().optional(),
   sampleId: z.string().uuid().optional(),
 });
@@ -44,6 +48,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   const assets = (await assetNames()).map((asset) => asset.name);
   return json(
-    await renderSample(sample, { yaml, template: picked.content, pageGroup: body.data.pageGroup, asset: await assetResolver(), assets, renderer: await previewRenderer() }),
+    await renderSample(sample, {
+      yaml,
+      template: picked.content,
+      pageGroup: body.data.pageGroup,
+      asset: await assetResolver(),
+      assets,
+      renderer: await previewRenderer(),
+      lookups: previewLookupRunner(draft.source.serverId, body.data.lookups ?? draft.lookups),
+    }),
   );
 }

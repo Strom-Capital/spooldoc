@@ -69,7 +69,9 @@ without a model is "Start from job" in the template editor's bar.
 
 No tool reaches the IBM i, the job log or any other spooled file, and
 nothing it writes is a version: save one yourself when the result is
-right.
+right. The agent does not run [lookups](lookups.md), so its renders show
+their tags empty. Its template check knows the columns of each lookup's
+last Test, so a tag such as `{d.pg.customer.EMAIL}` is not an error.
 
 **Questions.** When something is unclear, such as where a page group
 starts or what a value means, the agent asks instead of guessing, one

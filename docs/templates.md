@@ -40,6 +40,7 @@ A tag starts with `d`, the data of the document being made:
 | `d.pg` | `pg` is the page group: the one the document is made from, with the fields, tables, records and groups of the [definition](definitions.md). |
 | `d.pgs` | `pgs` is every page group of the spooled file, for page counts or totals. Sent only to templates that use it. |
 | `d.splf` | The spooled file: `name`, `number`, `jobName`, `jobUser`, `jobNumber`. |
+| `d.pg.<lookup>` | The rows of a [lookup](lookups.md) from Db2 for i, under its name, such as `{d.pg.customer.EMAIL}`. A row lookup adds them to each row of its table: `{d.pg.lines[i].product.DESC}`. The template check knows the columns of each lookup's last Test. |
 
 An Excel template that makes one file of the whole spooled file gets
 `d.pgs` and `d.splf`, and no `d.pg`. See [What each file holds](#what-each-file-holds).

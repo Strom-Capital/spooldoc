@@ -53,11 +53,14 @@ deletes or leaves the spooled file. Everything Spooldoc keeps is in Postgres.
 
 - **Servers and queues**: add IBM i systems, pick the output queues that
   matter, hide the rest, and look at a spooled file page by page.
-- **Jobs as pipelines**: source, trigger, extract, render, destination,
-  finish. Saved as versions, run on demand or by watching the queue.
+- **Jobs as pipelines**: source, trigger, extract, lookups, render,
+  destination, finish. Saved as versions, run on demand or by watching the queue.
 - **Definitions in YAML**: fields by label, pattern or position, tables,
   multi-line records, split keys for page groups printed back to back, and
   XML-in-spool.
+- **Lookups**: a SELECT against Db2 for i adds what the spooled file does
+  not print, such as the customer's email address, to each document. It
+  runs read only, with the values bound as parameters.
 - **HTML, Word and Excel templates**: [Carbone](https://carbone.io) tags
   with your logos, images and fonts, rendered to PDF, HTML, DOCX or XLSX by
   a Carbone server of your own or Carbone Cloud. A Word template is made in
@@ -133,6 +136,7 @@ The guides are also on the website, with search, at
 | [Queues](docs/queues.md) | Output queues and spooled files |
 | [Jobs](docs/jobs.md) | The job builder, versions, triggers, finish actions |
 | [Definitions](docs/definitions.md) | The YAML that turns pages into JSON |
+| [Lookups](docs/lookups.md) | Values from Db2 for i, such as a customer's email address |
 | [Templates](docs/templates.md) | HTML, Word and Excel templates, filters, assets, PDF layout |
 | [Carbone](docs/carbone.md) | The Carbone server, Settings, Community and Enterprise |
 | [Agent](docs/agent.md) | Models, tools, masking |
@@ -153,8 +157,10 @@ work and are tested against demo spooled files captured from PUB400. Jobs
 can also write their files to a folder in the IFS, email each document
 through an SMTP server or Microsoft 365, post it to a webhook, or upload
 it to an SFTP server. Alerts by email say when a run fails or watching
-stops, and when it works again. Next: S3 destinations, and more users
-and roles.
+stops, and when it works again. Lookups read values the spooled file does
+not print, such as a customer's email address, from Db2 for i, read only.
+Next: lookup tables kept in Spooldoc, the agent writing lookups, S3
+destinations, and more users and roles.
 
 Until 1.0, a minor release (0.1 to 0.2) can include breaking changes. Read
 the [release notes](https://github.com/Strom-Capital/spooldoc/releases)

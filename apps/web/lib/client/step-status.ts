@@ -1,6 +1,8 @@
 import type { ExtractResult } from '@spooldoc/core';
+import { lookupUntested } from '@spooldoc/core/lookups';
 import type { RenderResult } from '@/lib/client/render';
 import { STEPS, type Step } from '@/lib/client/job-steps';
+import { previewFor } from '@/lib/client/lookups';
 import type { JobSpec } from '@/lib/job-spec';
 import type { JobDetail } from '@/lib/types';
 
@@ -19,6 +21,8 @@ export interface StepStatusInput {
   render: RenderResult | null;
   /** Whether Carbone is connected. */
   rendering: boolean;
+  /** The page group shown. The lookups of a render of another page group do not count. */
+  pageGroup?: number;
 }
 
 /** How many fields the extraction did not find, each name once. */
@@ -26,8 +30,22 @@ export function missingFields(extract: ExtractResult): number {
   return new Set(extract.hits.filter((h) => h.status === 'missing').map((h) => h.name)).size;
 }
 
+/**
+ * The status of the Lookups step: ready with no lookups; a problem when one is untested or
+ * changed since its test, has a problem, or failed in the last preview; worth a look when
+ * one found no row in the page group shown.
+ */
+export function lookupsStatus(spec: Pick<JobSpec, 'lookups'>, render: RenderResult | null, pageGroup = render?.pageGroup ?? 0): StepStatus {
+  if (spec.lookups.length === 0) return 'ok';
+  if (spec.lookups.some(lookupUntested)) return 'error';
+  const preview = previewFor(render, pageGroup);
+  if (preview?.error || (preview?.problems.length ?? 0) > 0) return 'error';
+  if ((preview?.misses.length ?? 0) > 0) return 'warn';
+  return 'ok';
+}
+
 /** The status of each step, as the pipeline shows it. */
-export function stepStatuses({ spec, job, serverError, hasDestination, render, rendering }: StepStatusInput): Record<Step, StepStatus> {
+export function stepStatuses({ spec, job, serverError, hasDestination, render, rendering, pageGroup }: StepStatusInput): Record<Step, StepStatus> {
   const hasSource = !!spec.source.serverId && !!spec.source.library && !!spec.source.queue;
   const extract = render?.extract;
   const watching = spec.trigger.mode === 'watch';
@@ -44,6 +62,7 @@ export function stepStatuses({ spec, job, serverError, hasDestination, render, r
           : extract.pageGroups.length === 0 || missingFields(extract) > 0
             ? 'warn'
             : 'ok',
+    lookups: lookupsStatus(spec, render, pageGroup),
     render: !rendering || render?.carbone ? 'warn' : render?.template?.error ? 'error' : render?.html || render?.pdf ? 'ok' : 'unset',
     destination: hasDestination ? 'ok' : 'unset',
     finish: finish.action === 'move' && !finish.queue ? 'unset' : 'ok',

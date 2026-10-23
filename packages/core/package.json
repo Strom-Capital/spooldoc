@@ -21,6 +21,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./lookups": {
+      "types": "./dist/lookup-spec.d.ts",
+      "import": "./dist/lookup-spec.js"
+    },
     "./xlsx-scope": {
       "types": "./dist/xlsx-scope.d.ts",
       "import": "./dist/xlsx-scope.js"

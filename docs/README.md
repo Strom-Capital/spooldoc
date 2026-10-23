@@ -21,6 +21,7 @@ discussions and issues on GitHub, each in a new tab.
 | [Queues](queues.md) | Output queues and spooled files |
 | [Jobs](jobs.md) | The job builder, versions, triggers, finish actions |
 | [Definitions](definitions.md) | The YAML that turns pages into JSON |
+| [Lookups](lookups.md) | Values from Db2 for i, such as a customer's email address |
 | [Templates](templates.md) | HTML, Word and Excel templates with Carbone tags, the template check, assets, PDF layout |
 | [Agent](agent.md) | Models, tools, masking |
 | [Destinations](destinations.md) | Where documents go |

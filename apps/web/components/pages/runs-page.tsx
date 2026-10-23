@@ -23,7 +23,7 @@ import { bytes, dateTime, duration, splfLabel } from '@/lib/client/format';
 import type { JobSummary, RunStatus, RunView } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-const STEP_LABEL: Record<string, string> = { capture: 'Capture', extract: 'Extract', render: 'Render', deliver: 'Deliver', finish: 'Finish' };
+const STEP_LABEL: Record<string, string> = { capture: 'Capture', extract: 'Extract', lookup: 'Lookups', render: 'Render', deliver: 'Deliver', finish: 'Finish' };
 
 const RETRIED: Record<RunStatus, string> = { running: 'started', success: 'succeeded', warning: 'done with warnings', failed: 'failed', skipped: 'skipped' };
 
@@ -346,6 +346,15 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                           <span className="font-medium">{STEP_LABEL[step.step] ?? step.step}</span>
                           {step.note && <span className="text-muted-foreground">: {step.note}</span>}
                           {step.error && <div className="break-words text-destructive text-xs">{step.error}</div>}
+                          {step.warnings && step.warnings.length > 0 && (
+                            <ul className="mt-0.5 flex flex-col gap-0.5 text-amber-700 text-xs dark:text-amber-400" aria-label="Warnings">
+                              {step.warnings.map((warning) => (
+                                <li key={warning} className="break-words">
+                                  {warning}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
                         </div>
                         <span className="tabular shrink-0 text-muted-foreground text-xs">{duration(step.ms)}</span>
                       </li>

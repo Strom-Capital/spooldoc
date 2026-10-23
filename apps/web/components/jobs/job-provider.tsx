@@ -54,7 +54,7 @@ export interface JobState {
 
 const JobContext = createContext<JobState | null>(null);
 
-const TEXT_PARTS = new Set<keyof DraftPatch>(['extract', 'render', 'source']);
+const TEXT_PARTS = new Set<keyof DraftPatch>(['extract', 'lookups', 'render', 'source']);
 const DEBOUNCE_MS = 800;
 
 /**

@@ -23,7 +23,7 @@ the path opens the log without filters.
 |--------|---------|
 | Running | The run is in progress. A run whose server stopped while it ran is marked failed within a few minutes. |
 | Success | Every document was delivered and the finish step did what it should. |
-| Warning | The documents were delivered, but the finish step failed: the spooled file is still where it was. Hold, move or delete it by hand, or retry. |
+| Warning | The documents were delivered, but something needs a look: the finish step failed and the spooled file is still where it was (hold, move or delete it by hand, or retry), or a [lookup](lookups.md#when-no-row-is-found) found no row and left its values empty. |
 | Failed | A step failed before anything was delivered. The error names the step and the cause, with secrets removed. The spooled file is left alone. |
 | Skipped | The spooled file does not pass the definition's `match` rules, so it is not one the job is for. It is left alone. |
 
@@ -48,6 +48,7 @@ was cut off". Retry it to run the file again.
 |------|--------------|
 | Capture | Reads the spooled file and stores it as a sample. |
 | Extract | Matches the file against the definition and reads its page groups. |
+| Lookups | Runs the job's [lookups](lookups.md) against Db2 for i for every page group, such as "1 lookup, 6 queries". Shown only when the job has lookups. A lookup that finds no row and warns is listed under the step with its document, such as "No row in customer for customerNo 10042 (invoice-260101)". |
 | Render | Checks each template, then makes the document of each page group with it, in the template's formats, with [Carbone](carbone.md). An Excel template of the whole spooled file makes one document of all of them. A failed render shows Carbone's own text under Details. |
 | Deliver | Hands every file to the destination. |
 | Finish | Holds, moves, deletes or leaves the spooled file. |

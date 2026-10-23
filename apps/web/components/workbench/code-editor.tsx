@@ -3,6 +3,7 @@
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { html } from '@codemirror/lang-html';
 import { json } from '@codemirror/lang-json';
+import { sql, StandardSQL } from '@codemirror/lang-sql';
 import { yaml } from '@codemirror/lang-yaml';
 import {
   bracketMatching,
@@ -13,7 +14,7 @@ import {
   syntaxHighlighting,
 } from '@codemirror/language';
 import { highlightSelectionMatches, searchKeymap } from '@codemirror/search';
-import { Annotation, EditorState, type Extension } from '@codemirror/state';
+import { Annotation, Compartment, EditorState, type Extension } from '@codemirror/state';
 import {
   Decoration,
   drawSelection,
@@ -31,7 +32,7 @@ import {
 import { tags } from '@lezer/highlight';
 import { useEffect, useRef } from 'react';
 
-export type CodeLanguage = 'yaml' | 'html' | 'json';
+export type CodeLanguage = 'yaml' | 'html' | 'json' | 'sql';
 
 /** Token colors from the --syntax-* variables in globals.css, so they follow the theme. */
 const highlightStyle = HighlightStyle.define([
@@ -93,6 +94,7 @@ const LANGUAGES: Record<CodeLanguage, () => Extension> = {
   yaml: () => yaml(),
   html: () => [html(), templateTags],
   json: () => json(),
+  sql: () => sql({ dialect: StandardSQL, upperCaseKeywords: true }),
 };
 
 /**
@@ -108,6 +110,7 @@ export function CodeEditor({
   placeholder,
   readOnly = false,
   autoHeight = false,
+  extensions,
 }: {
   value: string;
   onChange?: (value: string) => void;
@@ -117,9 +120,13 @@ export function CodeEditor({
   readOnly?: boolean;
   /** Grow with the content instead of filling and scrolling the parent. */
   autoHeight?: boolean;
+  /** More extensions, such as decorations that change with the data. Taken again when they change, keeping the text and cursor. */
+  extensions?: Extension;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
+  const extra = useRef(new Compartment());
+  const initialExtensions = useRef(extensions);
   const onChangeRef = useRef(onChange);
   const initial = useRef(value);
 
@@ -153,6 +160,7 @@ export function CodeEditor({
           EditorView.editable.of(!readOnly),
           EditorView.contentAttributes.of({ 'aria-label': label }),
           placeholder ? placeholderText(placeholder) : [],
+          extra.current.of(initialExtensions.current ?? []),
           EditorView.updateListener.of((update) => {
             if (update.docChanged && !update.transactions.some((tr) => tr.annotation(external))) {
               onChangeRef.current?.(update.state.doc.toString());
@@ -167,6 +175,11 @@ export function CodeEditor({
       view.current = null;
     };
   }, [language, readOnly, autoHeight, label, placeholder]);
+
+  useEffect(() => {
+    initialExtensions.current = extensions;
+    view.current?.dispatch({ effects: extra.current.reconfigure(extensions ?? []) });
+  }, [extensions]);
 
   // Take outside changes (a saved file, the chat, another document) without losing the cursor when typing.
   useEffect(() => {

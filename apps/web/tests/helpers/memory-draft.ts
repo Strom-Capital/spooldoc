@@ -1,3 +1,4 @@
+import type { Lookup } from '@spooldoc/core';
 import { jobSpecSchema, withContent, type FileTemplateContent, type JobTemplate, type XlsxScope } from '@/lib/job-spec';
 import { switchProblem, type DraftStore } from '@/lib/server/chat';
 import type { TemplateFileView } from '@/lib/types';
@@ -20,6 +21,7 @@ export const htmlOf = (template: JobTemplate): string | null | undefined => (tem
 export class MemoryDraft implements DraftStore {
   yaml = '';
   templates: JobTemplate[] = jobSpecSchema.parse({}).render.templates;
+  lookups: Lookup[] = [];
   /** The files the agent saved, by id. */
   files = new Map<string, MemoryFile>();
 
@@ -32,6 +34,9 @@ export class MemoryDraft implements DraftStore {
   }
   async readTemplates() {
     return this.templates;
+  }
+  async readLookups() {
+    return this.lookups;
   }
   async writeDefinition(yaml: string) {
     this.yaml = yaml;

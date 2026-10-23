@@ -73,8 +73,18 @@ Spooldoc signs on with the profile of each saved server and uses only
 these operations: list output queues and spooled files (SQL services),
 read a spooled file, `HLDSPLF`, move and delete a spooled file, read a
 data queue, and, when asked from the trigger step, `CRTDTAQ` and
-`CHGOUTQ DTAQ(...)`. It runs no SQL against application tables and
-installs nothing on the system.
+`CHGOUTQ DTAQ(...)`. It runs SQL against application tables only for a
+job's [lookups](lookups.md), and installs nothing on the system.
+
+Lookups run on a second JDBC connection that is opened read only, so the
+driver refuses a statement that changes data, whatever the SQL says.
+Spooldoc also refuses anything but one SELECT, WITH or VALUES statement
+before it is sent. The driver checks only the type of the statement: a
+SELECT that calls a user-defined function which changes data is not
+blocked. The authority of the server's user profile is what limits that,
+so give it `*USE` on the tables its lookups read and no more. Each value
+a lookup takes is bound as a parameter, never written into the SQL, and
+each query may run 30 seconds.
 
 Previews only read. After a run delivered every document, the finish step
 holds the spooled file by default, or moves, deletes or leaves it as the
@@ -182,7 +192,8 @@ Every file a run uploaded, or tried to, is listed on the run in the
 - Put the app behind https and set `APP_URL`.
 - Reach the IBM i over a private network; do not open the host server
   ports to the internet. Set `SPOOLDOC_ALLOWED_HOSTS`.
-- Give the IBM i profile only the queues it needs.
+- Give the IBM i profile only the queues it needs, and only `*USE` on
+  the tables its lookups read.
 - Decide where the values may go: a local model keeps them on your
   network; with a hosted provider, turn on masking unless its terms are
   acceptable for your documents.

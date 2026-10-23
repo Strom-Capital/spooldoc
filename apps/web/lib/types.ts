@@ -1,6 +1,7 @@
 // Shapes the API returns, shared by the server routes and the pages.
 
 import type { SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
+import type { LookupColumn } from '@spooldoc/core/lookups';
 import type { AiProviderId, Effort } from './ai-providers';
 import type { EmailConfig, HostKeyInfo, IfExists, IfsConfig, SftpConfigView, WebhookConfigView } from './destination-config';
 import type { Formats } from './formats';
@@ -147,13 +148,15 @@ export interface JobDetail {
 
 /** One step of a run. */
 export interface RunStepView {
-  step: 'capture' | 'extract' | 'render' | 'deliver' | 'finish';
+  step: 'capture' | 'extract' | 'lookup' | 'render' | 'deliver' | 'finish';
   ok: boolean;
   ms: number;
   error?: string;
   /** The system's own text behind `error`, such as Carbone's message. */
   detail?: string;
   note?: string;
+  /** What went wrong without stopping the run, such as a lookup that found no row. */
+  warnings?: string[];
 }
 
 /** A row of the job log. */
@@ -398,6 +401,33 @@ export interface WebhookPreviewView {
   body: string;
   /** The size of the body as it is sent, with the files in base64. */
   bodyBytes: number;
+}
+
+/** A parameter of a lookup Test: its value, where it came from, and the marker type Db2 for i gave it. */
+export interface LookupTestParameter {
+  name: string;
+  value: string | number | null;
+  /** The tag of the value, such as `d.pg.customerNo` or `d.pg.lines[0].item`. */
+  source: string;
+  /** The Db2 for i type of its marker, such as `DECIMAL(7,0)`, when the driver says. */
+  marker: string | null;
+}
+
+/** What a lookup Test found: the result columns, the parameters, and the rows it ran with for one page group. */
+export interface LookupTestView {
+  /** What the client writes into the lookup's `checked`. */
+  checked: { sql: string; columns: LookupColumn[] };
+  /** Each result column with its Db2 for i type, such as `VARCHAR(80)`. */
+  columns: (LookupColumn & { db2: string })[];
+  parameters: LookupTestParameter[];
+  /** Up to 50 rows, typed as a run adds them. */
+  rows: Record<string, unknown>[];
+  /** How many rows the query returned. */
+  rowCount: number;
+  ms: number;
+  host: string;
+  /** For a row lookup: the row of the table whose values it ran with, 0-based. */
+  row?: number;
 }
 
 /** What the receiver answered a Send test. `error` is set when the call failed. */

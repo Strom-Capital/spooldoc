@@ -1,4 +1,4 @@
-import { spooledFileData, templatePaths, type Definition } from '@spooldoc/core';
+import { spooledFileData, templatePaths, type Definition, type Lookup } from '@spooldoc/core';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { emailConfigSchema } from '@/lib/destination-config';
@@ -23,6 +23,7 @@ import { getFormats } from '@/lib/server/formats';
 import { errorResponse, json, readJson } from '@/lib/server/http';
 import { draftPageGroup } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
+import { previewLookupRunner } from '@/lib/server/lookups';
 import { getMailView } from '@/lib/server/mail';
 import { renderSample } from '@/lib/server/render';
 import type { EmailPreviewView } from '@/lib/types';
@@ -44,12 +45,15 @@ const previewSchema = z.object({
  * without tables and records. The email of the whole spooled file has no page group, so it
  * reads the spooled file's fields only.
  */
-function emailFields(def: Definition, data: unknown, formatting: EmailFormatting, spooledFile: boolean): { path: string; value: string }[] {
-  const paths = [...templatePaths(def)];
+function emailFields(def: Definition, lookups: readonly Lookup[], data: unknown, formatting: EmailFormatting, spooledFile: boolean): { path: string; value: string }[] {
+  const paths = [...templatePaths(def, lookups)];
   const lists = new Set(paths.filter((path) => path.includes('[]')).map((path) => path.slice(0, path.indexOf('[]'))));
+  // A lookup of one row per page group is a row, not a value: its columns are the values.
+  const rows = new Set(lookups.filter((l) => l.for === undefined && l.result === 'one').map((l) => `pg.${l.name}`));
   const single = spooledFile ? /^splf\.[^.[\]]+$/ : /^(pg|splf)\.[^.[\]]+$/;
+  const column = /^(pg\.[^.[\]]+)\.[^.[\]]+$/;
   return paths
-    .filter((path) => single.test(path) && !lists.has(path))
+    .filter((path) => (single.test(path) && !lists.has(path) && !rows.has(path)) || (!spooledFile && rows.has(column.exec(path)?.[1] ?? '')))
     .map((path) => ({ path, value: expandText(`{d.${path}}`, data, formatting).text }));
 }
 
@@ -91,7 +95,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const [row] = destinationId ? await getDb().select({ kind: destinations.kind, config: destinations.config }).from(destinations).where(eq(destinations.id, destinationId)) : [];
   const testAddress = row?.kind === 'email' ? (emailConfigSchema.safeParse(row.config).data?.testAddress ?? null) : null;
   const mail = await getMailView();
-  const formatting: EmailFormatting = { formats: await getFormats(), types: fieldTypes(def) };
+  const formatting: EmailFormatting = { formats: await getFormats(), types: fieldTypes(def, draft.lookups) };
 
   // The message template's HTML for this page group, rendered as a run renders it.
   let templateHtml: string | null = null;
@@ -107,6 +111,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       asset: await assetResolver(),
       assets: (await assetNames()).map((asset) => asset.name),
       renderer: await previewRenderer(),
+      lookups: previewLookupRunner(draft.source.serverId, draft.lookups),
     });
     templateHtml = rendered.html ?? null;
     if (!templateHtml) bodyError = rendered.carbone?.error ?? rendered.template?.error ?? rendered.errors[0] ?? 'The message template could not be rendered.';
@@ -149,8 +154,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     testAddress,
     problems,
     notices,
-    unknownTags: emailSpecProblems(email, def, draft.render.templates).filter((problem) => !problem.startsWith('Enter To')),
-    fields: emailFields(def, data, formatting, whole),
+    unknownTags: emailSpecProblems(email, def, draft.render.templates, draft.lookups).filter((problem) => !problem.startsWith('Enter To')),
+    fields: emailFields(def, draft.lookups, data, formatting, whole),
   };
   return json(view);
 }

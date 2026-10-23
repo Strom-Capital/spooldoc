@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { parseDefinition, type Definition } from '@spooldoc/core';
+import { lookupProblems, lookupTestProblems, parseDefinition, type Definition } from '@spooldoc/core';
 import { and, desc, eq, isNotNull, max, sql } from 'drizzle-orm';
 import type { ZodError } from 'zod';
 import {
@@ -202,18 +202,22 @@ export class ConfirmDeleteError extends Error {
 }
 
 /**
- * Problems that keep a spec from being saved as a version: missing parts and a
- * definition that does not parse.
+ * Problems that keep a spec from being saved as a version: missing parts, a definition
+ * that does not parse, and lookups with problems or not tested since they changed. It
+ * needs no IBM i connection: each lookup's last Test is stored with it.
  */
 export function versionProblems(spec: JobSpec): string[] {
   const problems = missingParts(spec);
+  let def: Definition | null = null;
   if (spec.extract.definition.trim()) {
     try {
-      parseDefinition(spec.extract.definition);
+      def = parseDefinition(spec.extract.definition);
     } catch (error) {
       problems.push(`Extract: the definition has errors. ${error instanceof Error ? error.message.split('\n')[0] : ''}`.trim());
     }
   }
+  const lookups = [...lookupProblems(def, spec.lookups), ...lookupTestProblems(spec.lookups)];
+  for (const problem of lookups.sort((a, b) => a.index - b.index)) problems.push(`Lookups: ${problem.message}`);
   return problems;
 }
 
@@ -249,7 +253,7 @@ export async function destinationProblems(spec: JobSpec): Promise<string[]> {
   } catch {
     // The definition's own errors are reported by `versionProblems`.
   }
-  return emailSpecProblems(email, def, spec.render.templates).map((problem) => `Destination: ${problem}`);
+  return emailSpecProblems(email, def, spec.render.templates, spec.lookups).map((problem) => `Destination: ${problem}`);
 }
 
 /**

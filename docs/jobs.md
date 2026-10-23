@@ -19,10 +19,10 @@ first.
   </picture>
 </p>
 
-The job builder shows the pipeline as six steps, and each step opens an
+The job builder shows the pipeline as seven steps, and each step opens an
 inspector. Click a step to open it, or use Next and Back to go through them
 in order. Next sits at the end of each form, and in the bar above the page
-on Extract and Render. On Finish, Save version takes its place while the
+on Extract, Lookups and Render. On Finish, Save version takes its place while the
 draft has changes that are not in the active version. Next turns primary
 when its step is ready, and Run now turns primary when every step is
 ready. Only one of them is primary at a time, and Save version on Finish
@@ -48,6 +48,7 @@ has changes.
 | Source | The server, the output queue, and filters on spooled file name, user data, job name, job user and form type. Each filter is a "contains" match; empty means any file on the queue. |
 | Trigger | On demand, or Watching the queue, and whether held files count. See [Running on demand](#running-on-demand) and [Watching a queue](#watching-a-queue). |
 | Extract | The [definition](definitions.md): the YAML that turns pages into JSON. |
+| Lookups | [Lookups](lookups.md): SELECT statements against Db2 for i that add values, such as a customer's email address, to each page group. The step reads None, and is ready, when the job has none. |
 | Render | The [templates](templates.md): each has a name, HTML or a Word or Excel file, and the formats it makes. The starter template renders every field and table of the definition until you write your own. See [Templates](#templates). |
 | Destination | Where the files go. See [Destinations](destinations.md). |
 | Finish | What happens to the spooled file after every document was delivered. |

@@ -36,6 +36,7 @@ import {
   starterTemplate,
   templateData,
   type Definition,
+  type Lookup,
   type DesignImage,
   type DocxParagraph,
   type DocxProblem,
@@ -154,6 +155,7 @@ export async function fileTemplates(
   templates: JobTemplate[],
   definitionYaml: string,
   read: (fileId: string) => Promise<{ name: string; content: Uint8Array } | null>,
+  lookups: readonly Lookup[] = [],
 ): Promise<Record<string, FileTemplateNote>> {
   let def: Definition | null = null;
   try {
@@ -183,13 +185,13 @@ export async function fileTemplates(
           name: file?.name ?? null,
           scope: template.scope,
           cells: xlsx.cells,
-          problems: checkXlsx(xlsx, def, template.scope),
+          problems: checkXlsx(xlsx, def, template.scope, { lookups }),
           noPageSetup: sheetsWithoutPageSetup(xlsx),
         };
         continue;
       }
       const docx = readDocx(file ? file.content : await starterDocx(def!));
-      notes[template.id] = { name: file?.name ?? null, paragraphs: docx.paragraphs, problems: checkDocx(docx, def) };
+      notes[template.id] = { name: file?.name ?? null, paragraphs: docx.paragraphs, problems: checkDocx(docx, def, { lookups }) };
     } catch (error) {
       notes[template.id] = { error: message(error) };
     }
@@ -747,6 +749,8 @@ export interface DraftStore {
   readDefinition(): Promise<string>;
   /** The job's templates, in order. */
   readTemplates(): Promise<JobTemplate[]>;
+  /** The job's lookups, in order. */
+  readLookups(): Promise<Lookup[]>;
   writeDefinition(yaml: string): Promise<void>;
   /** Save the HTML of the template with this id. */
   writeHtml(templateId: string, html: string): Promise<void>;
@@ -969,6 +973,7 @@ const ASSET_PLACEHOLDER = 'data:,';
 async function renderDocument(
   html: string,
   def: Definition,
+  lookups: readonly Lookup[],
   pageGroups: Record<string, unknown>[],
   index: number,
   sample: Sample,
@@ -976,7 +981,7 @@ async function renderDocument(
   assets: ChatAsset[],
   renderer: DocumentRenderer | null,
 ): Promise<{ errors: string[]; textPreview: string }> {
-  const problems = checkTemplate(html, def, { assets: assets.map((asset) => asset.name) });
+  const problems = checkTemplate(html, def, { assets: assets.map((asset) => asset.name), lookups });
   if (problems.length > 0) {
     return { errors: problems.map((p) => `Line ${p.line}: ${p.message}`), textPreview: '' };
   }
@@ -1023,6 +1028,7 @@ interface FileRender {
 async function renderWord(
   bytes: Uint8Array,
   def: Definition,
+  lookups: readonly Lookup[],
   pageGroups: Record<string, unknown>[],
   index: number,
   sample: Sample,
@@ -1037,7 +1043,7 @@ async function renderWord(
   } catch (error) {
     return none([message(error)]);
   }
-  const problems = checkDocx(template, def);
+  const problems = checkDocx(template, def, { lookups });
   if (problems.length > 0) {
     return none(problems.map((p) => `${p.part}: ${p.message}`));
   }
@@ -1201,6 +1207,7 @@ function shortenedData(
 async function renderExcel(
   bytes: Uint8Array,
   def: Definition,
+  lookups: readonly Lookup[],
   scope: XlsxScope,
   pageGroups: Record<string, unknown>[],
   index: number,
@@ -1216,7 +1223,7 @@ async function renderExcel(
   } catch (error) {
     return none([message(error)]);
   }
-  const problems = checkXlsx(template, def, scope);
+  const problems = checkXlsx(template, def, scope, { lookups });
   if (problems.length > 0) {
     return none(problems.map((p) => `${cellRef(p.sheet, p.ref)}: ${p.message}`));
   }
@@ -1433,10 +1440,11 @@ export function buildTools({ sample: current, store, masked, assets = [], render
       return { errors: [`Extraction failed: ${message(error)}`], textPreview: '', view: null, pages: null, pageGroups: 0 };
     }
     const at = Math.min(index, Math.max(0, pageGroups.length - 1));
+    const lookups = await readLookups();
     const rendered =
       target.kind === 'xlsx'
-        ? await renderExcel(bytes, def, target.scope, pageGroups, at, sample, masked, renderer, visual)
-        : await renderWord(bytes, def, pageGroups, at, sample, masked, renderer, visual);
+        ? await renderExcel(bytes, def, lookups, target.scope, pageGroups, at, sample, masked, renderer, visual)
+        : await renderWord(bytes, def, lookups, pageGroups, at, sample, masked, renderer, visual);
     if (rendered.visual) {
       visuals.set(toolCallId, rendered.visual);
     }
@@ -1506,6 +1514,11 @@ export function buildTools({ sample: current, store, masked, assets = [], render
       return fail(`Could not read the job's templates: ${message(error)}`);
     }
     return findTemplate(templates, key) ?? noTemplate(key ?? '', templates);
+  }
+
+  /** The job's lookups, so template checks know the paths they add. The agent does not run them. */
+  async function readLookups(): Promise<Lookup[]> {
+    return store.readLookups().catch(() => []);
   }
 
   async function linked(): Promise<{ type: string; def: Definition } | ToolFailure> {
@@ -1617,7 +1630,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         } catch (error) {
           return { ok: false, path, ...named, errors: [`Extraction failed: ${message(error)}`], warnings, textPreview: '' };
         }
-        const rendered = await renderDocument(html, current.def, pageGroups, 0, sample, masked, assets, renderer);
+        const rendered = await renderDocument(html, current.def, await readLookups(), pageGroups, 0, sample, masked, assets, renderer);
         return { ok: rendered.errors.length === 0, path, ...named, errors: rendered.errors, warnings, textPreview: rendered.textPreview };
       }),
     }),
@@ -1652,7 +1665,7 @@ export function buildTools({ sample: current, store, masked, assets = [], render
         let rendered: { errors: string[]; textPreview: string } & Partial<ReturnType<typeof renderFields>>;
         if (template.kind === 'html') {
           const html = template.source ?? starterTemplate(current.def);
-          rendered = await renderDocument(html, current.def, result.pageGroups, index, sample, masked, assets, renderer);
+          rendered = await renderDocument(html, current.def, await readLookups(), result.pageGroups, index, sample, masked, assets, renderer);
         } else {
           const file = await currentFile(template, current.def);
           if ('ok' in file) {

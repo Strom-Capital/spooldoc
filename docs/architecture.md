@@ -35,20 +35,24 @@ where a run stopped.
    and is left alone. Then the fields, tables and records are read from
    the pages, or from the XML when the spooled file holds XML, and the
    pages are split into page groups. See [Definitions](definitions.md).
-3. **Render.** Spooldoc checks each template against the definition,
+3. **Lookups.** When the job has lookups, each one runs as a SELECT on a
+   read-only connection to Db2 for i, with values of the page group bound
+   as parameters, and adds its rows to the page group's JSON. Each
+   distinct set of values runs once per run. See [Lookups](lookups.md).
+4. **Render.** Spooldoc checks each template against the definition,
    then sends it to Carbone once per page group and format, with the
    page group's JSON as the data and uploaded assets written in as data
    URIs, or once per format with every page group for an Excel template
    of the whole spooled file. Carbone answers with the file: HTML, PDF,
    DOCX or XLSX. See
    [Templates](templates.md).
-4. **Deliver.** Every file goes to the job's destination: kept in
+5. **Deliver.** Every file goes to the job's destination: kept in
    Spooldoc's database, written to a folder in the IFS of the job's
    server, emailed, one email per document, through the mail server
    in Settings, posted to a URL, one signed webhook call per document, or
    uploaded to a folder on an SFTP server.
    See [Destinations](destinations.md).
-5. **Finish.** Only after every document was delivered, the spooled file
+6. **Finish.** Only after every document was delivered, the spooled file
    is held, moved, deleted or left as it is. A finish that fails gives the
    run the status warning: the documents are out, the file is still there.
 

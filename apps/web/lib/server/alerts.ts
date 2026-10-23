@@ -200,7 +200,7 @@ export function alertTime(at: Date, now: Date): string {
 /** The text with a period at the end, unless it ends a sentence already. */
 const sentence = (text: string): string => (/[.!?]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`);
 
-const STEP_NAMES: Record<RunStep['step'], string> = { capture: 'Capture', extract: 'Extract', render: 'Render', deliver: 'Deliver', finish: 'Finish' };
+const STEP_NAMES: Record<RunStep['step'], string> = { capture: 'Capture', extract: 'Extract', lookup: 'Lookups', render: 'Render', deliver: 'Deliver', finish: 'Finish' };
 
 /** "3 runs failed since 09:14 UTC", "2 runs failed and 1 ended with a warning since ...". */
 function countText(counted: { failed: number; warning: number }, since: string): string {

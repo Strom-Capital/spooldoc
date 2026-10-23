@@ -17,6 +17,7 @@ import {
 import { unzipSync } from "fflate";
 import type { Definition } from "./definition.js";
 import { pageField } from "./docx-design.js";
+import type { Lookup } from "./lookup-spec.js";
 import { short, tagProblems, templatePaths } from "./tags.js";
 import { decodeXml as decode, isOle, isZip, xmlAttribute as attribute } from "./xml.js";
 import { fieldLabel, MAX_TEMPLATE_FILE_BYTES, starterLayout, valueTag, type StarterBlock, type StarterColumn } from "./template.js";
@@ -210,8 +211,8 @@ const ASSET_START = /\{asset\b/;
  *
  * @returns The problems in the order of the paragraphs; empty when the template is fine
  */
-export function checkDocx(template: DocxTemplate, def?: Definition | null): DocxProblem[] {
-  const known = def ? templatePaths(def) : undefined;
+export function checkDocx(template: DocxTemplate, def?: Definition | null, options: { lookups?: readonly Lookup[] } = {}): DocxProblem[] {
+  const known = def ? templatePaths(def, options.lookups) : undefined;
   const problems: DocxProblem[] = [];
   const seen = new Set<string>();
   const add = (part: DocxPart, message: string): void => {

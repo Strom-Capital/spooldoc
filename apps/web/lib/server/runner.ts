@@ -15,6 +15,7 @@ import {
   docxProblemText,
   extract,
   isCarboneError,
+  isLookupError,
   matchProblems,
   parseDefinition,
   problemText,
@@ -24,6 +25,7 @@ import {
   type AssetResolver,
   type Definition,
   type DocumentRender,
+  type Lookup,
   type DocxTemplate,
   type Sample,
   type TemplateData,
@@ -41,6 +43,7 @@ import { fieldTypes } from './email-message';
 import { redact } from './http';
 import { connectServer, isConnectionError } from './ibmi';
 import { log } from './log';
+import { runLookups } from './lookups';
 import { HEARTBEAT_MS } from './retention';
 import { capture, storeSample } from './samples';
 import { StepError } from './step-error';
@@ -104,15 +107,28 @@ export async function executeRun(runId: string, request: RunRequest, connection?
   let status: 'success' | 'warning' | 'failed' | 'skipped' = 'success';
   let error: string | null = null;
 
-  const step = async <T>(name: RunStep['step'], fn: () => Promise<T>, note?: (value: T) => string | undefined): Promise<T> => {
+  const step = async <T>(
+    name: RunStep['step'],
+    fn: () => Promise<T>,
+    note?: (value: T) => string | undefined,
+    warnings?: (value: T) => string[],
+  ): Promise<T> => {
     const started = performance.now();
     try {
       const value = await fn();
-      steps.push({ step: name, ok: true, ms: Math.round(performance.now() - started), ...(note ? { note: note(value) } : {}) });
+      const warned = warnings?.(value) ?? [];
+      steps.push({
+        step: name,
+        ok: true,
+        ms: Math.round(performance.now() - started),
+        ...(note ? { note: note(value) } : {}),
+        ...(warned.length > 0 ? { warnings: warned } : {}),
+      });
       return value;
     } catch (err) {
       const message = err instanceof StepError ? err.message : firstLine(err, secrets);
-      const detail = err instanceof StepError ? err.detail : isCarboneError(err) || isConnectionError(err) ? err.detail : undefined;
+      const detail =
+        err instanceof StepError ? err.detail : isCarboneError(err) || isConnectionError(err) || isLookupError(err) ? err.detail : undefined;
       steps.push({ step: name, ok: false, ms: Math.round(performance.now() - started), error: message, ...(detail ? { detail } : {}) });
       throw new StepError(name, message, detail);
     }
@@ -175,8 +191,23 @@ export async function executeRun(runId: string, request: RunRequest, connection?
     if (extracted.mismatch.length > 0) {
       throw new SkipRun(`Skipped: the definition is not for this file (${extracted.mismatch.join('; ')}).`);
     }
-    const { def, groups, ranges } = extracted;
-    pageGroups = groups.length;
+    const { def, ranges } = extracted;
+    pageGroups = extracted.groups.length;
+
+    // Lookups add values from Db2 for i to each page group. The step is recorded only when the job has some.
+    let groups = extracted.groups;
+    let lookupWarnings: string[] = [];
+    if (spec.lookups.length > 0) {
+      const printedNames = documentNames(def, groups, sample, false).pageGroups;
+      const looked = await step(
+        'lookup',
+        () => runLookups(conn, spec.lookups, groups, { names: printedNames }),
+        (result) => lookupNote(result.traces.filter((t) => !t.cached && !t.skippedFor).length, spec.lookups.length),
+        (result) => result.misses.map((miss) => miss.text),
+      );
+      groups = looked.groups;
+      lookupWarnings = looked.misses.map((miss) => miss.text);
+    }
 
     // Looked up before the render, so an email destination's message template is rendered with the documents.
     const destinationLookup = destinationFor(spec.destination.destinationId);
@@ -223,7 +254,7 @@ export async function executeRun(runId: string, request: RunRequest, connection?
             splf: request.splf,
             attributes: sample.attributes,
           },
-          valueTypes: fieldTypes(def),
+          valueTypes: fieldTypes(def, spec.lookups),
           conn,
           host,
           addSecret: (secret) => secrets.push(secret),
@@ -231,6 +262,14 @@ export async function executeRun(runId: string, request: RunRequest, connection?
       },
       (note) => note,
     );
+
+    if (lookupWarnings.length > 0) {
+      status = 'warning';
+      error =
+        lookupWarnings.length === 1
+          ? `Delivered, but a lookup found no row: ${lookupWarnings[0]}.`
+          : `Delivered, but lookups found no row ${lookupWarnings.length} times. The Lookups step lists them.`;
+    }
 
     try {
       await step(
@@ -302,7 +341,7 @@ export async function renderFiles(
     const formats = only !== undefined && options.formats ? template.formats.filter((format) => options.formats!.includes(format)) : template.formats;
     if (only !== undefined && formats.length === 0 && template.id !== bodyTemplateId) continue;
     // Checked once per template: Carbone prints some mistakes without an error.
-    const prepared = await prepareTemplate(template, def, assets);
+    const prepared = await prepareTemplate(template, def, assets, spec.lookups);
     // The documents to make: one of the whole spooled file, or one per page group.
     const documents = perSpooledFile(template)
       ? [{ index: null, data: spooledFileData(groups, sample) as DocumentData, where: 'the spooled file' }]
@@ -357,12 +396,12 @@ const pageGroupData = (data: DocumentData): TemplateData => data as TemplateData
  *
  * @throws StepError when the template has problems or its file is gone
  */
-async function prepareTemplate(template: JobTemplate, def: Definition, assets: string[]): Promise<PreparedTemplate> {
+async function prepareTemplate(template: JobTemplate, def: Definition, assets: string[], lookups: readonly Lookup[]): Promise<PreparedTemplate> {
   const problems = (count: number, text: string) =>
     new StepError('render', `The "${template.name}" template has ${count === 1 ? '1 problem' : `${count} problems`}. ${text.replace(/\n/g, ' ')}`);
   if (template.kind === 'html') {
     const html = templateHtml(template.source, def);
-    const found = checkTemplate(html, def, { assets });
+    const found = checkTemplate(html, def, { assets, lookups });
     if (found.length > 0) throw problems(found.length, problemText(found.slice(0, 3)));
     return {
       data: html,
@@ -384,7 +423,7 @@ async function prepareTemplate(template: JobTemplate, def: Definition, assets: s
     } catch (err) {
       throw new StepError('render', `The "${template.name}" template's Excel file: ${err instanceof Error ? err.message : String(err)}`);
     }
-    const found = checkXlsx(read, def, template.scope);
+    const found = checkXlsx(read, def, template.scope, { lookups });
     if (found.length > 0) throw problems(found.length, xlsxProblemText(found.slice(0, 3)));
     // Worked out once, so a render per page group does not unzip the file again.
     const hardRefresh = xlsxHardRefresh(read);
@@ -396,13 +435,18 @@ async function prepareTemplate(template: JobTemplate, def: Definition, assets: s
   } catch (err) {
     throw new StepError('render', `The "${template.name}" template's Word file: ${err instanceof Error ? err.message : String(err)}`);
   }
-  const found = checkDocx(read, def);
+  const found = checkDocx(read, def, { lookups });
   if (found.length > 0) throw problems(found.length, docxProblemText(found.slice(0, 3)));
   const converter = docxConverter(read);
   return {
     data: read,
     input: (data, format) => ({ kind: 'docx', template: bytes, data: pageGroupData(data), format: format === 'docx' ? 'docx' : 'pdf', converter }),
   };
+}
+
+/** "1 lookup, 3 queries". */
+function lookupNote(queries: number, lookups: number): string {
+  return `${lookups} ${lookups === 1 ? 'lookup' : 'lookups'}, ${queries} ${queries === 1 ? 'query' : 'queries'}`;
 }
 
 /** "6 PDFs and 6 DOCX files", "1 XLSX file". */

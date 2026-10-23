@@ -157,7 +157,7 @@ filled in from the page group of each document:
 
 | Field | What it holds |
 |-------|---------------|
-| To | One or more addresses, separated by commas or semicolons: `{d.pg.email}, orders@example.com`. An address can have a name, as in `John Smith <john@example.com>` or `"Smith, John" <john@example.com>`, and the email goes out with it. Required. |
+| To | One or more addresses, separated by commas or semicolons: `{d.pg.email}, orders@example.com`. An address can have a name, as in `John Smith <john@example.com>` or `"Smith, John" <john@example.com>`, and the email goes out with it. When the spooled file does not print the address, a [lookup](lookups.md) can read it from Db2 for i: `{d.pg.customer.EMAIL}`. Required. |
 | Cc, Bcc | Optional, written like To. Bcc to an archive mailbox is one fixed address. |
 | Reply-To | Optional, one address, with or without a name. |
 | Subject | Such as `Invoice {d.pg.invoiceNo}`. Empty, the subject is the document's name. |
@@ -175,7 +175,8 @@ field prints in the date format of Settings, and a number keeps its
 decimals with the separators of Settings: `1,374.5`. Any other
 formatter, or one with a wrong argument, is listed under the fields, and
 a version cannot be saved with it. A value that is not a number or a date
-prints nothing. **Insert field** lists the fields of the definition with
+prints nothing. **Insert field** lists the fields of the definition, and
+the columns of each lookup that reads one row, with
 their values in the page group shown, formatted, and puts the one you
 pick at the cursor. A tag that is not a field of the
 definition is listed under the fields, and a version cannot be saved with
