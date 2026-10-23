@@ -6,6 +6,18 @@ const config = [
   ...nextTypescript,
   { ignores: ['.next/', 'node_modules/', 'next-env.d.ts'] },
   {
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'TaggedTemplateExpression > AwaitExpression.tag',
+          message:
+            "Await the tag in its own statement first. Next's compiler (SWC) drops the parentheses in (await f())`...`, so the template tags the promise and throws.",
+        },
+      ],
+    },
+  },
+  {
     files: ['app/**', 'components/**', 'lib/**', 'proxy.ts'],
     rules: { 'no-console': 'error' },
   },

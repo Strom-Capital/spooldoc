@@ -6,6 +6,8 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 import { getConfig } from '../config';
+import { redact } from '../http';
+import { log } from '../log';
 import * as schema from './schema';
 
 /** The database, whichever driver is behind it (postgres.js in the app, PGlite in tests). */
@@ -61,11 +63,26 @@ export function sessionLocks(client: postgres.Sql): LockProvider {
   const held = new Set<string>();
   let session: Promise<postgres.ReservedSql> | null = null;
   const connection = () => (session ??= client.reserve());
-  // A failed query may mean a lost connection, whose locks are gone: start over on the next call.
+  /**
+   * After a failed query, start over on a new connection with the next call. The old one
+   * may still be alive and hold locks, so it goes back to the pool only once it holds none;
+   * if even that fails, it is closed, and its locks go with it. Either way every lock of
+   * this process is gone, as when the connection is lost.
+   */
   const drop = () => {
     const lost = session;
     session = null;
-    void lost?.then((reserved) => reserved.release()).catch(() => undefined);
+    void lost
+      ?.then(async (reserved) => {
+        try {
+          await reserved`select pg_advisory_unlock_all()`;
+        } catch {
+          await reserved`select pg_terminate_backend(pg_backend_pid())`.catch(() => undefined);
+          return;
+        }
+        reserved.release();
+      })
+      .catch(() => undefined);
   };
   return {
     async tryLock(key) {
@@ -88,8 +105,11 @@ export function sessionLocks(client: postgres.Sql): LockProvider {
         if (released) return;
         released = true;
         try {
-          await (await connection())`select pg_advisory_unlock(hashtext(${key}))`;
-        } catch {
+          // The handle in its own statement: Next's compiler drops the parentheses of (await f())`...`.
+          const reserved = await connection();
+          await reserved`select pg_advisory_unlock(hashtext(${key}))`;
+        } catch (error) {
+          log.warn('Could not release a database lock', { lock: key, error: redact(error) });
           drop();
         } finally {
           held.delete(key);
