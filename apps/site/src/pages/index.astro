@@ -172,8 +172,11 @@ const tour = [
   .tour-item p { margin: 0; }
 
   .grid { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-3); }
+  /* Nine features: three rows of three, the reading side (servers, definitions, lookups) first.
+     In two columns the odd last card takes the whole row, so none stands alone. */
   @media (min-width: 600px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-  @media (min-width: 1000px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  @media (min-width: 600px) and (max-width: 899.98px) { .grid > li:last-child:nth-child(odd) { grid-column: 1 / -1; } }
+  @media (min-width: 900px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   .card { display: block; height: 100%; padding: var(--space-5); border: 1px solid var(--border); border-radius: calc(var(--radius) * 1.8); background: var(--card); color: var(--foreground); text-decoration: none; transition: border-color 0.15s; }
   .card:hover { border-color: var(--primary); }
   .card h3 { margin: 0 0 var(--space-2); }
