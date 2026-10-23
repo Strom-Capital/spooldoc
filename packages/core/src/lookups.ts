@@ -181,14 +181,41 @@ export interface LookupTrace {
   ms: number;
   /** True when the result came from the cache. */
   cached: boolean;
+  /**
+   * The earlier lookup that found no row and that this one reads a column of. The lookup
+   * did not run: its value is left empty.
+   */
+  skippedFor?: string;
 }
 
 /** A lookup that found no row, when the lookup says to warn. */
 export interface LookupMiss {
   lookup: string;
   pageGroup: number;
-  /** "No row in customer for customerNo 10042 (invoice-260101)" */
+  /** "No row in customer for customerNo 10042 (invoice-260101)", and the later lookups this left empty: ". product is left empty" */
   text: string;
+  /** Later lookups that read a column of this one, and so were left empty without running. */
+  leftEmpty?: string[];
+}
+
+/** A miss while lookups run: its text without the later lookups it left empty. */
+interface MissEntry {
+  lookup: string;
+  pageGroup: number;
+  base: string;
+  leftEmpty: string[];
+}
+
+/** "No row in customer ... (doc). product is left empty", the text of a miss. */
+function missText(miss: MissEntry): string {
+  if (miss.leftEmpty.length === 0) return miss.base;
+  const names = miss.leftEmpty.length === 1 ? miss.leftEmpty[0]! : `${miss.leftEmpty.slice(0, -1).join(", ")} and ${miss.leftEmpty.at(-1)!}`;
+  return `${miss.base}. ${names} ${miss.leftEmpty.length === 1 ? "is" : "are"} left empty`;
+}
+
+/** The value of a lookup that found no row: every column empty, or an empty list. */
+function emptyValue(lookup: Lookup, columns: readonly { name: string }[]): Record<string, null> | [] {
+  return lookup.result === "many" ? [] : Object.fromEntries(columns.map((c) => [c.name, null]));
 }
 
 /** Why a lookup stopped: its message says what to do; `detail` is Db2 for i's own text. */
@@ -274,6 +301,11 @@ export function parameterText(parameters: readonly BoundParameter[]): string {
  * none), `many` the rows as a list. Each distinct SQL and set of parameters runs once,
  * through `cache`. Values are typed by their Db2 for i type.
  *
+ * A lookup that reads a column of an earlier one that found no row, such as
+ * `:customer.LANG`, does not run: its value is left empty, and the earlier lookup's miss
+ * says so ("... product is left empty") instead of a warning per row. A parameter that is
+ * empty because the page had no value is bound as NULL, and the lookup runs.
+ *
  * @param query - Runs one query; the IBM i connection, or a stand-in in tests
  * @throws LookupError naming the lookup when a query fails, `one` finds more than one row,
  *   `many` finds more than 1,000 rows, or no row is found and the lookup says to stop
@@ -287,7 +319,10 @@ export async function applyLookups(
   const cache: LookupCache = options.cache ?? new Map<string, Promise<LookupQueryResult>>();
   const only = options.only ? new Set(options.only) : null;
   const traces: LookupTrace[] = [];
-  const misses: LookupMiss[] = [];
+  const misses: MissEntry[] = [];
+  const missByText = new Map<string, MissEntry>();
+  // The values of lookups that found no row, with the miss they warned of (null for one that did not warn).
+  const empties = new WeakMap<object, MissEntry | null>();
   const out = groups.map((group, index) => (lookups.length > 0 && (!only || only.has(index)) ? structuredClone(group) : group));
   const bound = lookups.map((lookup) => bindParameters(lookup.sql));
 
@@ -297,6 +332,19 @@ export async function applyLookups(
     for (const [i, lookup] of lookups.entries()) {
       const { sql, names } = bound[i]!;
       const runOnce = async (scopes: Record<string, unknown>[], row?: number): Promise<unknown> => {
+        // A column of an earlier lookup that found no row has no value to look up with.
+        for (const name of names) {
+          if (!name.includes(".")) continue;
+          const head = name.slice(0, name.indexOf("."));
+          const source = scopes.find((scope) => head in scope)?.[head];
+          if (source === null || typeof source !== "object" || !empties.has(source)) continue;
+          const miss = empties.get(source) ?? null;
+          if (miss && !miss.leftEmpty.includes(lookup.name)) miss.leftEmpty.push(lookup.name);
+          traces.push({ lookup: lookup.name, pageGroup, ...(row !== undefined ? { row } : {}), parameters: [], rows: 0, ms: 0, cached: false, skippedFor: head });
+          const value = emptyValue(lookup, lookup.checked?.columns ?? []);
+          empties.set(value, miss);
+          return value;
+        }
         const parameters: BoundParameter[] = names.map((name) => {
           const found = parameterValue(name, scopes);
           if (!found.found) {
@@ -352,11 +400,22 @@ export async function applyLookups(
           if (lookup.missing === "fail") {
             throw new LookupError(lookup.name, `${text}. Check the values, or set When no row is found to Warn and leave it empty.`, pageGroup);
           }
-          if (lookup.missing === "warn" && !misses.some((m) => m.text === text)) misses.push({ lookup: lookup.name, pageGroup, text });
+          let miss: MissEntry | null = null;
+          if (lookup.missing === "warn") {
+            miss = missByText.get(text) ?? null;
+            if (!miss) {
+              miss = { lookup: lookup.name, pageGroup, base: text, leftEmpty: [] };
+              missByText.set(text, miss);
+              misses.push(miss);
+            }
+          }
+          const value = emptyValue(lookup, result.columns);
+          empties.set(value, miss);
+          return value;
         }
         const rows = result.rows.map((r) => typedRow(r, result.columns));
         if (lookup.result === "many") return rows;
-        return rows[0] ?? Object.fromEntries(result.columns.map((c) => [c.name, null]));
+        return rows[0]!;
       };
 
       if (lookup.for === undefined) {
@@ -372,5 +431,9 @@ export async function applyLookups(
       }
     }
   }
-  return { groups: out, traces, misses };
+  return {
+    groups: out,
+    traces,
+    misses: misses.map((m) => ({ lookup: m.lookup, pageGroup: m.pageGroup, text: missText(m), ...(m.leftEmpty.length > 0 ? { leftEmpty: m.leftEmpty } : {}) })),
+  };
 }

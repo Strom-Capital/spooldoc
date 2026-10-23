@@ -120,6 +120,19 @@ query finds more, the run stops and says so; the rows are never cut off.
 A new lookup warns. An email destination fails each email whose To is
 empty, so a customer without an address shows in the job log either way.
 
+A later lookup that reads a column of one that found no row does not run
+in that page group, or that row: with `:customer.LANG`, a `product`
+lookup has no language to look up with. Its columns are left empty, and
+it adds no warning of its own. The earlier lookup's warning says what it
+left empty: "No row in customer for customerNo 10007 (pick-list-700005).
+product is left empty." When the earlier lookup stops the run, the later
+one never runs.
+
+A parameter whose field is empty on the page is different: it is bound
+as NULL and the lookup runs. A condition such as `CUSTNO = :customerNo`
+finds no row for NULL, so the lookup does what When no row is found says,
+and its warning shows the value as "(empty)".
+
 ## Test
 
 **Test** checks the lookup on the job's server and runs it with the
@@ -133,7 +146,11 @@ values of the page group shown:
 
 The Test tab shows the server and the time it took, each parameter with
 its value, where it came from and its Db2 for i type, the rows, and the
-tags templates write for each column, with a copy button. The JSON tab
+tags templates write for each column, with a copy button. A Test belongs
+to the page group it ran with: on another page group, or another preview
+file, the tab shows what the preview found there instead, with its
+parameters and rows, or the earlier lookup that left it empty. The tags
+show only while the SQL is the one last tested. The JSON tab
 shows the page group as templates get it, with the values of the lookups.
 
 A version can only be saved with lookups that were tested since they last

@@ -125,8 +125,9 @@ export function WorkbenchProvider({
     [content.kind, html, fileId, scope],
   );
   const setHtml = useCallback((source: string | null) => setContent({ kind: 'html', source }), [setContent]);
-  // An Excel template of the whole spooled file renders every page group, whichever is shown.
-  const renderedGroup = perSpooledFile(content) ? 0 : pageGroupIndex;
+  // An Excel template of the whole spooled file renders every page group, whichever is shown. With lookups
+  // the render is still of the page group shown, since the Lookups step and the pipeline show its lookups.
+  const renderedGroup = perSpooledFile(content) && lookups.length === 0 ? 0 : pageGroupIndex;
 
   // Text changes render after a pause; a new file, page group, template, kind, file or scope, or a reload, at once.
   const text = useDebounced(JSON.stringify({ yaml, lookups, ...templateRequest, templateId }), RENDER_DELAY_MS, `${templateId}:${content.kind}:${fileId}:${scope}`);

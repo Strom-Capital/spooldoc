@@ -22,16 +22,18 @@ import { ApiError, api, shownError, type ShownError } from '@/lib/client/api';
 import type { LookupsPreview } from '@/lib/client/render';
 import type { LookupTestView } from '@/lib/types';
 import { cn } from '@/lib/utils';
-import { currentColumns, testedColumns } from '@/lib/client/lookups';
+import { currentColumns, lookupSummary, previewFor, summaryText, testedColumns } from '@/lib/client/lookups';
 import { useJob } from './job-provider';
 import { DraftStatus, NoSample, StepHeader } from './workbench-steps';
 
 /** A Test that failed: what to do, the system's own text, and each problem when there are several. */
 type TestError = ShownError & { problems?: string[] };
 
-/** The last Test of a lookup in this session, for the SQL it ran. */
+/** The last Test of a lookup in this session, for the SQL, the preview file and the page group it ran with. */
 interface TestOutcome {
   sql: string;
+  sampleId: string | null;
+  pageGroup: number;
   view?: LookupTestView;
   error?: TestError;
 }
@@ -180,7 +182,10 @@ export function LookupsStep() {
   const index = Math.min(picked, Math.max(0, lookups.length - 1));
   const lookup = lookups[index];
   const server = servers.find((s) => s.id === spec.source.serverId);
-  const preview = render?.lookups;
+  const preview = previewFor(render, pageGroupIndex);
+  // A Test of another page group or preview file is not this one's: the pane shows the preview's instead.
+  const outcome = outcomes[index];
+  const shownOutcome = outcome && outcome.pageGroup === pageGroupIndex && outcome.sampleId === sampleId ? outcome : undefined;
 
   // The latest lookups, so a Test that ends after more typing writes its result into them.
   const latest = useRef(lookups);
@@ -228,7 +233,7 @@ export function LookupsStep() {
         method: 'POST',
         body: { lookups, index: at, sampleId: sampleId ?? undefined, pageGroup: pageGroupIndex },
       });
-      setOutcomes((current) => ({ ...current, [at]: { sql, view } }));
+      setOutcomes((current) => ({ ...current, [at]: { sql, sampleId, pageGroup: pageGroupIndex, view } }));
       if (spec.source.serverId) noteServerCall(spec.source.serverId, null);
       // Only a lookup whose SQL is still the one tested is marked tested.
       const now = latest.current;
@@ -243,7 +248,7 @@ export function LookupsStep() {
       const shown = shownError(err);
       const problems = err instanceof ApiError ? (err.body as { problems?: unknown } | undefined)?.problems : undefined;
       const error: TestError = { ...shown, ...(Array.isArray(problems) && problems.length > 1 ? { problems: problems.map(String) } : {}) };
-      setOutcomes((current) => ({ ...current, [at]: { sql, error } }));
+      setOutcomes((current) => ({ ...current, [at]: { sql, sampleId, pageGroup: pageGroupIndex, error } }));
       if (spec.source.serverId && (shown.code === 'host' || shown.code === 'auth')) noteServerCall(spec.source.serverId, shown);
     } finally {
       setTesting(null);
@@ -314,7 +319,7 @@ export function LookupsStep() {
                 ) : tab === 'json' ? (
                   <JsonView withLookups />
                 ) : lookup ? (
-                  <TestPane lookup={lookup} index={index} outcome={outcomes[index]} testing={testing === index} preview={preview} />
+                  <TestPane lookup={lookup} index={index} outcome={shownOutcome} testing={testing === index} preview={preview} />
                 ) : null}
               </div>
             </div>
@@ -356,7 +361,7 @@ function LookupForm({
 }) {
   const { render, pageGroupIndex } = useWorkbench();
   const lookup = lookups[index]!;
-  const group = (render?.pageGroup === pageGroupIndex ? preview?.pageGroup : undefined) ?? render?.extract?.pageGroups[pageGroupIndex];
+  const group = preview?.pageGroup ?? render?.extract?.pageGroups[pageGroupIndex];
   const tables = useMemo(() => {
     // The lists of the page group, without the ones lookups that read all rows added.
     const names = Object.keys(group ?? {}).filter((key) => Array.isArray(group?.[key]) && !lookups.some((l) => l.name === key));
@@ -470,7 +475,9 @@ function LookupForm({
               />
             </div>
             <p className="text-muted-foreground text-xs">
-              One SELECT. Write a field of the page group as a parameter, such as :customerNo. Its value is bound, never written into the SQL.
+              {lookup.for
+                ? `One SELECT, run once per row of ${lookup.for}. A column of the row or a field of the page group can be a parameter, such as :item. Its value is bound, never written into the SQL.`
+                : 'One SELECT. Write a field of the page group as a parameter, such as :customerNo. Its value is bound, never written into the SQL.'}
             </p>
           </div>
           {/* One above the other: the pane is often too narrow for both, and the texts stay whole. */}
@@ -556,7 +563,10 @@ function TestPane({
   // Columns of a Test of other SQL are not this lookup's any more.
   const columns = currentColumns(lookup, outcome);
   const columnsStale = columns.length === 0 && (lookup.checked?.columns.length ?? 0) > 0;
-  const traces = (preview?.traces ?? []).filter((t) => t.lookup === lookup.name);
+  const summary = lookupSummary(lookup, preview);
+  const summarized = summaryText(lookup, summary);
+  const value = !lookup.for ? preview?.pageGroup?.[lookup.name] : undefined;
+  const valueRow = value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
   const misses = (preview?.misses ?? []).filter((m) => m.lookup === lookup.name);
   const previewError = preview?.error && (preview.error.lookup === undefined || preview.error.lookup === lookup.name) ? preview.error : undefined;
 
@@ -651,11 +661,37 @@ function TestPane({
         </>
       )}
 
-      {!view && !lookupUntested(lookup) && traces.length > 0 && (
-        <p className="text-muted-foreground text-xs">
-          In this page group: {traces.reduce((sum, t) => sum + t.rows, 0)} {traces.reduce((sum, t) => sum + t.rows, 0) === 1 ? 'row' : 'rows'}
-          {lookup.for ? `, from ${traces.length} ${traces.length === 1 ? 'row' : 'rows'} of ${lookup.for}` : ''}.
-        </p>
+      {!view && !lookupUntested(lookup) && summarized && (
+        <section aria-labelledby="preview-lookup" className="flex flex-col gap-2">
+          <h3 id="preview-lookup" className="font-medium">
+            This page group
+          </h3>
+          <p className="text-muted-foreground text-xs">{summarized}</p>
+          {!lookup.for && summary.parameters.length > 0 && (
+            <table className="w-full text-xs">
+              <tbody className="divide-y">
+                {summary.parameters.map((p, i) => (
+                  <tr key={i}>
+                    <td className="py-1 pr-3 font-mono">:{p.name}</td>
+                    <td className="py-1 font-mono">{p.value === null ? '(empty)' : String(p.value)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {valueRow && summary.rows > 0 && (
+            <table className="w-full text-xs">
+              <tbody className="divide-y">
+                {Object.entries(valueRow).map(([column, v]) => (
+                  <tr key={column}>
+                    <td className="py-1 pr-3 font-mono">{column}</td>
+                    <td className="py-1 font-mono">{v === null || v === undefined ? '' : String(v)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </section>
       )}
       {misses.length > 0 && (
         <ul className="flex flex-col gap-0.5 text-amber-700 text-xs dark:text-amber-400" aria-label="Warnings">

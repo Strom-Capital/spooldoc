@@ -269,6 +269,35 @@ describe('lookups in the preview and the run', () => {
     expect(fake().actions()).toEqual([]);
   });
 
+  it('leaves a row lookup empty without running it when the lookup it reads found no row, with one warning', async () => {
+    const productSql = 'SELECT DESCRIPTION FROM MYLIB.ITEMS WHERE ITEMNO = :item AND LANG = :customer.LANG';
+    const product: Lookup = {
+      name: 'product',
+      for: 'lines',
+      sql: productSql,
+      result: 'one',
+      missing: 'warn',
+      checked: { sql: productSql, columns: [{ name: 'DESCRIPTION', type: 'string' }] },
+    };
+    const langColumns = { sql: SQL, columns: [...CHECKED!.columns, { name: 'LANG', type: 'string' as const }] };
+    const id = await lookupJob([customer({ checked: langColumns }), product]);
+    const templates = [{ id: 'main', name: 'Document', kind: 'html', source: '<p>{d.pg.customer.LANG}</p><p>{d.pg.lines[i].product.DESCRIPTION}</p><p>{d.pg.lines[i+1]}</p>', formats: ['html'] }];
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { templates } } }), params({ id }));
+    fake().queryAnswer = (sql, values) => {
+      if (sql.includes('CUSTOMERS')) {
+        const answer = customers(sql, values);
+        return { ...answer, columns: [...COLUMNS, { name: 'LANG', type: 'CHAR', precision: 2, scale: 0, nullable: false }], rows: answer.rows.map((r) => ({ ...r, LANG: 'FI' })) };
+      }
+      return { columns: [{ name: 'DESCRIPTION', type: 'VARCHAR', precision: 40, scale: 0, nullable: true }], rows: [{ DESCRIPTION: 'Kuvaus' }] };
+    };
+    const run = await runOnce(id);
+    expect(run.status).toBe('warning');
+    expect(run.steps.find((s) => s.step === 'lookup')?.warnings).toEqual(['No row in customer for customerNo 10003 (invoice-260102). product is left empty']);
+    // No item query ran with an empty language.
+    const itemQueries = fake().calls.filter((c) => c.method === 'query' && String(c.args[0]).includes('ITEMS'));
+    expect(itemQueries.every((c) => (c.args[1] as unknown[])[1] === 'FI')).toBe(true);
+  });
+
   it('runs a row lookup once per distinct set of parameters in a run', async () => {
     const product: Lookup = {
       name: 'product',

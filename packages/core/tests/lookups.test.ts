@@ -243,6 +243,55 @@ describe("applyLookups", () => {
     expect(result.groups[0]!.greeting).toEqual({ TEXT: "Hei" });
   });
 
+  it("does not run a lookup that reads a column of an earlier one that found no row, and says so in the earlier miss", async () => {
+    const query = vi.fn<LookupQuery>(async (sql, params, options) => {
+      if (sql.includes("CUSTOMERS")) {
+        const found = await customers()(sql, params, options);
+        return { ...found, columns: [...found.columns, { name: "LANG", type: "CHAR" }], rows: found.rows.map((r) => ({ ...r, LANG: "FI" })) };
+      }
+      return { columns: [{ name: "DESCRIPTION", type: "VARCHAR" }], rows: [{ DESCRIPTION: "Kuvaus" }], truncated: false };
+    });
+    const product = tested(lookup({ name: "product", for: "lines", sql: "SELECT DESCRIPTION FROM MYLIB.ITEMS WHERE ITEMNO = :item AND LANG = :customer.LANG" }), [
+      { name: "DESCRIPTION", type: "string" },
+    ]);
+    const greeting = lookup({ name: "greeting", sql: "SELECT TEXT FROM MYLIB.TEXTS WHERE LANG = :customer.LANG" });
+    const result = await applyLookups(groups, [lookup(), product, greeting], query, { only: [1], names: ["invoice-260101", "invoice-260102"] });
+    // Only the customer query ran: none per line, and no greeting.
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(result.misses).toEqual([
+      {
+        lookup: "customer",
+        pageGroup: 1,
+        text: "No row in customer for customerNo 10003 (invoice-260102). product and greeting are left empty",
+        leftEmpty: ["product", "greeting"],
+      },
+    ]);
+    const lines = result.groups[1]!.lines as Record<string, unknown>[];
+    expect(lines.every((line) => JSON.stringify(line.product) === JSON.stringify({ DESCRIPTION: null }))).toBe(true);
+    expect(result.groups[1]!.greeting).toEqual({});
+    expect(result.traces.filter((t) => t.skippedFor === "customer")).toHaveLength(lines.length + 1);
+
+    // A page group whose customer is found runs the line lookup as usual.
+    const found = await applyLookups(groups, [lookup(), product], query, { only: [0] });
+    expect(found.misses).toEqual([]);
+    expect(((found.groups[0]!.lines as Record<string, unknown>[])[0]!.product as Record<string, unknown>).DESCRIPTION).toBe("Kuvaus");
+  });
+
+  it("stops at the earlier lookup when it must find a row, before the later one runs", async () => {
+    const query = vi.fn<LookupQuery>(customers());
+    const product = lookup({ name: "product", for: "lines", sql: "SELECT 1 FROM MYLIB.ITEMS WHERE ITEMNO = :item AND LANG = :customer.LANG" });
+    await expect(applyLookups(groups, [lookup({ missing: "fail" }), product], query, { only: [1] })).rejects.toThrow(/^No row in customer for customerNo 10003/);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs a lookup whose parameter is empty on the page, bound as NULL", async () => {
+    const query = vi.fn<LookupQuery>(async () => ({ columns: [{ name: "A", type: "CHAR" }], rows: [], truncated: false }));
+    const blank = groups.map((g) => ({ ...g, customerNo: null }));
+    const result = await applyLookups(blank, [lookup()], query, { only: [0] });
+    expect(query.mock.calls[0]![1]).toEqual([null]);
+    expect(result.misses[0]!.text).toBe("No row in customer for customerNo (empty)");
+  });
+
   it("names the lookup when the query fails, and keeps Db2's text as the detail", async () => {
     const failure = Object.assign(new Error("MYLIB.CUSTOMERS was not found (SQL0204). Check the library and table."), { detail: "SQL0204 CUSTOMERS in MYLIB type *FILE not found." });
     const query: LookupQuery = async () => {

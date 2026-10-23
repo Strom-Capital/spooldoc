@@ -62,6 +62,10 @@ describe('stepStatuses', () => {
     expect(withLookups([{ ...tested, sql: `${sql} AND 1 = 1` }], preview)).toBe('error');
     expect(withLookups([tested], { ...preview, error: { message: 'Could not run customer: MYLIB.CUSTOMERS was not found (SQL0204).', lookup: 'customer' } })).toBe('error');
     expect(withLookups([tested], { ...preview, misses: [{ lookup: 'customer', pageGroup: 0, text: 'No row in customer for customerNo 10042' }] })).toBe('warn');
+    // A render of another page group than the one shown says nothing about it.
+    const missRender = rendered({ pageGroup: 0, lookups: { ...preview, misses: [{ lookup: 'customer', pageGroup: 0, text: 'No row in customer for customerNo 10042' }] } });
+    expect(stepStatuses(input({ spec: { ...readySpec(), lookups: [tested] }, render: missRender, pageGroup: 0 })).lookups).toBe('warn');
+    expect(stepStatuses(input({ spec: { ...readySpec(), lookups: [tested] }, render: missRender, pageGroup: 4 })).lookups).toBe('ok');
   });
 
   it('warns about the source when its server has an error', () => {

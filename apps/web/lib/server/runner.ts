@@ -202,7 +202,7 @@ export async function executeRun(runId: string, request: RunRequest, connection?
       const looked = await step(
         'lookup',
         () => runLookups(conn, spec.lookups, groups, { names: printedNames }),
-        (result) => lookupNote(result.traces.filter((t) => !t.cached).length, spec.lookups.length),
+        (result) => lookupNote(result.traces.filter((t) => !t.cached && !t.skippedFor).length, spec.lookups.length),
         (result) => result.misses.map((miss) => miss.text),
       );
       groups = looked.groups;

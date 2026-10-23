@@ -14,13 +14,13 @@ import {
   SendIcon,
   type LucideIcon,
 } from 'lucide-react';
-import { lookupUntested, type Lookup } from '@spooldoc/core/lookups';
+import type { Lookup } from '@spooldoc/core/lookups';
 import { useTheme } from 'next-themes';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useAppInfo } from '@/components/app-info';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
 import { STEP_TITLE, STEPS } from '@/lib/client/job-steps';
-import type { RenderResult } from '@/lib/client/render';
+import { lookupsSub, previewFor } from '@/lib/client/lookups';
 import { missingFields, type StepStatus } from '@/lib/client/step-status';
 import { contentLabel, formatList, hasOwnContent, type TemplateContent } from '@/lib/job-spec';
 import { cn } from '@/lib/utils';
@@ -140,7 +140,7 @@ function FitOnResize() {
 /** Title, detail line and status of each step, from the spec and the latest render. */
 function useSteps(): StepInfo[] {
   const { spec, job, servers, destinations } = useJob();
-  const { render, sampleId, templateId } = useWorkbench();
+  const { render, sampleId, templateId, pageGroupIndex } = useWorkbench();
   const { rendering } = useAppInfo();
   const { statuses } = useStepStatuses();
   const server = servers.find((s) => s.id === spec.source.serverId);
@@ -194,7 +194,7 @@ function useSteps(): StepInfo[] {
       title: STEP_TITLE.lookups,
       icon: DatabaseIcon,
       detail: lookupsDetail(spec.lookups),
-      sub: lookupsSub(spec.lookups, render),
+      sub: lookupsSub(spec.lookups, previewFor(render, pageGroupIndex)),
       status: statuses.lookups,
     },
     {
@@ -253,23 +253,6 @@ function lookupsDetail(lookups: readonly Lookup[]): string {
   if (lookups.length === 0) return 'None';
   if (lookups.length === 1) return lookups[0]!.name.trim() || 'Lookup 1';
   return `${lookups.length} lookups`;
-}
-
-/** The first problem, "Once per row of lines", or "3 rows in this page group". */
-function lookupsSub(lookups: readonly Lookup[], render: RenderResult | null): string | undefined {
-  if (lookups.length === 0) return undefined;
-  const untested = lookups.find(lookupUntested);
-  if (untested) return `Test ${untested.name.trim() || 'the lookup'}`;
-  const preview = render?.lookups;
-  if (preview?.problems[0]) return preview.problems[0].message;
-  if (preview?.error) return preview.error.message;
-  if (preview?.misses[0]) return preview.misses[0].text;
-  if (lookups.length === 1 && lookups[0]!.for) return `Once per row of ${lookups[0]!.for}`;
-  if (preview && preview.traces.length > 0) {
-    const rows = preview.traces.reduce((sum, trace) => sum + trace.rows, 0);
-    return `${rows} ${rows === 1 ? 'row' : 'rows'} in this page group`;
-  }
-  return undefined;
 }
 
 /** What a template has as its content, for the Render step's summary. */

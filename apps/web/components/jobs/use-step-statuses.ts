@@ -14,7 +14,7 @@ import { useJob } from './job-provider';
  */
 export function useStepStatuses(): { statuses: Record<Step, StepStatus>; ready: boolean } {
   const { spec, job, servers, destinations } = useJob();
-  const { render } = useWorkbench();
+  const { render, pageGroupIndex } = useWorkbench();
   const { rendering } = useAppInfo();
   const serverError = servers.find((s) => s.id === spec.source.serverId)?.lastError ?? null;
   const destination = destinations.find((d) => d.id === spec.destination.destinationId);
@@ -32,7 +32,7 @@ export function useStepStatuses(): { statuses: Record<Step, StepStatus>; ready: 
           ? destination.config.hostKey !== null
           : true);
   return useMemo(() => {
-    const statuses = stepStatuses({ spec, job, serverError, hasDestination, render, rendering });
+    const statuses = stepStatuses({ spec, job, serverError, hasDestination, render, rendering, pageGroup: pageGroupIndex });
     return { statuses, ready: allReady(statuses) };
-  }, [spec, job, serverError, hasDestination, render, rendering]);
+  }, [spec, job, serverError, hasDestination, render, rendering, pageGroupIndex]);
 }
