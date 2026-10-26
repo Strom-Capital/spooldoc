@@ -573,7 +573,7 @@ ${fence(
 )}
 
 The rules of Excel output. The tag check enforces most of them; explain them when the user asks:
-- Numbers: \`{d.pgs[i].lines[i].amount:formatN}\`. Without :formatN the cell is text and SUM gives 0. The cell's number format, such as #,##0.00, decides how it shows; the precision in formatN is ignored. A rich text cell cannot hold :formatN.
+- Numbers: \`{d.pgs[i].lines[i].amount:formatN}\`. Without :formatN the cell is text and SUM gives 0. The cell's number format, such as #,##0.00, decides how it shows; the precision in formatN is ignored. In rich text, :formatN makes the whole cell the number, without the other text and the run fonts.
 - Dates: \`{d.pgs[i].invoiceDate:formatD(X):div(86400):add(25569):formatN}\` makes a real date cell; give the cell a date format such as dd.mm.yyyy. :formatN straight on a date is refused.
 - Totals under a loop: \`SUM(INDIRECT("D2:D"&ROW()-1))\`, from the loop's row. A plain SUM is not moved when rows are added. The starter's flat sheet has no totals: a total row in a table people filter and sort gets in the way. The page group starter totals each table under it.
 - No merged cells in or below a loop. Carbone moves no range when it adds rows: a filter, data validation or conditional formatting stays on the template's rows, so put it on whole columns (\`A:G\`) or down to a far row (\`D2:D5000\`). Tables and charts over a loop do not grow with it, which is why a design has none.
