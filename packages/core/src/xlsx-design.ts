@@ -2,6 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { writeXlsx, type Cell, type CellStyle, type ColumnDef, type ConditionalRule, type DataValidation, type WriteOptions, type WriteSheet } from "hucre/xlsx";
 import { z } from "zod";
 import { DesignError, issueMessage, pathText, type DesignImage, type Path } from "./design.js";
+import { withFunctionPrefixes } from "./xlsx-formula.js";
 import { columnName, columnNumber, LAST_COLUMN, LAST_ROW, parseRange, parseRef } from "./xlsx-parts.js";
 
 /**
@@ -237,7 +238,7 @@ const formula = z
   .string()
   .min(1)
   .max(MAX_FORMULA)
-  .transform((value) => value.replace(/^=/, ""));
+  .transform((value) => withFunctionPrefixes(value.replace(/^=/, "")));
 
 const cfvo = z.strictObject({
   type: z.enum(["min", "max", "num", "percent", "percentile"]),
@@ -346,7 +347,7 @@ const dataValidation = z
     type: z.enum(VALIDATION_TYPES),
     operator: z.enum(OPERATORS).optional(),
     /** A list as `"\"Open,Closed\""` or a range; the bounds; or, for custom, a formula true for valid values. */
-    formulae: z.array(z.string().min(1).max(255).transform((value) => value.replace(/^=/, ""))).min(1).max(2),
+    formulae: z.array(z.string().min(1).max(255).transform((value) => withFunctionPrefixes(value.replace(/^=/, "")))).min(1).max(2),
     allowBlank: z.boolean().optional(),
     showInputMessage: z.boolean().optional(),
     promptTitle: z.string().min(1).max(32).optional(),

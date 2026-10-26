@@ -1,9 +1,10 @@
 /**
  * Excel's newer functions in formulas. A file stores them with a prefix, such as
  * `_xlfn.XLOOKUP`; without it LibreOffice, and so Carbone, computes `#NAME?`. Excel adds
- * the prefix itself when it saves, and so does hucre when it writes a design, but a
- * formula written into the XML by hand needs it written. The tag check names the ones
- * that miss it.
+ * the prefix itself when it saves, but a formula written into the XML needs it written.
+ * hucre 1.3.0 adds a missing prefix when it writes a design, but neither writes the name in
+ * capitals nor corrects a wrong prefix, so a design's formulas go through
+ * `withFunctionPrefixes` first.
  */
 
 /** The newer functions LibreOffice computes, with the prefix each needs in the file. Tried against Carbone 5.15.5. */
@@ -22,8 +23,9 @@ export const FUNCTION_PREFIXES: Readonly<Record<string, string>> = {
   SORT: "_xlfn._xlws.",
 };
 
-/** One function call outside string literals and quoted sheet names: the prefix as written and the name. */
+/** One function call outside string literals and quoted sheet names: where its prefix starts, the prefix as written and the name. */
 interface Call {
+  start: number;
   prefix: string;
   name: string;
 }
@@ -71,7 +73,7 @@ function calls(formula: string): Call[] {
       let after = end;
       while (formula[after] === " " || formula[after] === "\t" || formula[after] === "\n" || formula[after] === "\r") after++;
       if (end > pos && formula[after] === "(") {
-        out.push({ prefix, name: formula.slice(pos, end) });
+        out.push({ start: at, prefix, name: formula.slice(pos, end) });
         at = after + 1;
         continue;
       }
@@ -84,6 +86,23 @@ function calls(formula: string): Call[] {
     at++;
   }
   return out;
+}
+
+/**
+ * The formula with the prefix each newer function needs, outside string literals and
+ * quoted sheet names. A prefix already there is kept when right and corrected when
+ * wrong, never doubled.
+ */
+export function withFunctionPrefixes(formula: string): string {
+  let out = "";
+  let from = 0;
+  for (const call of calls(formula)) {
+    const wanted = FUNCTION_PREFIXES[call.name.toUpperCase()];
+    if (wanted === undefined || call.prefix === wanted) continue;
+    out += formula.slice(from, call.start) + wanted + call.name.toUpperCase();
+    from = call.start + call.prefix.length + call.name.length;
+  }
+  return out + formula.slice(from);
 }
 
 /** The newer functions in a formula written without the prefix they need, such as `XLOOKUP` for `_xlfn.XLOOKUP`, each once. */

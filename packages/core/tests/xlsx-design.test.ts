@@ -2,7 +2,7 @@ import { strFromU8, unzipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { DesignError, imageInfo, type DesignImage } from "../src/design.js";
 import { buildXlsx } from "../src/xlsx-design.js";
-import { missingPrefixes } from "../src/xlsx-formula.js";
+import { missingPrefixes, withFunctionPrefixes } from "../src/xlsx-formula.js";
 import { checkXlsx, readXlsx } from "../src/xlsx.js";
 import { loadFixture } from "./helpers/fixtures.js";
 import { testPng } from "./helpers/png.js";
@@ -66,7 +66,7 @@ const FULL = {
         { ref: "F5", value: "{d.pgs[i].lines[i].amount:formatN}" },
         { ref: "A6", value: "{d.pgs[i+1].lines[i+1]}" },
         { ref: "F7", value: { formula: '=SUM(INDIRECT("F5:F"&ROW()-1))', result: 0 } },
-        { ref: "G7", value: { formula: 'XLOOKUP("A",Rates!A:A,Rates!B:B)' } },
+        { ref: "G7", value: { formula: 'xlookup("A",Rates!A:A,Rates!B:B)' } },
         { ref: "H7", value: { date: "2026-10-15" } },
         { ref: "H8", value: { richText: [{ text: "Net " }, { text: "total", font: { bold: true } }] } },
         { ref: "H9", value: "Website", hyperlink: "https://example.com/invoices" },
@@ -432,8 +432,10 @@ describe("function prefixes", () => {
 
   it.each([
     ['XLOOKUP("A",A:A,B:B)', '_xlfn.XLOOKUP("A",A:A,B:B)'],
-    ['IFNA(TEXTJOIN(",",TRUE,A1:A9),"")', '_xlfn.IFNA(_xlfn.TEXTJOIN(",",TRUE,A1:A9),"")'],
-    ["SUM(FILTER(C2:C9,C2:C9>5))+ROWS(_xlfn._xlws.FILTER(C2:C9,C2:C9>5))", "SUM(_xlfn._xlws.FILTER(C2:C9,C2:C9>5))+ROWS(_xlfn._xlws.FILTER(C2:C9,C2:C9>5))"],
+    ['ifna(textjoin(",",TRUE,A1:A9),"")', '_xlfn.IFNA(_xlfn.TEXTJOIN(",",TRUE,A1:A9),"")'],
+    ["xlookup(A1,B:B,C:C)+Xlookup(A2,B:B,C:C)", "_xlfn.XLOOKUP(A1,B:B,C:C)+_xlfn.XLOOKUP(A2,B:B,C:C)"],
+    ["SUM(FILTER(C2:C9,C2:C9>5))+ROWS(_xlfn.FILTER(C2:C9,C2:C9>5))", "SUM(_xlfn._xlws.FILTER(C2:C9,C2:C9>5))+ROWS(_xlfn._xlws.FILTER(C2:C9,C2:C9>5))"],
+    ["_xlfn._xlws.FILTER(C2:C9,C2:C9>5)", "_xlfn._xlws.FILTER(C2:C9,C2:C9>5)"],
     ["_xlfn.XLOOKUP(1,A:A,B:B)", "_xlfn.XLOOKUP(1,A:A,B:B)"],
     ['"IFS(1)"&IFS(A1>1,"x",TRUE,"y")', '"IFS(1)"&_xlfn.IFS(A1>1,"x",TRUE,"y")'],
     ["'SORT (old)'!A1+SORT(A1:A9)", "'SORT (old)'!A1+_xlfn._xlws.SORT(A1:A9)"],
@@ -444,9 +446,15 @@ describe("function prefixes", () => {
     expect(missingPrefixes(prefixed)).toEqual([]);
   });
 
-  it("finds a wrong prefix in a design's file, so the check names it", async () => {
-    const [cell] = await written("ROWS(_xlfn.FILTER(C2:C9,C2:C9>5))");
-    expect(missingPrefixes(cell!)).toEqual([{ name: "FILTER", prefixed: "_xlfn._xlws.FILTER" }]);
+  it.each([
+    ['XLOOKUP("A",A:A,B:B)', '_xlfn.XLOOKUP("A",A:A,B:B)'],
+    ["ROWS(_xlfn.FILTER(C2:C9,C2:C9>5))", "ROWS(_xlfn._xlws.FILTER(C2:C9,C2:C9>5))"],
+  ])("gives withFunctionPrefixes %s as %s", (formula, prefixed) => {
+    expect(withFunctionPrefixes(formula)).toBe(prefixed);
+  });
+
+  it("names a wrong prefix, so the check reports it in a file made by hand", () => {
+    expect(missingPrefixes("ROWS(_xlfn.FILTER(C2:C9,C2:C9>5))")).toEqual([{ name: "FILTER", prefixed: "_xlfn._xlws.FILTER" }]);
   });
 
   it("names each newer function written without its prefix once", () => {
@@ -457,11 +465,11 @@ describe("function prefixes", () => {
   });
 
   it("reads a long formula in linear time", TIMING, () => {
-    expect(missingPrefixes("A".repeat(200_000))).toEqual([]);
+    expect(withFunctionPrefixes("A".repeat(200_000))).toBe("A".repeat(200_000));
     expect(missingPrefixes(`${"_xlfn.".repeat(50_000)}A`)).toEqual([]);
-    expect(missingPrefixes(`${"SUM(".repeat(20_000)}XLOOKUP(1)`)).toEqual([{ name: "XLOOKUP", prefixed: "_xlfn.XLOOKUP" }]);
-    linear((n) => "A".repeat(n), missingPrefixes, 204_800);
+    expect(withFunctionPrefixes(`${"SUM(".repeat(20_000)}XLOOKUP(1)`)).toBe(`${"SUM(".repeat(20_000)}_xlfn.XLOOKUP(1)`);
+    linear((n) => "A".repeat(n), withFunctionPrefixes, 204_800);
     linear((n) => `${"_xlfn.".repeat(n)}A`, missingPrefixes, 51_200);
-    linear((n) => `${"SUM(".repeat(n)}XLOOKUP(1)`, missingPrefixes, 19_200);
+    linear((n) => `${"SUM(".repeat(n)}XLOOKUP(1)`, withFunctionPrefixes, 19_200);
   });
 });
