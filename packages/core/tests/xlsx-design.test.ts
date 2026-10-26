@@ -2,7 +2,7 @@ import { strFromU8, unzipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { DesignError, imageInfo, type DesignImage } from "../src/design.js";
 import { buildXlsx } from "../src/xlsx-design.js";
-import { missingPrefixes, withFunctionPrefixes } from "../src/xlsx-formula.js";
+import { missingPrefixes } from "../src/xlsx-formula.js";
 import { checkXlsx, readXlsx } from "../src/xlsx.js";
 import { loadFixture } from "./helpers/fixtures.js";
 import { testPng } from "./helpers/png.js";
@@ -66,7 +66,7 @@ const FULL = {
         { ref: "F5", value: "{d.pgs[i].lines[i].amount:formatN}" },
         { ref: "A6", value: "{d.pgs[i+1].lines[i+1]}" },
         { ref: "F7", value: { formula: '=SUM(INDIRECT("F5:F"&ROW()-1))', result: 0 } },
-        { ref: "G7", value: { formula: 'xlookup("A",Rates!A:A,Rates!B:B)' } },
+        { ref: "G7", value: { formula: 'XLOOKUP("A",Rates!A:A,Rates!B:B)' } },
         { ref: "H7", value: { date: "2026-10-15" } },
         { ref: "H8", value: { richText: [{ text: "Net " }, { text: "total", font: { bold: true } }] } },
         { ref: "H9", value: "Website", hyperlink: "https://example.com/invoices" },
@@ -140,9 +140,9 @@ describe("buildXlsx", () => {
     expect(sheet).toContain('<pageSetUpPr fitToPage="1"/>');
     expect(sheet).toMatch(/<sheetView[^>]*showGridLines="0"[^>]*zoomScale="90"/);
     expect(sheet).toContain('<pane xSplit="1" ySplit="4" topLeftCell="B5" state="frozen" activePane="bottomRight"/>');
-    expect(sheet).toContain('<col min="1" max="1" width="12" customWidth="true"/><col min="2" max="2" width="12" customWidth="true"/>');
+    expect(sheet).toContain('<col min="1" max="2" width="12" customWidth="true"/>');
     expect(sheet).toMatch(/<col min="6" max="6" width="14" customWidth="true" style="\d+"\/>/);
-    expect(sheet).toMatch(/<col min="8" max="8" hidden="true" outlineLevel="1"\/>/);
+    expect(sheet).toMatch(/<col min="8" max="8" width="[\d.]+" hidden="true" outlineLevel="1"\/>/);
     expect(sheet).toContain('<row r="1" ht="30" customHeight="1">');
     expect(sheet).toMatch(/<row r="2" hidden="1" outlineLevel="2"/);
     expect(parts["xl/worksheets/sheet2.xml"]).toMatch(/<sheetView[^>]*rightToLeft="1"/);
@@ -151,7 +151,8 @@ describe("buildXlsx", () => {
     expect(sheet).toContain('<f>SUM(INDIRECT("F5:F"&amp;ROW()-1))</f><v>0</v>');
     expect(sheet).toContain('<f>_xlfn.XLOOKUP("A",Rates!A:A,Rates!B:B)</f>');
     expect(sheet).toMatch(/<c r="H7" s="\d+"><v>46310<\/v><\/c>/);
-    expect(sheet).toMatch(/<c r="H8" t="inlineStr"><is><r><rPr><sz val="11"\/><color rgb="FF1A1A1A"\/><rFont val="Calibri"\/><\/rPr><t[^>]*>Net <\/t><\/r><r><rPr><b\/>/);
+    expect(sheet).toMatch(/<c r="H8" t="s"><v>\d+<\/v><\/c>/);
+    expect(parts["xl/sharedStrings.xml"]).toMatch(/<si><r><rPr><sz val="11"\/><color rgb="FF1A1A1A"\/><rFont val="Calibri"\/><\/rPr><t[^>]*>Net <\/t><\/r><r><rPr><b\/>/);
     expect(sheet).toContain('<c r="H11"><v>42</v></c>');
     expect(sheet).toContain('<c r="H12" t="b"><v>1</v></c>');
     // Merges, filter, conditional formatting on whole columns, validation, links, notes, pictures, page setup.
@@ -217,11 +218,11 @@ describe("buildXlsx", () => {
       })
     )["xl/workbook.xml"]!;
     const names = [...workbook.matchAll(/<definedName [^>]*>[^<]*<\/definedName>/g)].map((m) => m[0]);
-    expect(names).toEqual([
+    expect(names.sort()).toEqual([
       `<definedName name="_xlnm.Print_Area" localSheetId="0">'Order lines'!$A$1:$F$50</definedName>`,
       `<definedName name="_xlnm.Print_Titles" localSheetId="0">'Order lines'!$1:$1</definedName>`,
-      `<definedName name="_xlnm._FilterDatabase" hidden="1" localSheetId="0">'Order lines'!$A$1:$F$1048576</definedName>`,
       `<definedName name="_xlnm.Print_Titles" localSheetId="1">'Bob''s'!$A:$B</definedName>`,
+      `<definedName name="_xlnm._FilterDatabase" hidden="1" localSheetId="0">'Order lines'!$A$1:$F$1048576</definedName>`,
     ]);
     // No filter, no filter name.
     expect((await partsOf(one({ cells: [{ ref: "A1", value: "x" }] })))["xl/workbook.xml"]).not.toContain("_FilterDatabase");
@@ -261,6 +262,16 @@ describe("buildXlsx", () => {
     const { definition } = loadFixture("invoice");
     // The loop is on rows 5 to 6; the note on A4 is above it.
     expect(checkXlsx(read, definition)).toEqual([]);
+  });
+
+  it("writes rich text as a shared string, so a :formatN tag in it becomes a number in Carbone, and the check takes it", async () => {
+    const design = one({ cells: [{ ref: "A1", value: { richText: [{ text: "{d.pgs[i].lines[i].amount:formatN}", font: { bold: true } }] } }] });
+    const parts = await partsOf(design);
+    expect(parts["xl/worksheets/sheet1.xml"]).toMatch(/<c r="A1" t="s"><v>0<\/v><\/c>/);
+    expect(parts["xl/sharedStrings.xml"]).toMatch(/<si><r><rPr><b\/><sz val="10"\/><rFont val="Arial"\/><\/rPr><t>\{d\.pgs\[i\]\.lines\[i\]\.amount:formatN\}<\/t><\/r><\/si>/);
+    const read = readXlsx(await buildXlsx(design, images));
+    expect(read.cells).toEqual([{ sheet: "Lines", ref: "A1", row: 1, text: "{d.pgs[i].lines[i].amount:formatN}" }]);
+    expect(checkXlsx(read, loadFixture("invoice").definition)).toEqual([]);
   });
 
   it("gives every sheet an A4 page setup, one page wide, when the design gives none", async () => {
@@ -351,6 +362,7 @@ describe("buildXlsx", () => {
             { ref: "A1", value: { date: "2026-02-30" } },
             { ref: "a1", value: "again" },
             { ref: "B1", value: { formula: "SUM(A:A)", extra: 1 } },
+            // Rich text may hold :formatN: it is a shared string, as Carbone needs it.
             { ref: "C1", value: { richText: [{ text: "{d.pg.total:formatN}" }] } },
             { ref: "D1", value: "x", hyperlink: "ftp://example.com" },
             { ref: "E1", value: "x", hyperlink: "#Nowhere!A1" },
@@ -373,7 +385,6 @@ describe("buildXlsx", () => {
       'sheets[0].cells[0].value: Give a date as { "date": "2026-10-15" }, from 1900-03-01 on.',
       "sheets[0].cells[1].ref: A1 is given in cells[0] too. Give each cell once.",
       'sheets[0].cells[2].value: Unknown key "extra"',
-      "sheets[0].cells[3].value: Rich text is written as an inline string, so a :formatN tag in it stays text and SUM gives 0. Give the tag as a plain text value.",
       "sheets[0].cells[4].hyperlink: Use a URL that starts with https://, http:// or mailto:, or a place such as #Lines!A1.",
       "sheets[0].cells[5].hyperlink: Use a place in the workbook such as #'Order lines'!A1, with a sheet of this workbook.",
       "sheets[0].merges[1]: B2:C3 overlaps merges[0] (A1:B2). Merged ranges cannot overlap.",
@@ -406,19 +417,36 @@ describe("buildXlsx", () => {
   });
 });
 
-describe("withFunctionPrefixes", () => {
+describe("function prefixes", () => {
+  /** The formula of A1, a conditional format and a validation, as the design's file stores them. */
+  async function written(formula: string): Promise<string[]> {
+    const design = one({
+      cells: [{ ref: "A1", value: { formula } }],
+      conditionalFormatting: [{ ref: "B:B", rules: [{ type: "expression", formulae: [formula], style: { font: { bold: true } } }] }],
+      dataValidations: [{ ref: "C:C", type: "custom", formulae: [formula] }],
+    });
+    const sheet = (await partsOf(design))["xl/worksheets/sheet1.xml"]!;
+    const decode = (xml: string) => xml.replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+    return [/<f>(.*?)<\/f>/.exec(sheet)![1]!, /<formula>(.*?)<\/formula>/.exec(sheet)![1]!, /<formula1>(.*?)<\/formula1>/.exec(sheet)![1]!].map(decode);
+  }
+
   it.each([
     ['XLOOKUP("A",A:A,B:B)', '_xlfn.XLOOKUP("A",A:A,B:B)'],
-    ["ifna(textjoin(\",\",TRUE,A1:A9),\"\")", '_xlfn.IFNA(_xlfn.TEXTJOIN(",",TRUE,A1:A9),"")'],
-    ["SUM(FILTER(C2:C9,C2:C9>5))+ROWS(_xlfn.FILTER(C2:C9,C2:C9>5))", "SUM(_xlfn._xlws.FILTER(C2:C9,C2:C9>5))+ROWS(_xlfn._xlws.FILTER(C2:C9,C2:C9>5))"],
+    ['IFNA(TEXTJOIN(",",TRUE,A1:A9),"")', '_xlfn.IFNA(_xlfn.TEXTJOIN(",",TRUE,A1:A9),"")'],
+    ["SUM(FILTER(C2:C9,C2:C9>5))+ROWS(_xlfn._xlws.FILTER(C2:C9,C2:C9>5))", "SUM(_xlfn._xlws.FILTER(C2:C9,C2:C9>5))+ROWS(_xlfn._xlws.FILTER(C2:C9,C2:C9>5))"],
     ["_xlfn.XLOOKUP(1,A:A,B:B)", "_xlfn.XLOOKUP(1,A:A,B:B)"],
     ['"IFS(1)"&IFS(A1>1,"x",TRUE,"y")', '"IFS(1)"&_xlfn.IFS(A1>1,"x",TRUE,"y")'],
     ["'SORT (old)'!A1+SORT(A1:A9)", "'SORT (old)'!A1+_xlfn._xlws.SORT(A1:A9)"],
     ['SUMIFS(C:C,A:A,"X")+INDEX(B:B,MATCH(1,A:A,0))', 'SUMIFS(C:C,A:A,"X")+INDEX(B:B,MATCH(1,A:A,0))'],
     ["MYSORT(A1)+CONCAT(A1,B1)+CONCATENATE(A1)", "MYSORT(A1)+_xlfn.CONCAT(A1,B1)+CONCATENATE(A1)"],
-  ])("writes %s as %s", (formula, prefixed) => {
-    expect(withFunctionPrefixes(formula)).toBe(prefixed);
+  ])("writes %s in a design as %s", async (formula, prefixed) => {
+    expect(await written(formula)).toEqual([prefixed, prefixed, prefixed]);
     expect(missingPrefixes(prefixed)).toEqual([]);
+  });
+
+  it("finds a wrong prefix in a design's file, so the check names it", async () => {
+    const [cell] = await written("ROWS(_xlfn.FILTER(C2:C9,C2:C9>5))");
+    expect(missingPrefixes(cell!)).toEqual([{ name: "FILTER", prefixed: "_xlfn._xlws.FILTER" }]);
   });
 
   it("names each newer function written without its prefix once", () => {
@@ -429,11 +457,11 @@ describe("withFunctionPrefixes", () => {
   });
 
   it("reads a long formula in linear time", TIMING, () => {
-    expect(withFunctionPrefixes("A".repeat(200_000))).toBe("A".repeat(200_000));
+    expect(missingPrefixes("A".repeat(200_000))).toEqual([]);
     expect(missingPrefixes(`${"_xlfn.".repeat(50_000)}A`)).toEqual([]);
-    expect(withFunctionPrefixes(`${"SUM(".repeat(20_000)}XLOOKUP(1)`)).toBe(`${"SUM(".repeat(20_000)}_xlfn.XLOOKUP(1)`);
-    linear((n) => "A".repeat(n), withFunctionPrefixes, 204_800);
+    expect(missingPrefixes(`${"SUM(".repeat(20_000)}XLOOKUP(1)`)).toEqual([{ name: "XLOOKUP", prefixed: "_xlfn.XLOOKUP" }]);
+    linear((n) => "A".repeat(n), missingPrefixes, 204_800);
     linear((n) => `${"_xlfn.".repeat(n)}A`, missingPrefixes, 51_200);
-    linear((n) => `${"SUM(".repeat(n)}XLOOKUP(1)`, withFunctionPrefixes, 19_200);
+    linear((n) => `${"SUM(".repeat(n)}XLOOKUP(1)`, missingPrefixes, 19_200);
   });
 });

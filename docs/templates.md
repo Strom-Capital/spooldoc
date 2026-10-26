@@ -307,7 +307,9 @@ sheet of its own.
 - **Numbers**: write every number as `{d.pgs[i].lines[i].amount:formatN}`,
   and give the cell a number format, such as `#,##0.00`. Without
   `:formatN` the cell is text and SUM gives 0. The cell's format decides
-  the decimals: `:formatN(2)` writes the same number.
+  the decimals: `:formatN(2)` writes the same number. In rich text,
+  `:formatN` makes the whole cell the number, without the other text and
+  the bold or colored parts: the cell's own font shows it.
 - **Dates**: write a date as
   `{d.pgs[i].invoiceDate:formatD(X):div(86400):add(25569):formatN}`, and
   give the cell a date format, such as `dd.mm.yyyy`. This makes a real

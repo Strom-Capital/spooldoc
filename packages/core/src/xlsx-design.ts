@@ -2,8 +2,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { writeXlsx, type Cell, type CellStyle, type ColumnDef, type ConditionalRule, type DataValidation, type WriteOptions, type WriteSheet } from "hucre/xlsx";
 import { z } from "zod";
 import { DesignError, issueMessage, pathText, type DesignImage, type Path } from "./design.js";
-import { withFunctionPrefixes } from "./xlsx-formula.js";
-import { columnName, columnNumber, LAST_COLUMN, LAST_ROW, parseRange, parseRef, relationships, relsOf, sheetFiles } from "./xlsx-parts.js";
+import { columnName, columnNumber, LAST_COLUMN, LAST_ROW, parseRange, parseRef } from "./xlsx-parts.js";
 
 /**
  * Excel templates designed as data: a JSON tree of sheets, each with its columns, rows,
@@ -82,11 +81,11 @@ const ranges = z
     return parts.join(" ");
   });
 
-/** A colour: six hex digits, with or without `#`, written as ARGB (`FF1F3A5F`), as Excel and LibreOffice read it. */
+/** A colour: six hex digits, with or without `#`. hucre writes it as ARGB (`FF1F3A5F`), as Excel and LibreOffice read it. */
 const color = z
   .string()
   .regex(/^#?[0-9A-Fa-f]{6}$/, 'Use six hex digits such as "1F3A5F"')
-  .transform((value) => `FF${value.replace(/^#/, "").toUpperCase()}`);
+  .transform((value) => value.replace(/^#/, "").toUpperCase());
 
 const font = z.strictObject({
   name: z.string().min(1).max(31).optional(),
@@ -238,7 +237,7 @@ const formula = z
   .string()
   .min(1)
   .max(MAX_FORMULA)
-  .transform((value) => withFunctionPrefixes(value.replace(/^=/, "")));
+  .transform((value) => value.replace(/^=/, ""));
 
 const cfvo = z.strictObject({
   type: z.enum(["min", "max", "num", "percent", "percentile"]),
@@ -347,7 +346,7 @@ const dataValidation = z
     type: z.enum(VALIDATION_TYPES),
     operator: z.enum(OPERATORS).optional(),
     /** A list as `"\"Open,Closed\""` or a range; the bounds; or, for custom, a formula true for valid values. */
-    formulae: z.array(z.string().min(1).max(255).transform((value) => withFunctionPrefixes(value.replace(/^=/, "")))).min(1).max(2),
+    formulae: z.array(z.string().min(1).max(255).transform((value) => value.replace(/^=/, ""))).min(1).max(2),
     allowBlank: z.boolean().optional(),
     showInputMessage: z.boolean().optional(),
     promptTitle: z.string().min(1).max(32).optional(),
@@ -536,7 +535,10 @@ function mergeStyle(base: Style | undefined, over: Style | undefined): Style | u
 
 type HucreFont = NonNullable<CellStyle["font"]>;
 
-/** A font as hucre takes it, with the default font under it so it keeps its name and size. */
+/**
+ * A font as hucre takes it, with the default font under it. hucre gives a cell's font the
+ * default font's name and size, but not its color, and gives a rich text run neither.
+ */
 function toFont(value: Font, base: Font | undefined): HucreFont {
   const full = { ...base, ...value };
   return {
@@ -589,13 +591,6 @@ function splitReference(ref: string): { sheet: string; range: string } | undefin
   return { sheet: (m[1] ?? m[2]!).replace(/''/g, "'"), range: m[3]! };
 }
 
-/** A picture placed by its top-left cell, to be anchored to that cell alone with its size. */
-interface OneCellPicture {
-  sheet: number;
-  /** Its place among the sheet's pictures. */
-  index: number;
-}
-
 /** The name Excel gives a sheet's filter range. */
 const FILTER_NAME = "_xlnm._FilterDatabase";
 
@@ -603,26 +598,17 @@ const FILTER_NAME = "_xlnm._FilterDatabase";
 const absolute = (range: string): string => range.replace(/([A-Z]+)(\d+)/g, "$$$1$$$2");
 
 /**
- * The names Excel keeps for a sheet's print area, print titles and filter, local to the
- * sheet. hucre writes the first two without the quotes a sheet name such as `Order lines`
- * needs, and the filter's not at all. Excel writes `_xlnm._FilterDatabase` with every
- * filter, as LibreOffice and the other writers do; `finish` hides it, as Excel does.
+ * The name Excel keeps for a sheet's filter, local to the sheet. Excel writes
+ * `_xlnm._FilterDatabase` with every filter, as LibreOffice and the other writers do, and
+ * hucre does not. `hideFilterNames` hides it, as Excel does.
  */
-function builtInNames(design: SheetDesign): { name: string; range: string; scope: string }[] {
-  const sheet = quoted(design.name);
-  const page = design.pageSetup;
-  const titles = [page?.printTitlesRow, page?.printTitlesColumn].filter((t) => t !== undefined).map((t) => `${sheet}!${t}`);
-  return [
-    ...(page?.printArea !== undefined ? [{ name: "_xlnm.Print_Area", range: `${sheet}!${absolute(page.printArea)}`, scope: design.name }] : []),
-    ...(titles.length > 0 ? [{ name: "_xlnm.Print_Titles", range: titles.join(","), scope: design.name }] : []),
-    ...(design.autoFilter !== undefined ? [{ name: FILTER_NAME, range: `${sheet}!${absolute(design.autoFilter)}`, scope: design.name }] : []),
-  ];
+function filterNames(design: SheetDesign): { name: string; range: string; scope: string }[] {
+  return design.autoFilter !== undefined ? [{ name: FILTER_NAME, range: `${quoted(design.name)}!${absolute(design.autoFilter)}`, scope: design.name }] : [];
 }
 
 /** Checks a design and turns it into hucre's options, collecting every problem with its path. */
 class Builder {
   readonly problems: string[] = [];
-  readonly oneCell: OneCellPicture[] = [];
   private names = new Set<string>();
 
   constructor(private readonly images: (name: string) => DesignImage | undefined) {}
@@ -665,7 +651,7 @@ class Builder {
       if (seen.has(key)) this.problem(["definedNames", i, "name"], "The name is given twice.");
       seen.add(key);
     });
-    namedRanges.push(...design.sheets.flatMap(builtInNames));
+    namedRanges.push(...design.sheets.flatMap(filterNames));
     return {
       sheets,
       defaultFont: toFont(defaultFont, undefined),
@@ -786,7 +772,6 @@ class Builder {
         height = Math.round((asset.height * width) / asset.width);
       } else if (width === undefined) width = Math.round((asset.width * height!) / asset.height);
       else if (height === undefined) height = Math.round((asset.height * width) / asset.width);
-      this.oneCell.push({ sheet: index, index: i });
       return [{ ...data, anchor: { from: { row: tl.row - 1, col: tl.column - 1 } }, width: Math.max(1, width), height: Math.max(1, height!) }];
     });
     if (images.length > 0) out.images = images;
@@ -834,9 +819,7 @@ class Builder {
           .refine((v) => v.richText.reduce((n, run) => n + run.text.length, 0) <= MAX_TEXT, `Use at most ${MAX_TEXT} characters in all`)
           .safeParse(value);
         if (!parsed.success) for (const issue of parsed.error.issues) this.problem([...at, ...(issue.path as Path)], issueMessage(issue));
-        else if (parsed.data.richText.some((run) => run.text.includes(":formatN"))) {
-          this.problem(at, "Rich text is written as an inline string, so a :formatN tag in it stays text and SUM gives 0. Give the tag as a plain text value.");
-        } else out.richText = parsed.data.richText.map((run) => ({ text: run.text, font: toFont(run.font ?? {}, defaultFont) }));
+        else out.richText = parsed.data.richText.map((run) => ({ text: run.text, font: toFont(run.font ?? {}, defaultFont) }));
       } else if (keys.includes("formula")) {
         const parsed = z.strictObject({ formula, result: z.union([z.string().max(MAX_TEXT), z.number().finite(), z.boolean()]).optional() }).safeParse(value);
         if (!parsed.success) for (const issue of parsed.error.issues) this.problem([...at, ...(issue.path as Path)], issueMessage(issue));
@@ -919,57 +902,27 @@ class Builder {
    */
   pageSetup(design: z.output<typeof pageSetup> | undefined): NonNullable<WriteSheet["pageSetup"]> {
     const d = design ?? {};
-    const fit = d.scale === undefined;
     return {
       paperSize: typeof d.paperSize === "string" ? PAPER[d.paperSize] : (d.paperSize ?? "a4"),
       orientation: d.orientation ?? "portrait",
-      ...(fit ? { fitToPage: true, fitToWidth: d.fitToWidth ?? 1, fitToHeight: d.fitToHeight ?? 0 } : { scale: d.scale }),
+      ...(d.scale === undefined ? { fitToWidth: d.fitToWidth ?? 1, fitToHeight: d.fitToHeight ?? 0 } : { scale: d.scale }),
       margins: { ...DEFAULT_MARGINS, ...d.margins },
       ...(d.horizontalCentered ? { horizontalCentered: true } : {}),
       ...(d.verticalCentered ? { verticalCentered: true } : {}),
       ...(d.printGridLines ? { showGridLines: true } : {}),
+      ...(d.printArea !== undefined ? { printArea: absolute(d.printArea) } : {}),
+      ...(d.printTitlesRow !== undefined ? { printTitlesRow: d.printTitlesRow } : {}),
+      ...(d.printTitlesColumn !== undefined ? { printTitlesColumn: d.printTitlesColumn } : {}),
     };
   }
 }
 
-/**
- * Puts into the file hucre wrote what hucre cannot write:
- *
- * - The pictures placed by their top-left cell are anchored to that cell alone, with their
- *   size (`oneCellAnchor`). hucre writes every picture between two cells, which stretches
- *   it over the cells when the design gives no end.
- * - A filter's `_xlnm._FilterDatabase` is hidden, as Excel writes it. hucre writes no
- *   hidden names.
- */
-function finish(bytes: Uint8Array, pictures: OneCellPicture[], filters: boolean): Uint8Array {
-  if (pictures.length === 0 && !filters) return bytes;
+/** Hides each filter's `_xlnm._FilterDatabase` in the file hucre wrote, as Excel writes it. hucre writes no hidden names. */
+function hideFilterNames(bytes: Uint8Array): Uint8Array {
   const files = unzipSync(bytes);
-  const text = (name: string): string => (files[name] ? strFromU8(files[name]) : "");
-  if (filters) {
-    const workbook = text("xl/workbook.xml");
-    if (!workbook.includes(`<definedName name="${FILTER_NAME}"`)) throw new Error(`hucre wrote no ${FILTER_NAME} name for the filters.`);
-    const hidden = workbook.replace(/<definedName name="_xlnm\._FilterDatabase"(?![^>]*\bhidden=)/g, '$& hidden="1"');
-    files["xl/workbook.xml"] = strToU8(hidden);
-  }
-  const sheets = sheetFiles(text("xl/workbook.xml"), text("xl/_rels/workbook.xml.rels"));
-  const bySheet = new Map<number, Set<number>>();
-  for (const p of pictures) bySheet.set(p.sheet, (bySheet.get(p.sheet) ?? new Set()).add(p.index));
-  for (const [index, which] of bySheet) {
-    const file = sheets[index]?.file;
-    const drawing = file ? relationships(text(relsOf(file)), file).find((r) => r.type === "drawing")?.target : undefined;
-    if (!drawing || !files[drawing]) throw new Error(`hucre wrote no drawing for the pictures of sheet ${index + 1}.`);
-    let n = -1;
-    const xml = text(drawing).replace(/<xdr:twoCellAnchor\b[^>]*>([\s\S]*?)<\/xdr:twoCellAnchor>/g, (whole, inner: string) => {
-      n++;
-      if (!which.has(n)) return whole;
-      const from = /<xdr:from>[\s\S]*?<\/xdr:from>/.exec(inner)?.[0];
-      const pic = /<xdr:pic>[\s\S]*?<\/xdr:pic>/.exec(inner)?.[0];
-      const ext = /<a:ext cx="(\d+)" cy="(\d+)"\/>/.exec(inner);
-      if (!from || !pic || !ext) return whole;
-      return `<xdr:oneCellAnchor>${from}<xdr:ext cx="${ext[1]}" cy="${ext[2]}"/>${pic}<xdr:clientData/></xdr:oneCellAnchor>`;
-    });
-    files[drawing] = strToU8(xml);
-  }
+  const workbook = files["xl/workbook.xml"] ? strFromU8(files["xl/workbook.xml"]) : "";
+  if (!workbook.includes(`<definedName name="${FILTER_NAME}"`)) throw new Error(`hucre wrote no ${FILTER_NAME} name for the filters.`);
+  files["xl/workbook.xml"] = strToU8(workbook.replace(/<definedName name="_xlnm\._FilterDatabase"(?![^>]*\bhidden=)/g, '$& hidden="1"'));
   return zipSync(files, { level: 6 });
 }
 
@@ -1016,5 +969,6 @@ export async function buildXlsx(design: unknown, images: (name: string) => Desig
   }
   const options = builder.workbook(parsed.data);
   if (builder.problems.length > 0) throw new DesignError(builder.problems);
-  return finish(await writeXlsx(options), builder.oneCell, parsed.data.sheets.some((sheet) => sheet.autoFilter !== undefined));
+  const bytes = await writeXlsx(options);
+  return parsed.data.sheets.some((sheet) => sheet.autoFilter !== undefined) ? hideFilterNames(bytes) : bytes;
 }
