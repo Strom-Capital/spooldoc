@@ -391,8 +391,19 @@ describe("buildXlsx", () => {
       ]);
       const wide = one({ columns: [{ ref: "AMJ", style: { font: { bold: true } } }], rows: Array.from({ length: 10 }, (_, n) => ({ row: n + 1, style: { fill: yellow } })) });
       expect(await problems(wide)).toEqual([
-        "sheets[0].rows: The styled rows need 10240 empty cells with their style, up to their last cell or styled column, and a sheet holds at most 10000. Style fewer rows, or style the cells.",
+        "sheets[0].rows: With the empty cells its styled rows need, the sheet would hold 10240 cells, and it holds at most 10000. Style fewer rows, or style the cells.",
       ]);
+      // 9000 given cells and the 1024 empty ones of row 1 cross the limit only together.
+      const together = (given: number) =>
+        one({
+          cells: Array.from({ length: given }, (_, n) => ({ ref: `A${n + 2}`, value: n })),
+          rows: [{ row: 1, style: { fill: yellow } }],
+          columns: [{ ref: "AMJ", style: { font: { bold: true } } }],
+        });
+      expect(await problems(together(9000))).toEqual([
+        "sheets[0].rows: With the empty cells its styled rows need, the sheet would hold 10024 cells, and it holds at most 10000. Style fewer rows, or style the cells.",
+      ]);
+      await expect(buildXlsx(together(8900))).resolves.toBeInstanceOf(Uint8Array);
     });
   });
 

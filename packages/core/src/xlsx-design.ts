@@ -822,10 +822,10 @@ class Builder {
     const lastStyled = Math.max(0, ...columnStyles.keys());
     let added = 0;
     for (const r of rowStyles.keys()) added += Math.max(lastColumn.get(r) ?? 0, lastStyled) - (given.get(r) ?? 0);
-    if (added > MAX_CELLS) {
+    if (cells.size + added > MAX_CELLS) {
       this.problem(
         [...path, "rows"],
-        `The styled rows need ${added} empty cells with their style, up to their last cell or styled column, and a sheet holds at most ${MAX_CELLS}. Style fewer rows, or style the cells.`,
+        `With the empty cells its styled rows need, the sheet would hold ${cells.size + added} cells, and it holds at most ${MAX_CELLS}. Style fewer rows, or style the cells.`,
       );
       return;
     }
