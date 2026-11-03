@@ -13,6 +13,10 @@ updates:
       interval: monthly
     commit-message:
       prefix: build
+    ignore:
+      # The types follow the oldest Node we support (engines in package.json).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       dependencies:
         patterns: ["*"]
