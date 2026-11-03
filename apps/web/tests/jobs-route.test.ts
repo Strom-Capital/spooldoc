@@ -8,7 +8,7 @@ import { signedIn } from './helpers/auth';
 import { fakeCarbone, fakeRenderer, PDF_BYTES, sentPageGroup } from './helpers/carbone';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, loadSample } from './helpers/fake-connection';
-import { db, insertServer } from './helpers/fixtures';
+import { db, insertServer, oneRoute } from './helpers/fixtures';
 import { appRequest, connections, params, spyConsole } from './helpers/mocks';
 
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
@@ -124,7 +124,7 @@ describe('jobs', () => {
     const created = await job(id);
     expect(created.name).toBe(`${library}/${queue}`);
     expect(created.draft.source).toMatchObject({ serverId, library, queue });
-    expect(created.draft.destination.destinationId).toBeTruthy();
+    expect(created.draft.destination.routes).toEqual([{ when: [], destinations: [{ destinationId: expect.any(String), email: null, webhook: null }] }]);
     expect(created.draft.finish).toEqual({ action: 'hold', queue: null });
 
     await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { extract: { definition: yaml } } }), params({ id }));
@@ -583,7 +583,7 @@ describe('runs that deliver to an IFS folder', () => {
       .values({ kind: 'ifs', name: 'Output folder', config: { folder: FOLDER, ...config } })
       .returning({ id: destinations.id });
     await jobRoute.PATCH(
-      patch(`/api/jobs/${id}`, { draft: { destination: { destinationId: destination!.id }, render: { templates: [tpl({ formats })] } } }),
+      patch(`/api/jobs/${id}`, { draft: { destination: oneRoute(destination!.id), render: { templates: [tpl({ formats })] } } }),
       params({ id }),
     );
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
@@ -686,5 +686,67 @@ describe('runs that deliver to an IFS folder', () => {
     expect(deliver(r)?.detail).toBe('IFS file /home/docs/out/x.pdf: Access to request was denied.');
     expect(written()).toHaveLength(5);
     expect(fake().actions()).toEqual([]);
+  });
+});
+
+describe('routes', () => {
+  const routesPreview = async (id: string, routes: unknown, pageGroup = 0) =>
+    (await import('@/app/api/jobs/[id]/routes-preview/route')).POST(post(`/api/jobs/${id}/routes-preview`, { routes, pageGroup }), params({ id }));
+
+  /** A ready job and an email destination. */
+  async function routedJob(): Promise<{ id: string; email: string; builtin: string }> {
+    const id = await readyJob();
+    const [email] = await db().insert(destinations).values({ kind: 'email', name: 'MYEMAIL', config: { testAddress: null } }).returning({ id: destinations.id });
+    const [builtin] = await db().select({ id: destinations.id }).from(destinations).where(eq(destinations.builtin, true));
+    return { id, email: email!.id, builtin: builtin!.id };
+  }
+
+  it('refuses a version with a condition on a field the job does not read, and checks the email of each destination', async () => {
+    const { id, email, builtin } = await routedJob();
+    const save = async (field: string, to: string) => {
+      const routes = [
+        { when: [{ field, op: 'notEmpty' }], destinations: [{ destinationId: email, email: { to, subject: 'Invoice {d.pg.invoiceNo}' } }] },
+        { when: [], destinations: [{ destinationId: builtin }] },
+      ];
+      expect((await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { destination: { routes } } }), params({ id }))).status).toBe(200);
+      return versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    };
+    const unknown = await save('pg.nope', '');
+    expect(unknown.status).toBe(422);
+    expect((await unknown.json()).problems).toEqual([
+      'Destination, route 1, condition 1: the job has no field pg.nope with a single value. Pick one of its fields.',
+      expect.stringMatching(/^Destination, route 1, MYEMAIL: Enter To/),
+    ]);
+    // A table is not a single value.
+    expect((await (await save('pg.lines', '{d.pg.customerNo}@example.com')).json()).problems).toEqual([
+      'Destination, route 1, condition 1: the job has no field pg.lines with a single value. Pick one of its fields.',
+    ]);
+    expect((await save('splf.name', '{d.pg.customerNo}@example.com')).status).toBe(201);
+  });
+
+  it('refuses routes the schema does not take, such as more than 20', async () => {
+    const { id } = await routedJob();
+    const routes = Array.from({ length: 21 }, () => ({ when: [], destinations: [] }));
+    const response = await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { destination: { routes } } }), params({ id }));
+    expect(response.status).toBe(400);
+  });
+
+  it('previews the route of each page group, and why the one shown takes its route or not', async () => {
+    const { id, email, builtin } = await routedJob();
+    const routes = [
+      { when: [{ field: 'pg.address3', op: 'matches', pattern: '^SE-' }], destinations: [{ destinationId: email }] },
+      { when: [{ field: 'pg.currency', op: 'equals', value: 'USD' }], destinations: [{ destinationId: builtin }] },
+    ];
+    const response = await routesPreview(id, routes, 1);
+    expect(response.status).toBe(200);
+    const view = await response.json();
+    expect(view).toMatchObject({ pageGroup: 1, pageGroups: 6, route: null, taken: [null, null, null, 0, null, null], spooledFile: null, lookupError: null });
+    expect(view.checks).toEqual([
+      { ok: false, conditions: [{ ok: false, reason: 'pg.address3 is FI-40100 JYVÄSKYLÄ, which does not match /^SE-/' }] },
+      { ok: false, conditions: [{ ok: false, reason: 'pg.currency is EUR, not USD' }] },
+    ]);
+    expect(view.fields).toEqual(expect.arrayContaining([{ path: 'pg.invoiceNo', value: '260102' }, { path: 'splf.name', value: sample.splf.name }]));
+    expect(view.fields.map((field: { path: string }) => field.path)).not.toContain('pg.lines');
+    expect((await routesPreview(id, [{ when: [{ field: 'pg.x', op: 'nope' }], destinations: [] }])).status).toBe(400);
   });
 });

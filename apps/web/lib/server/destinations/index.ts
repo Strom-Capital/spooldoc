@@ -48,7 +48,7 @@ export interface DeliverInput {
   /** The job and the spooled file, for a destination that remembers what it delivered. */
   job: { id: string; splfKey: string };
   destinationId: string;
-  /** The route that sends these documents here; null when the job has no routes. */
+  /** The route that sends these documents here, counted from 1, recorded with each delivery. */
   route: number | null;
   /** The job's templates, for a destination that works out from them what a run sends, such as email. */
   templates: JobTemplate[];

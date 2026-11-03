@@ -8,7 +8,7 @@ import type { DestinationView, SettingsView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
 import { fixtureText } from './helpers/fake-connection';
-import { db, insertJob, insertServer } from './helpers/fixtures';
+import { db, insertJob, insertServer, oneRoute } from './helpers/fixtures';
 import { appRequest, params } from './helpers/mocks';
 
 const settingsRoute = await import('@/app/api/settings/route');
@@ -153,7 +153,7 @@ describe('email destinations', () => {
     const save = async (email: unknown) => {
       await db()
         .update(jobs)
-        .set({ draft: { ...job!.draft, destination: { destinationId: destination.id, email: emailSpecSchema.parse(email), webhook: null } } })
+        .set({ draft: { ...job!.draft, destination: oneRoute(destination.id, { email: emailSpecSchema.parse(email) }) } })
         .where(eq(jobs.id, jobId));
       return versions.POST(appRequest(`/api/jobs/${jobId}/versions`, { method: 'POST', body: { note: '' }, headers: auth }), params({ id: jobId }));
     };

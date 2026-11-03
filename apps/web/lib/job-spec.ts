@@ -1,6 +1,7 @@
 import { lookupsSchema } from '@spooldoc/core/lookups';
 import { XLSX_SCOPES, type XlsxScope } from '@spooldoc/core/xlsx-scope';
 import { z } from 'zod';
+import { routeProblems } from './routes';
 
 /** An IBM i object name: 1 to 10 characters, upper-cased. */
 export const IBMI_NAME = /^[A-Z$#@][A-Z0-9_$#@.]{0,9}$/;
@@ -348,6 +349,69 @@ export function emptyWebhookSpec(): WebhookSpec {
   return webhookSpecSchema.parse({});
 }
 
+/** How many of each part a job's routes can have. */
+export const ROUTE_LIMITS = { routes: 20, conditions: 5, destinations: 5, values: 50, valueLength: 500 } as const;
+
+/** The operators of a route's condition: is empty, is not empty, equals, is one of, matches. */
+export const CONDITION_OPS = ['empty', 'notEmpty', 'equals', 'oneOf', 'matches'] as const;
+export type ConditionOp = (typeof CONDITION_OPS)[number];
+
+const conditionField = z.string().trim().max(200, 'Use at most 200 characters for a field');
+const conditionValue = z.string().max(ROUTE_LIMITS.valueLength, `Use at most ${ROUTE_LIMITS.valueLength} characters for a value`);
+
+/**
+ * One condition of a route on a field of the document, such as `pg.email` or `splf.name`.
+ * A draft may hold an incomplete one, such as one with no field yet; `missingParts` says so.
+ */
+export const conditionSchema = z.discriminatedUnion('op', [
+  z.object({ field: conditionField, op: z.literal('empty') }),
+  z.object({ field: conditionField, op: z.literal('notEmpty') }),
+  z.object({ field: conditionField, op: z.literal('equals'), value: conditionValue.default('') }),
+  z.object({
+    field: conditionField,
+    op: z.literal('oneOf'),
+    values: z.array(conditionValue).max(ROUTE_LIMITS.values, `Use at most ${ROUTE_LIMITS.values} values`).default([]),
+  }),
+  z.object({ field: conditionField, op: z.literal('matches'), pattern: conditionValue.default('') }),
+]);
+export type RouteCondition = z.infer<typeof conditionSchema>;
+
+/**
+ * A destination of a route, with what the job sends there: the email part for an email
+ * destination, the files of each call for a webhook. Each is kept when the entry is
+ * changed to another destination, for coming back.
+ */
+export const routeDestinationSchema = z.object({
+  destinationId: z.string().uuid(),
+  email: emailSpecSchema.nullable().default(null),
+  webhook: webhookSpecSchema.nullable().default(null),
+});
+export type RouteDestination = z.infer<typeof routeDestinationSchema>;
+
+/** A route: the conditions a document must all match, and the destinations it then goes to. */
+export const routeSchema = z.object({
+  when: z.array(conditionSchema).max(ROUTE_LIMITS.conditions, `A route has at most ${ROUTE_LIMITS.conditions} conditions`).default([]),
+  destinations: z
+    .array(routeDestinationSchema)
+    .max(ROUTE_LIMITS.destinations, `A route sends to at most ${ROUTE_LIMITS.destinations} destinations`)
+    .default([]),
+});
+export type Route = z.infer<typeof routeSchema>;
+
+/** A route with no conditions, to the destination given or to none yet. */
+export function emptyRoute(destinationId?: string | null): Route {
+  return { when: [], destinations: destinationId ? [{ destinationId, email: null, webhook: null }] : [] };
+}
+
+/**
+ * Where a job's documents go: its routes, in order. Each document takes the first route
+ * whose conditions it all matches, and goes to every destination of that route.
+ */
+export const destinationSpecSchema = z.object({
+  routes: z.array(routeSchema).min(1, 'Add at least one route').max(ROUTE_LIMITS.routes, `A job has at most ${ROUTE_LIMITS.routes} routes`),
+});
+export type DestinationSpec = z.infer<typeof destinationSpecSchema>;
+
 /** The parts of a job. A draft may be incomplete; a version must be complete (`completeSpec`). */
 export const jobSpecSchema = z.object({
   source: z
@@ -373,15 +437,7 @@ export const jobSpecSchema = z.object({
   render: z
     .object({ templates: z.array(templateSchema).min(1, 'Add at least one template') })
     .default(() => ({ templates: [firstTemplate()] })),
-  destination: z
-    .object({
-      destinationId: z.string().uuid().nullable().default(null),
-      /** What each email holds, when the destination is an email destination. Kept when another destination is picked. */
-      email: emailSpecSchema.nullable().default(null),
-      /** What each webhook call holds, when the destination is a webhook destination. Kept when another destination is picked. */
-      webhook: webhookSpecSchema.nullable().default(null),
-    })
-    .default({ destinationId: null, email: null, webhook: null }),
+  destination: destinationSpecSchema.default(() => ({ routes: [emptyRoute()] })),
   finish: z
     .object({ action: z.enum(FINISH_ACTIONS).default('hold'), queue: queueRefSchema.nullable().default(null) })
     .default({ action: 'hold', queue: null }),
@@ -396,7 +452,7 @@ export function emptySpec(overrides: { serverId?: string; library?: string; queu
   return {
     ...spec,
     source: { ...spec.source, serverId: overrides.serverId ?? null, library: overrides.library ?? '', queue: overrides.queue ?? '' },
-    destination: { destinationId: overrides.destinationId ?? null, email: null, webhook: null },
+    destination: { routes: [emptyRoute(overrides.destinationId)] },
   };
 }
 
@@ -418,7 +474,7 @@ export function missingParts(spec: JobSpec): string[] {
     }
   }
   missing.push(...twice);
-  if (!spec.destination.destinationId) missing.push('Destination: pick a destination.');
+  missing.push(...routeProblems(spec.destination.routes, spec.render.templates.some(perSpooledFile)));
   if (spec.finish.action === 'move' && !spec.finish.queue) missing.push('Finish: pick the output queue to move files to.');
   return missing;
 }

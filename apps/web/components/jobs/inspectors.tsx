@@ -2,20 +2,23 @@
 
 import { Trash2Icon } from 'lucide-react';
 import Link from 'next/link';
-import { useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Hint } from '@/components/hint';
 import { ServerSelect } from '@/components/server-select';
 import { ErrorNote } from '@/components/page';
 import { ServerErrorNote } from '@/components/server-status';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { PageGroupSelect } from '@/components/workbench/position-select';
 import { cn } from '@/lib/utils';
 import { destinationText } from '@/lib/destination-config';
-import { emptyEmailSpec, emptyWebhookSpec, type FinishAction, type SourceFilter } from '@/lib/job-spec';
-import { EmailStep } from './email-step';
-import { SftpStep } from './sftp-step';
-import { WebhookStep } from './webhook-step';
+import type { FinishAction, Route, SourceFilter } from '@/lib/job-spec';
+import { isSimpleDestination } from '@/lib/routes';
+import { addRoute, DestinationPart, DestinationRoutes, hasPart, newEntry, routeName, RouteStatus, useRoutesPreview, type OpenPart } from './destination-routes';
 import { useJob } from './job-provider';
+import { newCondition } from './route-conditions';
 import { QueueSelect } from './queue-select';
 import { StepFooter, useFocusOnArrival } from './step-nav';
 
@@ -171,48 +174,107 @@ export function SourceInspector() {
   );
 }
 
-/** Destination: where the documents go. */
+/**
+ * Destination: where the documents go. A job with one route, no conditions and one
+ * destination picks it from the destinations, as the reduced form of the routes; adding a
+ * condition or a route shows every route as a card.
+ */
 export function DestinationInspector() {
   const { spec, updateDraft, readOnly, destinations, destinationsError } = useJob();
-  const picked = destinations.find((destination) => destination.id === spec.destination.destinationId);
+  const { routes } = spec.destination;
+  const simple = isSimpleDestination(spec.destination);
+  const routing = useRoutesPreview(routes, !simple);
+  const [open, setOpen] = useState<OpenPart | null>({ route: 0, entry: 0 });
+
+  // Every change is made to the latest routes, so quick edits in a row never undo each other.
+  const latest = useRef(routes);
+  useEffect(() => {
+    latest.current = routes;
+  }, [routes]);
+  const change = (update: (current: Route[]) => Route[], debounce = false) => {
+    const next = update(latest.current);
+    latest.current = next;
+    updateDraft({ destination: { routes: next } }, { debounce });
+  };
+
+  const route = routes[0]!;
+  const entry = simple ? route.destinations[0] : undefined;
+  const picked = entry ? destinations.find((destination) => destination.id === entry.destinationId) : undefined;
+  const suffix = (index: number) => {
+    const taken = routing.preview?.taken[index];
+    return taken === undefined ? '' : `, ${taken === null ? 'no route' : routeName(routes, taken).toLowerCase()}`;
+  };
   return (
-    <Panel title="Destination" description="Where the job delivers its documents." wide={picked?.kind === 'email' || picked?.kind === 'webhook' || picked?.kind === 'sftp'}>
+    <Panel title="Destination" description="Where the job delivers its documents." wide={!simple || hasPart(picked)}>
       {destinationsError && <ErrorNote>Could not load the destinations. {destinationsError}</ErrorNote>}
-      <div role="radiogroup" aria-label="Destination" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {destinations.map((destination) => (
-          <Choice
-            key={destination.id}
-            selected={spec.destination.destinationId === destination.id}
-            disabled={readOnly}
-            onSelect={() =>
-              updateDraft(
-                {
-                  destination: {
-                    destinationId: destination.id,
-                    // An email or webhook destination needs its part; another destination keeps it, for coming back.
-                    email: spec.destination.email ?? (destination.kind === 'email' ? emptyEmailSpec() : null),
-                    webhook: spec.destination.webhook ?? (destination.kind === 'webhook' ? emptyWebhookSpec() : null),
-                  },
-                },
-                { debounce: false },
-              )
-            }
-            title={destination.name}
-          >
-            {Object.values(destinationText(destination)).join(' ')}
-          </Choice>
-        ))}
+      <div className="flex flex-col gap-2">
+        <PageGroupSelect suffix={simple ? undefined : suffix} />
+        {!simple && <RouteStatus routes={routes} {...routing} />}
       </div>
-      <p className="text-muted-foreground text-xs">
-        Add a folder in the IFS, an email, a webhook or an SFTP destination, or change one, on the{' '}
-        <Link href="/destinations" className="text-primary hover:underline">
-          Destinations
-        </Link>{' '}
-        page.
-      </p>
-      {picked?.kind === 'email' && <EmailStep destination={picked} />}
-      {picked?.kind === 'webhook' && <WebhookStep destination={picked} />}
-      {picked?.kind === 'sftp' && <SftpStep destination={picked} />}
+      {simple ? (
+        <>
+          <div role="radiogroup" aria-label="Destination" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {destinations.map((destination) => (
+              <Choice
+                key={destination.id}
+                selected={entry?.destinationId === destination.id}
+                disabled={readOnly}
+                onSelect={() => change((current) => [{ ...current[0]!, destinations: [newEntry(destination, current[0]!.destinations[0])] }])}
+                title={destination.name}
+              >
+                {Object.values(destinationText(destination)).join(' ')}
+              </Choice>
+            ))}
+          </div>
+          <p className="text-muted-foreground text-xs">
+            Add a folder in the IFS, an email, a webhook or an SFTP destination, or change one, on the{' '}
+            <Link href="/destinations" className="text-primary hover:underline">
+              Destinations
+            </Link>{' '}
+            page.
+          </p>
+          {!readOnly && (
+            <p className="flex flex-wrap items-center gap-x-1 text-muted-foreground text-xs">
+              To send some documents elsewhere by their fields:
+              <Hint text="Sends only the documents that match it to this destination. A route can have several conditions.">
+                <Button type="button" variant="link" size="sm" className="h-auto px-0 text-xs" onClick={() => change((current) => [{ ...current[0]!, when: [newCondition()] }])}>
+                  Add a condition
+                </Button>
+              </Hint>
+              or
+              <Hint text="Adds a route before this one. Each document takes the first route it matches, and this one takes the rest.">
+                <Button type="button" variant="link" size="sm" className="h-auto px-0 text-xs" onClick={() => change(addRoute)}>
+                  Add a route
+                </Button>
+              </Hint>
+            </p>
+          )}
+          {picked && entry && (
+            <DestinationPart
+              destination={picked}
+              entry={entry}
+              onChange={(part, debounce) => change((current) => [{ ...current[0]!, destinations: current[0]!.destinations.map((e, i) => (i === 0 ? { ...e, ...part } : e)) }], debounce)}
+            />
+          )}
+        </>
+      ) : (
+        <>
+          <p className="text-muted-foreground text-sm">
+            Each document takes the first route whose conditions it all matches, and goes to every destination of that route. A document that takes no route fails the run.{' '}
+            <Link href="/docs/destinations#routes" className="text-primary hover:underline">
+              How routes work
+            </Link>
+          </p>
+          <DestinationRoutes routes={routes} preview={routing.preview} open={open} onOpen={setOpen} change={change} />
+          <p className="text-muted-foreground text-xs">
+            Add a destination, or change one, on the{' '}
+            <Link href="/destinations" className="text-primary hover:underline">
+              Destinations
+            </Link>{' '}
+            page.
+          </p>
+        </>
+      )}
     </Panel>
   );
 }

@@ -262,7 +262,7 @@ export const samples = pgTable(
 
 /** One step of a run, as stored in `runs.steps`. */
 export interface RunStep {
-  step: 'capture' | 'extract' | 'lookup' | 'render' | 'deliver' | 'finish';
+  step: 'capture' | 'extract' | 'lookup' | 'route' | 'render' | 'deliver' | 'finish';
   ok: boolean;
   ms: number;
   error?: string;
@@ -275,6 +275,10 @@ export interface RunStep {
   tables?: { id: string; name: string; revision: number }[];
   /** A Deliver step: the destination it delivered to, as it was named then. Missing when the destination was gone. */
   destination?: { id: string; name: string; kind: string };
+  /** A Deliver step: the route that sent the documents there, counted from 1, when the job had several routes or conditions. */
+  route?: number;
+  /** The Route step: each document that took no route, and why each route did not take it. */
+  unrouted?: { pageGroup: number | null; document: string; reasons: string[] }[];
 }
 
 /** One processing of one spooled file by a job version. */
@@ -356,6 +360,8 @@ export const runDeliveries = pgTable(
     destinationId: uuid('destination_id').references(() => destinations.id, { onDelete: 'set null' }),
     /** The destination kind that delivered it, such as `email`. */
     kind: text('kind').notNull().default('email'),
+    /** The route that sent it, counted from 1; null on rows written before routes. */
+    route: integer('route'),
     /** The page group of the document; null for the document of the whole spooled file. */
     pageGroupIndex: integer('page_group_index'),
     /** The document's file name without extension, such as `invoice-260101`. */

@@ -21,7 +21,7 @@ import { useAppInfo } from '@/components/app-info';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
 import { STEP_TITLE, STEPS } from '@/lib/client/job-steps';
 import { lookupsSub, previewFor } from '@/lib/client/lookups';
-import { missingFields, type StepStatus } from '@/lib/client/step-status';
+import { destinationDetail, missingFields, type StepStatus } from '@/lib/client/step-status';
 import { contentLabel, formatList, hasOwnContent, type TemplateContent } from '@/lib/job-spec';
 import { cn } from '@/lib/utils';
 import { useJob, type Step } from './job-provider';
@@ -147,7 +147,6 @@ function useSteps(): StepInfo[] {
   const hasSource = !!spec.source.serverId && !!spec.source.library && !!spec.source.queue;
   const extract = render?.extract;
   const missing = extract ? missingFields(extract) : 0;
-  const destination = destinations.find((d) => d.id === spec.destination.destinationId);
   const finish = spec.finish;
   const templates = spec.render.templates;
   const picked = templates.find((t) => t.id === templateId) ?? templates[0];
@@ -219,14 +218,7 @@ function useSteps(): StepInfo[] {
       step: 'destination',
       title: STEP_TITLE.destination,
       icon: SendIcon,
-      // A destination in test mode says so, since its documents go to the test address, URL or folder.
-      detail: destination
-        ? (destination.kind === 'email' && destination.config.testAddress) ||
-          (destination.kind === 'webhook' && destination.config.testUrl) ||
-          (destination.kind === 'sftp' && destination.config.testFolder)
-          ? `${destination.name} (test)`
-          : destination.name
-        : 'Pick a destination',
+      detail: destinationDetail(spec.destination, destinations),
       status: statuses.destination,
     },
     {

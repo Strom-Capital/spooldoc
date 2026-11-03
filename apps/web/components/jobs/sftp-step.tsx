@@ -1,8 +1,8 @@
 'use client';
 
-import { ChevronLeftIcon, ChevronRightIcon, FlaskConicalIcon, FolderIcon, RefreshCwIcon, UploadIcon } from 'lucide-react';
+import { FlaskConicalIcon, FolderIcon, RefreshCwIcon, UploadIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BoxHeader, useReducedMotion } from '@/components/code-box';
 import { Hint } from '@/components/hint';
 import { ErrorNote } from '@/components/page';
@@ -263,15 +263,15 @@ function FolderBox({
 }
 
 /**
- * The SFTP part of the destination step: the page group to show beside the folder on the
- * server, listed live, with the page group's files placed and tagged, and Upload test,
- * which puts them in the test folder.
+ * The SFTP part of the destination step, for one destination of a route: the folder on
+ * the server, listed live, with the files of the page group the Destination step shows
+ * placed and tagged, and Upload test, which puts them in the test folder. `notice` says
+ * when that page group takes another route.
  */
-export function SftpStep({ destination }: { destination: SftpDestination }) {
+export function SftpStep({ destination, notice }: { destination: SftpDestination; notice?: ReactNode }) {
   const { job, readOnly } = useJob();
-  const { pageGroupIndex, sampleId } = useWorkbench();
+  const { pageGroupIndex: pageGroup, sampleId } = useWorkbench();
   const reduced = useReducedMotion();
-  const [pageGroup, setPageGroup] = useState(pageGroupIndex);
   const [refreshes, setRefreshes] = useState(0);
   const { view, error, loading } = useSftpFolder(destination, pageGroup, refreshes);
   const [test, setTest] = useState<{ uploading: boolean; result: SftpUploadTestView | null; error: ShownError | null; landed: number; group: number }>({
@@ -282,7 +282,6 @@ export function SftpStep({ destination }: { destination: SftpDestination }) {
     group: -1,
   });
   const shown = view?.pageGroup ?? pageGroup;
-  const total = view?.pageGroups ?? null;
   const testFolder = destination.config.testFolder;
 
   // The uploaded rows turn solid one after the other.
@@ -328,29 +327,6 @@ export function SftpStep({ destination }: { destination: SftpDestination }) {
   return (
     <div className="grid min-w-0 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)]">
       <div className="flex min-w-0 flex-col gap-1.5">
-        <span className="font-medium text-sm">Page group</span>
-        <div className="flex items-center gap-1">
-          <Hint text="Show the files of the page group before this one.">
-            <Button type="button" variant="outline" size="icon-sm" disabled={shown === 0} onClick={() => setPageGroup(shown - 1)} aria-label="Previous page group">
-              <ChevronLeftIcon />
-            </Button>
-          </Hint>
-          <span className="tabular min-w-28 text-center text-sm" aria-live="polite">
-            {total === null ? `Page group ${shown + 1}` : `${shown + 1} of ${total}`}
-          </span>
-          <Hint text="Show the files of the next page group.">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon-sm"
-              disabled={total === null || shown >= total - 1}
-              onClick={() => setPageGroup(shown + 1)}
-              aria-label="Next page group"
-            >
-              <ChevronRightIcon />
-            </Button>
-          </Hint>
-        </div>
         <p className="text-muted-foreground text-xs">
           Each document&apos;s files go to the folder on the server. {IF_EXISTS_TEXT[destination.config.ifExists]}{' '}
           <Link href="/docs/destinations#sftp" className="text-primary hover:underline">
@@ -359,6 +335,7 @@ export function SftpStep({ destination }: { destination: SftpDestination }) {
         </p>
       </div>
       <section aria-label="Folder on the server" className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-0">
+        {notice}
         {!sampleId ? (
           <p className="rounded-lg border border-dashed p-4 text-muted-foreground text-sm">Pick a sample spooled file to see the folder.</p>
         ) : error && !view ? (

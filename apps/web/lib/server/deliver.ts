@@ -1,6 +1,6 @@
 import 'server-only';
 
-import type { EmailSpec, JobSpec, WebhookSpec } from '@/lib/job-spec';
+import type { EmailSpec, WebhookSpec } from '@/lib/job-spec';
 import type { RunStep } from './db/schema';
 import { storeRunFiles } from './destinations/store';
 import type { DeliverInput, FoundDestination, RunDocument, RunFile } from './destinations';
@@ -8,7 +8,7 @@ import { StepError } from './step-error';
 
 /** Where some of a run's documents go: a destination, with the job's email or webhook part for it. */
 export interface DeliveryTarget {
-  /** The route that sends the documents here; null when the job has no routes. */
+  /** The route that sends the documents here, counted from 1 (`routeDocuments`). */
   route: number | null;
   destinationId: string;
   email: EmailSpec | null;
@@ -23,7 +23,7 @@ export interface FoundTarget extends DeliveryTarget {
 }
 
 /** Runs one deliver step of a run, recorded with the destination it delivers to. */
-export type DeliverStep = (destination: RunStep['destination'], deliver: () => Promise<string>) => Promise<string>;
+export type DeliverStep = (destination: RunStep['destination'], deliver: () => Promise<string>, route: number | null) => Promise<string>;
 
 /** What every target's delivery shares: the run, its files, the job and the connection. */
 export type DeliverBase = Omit<DeliverInput, 'files' | 'documents' | 'keepFiles' | 'destinationId' | 'route' | 'email' | 'webhook'> & {
@@ -31,12 +31,6 @@ export type DeliverBase = Omit<DeliverInput, 'files' | 'documents' | 'keepFiles'
   files: RunFile[];
   step: DeliverStep;
 };
-
-/** Where a run's documents go: every document to the job's destination. */
-export function deliveryTargets(spec: JobSpec, documents: RunDocument[]): DeliveryTarget[] {
-  const { destinationId, email, webhook } = spec.destination;
-  return [{ route: null, destinationId: destinationId ?? '', email, webhook, documents }];
-}
 
 /** "1 more destination failed", "2 more destinations failed". */
 const moreFailed = (n: number): string => `${n} more ${n === 1 ? 'destination' : 'destinations'} failed`;
@@ -88,7 +82,7 @@ export async function deliverAll(targets: FoundTarget[], base: DeliverBase): Pro
           email: target.email,
           webhook: target.webhook,
         });
-      });
+      }, target.route);
     } catch (err) {
       failures.push(err);
     }

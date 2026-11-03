@@ -6,8 +6,11 @@ import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
 import { useWorkbench } from './workbench-provider';
 
-/** Picks the page group shown on the page, in the JSON view and in the preview. */
-export function PageGroupSelect() {
+/**
+ * Picks the page group shown on the page, in the JSON view and in the preview. `suffix`
+ * adds to each option, such as ", route 2" in the Destination step.
+ */
+export function PageGroupSelect({ suffix }: { suffix?: (index: number) => string } = {}) {
   const { render, pageGroupIndex, setPageGroupIndex } = useWorkbench();
   const pageGroups = render?.extract?.pageGroups ?? [];
   const names = render?.names ?? [];
@@ -20,7 +23,7 @@ export function PageGroupSelect() {
       value={Math.min(pageGroupIndex, pageGroups.length - 1)}
       options={pageGroups.map((group, index) => ({
         value: index,
-        label: `Page group ${index + 1} of ${pageGroups.length}${pageGroupTitle(names[index], group)}`,
+        label: `Page group ${index + 1} of ${pageGroups.length}${pageGroupTitle(names[index], group)}${suffix?.(index) ?? ''}`,
       }))}
       onChange={setPageGroupIndex}
     />

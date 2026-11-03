@@ -53,7 +53,7 @@ export const isEmailAddress = (value: string): boolean => EMAIL_ADDRESS.test(val
 
 /**
  * The settings of an email destination. While `testAddress` is set, every email goes only
- * there. To, Subject and the message are set per job, in `spec.destination.email`.
+ * there. To, Subject and the message are set per job, in the `email` of each route destination.
  */
 export const emailConfigSchema = z.object({
   testAddress: z

@@ -1,8 +1,9 @@
 import type { FieldHit } from '@spooldoc/core';
 import { describe, expect, it } from 'vitest';
 import type { RenderResult } from '@/lib/client/render';
-import { allReady, missingFields, nextVariant, runVariant, stepStatuses, type StepStatus, type StepStatusInput } from '@/lib/client/step-status';
-import { emptySpec, type JobSpec } from '@/lib/job-spec';
+import { allReady, destinationDetail, destinationReady, missingFields, nextVariant, runVariant, stepStatuses, type StepStatus, type StepStatusInput } from '@/lib/client/step-status';
+import { emailSpecSchema, emptySpec, type JobSpec, type Route, type RouteDestination } from '@/lib/job-spec';
+import type { DestinationView } from '@/lib/types';
 
 const hit = (name: string, status: FieldHit['status']): FieldHit => ({ pageGroup: 0, name, page: 1, line: 1, column: 1, length: 1, value: '', status });
 
@@ -155,5 +156,48 @@ describe('forward buttons', () => {
         expect(nextVariant(status, ready) === 'default' && runVariant(ready) === 'default').toBe(false);
       }
     }
+  });
+});
+
+describe('destinationReady', () => {
+  const ifs = { id: '00000000-0000-4000-8000-0000000000a1', name: 'MYIFS', builtin: false, jobs: [], kind: 'ifs', config: { folder: '/home/docs/out' } } as unknown as DestinationView;
+  const email = { id: '00000000-0000-4000-8000-0000000000a2', name: 'MYEMAIL', builtin: false, jobs: [], kind: 'email', config: { testAddress: null } } as unknown as DestinationView;
+  const entry = (destination: DestinationView, change: Partial<RouteDestination> = {}): RouteDestination => ({ destinationId: destination.id, email: null, webhook: null, ...change });
+  const spec = (routes: Route[]): JobSpec => ({ ...readySpec(), destination: { routes } });
+
+  it('is ready when every route has destinations that have what they need', () => {
+    const routes: Route[] = [
+      { when: [{ field: 'pg.email', op: 'notEmpty' }], destinations: [entry(email, { email: emailSpecSchema.parse({ to: '{d.pg.email}' }) })] },
+      { when: [], destinations: [entry(ifs)] },
+    ];
+    expect(destinationReady(spec(routes), [ifs, email])).toBe(true);
+  });
+
+  it('is not ready with a route problem, a gone destination, or an email without To', () => {
+    expect(destinationReady(spec([{ when: [], destinations: [] }]), [ifs])).toBe(false);
+    expect(destinationReady(spec([{ when: [{ field: '', op: 'empty' }], destinations: [entry(ifs)] }]), [ifs])).toBe(false);
+    expect(destinationReady(spec([{ when: [], destinations: [entry(ifs)] }]), [])).toBe(false);
+    expect(destinationReady(spec([{ when: [], destinations: [entry(email, { email: emailSpecSchema.parse({}) })] }]), [email])).toBe(false);
+  });
+});
+
+describe('destinationDetail', () => {
+  const ifs = { id: '00000000-0000-4000-8000-0000000000a1', name: 'MYIFS', builtin: false, jobs: [], kind: 'ifs', config: { folder: '/home/docs/out' } } as unknown as DestinationView;
+  const email = { id: '00000000-0000-4000-8000-0000000000a2', name: 'MYEMAIL', builtin: false, jobs: [], kind: 'email', config: { testAddress: 'me@example.com' } } as unknown as DestinationView;
+  const to = (destination: DestinationView): RouteDestination => ({ destinationId: destination.id, email: null, webhook: null });
+
+  it('names the one destination, says when it is in test mode, and counts routes and destinations', () => {
+    expect(destinationDetail({ routes: [{ when: [], destinations: [to(ifs)] }] }, [ifs, email])).toBe('MYIFS');
+    expect(destinationDetail({ routes: [{ when: [], destinations: [to(email)] }] }, [ifs, email])).toBe('MYEMAIL (test)');
+    const routes: Route[] = [
+      { when: [{ field: 'pg.email', op: 'notEmpty' }], destinations: [to(email)] },
+      { when: [], destinations: [to(ifs), to(email)] },
+    ];
+    expect(destinationDetail({ routes }, [ifs, email])).toBe('2 routes, 2 destinations, 1 in test');
+  });
+
+  it('asks for a destination when none of the job\'s destinations exists any more', () => {
+    expect(destinationDetail({ routes: [{ when: [], destinations: [] }] }, [ifs])).toBe('Pick a destination');
+    expect(destinationDetail({ routes: [{ when: [], destinations: [to(ifs)] }] }, [])).toBe('Pick a destination');
   });
 });

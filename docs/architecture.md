@@ -46,12 +46,15 @@ where a run stopped.
    of the whole spooled file. Carbone answers with the file: HTML, PDF,
    DOCX or XLSX. See
    [Templates](templates.md).
-5. **Deliver.** Every file goes to the job's destination: kept in
-   Spooldoc's database, written to a folder in the IFS of the job's
-   server, emailed, one email per document, through the mail server
-   in Settings, posted to a URL, one signed webhook call per document, or
-   uploaded to a folder on an SFTP server.
-   See [Destinations](destinations.md).
+5. **Deliver.** Each document takes the first of the job's
+   [routes](destinations.md#routes) whose conditions it matches, by the
+   values in its JSON, and its files go to every destination of that
+   route, one destination after another: kept in Spooldoc's database,
+   written to a folder in the IFS of the job's server, emailed, one email
+   per document, through the mail server in Settings, posted to a URL,
+   one signed webhook call per document, or uploaded to a folder on an
+   SFTP server. A document that takes no route fails the run after the
+   others are delivered. See [Destinations](destinations.md).
 6. **Finish.** Only after every document was delivered, the spooled file
    is held, moved, deleted or left as it is. A finish that fails gives the
    run the status warning: the documents are out, the file is still there.
@@ -118,7 +121,7 @@ backup:
 | `job_chats` | The agent's conversation for each job |
 | `samples` | Captured spooled files: raw bytes, attributes and parsed pages, for previews and runs |
 | `runs`, `run_files` | Every run with its steps, and the files kept in Spooldoc: by the Spooldoc download destination, by an IFS destination with Keep a copy in Spooldoc, or by an email, webhook or SFTP destination |
-| `run_deliveries` | Every delivery a run made or tried, one per document with its destination kind, such as each email or webhook call, or one per file for an SFTP upload, so Retry sends only the rest |
+| `run_deliveries` | Every delivery a run made or tried, one per document with its destination, its kind and the route that sent it, such as each email or webhook call, or one per file for an SFTP upload, so Retry sends only the rest |
 | `watch_seen` | Which spooled files each job has processed |
 | `destinations` | Where jobs deliver, with the secrets of a webhook (its signing secret and header values) and of an SFTP destination (its key or password) encrypted, and the host key an SFTP destination trusts |
 | `assets` | Logos, images and fonts for templates |

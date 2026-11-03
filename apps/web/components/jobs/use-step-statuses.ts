@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useAppInfo } from '@/components/app-info';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
 import type { Step } from '@/lib/client/job-steps';
-import { allReady, stepStatuses, type StepStatus } from '@/lib/client/step-status';
+import { allReady, destinationReady, stepStatuses, type StepStatus } from '@/lib/client/step-status';
 import { useJob } from './job-provider';
 
 /**
@@ -17,20 +17,7 @@ export function useStepStatuses(): { statuses: Record<Step, StepStatus>; ready: 
   const { render, pageGroupIndex } = useWorkbench();
   const { rendering } = useAppInfo();
   const serverError = servers.find((s) => s.id === spec.source.serverId)?.lastError ?? null;
-  const destination = destinations.find((d) => d.id === spec.destination.destinationId);
-  // An email destination is set once the job says where each email goes; a webhook once it sends no files, or files a template makes;
-  // an SFTP destination once its host key is trusted.
-  const attach = spec.destination.webhook?.attach;
-  const webhookReady = !attach || attach.length === 0 || spec.render.templates.some((template) => template.formats.some((format) => attach.includes(format)));
-  const hasDestination =
-    !!destination &&
-    (destination.kind === 'email'
-      ? !!spec.destination.email?.to.trim()
-      : destination.kind === 'webhook'
-        ? webhookReady
-        : destination.kind === 'sftp'
-          ? destination.config.hostKey !== null
-          : true);
+  const hasDestination = destinationReady(spec, destinations);
   return useMemo(() => {
     const statuses = stepStatuses({ spec, job, serverError, hasDestination, render, rendering, pageGroup: pageGroupIndex });
     return { statuses, ready: allReady(statuses) };

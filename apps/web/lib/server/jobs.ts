@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { lookupProblems, lookupTestProblems, parseDefinition, type Definition, type LookupTableData } from '@spooldoc/core';
-import { and, desc, eq, isNotNull, max, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, max, sql } from 'drizzle-orm';
 import type { ZodError } from 'zod';
 import {
   deleteNotice,
@@ -15,8 +15,12 @@ import {
   startsDeleting,
   versionSpec,
   type JobSpec,
+  type JobTemplate,
+  type WebhookSpec,
 } from '@/lib/job-spec';
+import { routeDestinationIds, routePrefix } from '@/lib/routes';
 import { emailSpecProblems } from './email-message';
+import { valueFields } from './value-fields';
 import type { JobDetail, JobSummary, RunStatus } from '@/lib/types';
 import { getDb, type Db, type Tx } from './db';
 import { destinations, jobs, jobVersions, queueHealth, runs, servers } from './db/schema';
@@ -233,28 +237,57 @@ async function templateFileProblems(spec: JobSpec): Promise<string[]> {
   return problems;
 }
 
-/** What is wrong with the files a webhook job sends: a pick that matches none of the files its templates make. */
-export function webhookSpecProblems(spec: JobSpec): string[] {
-  const attach = (spec.destination.webhook ?? emptyWebhookSpec()).attach;
-  const made = new Set(spec.render.templates.flatMap((template) => template.formats));
+/** What is wrong with the files a webhook destination sends: a pick that matches none of the files the templates make. */
+export function webhookSpecProblems(webhook: WebhookSpec | null, templates: readonly JobTemplate[]): string[] {
+  const attach = (webhook ?? emptyWebhookSpec()).attach;
+  const made = new Set(templates.flatMap((template) => template.formats));
   if (attach.length === 0 || attach.some((format) => made.has(format))) return [];
   return ['Files to send picks none of the files the templates make, so each call would hold the data only. Pick a format the templates make, or clear Files to send.'];
 }
 
-/** What is wrong with the destination part of a spec: the email part for an email destination, the files for a webhook, one line each. */
+/**
+ * What is wrong with the routes of a spec that needs the database or the definition, one
+ * line each: a destination that is gone, a condition on a field the job does not read as a
+ * single value, and for each destination its email or webhook part. A problem of one
+ * destination of several names it: "Destination, route 2, MYEMAIL: Enter To ...".
+ */
 export async function destinationProblems(spec: JobSpec): Promise<string[]> {
-  if (!spec.destination.destinationId) return [];
-  const [row] = await getDb().select({ kind: destinations.kind }).from(destinations).where(eq(destinations.id, spec.destination.destinationId));
-  if (row?.kind === 'webhook') return webhookSpecProblems(spec).map((problem) => `Destination: ${problem}`);
-  if (row?.kind !== 'email') return [];
-  const email = spec.destination.email ?? emptyEmailSpec();
+  const { routes } = spec.destination;
+  const ids = routeDestinationIds(routes);
+  const rows = ids.length === 0 ? [] : await getDb().select({ id: destinations.id, name: destinations.name, kind: destinations.kind }).from(destinations).where(inArray(destinations.id, ids));
+  const byId = new Map(rows.map((row) => [row.id, row]));
   let def: Definition | null = null;
   try {
     def = parseDefinition(spec.extract.definition);
   } catch {
     // The definition's own errors are reported by `versionProblems`.
   }
-  return emailSpecProblems(email, def, spec.render.templates, spec.lookups).map((problem) => `Destination: ${problem}`);
+  const fields = def ? new Set(valueFields(def, spec.lookups, false)) : null;
+  const problems: string[] = [];
+  for (const [index, route] of routes.entries()) {
+    for (const [at, condition] of route.when.entries()) {
+      if (fields && condition.field && !fields.has(condition.field)) {
+        problems.push(`${routePrefix(routes, index, `condition ${at + 1}`)} the job has no field ${condition.field} with a single value. Pick one of its fields.`);
+      }
+    }
+    for (const entry of route.destinations) {
+      const row = byId.get(entry.destinationId);
+      if (!row) {
+        problems.push(`${routePrefix(routes, index)} a destination is gone. Pick another one.`);
+        continue;
+      }
+      // One destination of one route is the job's only destination: its problems need no name.
+      const prefix = routes.length > 1 || route.destinations.length > 1 ? routePrefix(routes, index, row.name) : routePrefix(routes, index);
+      const found =
+        row.kind === 'webhook'
+          ? webhookSpecProblems(entry.webhook, spec.render.templates)
+          : row.kind === 'email'
+            ? emailSpecProblems(entry.email ?? emptyEmailSpec(), def, spec.render.templates, spec.lookups)
+            : [];
+      problems.push(...found.map((problem) => `${prefix} ${problem}`));
+    }
+  }
+  return problems;
 }
 
 /**

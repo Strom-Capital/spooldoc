@@ -3,9 +3,11 @@ title: "Destinations"
 description: "Where a job delivers its documents."
 ---
 
-A destination is where the files of a run go. Jobs pick one in the
-destination step. The Destinations page lists them with the jobs that use
-each, and adds, edits and deletes the ones you made.
+A destination is where the files of a run go. A job picks one in its
+Destination step, or sends each document to one or more destinations by
+its fields, with [routes](#routes). The Destinations page lists the
+destinations with the jobs that use each, and adds, edits and deletes the
+ones you made.
 
 <p align="center">
   <picture>
@@ -189,8 +191,9 @@ one. From is always the address in Settings.
 
 Beside the fields, the step shows the email of one page group as it will
 be sent: From, To, Subject, the files and the message. Previous and Next
-step through the page groups, so you can watch To and Subject change from
-customer to customer. When the run also sends an email for the whole
+step through the page groups, as the page group stepper at the top of the
+step does, so you can watch To and Subject change from customer to
+customer. When the run also sends an email for the whole
 spooled file, Next after the last page group shows that one, filled in
 from `{d.splf...}`. When page groups get no email, the preview shows only
 the whole spooled file's email. Nothing is sent from the preview.
@@ -625,8 +628,8 @@ destination instead: it tags each file with its CCSID, which SFTP cannot.
 
 ### The folder view and Upload test
 
-In the job's destination step, beside the page group, the folder on the
-server is listed live: the folder runs write to, or the test folder in
+In the job's destination step, beside the settings, the folder on the
+server is listed live for the page group the step shows: the folder runs write to, or the test folder in
 test mode. The page group's files are placed among the files already
 there, in the order the server sorts them, each tagged with what a run
 will do: New, Replaces the file from 14 Oct, Becomes
@@ -685,6 +688,92 @@ run to finish, then uploads only what is left. After 5 minutes it stops
 waiting, and the run fails with "Another run of this job is uploading
 files of this spooled file. Retry when it has finished." No file is
 uploaded twice.
+
+## Routes
+
+Routes send each document of a spooled file to a destination by its
+fields: email the invoices of customers who have an email address, and
+write the rest to an IFS folder. One job does what took two jobs on two
+output queues.
+
+A job's routes are in its Destination step, in order. Each has
+conditions on the fields of the document, and one or more destinations.
+A document takes the first route whose conditions it all matches, and
+goes to every destination of that route, such as an email to the
+customer and a copy in an IFS folder. There is no "or": another route
+does that. The last route without conditions reads **Otherwise**. It
+takes every document the routes above do not.
+
+**From one destination to routes.** A new job picks one destination.
+Below the destinations, **Add a condition** sends only the documents
+that match it, and **Add a route** adds a route before the one you have,
+which becomes Otherwise. The step then shows each route as a card: its
+conditions under When, and its destinations under Send to, each with
+**Settings** for its email, webhook call or SFTP folder. The ⋯ menu of a
+route moves it up or down, or removes it. A job back to one route with
+no conditions and one destination shows the pick of one destination
+again.
+
+**Conditions.** A condition reads one field with a single value: a field
+of the page group such as `pg.email`, a column a [lookup](lookups.md)
+adds such as `pg.customer.EMAIL`, or a field of the spooled file such
+as `splf.name`. A table or a record has many values, so a condition
+cannot read it.
+
+| Operator | Matches when the field |
+|----------|------------------------|
+| is empty | is not in the data, is null, or holds only spaces |
+| is not empty | has a value |
+| equals | is the value, in the same case, without the spaces at its ends |
+| is one of | equals one of the values |
+| matches | matches a regular expression, such as `^SE-` |
+
+A condition compares the value in the data, not the printed text. A
+number field compares as a number, so `1,000.00` equals 1000, and a date
+field as a date, so `15.10.2026` equals `2026-10-15`. Changing the
+Formats in [Settings](configuration.md) never sends a document another
+way.
+
+**Where each page group goes.** The page group stepper at the top of the
+step adds the route to each page group, and under it the step says
+"Page group 3 takes route 1". **Why** says, for each route, the
+conditions that do not match, such as `pg.country is DK, not SE`. Each
+condition shows the value of its field in the page group shown, and
+whether it matches. The email, webhook and SFTP previews of a
+destination follow the stepper. When the page group shown takes another
+route, they say so, and show what it would get there. Nothing is sent.
+
+**The whole spooled file.** An Excel template of the whole spooled file
+makes one document with no page group. It takes the first route that has
+no conditions, or whose conditions read only `splf` fields. When no
+route can take it, the version cannot be saved.
+
+**A document that takes no route.** The run delivers the documents that
+took a route, then fails, and the job log says which ones took none:
+"11 of 12 documents took a route. Page group 3 (invoice-1003) matched no
+route: pg.country is DK, not SE. The Route step lists each one." The
+spooled file is not held, moved or deleted. Add a route for them, save a
+version, and [Retry](job-log.md#retry): only what was not sent goes.
+
+**Already sent is per destination.** Retry remembers what each
+destination sent, not what each route sent. A document that takes
+another route on Retry, because the routes changed, goes to the
+destinations of its new route, even when a destination of its old route
+already got it.
+
+**Before a version is saved.** Each route needs a destination, a
+destination once per route, and each condition a field and a value. A
+route after one without conditions can never take a document, so the
+version is not saved until it moves or the earlier route gets a
+condition. Each email and webhook destination is checked on its own:
+"Destination, route 2, MYEMAIL: ...".
+
+**Limits.** A job has up to 20 routes. A route has up to 5 conditions
+and 5 destinations, "is one of" up to 50 values, and a value up to 500
+characters. At a limit, the button to add one is off and says why.
+
+A destination that a route of a job's draft or any saved version sends
+to cannot be deleted.
 
 ## Writing a destination
 

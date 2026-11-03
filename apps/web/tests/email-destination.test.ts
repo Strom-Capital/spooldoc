@@ -12,7 +12,7 @@ import { runViews } from '@/lib/server/runs';
 
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, GOOD_PASSWORD, loadSample } from './helpers/fake-connection';
-import { db, insertServer, testDb } from './helpers/fixtures';
+import { db, insertServer, oneRoute, onlyEntry, testDb } from './helpers/fixtures';
 
 const data = { pg: { email: 'buyer@example.com', invoiceNo: '260101', empty: '', contact: 'J. SMITH' }, splf: { name: 'SPDINVOICE' } };
 const spec = (change: Partial<EmailSpec> = {}): EmailSpec => emailSpecSchema.parse({ to: '{d.pg.email}', ...change });
@@ -310,7 +310,7 @@ describe('the email destination in a run', () => {
       ...base,
       extract: { definition: change.definition ?? fixtureText('invoice', 'definition.yaml') },
       render: change.templates ? { templates: change.templates } : base.render,
-      destination: { destinationId: destination!.id, email, webhook: null },
+      destination: oneRoute(destination!.id, { email }),
     };
     const [job] = await db().insert(jobs).values({ name: 'Invoices', draft: spec, activeVersion: 1 }).returning();
     await db().insert(jobVersions).values({ jobId: job!.id, number: 1, spec });
@@ -353,7 +353,7 @@ describe('the email destination in a run', () => {
     expect(sent).toHaveLength(6);
 
     const [other] = await db().insert(destinations).values({ kind: 'email', name: 'Invoices by email, copy', config: { testAddress: null } }).returning();
-    await db().insert(jobVersions).values({ jobId, number: 2, spec: { ...first, destination: { ...first.destination, destinationId: other!.id } } });
+    await db().insert(jobVersions).values({ jobId, number: 2, spec: { ...first, destination: oneRoute(other!.id, { email: onlyEntry(first).email }) } });
     sent = [];
     const second = await run(jobId, conn, 2);
     expect(sent).toHaveLength(6);

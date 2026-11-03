@@ -20,6 +20,8 @@ import {
   perSpooledFile,
   spooledFileName,
   starterContent,
+  emptySpec,
+  ROUTE_LIMITS,
   type JobTemplate,
 } from '@/lib/job-spec';
 
@@ -77,6 +79,36 @@ describe('job spec', () => {
     expect(newTemplate([template({ id: 'lines', name: 'Old lines' })], 'Lines').id).toBe('lines-2');
     expect(nameTaken(templates, ' template 1 ')).toBe(true);
     expect(nameTaken(templates, 'Template 1', 'template-1')).toBe(false);
+  });
+
+  it('starts with one route, no conditions and no destination, and caps the routes', () => {
+    const id = '00000000-0000-4000-8000-00000000000a';
+    expect(jobSpecSchema.parse({}).destination).toEqual({ routes: [{ when: [], destinations: [] }] });
+    expect(emptySpec({ destinationId: id }).destination).toEqual({ routes: [{ when: [], destinations: [{ destinationId: id, email: null, webhook: null }] }] });
+    expect(jobSpecSchema.parse({ destination: { routes: [{ when: [{ field: 'pg.a', op: 'equals' }], destinations: [{ destinationId: id }] }] } }).destination).toEqual({
+      routes: [{ when: [{ field: 'pg.a', op: 'equals', value: '' }], destinations: [{ destinationId: id, email: null, webhook: null }] }],
+    });
+    const route = { when: [], destinations: [] };
+    expect(() => jobSpecSchema.parse({ destination: { routes: [] } })).toThrow(/at least one route/);
+    expect(() => jobSpecSchema.parse({ destination: { routes: Array(ROUTE_LIMITS.routes + 1).fill(route) } })).toThrow(/at most 20 routes/);
+    expect(() => jobSpecSchema.parse({ destination: { routes: [{ when: Array(6).fill({ field: 'pg.a', op: 'empty' }), destinations: [] }] } })).toThrow(/at most 5 conditions/);
+    expect(() => jobSpecSchema.parse({ destination: { routes: [{ when: [], destinations: Array(6).fill({ destinationId: id }) }] } })).toThrow(/at most 5 destinations/);
+    expect(() => jobSpecSchema.parse({ destination: { routes: [{ when: [{ field: 'pg.a', op: 'oneOf', values: Array(51).fill('x') }], destinations: [] }] } })).toThrow(/at most 50 values/);
+    expect(() => jobSpecSchema.parse({ destination: { routes: [{ when: [{ field: 'pg.a', op: 'equals', value: 'x'.repeat(501) }], destinations: [] }] } })).toThrow(/500 characters/);
+  });
+
+  it('says what the routes still need before a version is saved', () => {
+    const spec = jobSpecSchema.parse({});
+    const destination = (lines: string[]) => lines.filter((line) => line.startsWith('Destination'));
+    expect(destination(missingParts(spec))).toEqual(['Destination: pick a destination.']);
+    const id = '00000000-0000-4000-8000-00000000000a';
+    const routed = { ...spec, destination: { routes: [{ when: [{ field: 'pg.email', op: 'notEmpty' as const }], destinations: [{ destinationId: id, email: null, webhook: null }] }] } };
+    expect(destination(missingParts(routed))).toEqual([]);
+    // An Excel template of the whole spooled file makes a document no page group condition can take.
+    const whole = { ...routed, render: { templates: [template({ kind: 'xlsx', fileId: null, scope: 'splf', formats: ['xlsx'] } as Partial<JobTemplate>)] } };
+    expect(destination(missingParts(whole))).toEqual([
+      'Destination: no route can take the document of the whole spooled file, since it has no page group fields. Add a route without conditions, or one that reads only splf fields.',
+    ]);
   });
 });
 

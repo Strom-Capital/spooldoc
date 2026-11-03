@@ -21,9 +21,10 @@ import { randomWebhookId, webhookPayload, type WebhookPayload } from './webhook-
 /** A preview or test of a webhook call, from the job builder. */
 export const webhookCallSchema = z.object({
   pageGroupIndex: z.number().int().nonnegative().default(0),
-  /** The webhook part as the editor has it, saved or not; the draft's when left out. */
+  /** The webhook part as the editor has it, saved or not; the draft's for this destination when left out. */
   webhook: webhookSpecSchema.optional(),
-  destinationId: z.string().uuid().nullable().optional(),
+  /** The webhook destination: a job can have several, one per route. */
+  destinationId: z.string().uuid(),
   sampleId: z.string().uuid().optional(),
 });
 
@@ -55,8 +56,7 @@ export async function draftCall(job: JobRow, input: z.infer<typeof webhookCallSc
   if ('response' in picked) return picked;
   const { draft, sample, def, groups, index } = picked;
 
-  const destinationId = input.destinationId ?? draft.destination.destinationId;
-  const [row] = destinationId ? await getDb().select().from(destinations).where(eq(destinations.id, destinationId)) : [];
+  const [row] = await getDb().select().from(destinations).where(eq(destinations.id, input.destinationId));
   if (row?.kind !== 'webhook') return { response: errorResponse(400, 'Pick a webhook destination first.') };
   const config = webhookConfigSchema.safeParse(row.config);
   if (!config.success) return { response: errorResponse(422, `The settings of ${row.name} are not valid. Open it on the Destinations page and save it again.`) };
@@ -69,7 +69,8 @@ export async function draftCall(job: JobRow, input: z.infer<typeof webhookCallSc
   const { url, testUrl } = config.data;
   const target: WebhookTarget = { url: testUrl ?? url, toTestUrl: testUrl !== null, secret: secrets.signingSecret, headers: secrets.headers, destination: row.name };
 
-  const formats = (input.webhook ?? draft.destination.webhook ?? emptyWebhookSpec()).attach;
+  const saved = draft.destination.routes.flatMap((route) => route.destinations).find((entry) => entry.destinationId === input.destinationId)?.webhook;
+  const formats = (input.webhook ?? saved ?? emptyWebhookSpec()).attach;
   let files: Awaited<ReturnType<typeof renderFiles>>['files'] = [];
   const made = draft.render.templates.some((template) => template.formats.some((format) => formats.includes(format)));
   if (made) {

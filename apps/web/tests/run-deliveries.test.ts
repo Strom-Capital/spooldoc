@@ -1,12 +1,13 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { deliveryGroups, noCopyText, RunDeliveries } from '@/components/run-deliveries';
+import { deliveryGroups, noCopyText, RunDeliveries, UnroutedList } from '@/components/run-deliveries';
 import type { DeliveryView } from '@/lib/types';
 
 const delivery = (id: string, destinationId: string | null, kind: DeliveryView['kind'] = 'email'): DeliveryView => ({
   id,
   destinationId,
+  route: null,
   kind,
   document: `invoice-${id}`,
   to: 'buyer@example.com',
@@ -88,5 +89,23 @@ describe('the deliveries of a run', () => {
     expect(noCopyText({ steps: [okStep, okStep], deliveries: [] })).toBe('No copy kept in Spooldoc. The Deliver steps say where the files went.');
     expect(noCopyText({ steps: [failedStep], deliveries: [ifs('failed')] })).toBe('None delivered.');
     expect(noCopyText({ steps: [], deliveries: [] })).toBe('None delivered.');
+  });
+});
+
+describe('routes in the job log', () => {
+  it('name the route of each delivery only when the run had several routes', () => {
+    const routed = { ...delivery('1', 'a'), route: 2 };
+    expect(renderToStaticMarkup(createElement(RunDeliveries, { kind: 'email', deliveries: [routed], routes: 2 }))).toContain('Route 2');
+    expect(renderToStaticMarkup(createElement(RunDeliveries, { kind: 'email', deliveries: [routed], routes: 1 }))).not.toContain('Route 2');
+    expect(renderToStaticMarkup(createElement(RunDeliveries, { kind: 'email', deliveries: [routed], routes: 2, otherwise: true }))).toContain('Otherwise');
+  });
+
+  it('list each document that took no route, and say how many more there are', () => {
+    const unrouted = Array.from({ length: 52 }, (_, at) => ({ pageGroup: at, document: `invoice-${at + 1}`, reasons: ['pg.email is empty'] }));
+    const html = renderToStaticMarkup(createElement(UnroutedList, { unrouted: [{ pageGroup: null, document: 'spdinvoice', reasons: ['Route 1: pg.email is empty'] }, ...unrouted] }));
+    expect(html).toContain('Whole spooled file (spdinvoice):');
+    expect(html).toContain('Page group 1 (invoice-1):');
+    expect(html).toContain('Showing 50 of 53 documents.');
+    expect(html).not.toContain('invoice-52');
   });
 });

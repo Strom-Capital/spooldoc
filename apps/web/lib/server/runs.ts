@@ -1,7 +1,6 @@
 import 'server-only';
 
 import { and, desc, eq, gte, inArray, lt, lte, sql, type SQL } from 'drizzle-orm';
-import type { JobSpec } from '@/lib/job-spec';
 import type { DeliveryKind, DeliveryView, RunStatus, RunView } from '@/lib/types';
 import { getDb } from './db';
 import { destinations, jobs, jobVersions, runDeliveries, runFiles, runs } from './db/schema';
@@ -32,6 +31,7 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
       id: runDeliveries.id,
       runId: runDeliveries.runId,
       destinationId: runDeliveries.destinationId,
+      route: runDeliveries.route,
       kind: runDeliveries.kind,
       document: runDeliveries.document,
       to: runDeliveries.to,
@@ -55,9 +55,11 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
     .from(jobs)
     .where(inArray(jobs.id, [...new Set(rows.map((row) => row.jobId))]));
   const jobName = new Map(jobRows.map((job) => [job.id, job.name]));
-  const deliveryTargets = await versionDeliveryTargets(rows);
+  const versions = await versionDestinations(rows);
   return rows.map((row) => ({
-    deliveryTargets: deliveryTargets.get(`${row.jobId}/${row.version}`) ?? [],
+    deliveryTargets: versions.get(`${row.jobId}/${row.version}`)?.targets ?? [],
+    routes: versions.get(`${row.jobId}/${row.version}`)?.routes ?? 1,
+    otherwise: versions.get(`${row.jobId}/${row.version}`)?.otherwise ?? false,
     id: row.id,
     seq: row.seq,
     jobId: row.jobId,
@@ -75,6 +77,7 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
       .map((d) => ({
         id: d.id,
         destinationId: d.destinationId,
+        route: d.route,
         kind: d.kind as DeliveryKind,
         document: d.document,
         to: d.to,
@@ -96,20 +99,25 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
   }));
 }
 
-/** The destinations a job version delivers to, in its order: for now, the one destination of the job. */
-const specDestinationIds = (destination: JobSpec['destination'] | null): string[] => (destination?.destinationId ? [destination.destinationId] : []);
-
 /**
- * The destinations that record deliveries of the job versions of these runs, by `jobId/number`:
- * every destination of the version whose kind records them, in order, each once.
+ * The destinations of the job versions of these runs, by `jobId/number`: every destination
+ * of the version's routes whose kind records deliveries, in route order, each once, and how
+ * many routes the version has.
  */
-async function versionDeliveryTargets(rows: RunRow[]): Promise<Map<string, RunView['deliveryTargets']>> {
+async function versionDestinations(rows: RunRow[]): Promise<Map<string, { targets: RunView['deliveryTargets']; routes: number; otherwise: boolean }>> {
   const db = getDb();
   const versions = await db
-    .select({ jobId: jobVersions.jobId, number: jobVersions.number, destination: sql<JobSpec['destination'] | null>`${jobVersions.spec} -> 'destination'` })
+    .select({
+      jobId: jobVersions.jobId,
+      number: jobVersions.number,
+      ids: sql<string[] | null>`jsonb_path_query_array(${jobVersions.spec}, '$.destination.routes[*].destinations[*].destinationId')`,
+      routes: sql<number | null>`jsonb_array_length(${jobVersions.spec} -> 'destination' -> 'routes')`,
+      otherwise: sql<boolean | null>`jsonb_array_length(${jobVersions.spec} -> 'destination' -> 'routes' -> -1 -> 'when') = 0`,
+    })
     .from(jobVersions)
     .where(inArray(jobVersions.jobId, [...new Set(rows.map((row) => row.jobId))]));
-  const ids = new Map(versions.map((version) => [`${version.jobId}/${version.number}`, [...new Set(specDestinationIds(version.destination))]]));
+  const ids = new Map(versions.map((version) => [`${version.jobId}/${version.number}`, [...new Set((version.ids ?? []).filter((id) => typeof id === 'string'))]]));
+  const routeCounts = new Map(versions.map((version) => [`${version.jobId}/${version.number}`, { routes: version.routes ?? 1, otherwise: version.otherwise ?? false }]));
   const all = [...new Set([...ids.values()].flat())];
   const found =
     all.length === 0
@@ -122,10 +130,14 @@ async function versionDeliveryTargets(rows: RunRow[]): Promise<Map<string, RunVi
   return new Map(
     [...ids].map(([key, list]) => [
       key,
-      list.flatMap((id) => {
-        const destination = byId.get(id);
-        return destination ? [{ destinationId: id, name: destination.name, kind: destination.kind as DeliveryKind }] : [];
-      }),
+      {
+        routes: routeCounts.get(key)?.routes ?? 1,
+        otherwise: routeCounts.get(key)?.otherwise ?? false,
+        targets: list.flatMap((id) => {
+          const destination = byId.get(id);
+          return destination ? [{ destinationId: id, name: destination.name, kind: destination.kind as DeliveryKind }] : [];
+        }),
+      },
     ]),
   );
 }

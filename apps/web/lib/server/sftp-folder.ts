@@ -22,7 +22,8 @@ import { StepError } from './step-error';
 
 /** A folder view or an Upload test, from the job builder. */
 export const sftpFolderSchema = z.object({
-  destinationId: z.string().uuid().nullable().optional(),
+  /** The SFTP destination: a job can have several, one per route. */
+  destinationId: z.string().uuid(),
   pageGroupIndex: z.number().int().nonnegative().default(0),
   sampleId: z.string().uuid().optional(),
   /** Read the folder again instead of the listing of the last minute. */
@@ -50,14 +51,11 @@ export function forgetListings(destinationId: string): void {
   for (const id of listings.keys()) if (id.startsWith(`${destinationId}\n`)) listings.delete(id);
 }
 
-/** The SFTP destination a request names, or the draft's, with its settings and secrets; or a response that says what is wrong. */
+/** The SFTP destination a request names, with its settings and secrets; or a response that says what is wrong. */
 async function pickDestination(
-  job: JobRow,
-  draft: JobSpec,
-  destinationId: string | null | undefined,
+  destinationId: string,
 ): Promise<{ id: string; name: string; config: SftpConfig; secrets: SftpSecrets } | { response: Response }> {
-  const id = destinationId ?? draft.destination.destinationId;
-  const [row] = id ? await getDb().select().from(destinations).where(eq(destinations.id, id)) : [];
+  const [row] = await getDb().select().from(destinations).where(eq(destinations.id, destinationId));
   if (row?.kind !== 'sftp') return { response: errorResponse(400, 'Pick an SFTP destination first.') };
   const config = sftpConfigSchema.safeParse(row.config);
   if (!config.success) return { response: errorResponse(422, `The settings of ${row.name} are not valid. Open it on the Destinations page and save it again.`) };
@@ -140,7 +138,7 @@ export async function sftpFolder(job: JobRow, input: z.infer<typeof sftpFolderSc
   const picked = await draftPageGroup(job, { sampleId: input.sampleId, pageGroup: input.pageGroupIndex }, 'the files');
   if ('response' in picked) return picked.response;
   const { draft, sample, def, groups, index } = picked;
-  const destination = await pickDestination(job, draft, input.destinationId);
+  const destination = await pickDestination(input.destinationId);
   if ('response' in destination) return destination.response;
   const { config } = destination;
   const testMode = config.testFolder !== null;
@@ -231,7 +229,7 @@ export async function sftpUploadTest(job: JobRow, input: z.infer<typeof sftpFold
   const picked = await draftPageGroup(job, { sampleId: input.sampleId, pageGroup: input.pageGroupIndex }, 'the files');
   if ('response' in picked) return picked.response;
   const { draft, sample, def, groups, index } = picked;
-  const destination = await pickDestination(job, draft, input.destinationId);
+  const destination = await pickDestination(input.destinationId);
   if ('response' in destination) return destination.response;
   const { config, secrets } = destination;
   if (!config.testFolder) {

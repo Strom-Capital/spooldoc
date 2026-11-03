@@ -7,6 +7,7 @@ import { StatusPill, type StatusTone } from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { bytes, duration } from '@/lib/client/format';
 import { shortUrl } from '@/lib/destination-config';
+import { routeNumberLabel } from '@/lib/routes';
 import type { DeliveryKind, DeliveryTargetView, DeliveryView, RunView } from '@/lib/types';
 
 /** Deliveries shown at first and per Show more. */
@@ -97,6 +98,39 @@ export function noCopyText(run: Pick<RunView, 'steps' | 'deliveries'>): string {
   return 'None delivered.';
 }
 
+/** "Page group 3 (invoice-1003)", "Whole spooled file (spdinvoice)". */
+const unroutedName = (item: { pageGroup: number | null; document: string }): string =>
+  item.pageGroup === null ? `Whole spooled file (${item.document})` : `Page group ${item.pageGroup + 1} (${item.document})`;
+
+/**
+ * The documents of a run that took no route, with why each route did not take them, under
+ * the Route step. A long list shows the first ones and says how many more there are.
+ */
+export function UnroutedList({ unrouted }: { unrouted: NonNullable<RunView['steps'][number]['unrouted']> }) {
+  const [shown, setShown] = useState(PAGE);
+  return (
+    <div className="mt-1">
+      <ul className="flex flex-col gap-1 text-xs" aria-label="Documents that took no route">
+        {unrouted.slice(0, shown).map((item) => (
+          <li key={`${item.pageGroup}`} className="break-words">
+            <span className="font-medium">{unroutedName(item)}:</span> <span className="text-muted-foreground">{item.reasons.join('; ')}</span>
+          </li>
+        ))}
+      </ul>
+      {unrouted.length > shown && (
+        <div className="mt-1.5 flex items-center justify-between gap-2">
+          <span className="text-muted-foreground text-xs">
+            Showing {shown} of {unrouted.length} documents.
+          </span>
+          <Button variant="outline" size="sm" onClick={() => setShown((n) => n + PAGE)}>
+            Show {Math.min(PAGE, unrouted.length - shown)} more
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** The path of an upload on the server, without the host: `sftp.example.com:/in/a.pdf` is `/in/a.pdf`. */
 const remotePath = (to: string): string => {
   const at = to.indexOf(':/');
@@ -183,9 +217,23 @@ const time = (iso: string): string => new Date(iso).toLocaleTimeString(undefined
  * document or file: what it was, where it went (for a webhook call the answer and the
  * tries, for an upload the path, the size and how long it took), the status and the time. A failed row opens to show what went wrong and the other system's own text. A
  * long list shows the first deliveries and says how many more there are. With `destination`, the
- * title names the destination they went through, for a run with several lists.
+ * title names the destination they went through, for a run with several lists. With
+ * several `routes`, each row says the route that sent it, the last one Otherwise when it has
+ * no conditions (`otherwise`).
  */
-export function RunDeliveries({ kind, deliveries, destination }: { kind: DeliveryKind; deliveries: DeliveryView[]; destination?: string | null }) {
+export function RunDeliveries({
+  kind,
+  deliveries,
+  destination,
+  routes = 1,
+  otherwise = false,
+}: {
+  kind: DeliveryKind;
+  deliveries: DeliveryView[];
+  destination?: string | null;
+  routes?: number;
+  otherwise?: boolean;
+}) {
   const text = KIND_TEXT[kind];
   const webhook = kind === 'webhook';
   // Files in a folder: an upload, or a file written to the IFS.
@@ -245,6 +293,7 @@ export function RunDeliveries({ kind, deliveries, destination }: { kind: Deliver
                         ) : (
                           <div className="break-words">{delivery.document}</div>
                         )}
+                        {routes > 1 && delivery.route !== null && <div className="text-muted-foreground text-xs">{routeNumberLabel(delivery.route, routes, otherwise)}</div>}
                         <div className="text-muted-foreground text-xs">
                           {!delivery.to ? (
                             delivery.status === 'already_sent' && upload ? null : (
