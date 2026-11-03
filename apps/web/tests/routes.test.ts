@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Route, RouteCondition } from '@/lib/job-spec';
-import { isSimpleDestination, routeLabel, routeProblems, takesSpooledFile } from '@/lib/routes';
+import { isSimpleDestination, routeLabel, routeNumberLabel, routeProblems, takesSpooledFile } from '@/lib/routes';
 import type { RunDocument } from '@/lib/server/destinations';
 import { checkCondition, checkRoutes, routeDocuments, routeNote, unroutedError } from '@/lib/server/routing';
 
@@ -65,6 +65,11 @@ describe('a condition', () => {
     expect(checkCondition({ field: 'pg.note', op: 'empty' }, long, {}, false).reason).toBe(`pg.note is ${'x'.repeat(39)}…, not empty`);
   });
 
+  it('never matches without a field, though the whole document is at the empty path', () => {
+    for (const op of ['empty', 'notEmpty'] as const) expect(check({ field: ' ', op })).toEqual({ ok: false, reason: 'a condition has no field yet: pick a field' });
+    expect(checkRoutes([route([{ field: '', op: 'notEmpty' }], ID_A)], data, types, false).route).toBeNull();
+  });
+
   it('never matches a page group field for the whole spooled file', () => {
     expect(check({ field: 'pg.email', op: 'notEmpty' }, true)).toEqual({ ok: false, reason: 'the whole spooled file has no page group fields, such as pg.email' });
     expect(check({ field: 'splf.name', op: 'equals', value: 'SPDINVOICE' }, true).ok).toBe(true);
@@ -78,6 +83,10 @@ describe('routes', () => {
     expect(routes.map((_, index) => routeLabel(routes, index))).toEqual(['Route 1', 'Otherwise']);
     expect(routeLabel([route([])], 0)).toBe('Route 1');
     expect(routeLabel([route([]), route([{ field: 'pg.x', op: 'empty' }])], 1)).toBe('Route 2');
+    // The job log knows only how many routes there were, and whether the last is Otherwise.
+    expect([1, 2].map((n) => routeNumberLabel(n, 2, true))).toEqual(['Route 1', 'Otherwise']);
+    expect(routeNumberLabel(2, 2, false, true)).toBe('route 2');
+    expect(routeNumberLabel(1, 1, true)).toBe('Route 1');
   });
 
   it('take the first that matches', () => {
@@ -103,8 +112,9 @@ describe('routes', () => {
     expect(taken).toEqual([0, null, 1]);
     expect(unrouted).toEqual([{ pageGroup: 1, document: 'invoice-2', reasons: ['Route 1: pg.email is not in the data', 'Route 2: pg.country is DK, not SE'] }]);
     expect(routeNote(two, documents, taken)).toBe('Route 1: 1 page group, route 2: 1, no route: 1');
+    expect(unroutedError([unrouted[0]!, unrouted[0]!, unrouted[0]!], 3, true)).toMatch(/^0 of 3 documents took a route\. /);
     expect(unroutedError(unrouted, 3, true)).toBe(
-      'Delivered 2 of 3 documents. Page group 2 (invoice-2) matched no route: Route 1: pg.email is not in the data; Route 2: pg.country is DK, not SE. The Route step lists each one.',
+      '2 of 3 documents took a route. Page group 2 (invoice-2) matched no route: Route 1: pg.email is not in the data; Route 2: pg.country is DK, not SE. The Route step lists each one.',
     );
   });
 

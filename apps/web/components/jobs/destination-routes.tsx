@@ -166,12 +166,13 @@ export function RouteStatus({ routes, preview, error, loading }: { routes: Route
 
 /** A note above a preview of a destination of one route, when the page group shown takes another route. */
 function OtherRouteNotice({ routes, route, preview }: { routes: Route[]; route: number; preview: RoutesPreviewView | null }) {
-  if (!preview || preview.route === route || routes.length === 1) return null;
-  const taken = preview.route === null ? 'no route' : routeName(routes, preview.route);
+  if (!preview || preview.route === route) return null;
   return (
     <p className="flex items-start gap-2 rounded-md border bg-muted/40 px-3 py-2 text-muted-foreground text-sm">
       <InfoIcon className="mt-0.5 size-4 shrink-0" aria-hidden />
-      Page group {preview.pageGroup + 1} takes {taken}, not this one. This is what it would get here.
+      {preview.route === null
+        ? `Page group ${preview.pageGroup + 1} takes no route, so a run sends it nowhere. This is what it would get here.`
+        : `Page group ${preview.pageGroup + 1} takes ${routeName(routes, preview.route)}, not this one. This is what it would get here.`}
     </p>
   );
 }

@@ -82,6 +82,8 @@ const shownText = (value: unknown): string => (typeof value === 'string' ? value
 export function checkCondition(condition: RouteCondition, data: unknown, types: Readonly<Record<string, ValueType>>, spooledFile: boolean): ConditionCheck {
   const { field } = condition;
   const fail = (reason: string): ConditionCheck => ({ ok: false, reason });
+  // A condition without a field yet matches nothing: the path "" would be the whole document.
+  if (!field.trim()) return fail('a condition has no field yet: pick a field');
   if (spooledFile && !spooledFileField(field)) return fail(`the whole spooled file has no page group fields, such as ${field}`);
   const value = valueAt(data, field);
   const missing = value === undefined;
@@ -203,14 +205,15 @@ export function routeNote(routes: readonly Route[], documents: readonly Pick<Run
 }
 
 /**
- * The run's error when documents took no route: what was delivered, the first one and
- * why, and how many more. "Delivered 11 of 12 documents. Page group 3 (invoice-1003)
- * matched no route: pg.country is DK, not SE. The Route step lists each one."
+ * The run's error when documents took no route: how many took one, the first that did not
+ * and why, and how many more. "11 of 12 documents took a route. Page group 3 (invoice-1003)
+ * matched no route: pg.country is DK, not SE. The Route step lists each one." With
+ * `counted` false, as when a destination's error leads, the count is left out.
  */
-export function unroutedError(unrouted: readonly Unrouted[], total: number, delivered: boolean): string {
+export function unroutedError(unrouted: readonly Unrouted[], total: number, counted: boolean): string {
   const first = unrouted[0]!;
   const name = unroutedName(first);
-  const lead = delivered ? `Delivered ${total - unrouted.length} of ${total} ${total === 1 ? 'document' : 'documents'}. ` : '';
+  const lead = counted ? `${total - unrouted.length} of ${total} ${total === 1 ? 'document' : 'documents'} took a route. ` : '';
   const more = unrouted.length > 1 ? ` ${unrouted.length - 1} more ${unrouted.length === 2 ? 'document' : 'documents'} matched no route.` : '';
   return `${lead}${name[0]!.toUpperCase()}${name.slice(1)} matched no route: ${first.reasons.join('; ')}.${more} The Route step lists each one.`;
 }

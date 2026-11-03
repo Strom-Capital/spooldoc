@@ -4,7 +4,7 @@ import type { RenderResult } from '@/lib/client/render';
 import { STEPS, type Step } from '@/lib/client/job-steps';
 import { previewFor } from '@/lib/client/lookups';
 import { perSpooledFile, type JobSpec } from '@/lib/job-spec';
-import { routeProblems } from '@/lib/routes';
+import { isSimpleDestination, routeDestinationIds, routeProblems } from '@/lib/routes';
 import type { DestinationView, JobDetail } from '@/lib/types';
 
 /** How a step looks in the pipeline: not set yet, ready, worth a look, or a problem. */
@@ -115,4 +115,23 @@ export function destinationReady(spec: Pick<JobSpec, 'destination' | 'render'>, 
       return true;
     }),
   );
+}
+
+/**
+ * The Destination step's line in the pipeline, from the destinations that still exist: the
+ * name of a job's one destination, with "(test)" in test mode, or how many routes and
+ * destinations, such as "3 routes, 4 destinations, 1 in test". "Pick a destination" when
+ * none of them exists.
+ */
+export function destinationDetail(destination: JobSpec['destination'], destinations: readonly DestinationView[]): string {
+  const { routes } = destination;
+  const used = routeDestinationIds(routes).flatMap((id) => destinations.filter((d) => d.id === id));
+  if (used.length === 0) return 'Pick a destination';
+  // A destination in test mode says so, since its documents go to the test address, URL or folder.
+  const inTest = used.filter(
+    (d) => (d.kind === 'email' && !!d.config.testAddress) || (d.kind === 'webhook' && !!d.config.testUrl) || (d.kind === 'sftp' && !!d.config.testFolder),
+  ).length;
+  if (isSimpleDestination(destination)) return inTest > 0 ? `${used[0]!.name} (test)` : used[0]!.name;
+  const n = (count: number, word: string) => `${count} ${count === 1 ? word : `${word}s`}`;
+  return `${n(routes.length, 'route')}, ${n(used.length, 'destination')}${inTest > 0 ? `, ${inTest} in test` : ''}`;
 }

@@ -59,6 +59,7 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
   return rows.map((row) => ({
     deliveryTargets: versions.get(`${row.jobId}/${row.version}`)?.targets ?? [],
     routes: versions.get(`${row.jobId}/${row.version}`)?.routes ?? 1,
+    otherwise: versions.get(`${row.jobId}/${row.version}`)?.otherwise ?? false,
     id: row.id,
     seq: row.seq,
     jobId: row.jobId,
@@ -103,7 +104,7 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
  * of the version's routes whose kind records deliveries, in route order, each once, and how
  * many routes the version has.
  */
-async function versionDestinations(rows: RunRow[]): Promise<Map<string, { targets: RunView['deliveryTargets']; routes: number }>> {
+async function versionDestinations(rows: RunRow[]): Promise<Map<string, { targets: RunView['deliveryTargets']; routes: number; otherwise: boolean }>> {
   const db = getDb();
   const versions = await db
     .select({
@@ -111,11 +112,12 @@ async function versionDestinations(rows: RunRow[]): Promise<Map<string, { target
       number: jobVersions.number,
       ids: sql<string[] | null>`jsonb_path_query_array(${jobVersions.spec}, '$.destination.routes[*].destinations[*].destinationId')`,
       routes: sql<number | null>`jsonb_array_length(${jobVersions.spec} -> 'destination' -> 'routes')`,
+      otherwise: sql<boolean | null>`jsonb_array_length(${jobVersions.spec} -> 'destination' -> 'routes' -> -1 -> 'when') = 0`,
     })
     .from(jobVersions)
     .where(inArray(jobVersions.jobId, [...new Set(rows.map((row) => row.jobId))]));
   const ids = new Map(versions.map((version) => [`${version.jobId}/${version.number}`, [...new Set((version.ids ?? []).filter((id) => typeof id === 'string'))]]));
-  const routeCounts = new Map(versions.map((version) => [`${version.jobId}/${version.number}`, version.routes ?? 1]));
+  const routeCounts = new Map(versions.map((version) => [`${version.jobId}/${version.number}`, { routes: version.routes ?? 1, otherwise: version.otherwise ?? false }]));
   const all = [...new Set([...ids.values()].flat())];
   const found =
     all.length === 0
@@ -129,7 +131,8 @@ async function versionDestinations(rows: RunRow[]): Promise<Map<string, { target
     [...ids].map(([key, list]) => [
       key,
       {
-        routes: routeCounts.get(key) ?? 1,
+        routes: routeCounts.get(key)?.routes ?? 1,
+        otherwise: routeCounts.get(key)?.otherwise ?? false,
         targets: list.flatMap((id) => {
           const destination = byId.get(id);
           return destination ? [{ destinationId: id, name: destination.name, kind: destination.kind as DeliveryKind }] : [];

@@ -217,6 +217,8 @@ export interface RunView {
   deliveryTargets: DeliveryTargetView[];
   /** How many routes the run's job version has. The Job log names the route of each delivery only when there are several. */
   routes: number;
+  /** The last route of the run's job version has no conditions, so it reads Otherwise (`routeNumberLabel`). */
+  otherwise: boolean;
   startedAt: string;
   finishedAt: string | null;
 }

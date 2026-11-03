@@ -75,6 +75,7 @@ describe('routes in a run', () => {
     const view = await run(jobId, conn);
     expect(view.status).toBe('success');
     expect(view.routes).toBe(2);
+    expect(view.otherwise).toBe(true);
     expect(sent.map((message) => message.subject)).toEqual(['Invoice 260104']);
     expect([...conn.ifs.keys()].sort()).toEqual(['260101', '260102', '260103', '260105', '260106'].map((no) => `${FOLDER}/invoice-${no}.pdf`));
     expect(view.steps.map((step) => step.step)).toEqual(['capture', 'extract', 'route', 'render', 'deliver', 'deliver', 'finish']);
@@ -102,7 +103,7 @@ describe('routes in a run', () => {
     const view = await run(jobId, conn);
     expect(view.status).toBe('failed');
     expect(view.error).toBe(
-      'Delivered 1 of 6 documents. Page group 1 (invoice-260101) matched no route: pg.address3 is FI-90100 OULU, which does not match /^SE-/. 4 more documents matched no route. The Route step lists each one.',
+      '1 of 6 documents took a route. Page group 1 (invoice-260101) matched no route: pg.address3 is FI-90100 OULU, which does not match /^SE-/. 4 more documents matched no route. The Route step lists each one.',
     );
     const route = view.steps.find((step) => step.step === 'route');
     expect(route).toMatchObject({ ok: false, error: '5 documents matched no route.', note: 'Route 1: 1 page group, no route: 5' });
@@ -119,7 +120,7 @@ describe('routes in a run', () => {
     const view = await run(jobId, new FakeConnection());
     expect(view.status).toBe('failed');
     expect(view.error).toMatch(/^The folder \/home\/docs\/missing does not exist on ibmi\.example\.com\..* Page group 1 \(invoice-260101\) matched no route: /);
-    expect(view.error).not.toMatch(/Delivered 1 of 6/);
+    expect(view.error).not.toMatch(/took a route/);
   });
 
   it('sends only the documents that were not sent when Retry runs a version with Otherwise', async () => {

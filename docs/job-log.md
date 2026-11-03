@@ -176,7 +176,10 @@ everything through the new one.
 When documents took no [route](destinations.md#routes), add a route that
 takes them, such as Otherwise, save a version and Retry. The documents
 that were sent show as sent, and only the others go. The spooled file is
-held, moved or deleted once every document was delivered.
+held, moved or deleted once every document was delivered. What was sent
+is remembered per destination, not per route: a document that takes
+another route on Retry goes to the destinations of its new route, even
+when a destination of its old route already got it.
 
 With an email destination, Retry sends only the emails that were not sent
 yet. The ones an earlier run sent show as "Sent in run #N", and the

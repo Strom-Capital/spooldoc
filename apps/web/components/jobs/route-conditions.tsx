@@ -135,7 +135,7 @@ export function RouteConditions({
                 {value && (
                   <span className={cn('rounded px-1 font-mono text-xs', value === 'Not in the data' ? 'text-destructive' : 'bg-muted text-muted-foreground')}>{value}</span>
                 )}
-                {result && (
+                {result && condition.field.trim() && (
                   <Hint text={result.ok ? 'The page group shown matches this condition.' : result.reason}>
                     <span
                       className={cn('inline-flex size-5 items-center justify-center rounded-full', result.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive')}

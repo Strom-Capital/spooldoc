@@ -7,6 +7,7 @@ import { StatusPill, type StatusTone } from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { bytes, duration } from '@/lib/client/format';
 import { shortUrl } from '@/lib/destination-config';
+import { routeNumberLabel } from '@/lib/routes';
 import type { DeliveryKind, DeliveryTargetView, DeliveryView, RunView } from '@/lib/types';
 
 /** Deliveries shown at first and per Show more. */
@@ -217,18 +218,21 @@ const time = (iso: string): string => new Date(iso).toLocaleTimeString(undefined
  * tries, for an upload the path, the size and how long it took), the status and the time. A failed row opens to show what went wrong and the other system's own text. A
  * long list shows the first deliveries and says how many more there are. With `destination`, the
  * title names the destination they went through, for a run with several lists. With
- * several `routes`, each row says the route that sent it.
+ * several `routes`, each row says the route that sent it, the last one Otherwise when it has
+ * no conditions (`otherwise`).
  */
 export function RunDeliveries({
   kind,
   deliveries,
   destination,
   routes = 1,
+  otherwise = false,
 }: {
   kind: DeliveryKind;
   deliveries: DeliveryView[];
   destination?: string | null;
   routes?: number;
+  otherwise?: boolean;
 }) {
   const text = KIND_TEXT[kind];
   const webhook = kind === 'webhook';
@@ -289,7 +293,7 @@ export function RunDeliveries({
                         ) : (
                           <div className="break-words">{delivery.document}</div>
                         )}
-                        {routes > 1 && delivery.route !== null && <div className="text-muted-foreground text-xs">Route {delivery.route}</div>}
+                        {routes > 1 && delivery.route !== null && <div className="text-muted-foreground text-xs">{routeNumberLabel(delivery.route, routes, otherwise)}</div>}
                         <div className="text-muted-foreground text-xs">
                           {!delivery.to ? (
                             delivery.status === 'already_sent' && upload ? null : (

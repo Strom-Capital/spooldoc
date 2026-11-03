@@ -97,6 +97,7 @@ describe('routes in the job log', () => {
     const routed = { ...delivery('1', 'a'), route: 2 };
     expect(renderToStaticMarkup(createElement(RunDeliveries, { kind: 'email', deliveries: [routed], routes: 2 }))).toContain('Route 2');
     expect(renderToStaticMarkup(createElement(RunDeliveries, { kind: 'email', deliveries: [routed], routes: 1 }))).not.toContain('Route 2');
+    expect(renderToStaticMarkup(createElement(RunDeliveries, { kind: 'email', deliveries: [routed], routes: 2, otherwise: true }))).toContain('Otherwise');
   });
 
   it('list each document that took no route, and say how many more there are', () => {

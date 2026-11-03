@@ -20,16 +20,17 @@ import { Spinner } from '@/components/ui/spinner';
 import { api, errorText } from '@/lib/client/api';
 import { pollWhileVisible } from '@/lib/client/poll';
 import { bytes, dateTime, duration, splfLabel } from '@/lib/client/format';
+import { routeNumberLabel } from '@/lib/routes';
 import type { JobSummary, RunStatus, RunView } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 const STEP_LABEL: Record<string, string> = { capture: 'Capture', extract: 'Extract', lookup: 'Lookups', route: 'Route', render: 'Render', deliver: 'Deliver', finish: 'Finish' };
 
 /** A step's label. A Deliver step of several names its destination and route: "Deliver to MYIFS, route 2". */
-function stepLabel(step: RunView['steps'][number], severalDeliveries: boolean): string {
+function stepLabel(step: RunView['steps'][number], run: Pick<RunView, 'routes' | 'otherwise'>, severalDeliveries: boolean): string {
   const label = STEP_LABEL[step.step] ?? step.step;
   if (step.step !== 'deliver' || !severalDeliveries) return label;
-  return [step.destination ? `${label} to ${step.destination.name}` : label, ...(step.route ? [`route ${step.route}`] : [])].join(', ');
+  return [step.destination ? `${label} to ${step.destination.name}` : label, ...(step.route ? [routeNumberLabel(step.route, run.routes, run.otherwise, true)] : [])].join(', ');
 }
 
 const RETRIED: Record<RunStatus, string> = { running: 'started', success: 'succeeded', warning: 'done with warnings', failed: 'failed', skipped: 'skipped' };
@@ -353,7 +354,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                         )}
                         <span className="sr-only">{step.ok ? 'Passed:' : 'Failed:'}</span>
                         <div className="min-w-0 flex-1">
-                          <span className="font-medium">{stepLabel(step, severalDeliveries)}</span>
+                          <span className="font-medium">{stepLabel(step, open, severalDeliveries)}</span>
                           {step.note && <span className="text-muted-foreground">: {step.note}</span>}
                           {step.error && <div className="break-words text-destructive text-xs">{step.error}</div>}
                           {step.unrouted && step.unrouted.length > 0 && <UnroutedList unrouted={step.unrouted} />}
@@ -413,6 +414,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                     deliveries={group.deliveries}
                     destination={openDeliveries.length > 1 ? group.target.name : null}
                     routes={open.routes}
+                    otherwise={open.otherwise}
                   />
                 ))}
               </div>

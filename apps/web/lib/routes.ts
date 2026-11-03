@@ -22,7 +22,17 @@ export function isOtherwise(routes: readonly Pick<Route, 'when'>[], index: numbe
 
 /** "Route 2", or "Otherwise" for the last route of several when it has no conditions. */
 export function routeLabel(routes: readonly Pick<Route, 'when'>[], index: number): string {
-  return isOtherwise(routes, index) ? 'Otherwise' : `Route ${index + 1}`;
+  return routeNumberLabel(index + 1, routes.length, routes.at(-1)?.when.length === 0);
+}
+
+/**
+ * The label of route `number` (counted from 1) of `count` routes, as `routeLabel` gives it,
+ * when only the count is known and whether the last route is Otherwise, as in the job log.
+ * With `inSentence`, "route 2" or "Otherwise".
+ */
+export function routeNumberLabel(number: number, count: number, otherwise: boolean, inSentence = false): string {
+  if (otherwise && count > 1 && number === count) return 'Otherwise';
+  return `${inSentence ? 'route' : 'Route'} ${number}`;
 }
 
 /**

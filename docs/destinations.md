@@ -750,10 +750,16 @@ route can take it, the version cannot be saved.
 
 **A document that takes no route.** The run delivers the documents that
 took a route, then fails, and the job log says which ones took none:
-"Delivered 11 of 12 documents. Page group 3 (invoice-1003) matched no
+"11 of 12 documents took a route. Page group 3 (invoice-1003) matched no
 route: pg.country is DK, not SE. The Route step lists each one." The
 spooled file is not held, moved or deleted. Add a route for them, save a
 version, and [Retry](job-log.md#retry): only what was not sent goes.
+
+**Already sent is per destination.** Retry remembers what each
+destination sent, not what each route sent. A document that takes
+another route on Retry, because the routes changed, goes to the
+destinations of its new route, even when a destination of its old route
+already got it.
 
 **Before a version is saved.** Each route needs a destination, a
 destination once per route, and each condition a field and a value. A
