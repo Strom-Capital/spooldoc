@@ -1,20 +1,28 @@
 ---
 title: "Lookups"
-description: "Read values from Db2 for i, such as a customer's email address, and add them to each document."
+description: "Read values from Db2 for i or from lookup tables kept in Spooldoc, such as a customer's email address, and add them to each document."
 ---
 
-Many printed documents leave out something the document needs, most
-often the customer's email address. A lookup reads it from Db2 for i
-instead, so the program and its spooled file stay as they are.
+Many printed documents leave out something the document needs, most often
+the customer's email address. A lookup reads it from Db2 for i instead, so
+the program and its spooled file stay as they are. Values that have no
+home in Db2 for i, such as the text of a payment terms code, go in a
+[lookup table](#lookup-tables) kept in Spooldoc.
 
-A lookup is one SELECT statement. It runs after the definition has read
-each page group and before the templates render it. It takes values the
-definition read, such as the customer number, and adds the rows it finds
-to the page group's data. Templates, file names and email fields then use
-them like any other field: `{d.pg.customer.EMAIL}`.
+A lookup runs after the definition has read each page group and before
+the templates render it. It takes values the definition read, such as the
+customer number, and adds the rows it finds to the page group's data.
+Templates, file names and email fields then use them like any other
+field: `{d.pg.customer.EMAIL}`.
 
-Lookups only read. They run on a read-only connection, and nothing on the
-IBM i changes. See [On the IBM i](security.md#on-the-ibm-i).
+A lookup reads from one of two sources:
+
+- **Db2 for i**: one SELECT statement, run on the job's server.
+- **Lookup table**: the rows of a table kept in Spooldoc whose key columns
+  equal values of the page group. No SQL, and no server.
+
+Lookups only read. A Db2 for i lookup runs on a read-only connection, and
+nothing on the IBM i changes. See [On the IBM i](security.md#on-the-ibm-i).
 
 ## Writing a lookup
 
@@ -25,7 +33,9 @@ pick **Add lookup**. A lookup has:
 |-------|---------------|
 | Name | The key of its values in the data, such as `customer`. Letters, digits and underscores, starting with a letter. It cannot be the name of a field or table of the definition. |
 | Runs | Once per page group, or once per row of a table of the definition. See [Row lookups](#row-lookups). |
-| SQL | One SELECT, with parameters such as `:customerNo`. |
+| Source | Db2 for i, or Lookup table. See [Lookup tables](#lookup-tables). |
+| SQL | For Db2 for i: one SELECT, with parameters such as `:customerNo`. |
+| Table and Key | For a lookup table: the table, and the key columns that must equal values of the page group. |
 | Rows | One row, as an object, or all rows, as a list. See [One row or all rows](#one-row-or-all-rows). |
 | When no row is found | Stop the run, warn and leave it empty, or leave it empty. See [When no row is found](#when-no-row-is-found). |
 
@@ -194,9 +204,148 @@ lookups that are tested and ran. A lookup that is not tested, has a
 problem or failed in the preview shows as a problem. One that found no
 row in the page group shown is worth a look.
 
+## Lookup tables
+
+Some values a document needs are not in Db2 for i, and nobody wants a
+table there for them: a short code mapped to the text the document
+prints, the email address of whoever handles a customer group, or the
+logo for each company code. Keep them in a lookup table instead. People
+who never edit templates can change the values.
+
+### The Lookup tables page
+
+**Lookup tables** in the sidebar lists the tables, with their columns,
+how many rows each has, the jobs that read it and when it changed.
+**New table** asks for a name, such as `payment-terms`: lowercase letters,
+digits, dashes and underscores, starting with a letter or digit. A new
+table starts empty, with the columns `CODE` and `TEXT`, or from a CSV file
+or cells pasted from a spreadsheet.
+
+Open a table to edit it in a grid, 100 rows a page, with a filter box
+that finds rows by any cell.
+
+- **Add row** and the button at the end of a row add and delete rows.
+- **Add column** adds one. The menu of a column renames it, changes its
+  type, moves it left or right, or deletes it.
+- **Import CSV** replaces the columns and rows with those of a CSV file or
+  pasted cells. It shows what it read first: the delimiter, each column
+  with its type, and the first rows.
+- **Download CSV** saves the table as last saved.
+- **Save** saves the table: "Saved payment-terms".
+
+Changes are saved together, with Save. Leaving the page with changes
+that are not saved asks first. When someone else saved the table since
+you opened it, Save says so: "Could not save: payment-terms changed since
+you opened it. Reload to see the changes." Each save raises the table's
+revision by one.
+
+### Columns and types
+
+A column name is what templates write, so it follows the rule for lookup
+names: letters, digits and underscores, starting with a letter, such as
+`TEXT`. Templates write `{d.pg.terms.TEXT}`.
+
+Each column is one of three types:
+
+| Type | Cells |
+|------|-------|
+| Text | Anything, as typed. |
+| Number | A number, with a decimal point or a decimal comma: `1.5` or `1,5`. |
+| Date | A date as `YYYY-MM-DD`, or typed as `DD.MM.YYYY`. |
+
+Values reach the template typed, as the definition types fields, so
+templates format them the same way. An empty cell is empty in the data.
+
+A cell that does not fit its column's type is marked, and Save stays
+off until it is fixed. The message says how many cells and where the
+first one is: "2 cells do not fit their column. The first is row 12,
+column RATE, which takes a number."
+
+### CSV files
+
+Import and **New table** read a CSV whose first row names the columns.
+
+- The delimiter is a comma, a semicolon or a tab, found from the first
+  row. Cells copied from a spreadsheet are tab delimited.
+- With semicolons, numbers are read with a decimal comma, as a spreadsheet
+  saves them in Finnish or German: `1,5`.
+- A cell in double quotes can hold the delimiter, a line break or a
+  doubled quote. A byte order mark at the start is skipped.
+- Each column's type comes from its cells: Number when every cell is a
+  number, Date when every cell is a date, else Text. A code with a leading
+  zero, such as `007`, stays text.
+- A header that is not a column name is refused, and the message names
+  it: "Column 2 of the CSV is named "Due date", which templates cannot
+  read."
+
+**Download CSV** writes UTF-8 with a byte order mark, so a spreadsheet
+shows ä and ö, comma delimited, with a decimal point and dates as
+`YYYY-MM-DD`.
+
+A table holds up to 10,000 rows and 50 columns.
+
+### A lookup that reads a table
+
+In the Lookups step, set **Source** to Lookup table. Then pick:
+
+- **Table**: the lookup table. With no tables yet, the step links to the
+  Lookup tables page.
+- **Key**: up to 5 key columns, each with the value it must equal, such as
+  `CODE` equals `:paymentTerms`. A value is written like an SQL parameter
+  and names the same things: a field of the page group, a column of the
+  row in a row lookup, or a column of an earlier lookup that reads one
+  row.
+
+Runs, Rows and When no row is found work as for Db2 for i. To print the
+text of the payment terms the invoice prints as `paymentTerms`, name the
+lookup `terms`, pick `payment-terms`, and match `CODE` on `:paymentTerms`.
+A template writes `{d.pg.terms.TEXT}`.
+
+A row matches when each key column equals its value:
+
+- A Number column compares as numbers: `30` equals `30.00`.
+- A Text column compares the text without spaces at either end, and
+  upper and lower case differ, as Db2 for i compares CHAR.
+- A Date column compares dates as `YYYY-MM-DD`.
+- An empty value matches no row, as NULL does in Db2 for i, so When no
+  row is found applies.
+
+With Rows set to One row, a key that matches two or more rows stops the
+run: "terms matched 2 rows of payment-terms for CODE 30. Pick key columns
+that name one row, or set Rows to All rows." All rows reads at most 1,000
+rows, as a Db2 for i lookup does.
+
+**Test** needs no server and no IBM i, unless an earlier lookup reads Db2
+for i. It shows the table and its revision, each value with the key
+column it must equal, the rows matched, and the tags templates write.
+Changing the table or the key needs a new Test before a version is saved.
+
+### Which table a run read
+
+A run reads each table as it is when the run gets to the Lookups step.
+The step in the [job log](job-log.md#steps) names each table it read and
+its revision, such as "1 lookup, payment-terms revision 4", so you can
+tell which values a document got.
+
+### Changing or deleting a table that jobs read
+
+A change that breaks the lookups of jobs asks first, and names the jobs:
+
+- deleting a table that a job's lookup reads;
+- renaming or deleting a column that a job's lookup keys on;
+- importing a CSV that has no such column.
+
+Renaming a table is safe: its lookups keep reading it under its new
+name. Rename it from the menu of its row on the Lookup tables page.
+
+A run whose lookup table was deleted stops at the Lookups step: "terms
+reads the lookup table payment-terms, which was deleted. Pick another
+table in the Lookups step." A draft with such a lookup cannot be saved as
+a version until another table is picked.
+
 ## Authority
 
-The lookup runs with the user profile of the job's server. It needs
+A Db2 for i lookup runs with the user profile of the job's server. It needs
 `*USE` on each table or view the query reads, and `*EXECUTE` on its
 library. A security officer grants them, for example:
 
@@ -223,6 +372,9 @@ i message is under Details.
 | Timeout (SQL0952) | Each query may run 30 seconds. Make it faster, for example with an index over the columns in its WHERE clause. |
 | The query would change data | A lookup runs one SELECT. The read-only connection refuses anything else. |
 | More than one row, or more than 1,000 | Add a condition to the query. |
+| A lookup table matched more than one row | Pick key columns that name one row, or set Rows to All rows. |
+| A lookup table has no such column | A key column was renamed or deleted in the table. Pick another key column in the Lookups step. |
+| The lookup table was deleted | Pick another table in the Lookups step. |
 
 A failed lookup stops the run at the Lookups step. Retry it from the job
 log once it is fixed.

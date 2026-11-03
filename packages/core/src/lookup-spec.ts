@@ -22,32 +22,195 @@ export const lookupColumnSchema = z
   .strict();
 export type LookupColumn = z.infer<typeof lookupColumnSchema>;
 
+/** How many rows a lookup table may hold. */
+export const MAX_TABLE_ROWS = 10_000;
+
+/** How many columns a lookup table may have. */
+export const MAX_TABLE_COLUMNS = 50;
+
+/** How many key columns a table lookup may match on. */
+export const MAX_LOOKUP_KEYS = 5;
+
+/** A lookup table's name: lowercase letters, digits, hyphens and underscores, as asset names. */
+export const LOOKUP_TABLE_NAME = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+
+/** A parameter of a table lookup's key, without its colon: `termsCode` or `customer.LANG`. */
+export const LOOKUP_PARAMETER = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?$/;
+
+/** The fields every lookup has, whatever it reads from. */
+const lookupFields = {
+  /** The key of its value in the data: `{d.pg.customer.EMAIL}`. */
+  name: z.string().max(64),
+  /** A table of the definition: the lookup runs once per row of it. Omitted: once per page group. */
+  for: z.string().max(64).optional(),
+  /** `one`: the row as an object. `many`: every row as a list. */
+  result: z.enum(["one", "many"]).default("one"),
+  /** When no row is found: stop the run, warn and leave it empty, or leave it empty. */
+  missing: z.enum(["fail", "warn", "empty"]).default("warn"),
+};
+
 /**
- * A lookup as a job stores it. A draft may hold one that is not complete yet, such as a
- * name that is not an identifier; `lookupProblems` says what is wrong.
+ * A lookup that runs one SELECT on Db2 for i. Lookups stored before lookup tables have no
+ * `source`, and are this kind.
  */
-export const lookupSchema = z
+export const db2LookupSchema = z
   .object({
-    /** The key of its value in the data: `{d.pg.customer.EMAIL}`. */
-    name: z.string().max(64),
-    /** A table of the definition: the lookup runs once per row of it. Omitted: once per page group. */
-    for: z.string().max(64).optional(),
+    source: z.literal("db2").optional(),
+    ...lookupFields,
     /** One SELECT, with parameters such as `:customerNo`. */
     sql: z.string().max(20_000),
-    /** `one`: the row as an object. `many`: every row as a list. */
-    result: z.enum(["one", "many"]).default("one"),
-    /** When no row is found: stop the run, warn and leave it empty, or leave it empty. */
-    missing: z.enum(["fail", "warn", "empty"]).default("warn"),
     /** What the last Test found: the SQL it tested and its result columns. */
     checked: z.object({ sql: z.string(), columns: z.array(lookupColumnSchema) }).strict().optional(),
   })
   .strict();
-export type Lookup = z.infer<typeof lookupSchema>;
+export type Db2Lookup = z.infer<typeof db2LookupSchema>;
+
+/** One key column of a table lookup: the column, and the parameter whose value it must equal. */
+export const lookupKeySchema = z
+  .object({
+    /** A column of the lookup table. */
+    column: z.string().max(128),
+    /** A field of the page group, or a column of the row or of an earlier lookup, without the colon: `termsCode`. */
+    param: z.string().max(200),
+  })
+  .strict();
+export type LookupKey = z.infer<typeof lookupKeySchema>;
+
+/** A lookup that matches rows of a lookup table kept in Spooldoc, with no SQL. */
+export const tableLookupSchema = z
+  .object({
+    source: z.literal("table"),
+    ...lookupFields,
+    /** The lookup table's id; empty until one is picked. */
+    table: z.string().max(64),
+    /** The columns that must equal the values named. */
+    key: z.array(lookupKeySchema).min(1).max(MAX_LOOKUP_KEYS, `A lookup matches on up to ${MAX_LOOKUP_KEYS} key columns.`),
+    /** What the last Test found: the table and key it tested, the table's name then, and its columns. */
+    checked: z
+      .object({ table: z.string(), tableName: z.string().optional(), key: z.string(), columns: z.array(lookupColumnSchema) })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export type TableLookup = z.infer<typeof tableLookupSchema>;
+
+/**
+ * A lookup as a job stores it: a Db2 for i lookup, or a table lookup. A draft may hold one
+ * that is not complete yet, such as a name that is not an identifier; `lookupProblems`
+ * says what is wrong.
+ */
+export const lookupSchema = z.union([db2LookupSchema, tableLookupSchema]);
+export type Lookup = Db2Lookup | TableLookup;
 
 export const lookupsSchema = z.array(lookupSchema).max(20, "A job takes up to 20 lookups.");
 
-/** True for a lookup that was never tested, or whose SQL changed since its test. */
-export const lookupUntested = (lookup: Pick<Lookup, "sql" | "checked">): boolean => lookup.checked?.sql !== lookup.sql;
+/** True for a lookup that reads a lookup table. */
+export const isTableLookup = (lookup: Lookup): lookup is TableLookup => lookup.source === "table";
+
+/** A table lookup's key as one string, to tell whether it changed since its test. */
+export const lookupKeyText = (key: readonly LookupKey[]): string => JSON.stringify(key.map((k) => [k.column, k.param]));
+
+/** What a lookup reads, as a string that changes whenever the lookup needs another test. */
+export const lookupSubject = (lookup: Lookup): string => (lookup.source === "table" ? `${lookup.table}\n${lookupKeyText(lookup.key)}` : lookup.sql);
+
+/** What a lookup's last Test read, in the form of `lookupSubject`; undefined when it was never tested. */
+export function checkedSubject(lookup: Lookup): string | undefined {
+  if (lookup.source === "table") return lookup.checked ? `${lookup.checked.table}\n${lookup.checked.key}` : undefined;
+  return lookup.checked?.sql;
+}
+
+/** True for a lookup that was never tested, or that changed since its test: its SQL, or its table and key. */
+export const lookupUntested = (lookup: Lookup): boolean => checkedSubject(lookup) !== lookupSubject(lookup);
+
+/** The value names a lookup reads: its SQL's parameters, or its key's parameters, in order. */
+export function lookupParameterNames(lookup: Lookup): string[] {
+  if (lookup.source === "table") return lookup.key.map((k) => k.param.trim().replace(/^:/, ""));
+  return sqlParameters(lookup.sql).map((p) => p.name);
+}
+
+/** A column of a lookup table: a name templates can read, and its type. */
+export const lookupTableColumnSchema = z
+  .object({
+    name: z
+      .string()
+      .min(1, "Give each column a name.")
+      .max(128)
+      .regex(LOOKUP_NAME, "Column names use letters, digits and underscores, starting with a letter."),
+    type: z.enum(["string", "number", "date"]),
+  })
+  .strict();
+export type LookupTableColumn = z.infer<typeof lookupTableColumnSchema>;
+
+/** A cell: text, a number, a date as `YYYY-MM-DD`, or empty. */
+export type LookupTableCell = string | number | null;
+
+/** True for `YYYY-MM-DD` that names a real day. */
+export function isIsoDate(text: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (!match) return false;
+  const [y, m, d] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+/** Whether a cell fits its column's type. Empty fits every type. */
+export function cellFits(cell: LookupTableCell, type: LookupTableColumn["type"]): boolean {
+  if (cell === null) return true;
+  if (type === "number") return typeof cell === "number" && Number.isFinite(cell);
+  if (type === "date") return typeof cell === "string" && isIsoDate(cell);
+  return typeof cell === "string";
+}
+
+/** What a column of the type holds, for messages: "a number". */
+export const cellKind = (type: LookupTableColumn["type"]): string => (type === "number" ? "a number" : type === "date" ? "a date, YYYY-MM-DD" : "text");
+
+/**
+ * The columns and rows of a lookup table, as stored and as the API takes them. Rows are
+ * positional, one cell per column, and each cell fits its column's type.
+ */
+export const lookupTableContentSchema = z
+  .object({
+    columns: z
+      .array(lookupTableColumnSchema)
+      .min(1, "A table needs at least one column.")
+      .max(MAX_TABLE_COLUMNS, `A table has up to ${MAX_TABLE_COLUMNS} columns.`),
+    rows: z
+      .array(z.array(z.union([z.string().max(10_000), z.number(), z.null()])))
+      .max(MAX_TABLE_ROWS, `A table has up to ${MAX_TABLE_ROWS.toLocaleString("en-US")} rows.`),
+  })
+  .strict()
+  .superRefine((table, ctx) => {
+    const seen = new Set<string>();
+    for (const column of table.columns) {
+      if (seen.has(column.name)) {
+        ctx.addIssue({ code: "custom", message: `Two columns are named ${column.name}. Give each its own name.`, path: ["columns"] });
+        return;
+      }
+      seen.add(column.name);
+    }
+    for (const [r, row] of table.rows.entries()) {
+      if (row.length !== table.columns.length) {
+        ctx.addIssue({ code: "custom", message: `Row ${r + 1} has ${row.length} cells, and the table has ${table.columns.length} columns.`, path: ["rows", r] });
+        return;
+      }
+      for (const [c, cell] of row.entries()) {
+        const column = table.columns[c]!;
+        if (!cellFits(cell, column.type)) {
+          ctx.addIssue({ code: "custom", message: `Row ${r + 1}, column ${column.name} is not ${cellKind(column.type)}.`, path: ["rows", r, c] });
+          return;
+        }
+      }
+    }
+  });
+export type LookupTableContent = z.infer<typeof lookupTableContentSchema>;
+
+/** A lookup table as runs, the preview and Test read it. */
+export interface LookupTableData extends LookupTableContent {
+  id: string;
+  name: string;
+  /** Goes up by one on every save. */
+  revision: number;
+}
 
 /**
  * The statement with string constants, delimited names and comments blanked out, so what

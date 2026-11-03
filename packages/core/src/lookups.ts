@@ -3,12 +3,17 @@ import {
   bindParameters,
   db2ValueType,
   LOOKUP_NAME,
+  LOOKUP_PARAMETER,
   LOOKUP_TIMEOUT_SECONDS,
+  lookupParameterNames,
   lookupUntested,
   MAX_LOOKUP_ROWS,
   parameterValue,
-  sqlParameters,
+  type Db2Lookup,
   type Lookup,
+  type LookupTableColumn,
+  type LookupTableData,
+  type TableLookup,
 } from "./lookup-spec.js";
 import { starterLayout } from "./template.js";
 import { convertValue } from "./values.js";
@@ -41,10 +46,20 @@ export const lookupRuns = (lookup: Pick<Lookup, "for">): string => (lookup.for ?
  *   the row, or a column of an earlier lookup that reads one row. A name that is both a
  *   column of the row and a field of the page group is a problem, so the user renames one.
  *
- * Without a definition (it does not parse), only the names and the SQL are checked.
- * Whether each lookup was tested is `lookupTestProblems`.
+ * A table lookup has no SQL. Instead its table is picked and, when `tables` is given,
+ * still there; its key is there, each key column is a column of the table, and each
+ * key parameter is checked as an SQL parameter is.
+ *
+ * Without a definition (it does not parse), only the names, the SQL and the key are
+ * checked. Whether each lookup was tested is `lookupTestProblems`.
+ *
+ * @param tables - The lookup tables there are, by id; without it, tables are not checked
  */
-export function lookupProblems(def: Definition | null, lookups: readonly Lookup[]): LookupProblem[] {
+export function lookupProblems(
+  def: Definition | null,
+  lookups: readonly Lookup[],
+  tables?: ReadonlyMap<string, Pick<LookupTableData, "name" | "columns">>,
+): LookupProblem[] {
   const problems: LookupProblem[] = [];
   const shape = def ? shapeOf(def) : null;
   const seen = new Set<string>();
@@ -71,7 +86,9 @@ export function lookupProblems(def: Definition | null, lookups: readonly Lookup[
         add(`${name} is already a table of the definition. Give the lookup another name.`);
       }
     }
-    if (!lookup.sql.trim()) {
+    if (lookup.source === "table") {
+      if (!tableProblems(lookup, label, tables, add)) return;
+    } else if (!lookup.sql.trim()) {
       add(`Write the SQL of ${label}.`);
       return;
     }
@@ -79,7 +96,7 @@ export function lookupProblems(def: Definition | null, lookups: readonly Lookup[
     const rowColumns = lookup.for !== undefined ? shape.tables.get(lookup.for) : undefined;
     if (lookup.for !== undefined && !rowColumns) return;
     const reported = new Set<string>();
-    for (const { name: parameter } of sqlParameters(lookup.sql)) {
+    for (const parameter of lookupParameterNames(lookup)) {
       if (reported.has(parameter)) continue;
       reported.add(parameter);
       const problem = parameterProblem(parameter, lookup, shape, rowColumns, earlier, later);
@@ -87,6 +104,60 @@ export function lookupProblems(def: Definition | null, lookups: readonly Lookup[
     }
   });
   return problems;
+}
+
+/** "terms reads the lookup table payment-terms, which was deleted. ...", for a table that is gone. */
+export function deletedTableMessage(lookup: TableLookup): string {
+  const name = lookup.name.trim() || "The lookup";
+  const table = lookup.checked?.table === lookup.table && lookup.checked.tableName ? `the lookup table ${lookup.checked.tableName}` : "a lookup table";
+  return `${name} reads ${table}, which was deleted. Pick another table in the Lookups step.`;
+}
+
+/**
+ * Adds what is wrong with a table lookup's table and key, without the parameters.
+ *
+ * @returns Whether its parameters are worth checking
+ */
+function tableProblems(
+  lookup: TableLookup,
+  label: string,
+  tables: ReadonlyMap<string, Pick<LookupTableData, "name" | "columns">> | undefined,
+  add: (message: string) => void,
+): boolean {
+  if (!lookup.table) {
+    add(`Pick the lookup table ${label} reads.`);
+    return false;
+  }
+  const table = tables?.get(lookup.table);
+  if (tables && !table) {
+    add(deletedTableMessage(lookup));
+    return false;
+  }
+  let ok = true;
+  const seen = new Set<string>();
+  for (const [i, key] of lookup.key.entries()) {
+    const column = key.column.trim();
+    const param = key.param.trim().replace(/^:/, "");
+    if (!column) {
+      add(`Pick the column of key ${i + 1} of ${label}.`);
+      ok = false;
+    } else if (table && !table.columns.some((c) => c.name === column)) {
+      add(`${table.name} has no column ${column}. Its columns are ${table.columns.map((c) => c.name).join(", ")}.`);
+      ok = false;
+    } else if (seen.has(column)) {
+      add(`${label} matches on ${column} twice. Remove one of them.`);
+      ok = false;
+    }
+    seen.add(column);
+    if (!param) {
+      add(`Name the value ${column || `key ${i + 1}`} of ${label} must equal, such as :termsCode.`);
+      ok = false;
+    } else if (!LOOKUP_PARAMETER.test(param)) {
+      add(`:${param} is not a name of the data. Write a field, such as :termsCode, or a column of an earlier lookup, such as :customer.LANG.`);
+      ok = false;
+    }
+  }
+  return ok;
 }
 
 /** What is wrong with one parameter of a lookup, or null. */
@@ -294,29 +365,203 @@ export function parameterText(parameters: readonly BoundParameter[]): string {
   return parts.join(" and ");
 }
 
+/** "CODE 30 and LANG FI": the key columns of a table lookup with the values they must equal, for messages. */
+export function keyText(columns: readonly string[], values: readonly (string | number | null)[]): string {
+  return parameterText(columns.map((name, i) => ({ name, value: typeof values[i] === "string" && values[i].trim() === "" ? null : (values[i] ?? null) })));
+}
+
+/** A value as a key column of the type compares it, or null when it matches no row: empty, or not of the type. */
+function keyValue(value: string | number | null, type: LookupTableColumn["type"]): string | null {
+  if (value === null) return null;
+  const text = String(value).trim();
+  if (text === "") return null;
+  if (type === "number") {
+    const n = typeof value === "number" ? value : Number(text);
+    return Number.isFinite(n) ? String(n) : null;
+  }
+  if (type === "date") {
+    const converted = convertValue(text, "date");
+    return converted.ok && typeof converted.value === "string" ? converted.value : null;
+  }
+  return text;
+}
+
+/** The rows of a lookup table by their key, per key columns: one per table revision and key. */
+export type LookupTableIndexes = Map<string, Map<string, number[]>>;
+
+/** What a table lookup matched. */
+export interface TableMatch {
+  /** The rows matched, as the lookup adds them to the data. */
+  rows: Record<string, unknown>[];
+  /** "CODE 30", for messages. */
+  keyText: string;
+}
+
+/**
+ * The rows of a lookup table whose key columns equal the values: numbers as numbers, text
+ * trimmed and case-sensitive, dates as `YYYY-MM-DD`. An empty value matches no row, as
+ * NULL does in Db2 for i.
+ *
+ * @param indexes - Indexes to reuse and add to, so a run builds each one once
+ * @throws Error when a key column is not in the table
+ */
+export function matchTable(
+  table: LookupTableData,
+  columns: readonly string[],
+  values: readonly (string | number | null)[],
+  indexes: LookupTableIndexes = new Map(),
+): TableMatch {
+  const at = columns.map((name) => {
+    const i = table.columns.findIndex((c) => c.name === name);
+    if (i < 0) throw new Error(`${table.name} has no column ${name}. Pick another key column in the Lookups step.`);
+    return i;
+  });
+  const indexKey = `${table.id}\n${table.revision}\n${at.join(",")}`;
+  let index = indexes.get(indexKey);
+  if (!index) {
+    index = new Map();
+    for (const [r, row] of table.rows.entries()) {
+      const parts = at.map((c) => keyValue(row[c] ?? null, table.columns[c]!.type));
+      if (parts.some((p) => p === null)) continue;
+      const k = JSON.stringify(parts);
+      const list = index.get(k);
+      if (list) list.push(r);
+      else index.set(k, [r]);
+    }
+    indexes.set(indexKey, index);
+  }
+  const parts = at.map((c, i) => keyValue(values[i] ?? null, table.columns[c]!.type));
+  const found = parts.some((p) => p === null) ? [] : (index.get(JSON.stringify(parts)) ?? []);
+  return {
+    rows: found.map((r) => Object.fromEntries(table.columns.map((c, i) => [c.name, table.rows[r]![i] ?? null]))),
+    keyText: keyText(columns, values),
+  };
+}
+
+/** Where a lookup's rows come from: the IBM i for Db2 for i lookups, and the lookup tables by id for table lookups. */
+export interface LookupSources {
+  /** Runs one query on the IBM i. Without it, a Db2 for i lookup stops with a LookupError. */
+  query?: LookupQuery;
+  /** The lookup tables the table lookups read, by id, as they are for this run. */
+  tables?: ReadonlyMap<string, LookupTableData>;
+}
+
+/** The rows one lookup found for one set of values, typed, and how to name them in messages. */
+interface Found {
+  columns: readonly { name: string }[];
+  rows: Record<string, unknown>[];
+  /** More rows than the lookup may read: for `one`, more than one. */
+  tooMany: boolean;
+  cached: boolean;
+  /** "for customerNo 10042", or "" when there are no values. */
+  forValues: string;
+  /** The message when there are too many rows, without the document. */
+  tooManyText: (where: string) => string;
+}
+
+/** Runs a Db2 for i lookup for one set of values, through the cache. */
+async function findDb2(
+  lookup: Db2Lookup,
+  sql: string,
+  parameters: BoundParameter[],
+  query: LookupQuery | undefined,
+  cache: LookupCache,
+  pageGroup: number,
+): Promise<Found> {
+  if (!query) throw new LookupError(lookup.name, `Could not run ${lookup.name}: it reads Db2 for i, and no server is connected.`, pageGroup);
+  const values = parameters.map((p) => p.value);
+  const maxRows = lookup.result === "one" ? 1 : MAX_LOOKUP_ROWS;
+  const key = `${lookup.result}\n${sql}\n${JSON.stringify(values)}`;
+  let pending = cache.get(key);
+  const cached = pending !== undefined;
+  if (!pending) {
+    pending = query(sql, values, { maxRows, timeoutSeconds: LOOKUP_TIMEOUT_SECONDS });
+    cache.set(key, pending);
+    // A failed query is tried again by the next page group that needs it.
+    pending.catch(() => cache.delete(key));
+  }
+  let result: LookupQueryResult;
+  try {
+    result = await pending;
+  } catch (error) {
+    const text = error instanceof Error ? error.message : String(error);
+    const detail = (error as { detail?: unknown } | null)?.detail;
+    throw new LookupError(lookup.name, `Could not run ${lookup.name}: ${text}`, pageGroup, typeof detail === "string" ? detail : undefined, { cause: error });
+  }
+  const forValues = parameters.length > 0 ? ` for ${parameterText(parameters)}` : "";
+  const most = MAX_LOOKUP_ROWS.toLocaleString("en-US");
+  return {
+    columns: result.columns,
+    rows: result.rows.map((r) => typedRow(r, result.columns)),
+    tooMany: result.truncated,
+    cached,
+    forValues,
+    tooManyText: (where) =>
+      lookup.result === "one"
+        ? `${lookup.name} returned more than one row${forValues}${where}. Add a condition, or FETCH FIRST 1 ROW ONLY.`
+        : `${lookup.name} returned more than ${most} rows${forValues}${where}. A lookup reads at most ${most} rows. Add a condition.`,
+  };
+}
+
+/** Matches a table lookup's rows for one set of values. */
+function findTable(lookup: TableLookup, parameters: BoundParameter[], tables: ReadonlyMap<string, LookupTableData> | undefined, indexes: LookupTableIndexes, pageGroup: number): Found {
+  const table = tables?.get(lookup.table);
+  if (!table) throw new LookupError(lookup.name, deletedTableMessage(lookup), pageGroup);
+  let match: TableMatch;
+  try {
+    match = matchTable(
+      table,
+      lookup.key.map((k) => k.column.trim()),
+      parameters.map((p) => p.value),
+      indexes,
+    );
+  } catch (error) {
+    throw new LookupError(lookup.name, `Could not run ${lookup.name}: ${error instanceof Error ? error.message : String(error)}`, pageGroup);
+  }
+  const count = match.rows.length;
+  const tooMany = lookup.result === "one" ? count > 1 : count > MAX_LOOKUP_ROWS;
+  const most = MAX_LOOKUP_ROWS.toLocaleString("en-US");
+  return {
+    columns: table.columns,
+    rows: match.rows,
+    tooMany,
+    cached: false,
+    forValues: ` for ${match.keyText}`,
+    tooManyText: (where) =>
+      lookup.result === "one"
+        ? `${lookup.name} matched ${count.toLocaleString("en-US")} rows of ${table.name} for ${match.keyText}${where}. Pick key columns that name one row, or set Rows to All rows.`
+        : `${lookup.name} matched ${count.toLocaleString("en-US")} rows of ${table.name} for ${match.keyText}${where}. A lookup reads at most ${most} rows. Add a key column.`,
+  };
+}
+
 /**
  * Runs the lookups for page groups, in order, and adds each one's rows to the data: a
  * page group lookup under its name in the page group, a row lookup under its name in each
  * row of its table. `one` gives the row as an object (every column empty when there is
- * none), `many` the rows as a list. Each distinct SQL and set of parameters runs once,
- * through `cache`. Values are typed by their Db2 for i type.
+ * none), `many` the rows as a list.
+ *
+ * A Db2 for i lookup runs its SQL through `sources.query`; each distinct SQL and set of
+ * parameters runs once, through `cache`, and values are typed by their Db2 for i type. A
+ * table lookup matches rows of its table in `sources.tables` (see `matchTable`), with one
+ * index per table and key columns.
  *
  * A lookup that reads a column of an earlier one that found no row, such as
  * `:customer.LANG`, does not run: its value is left empty, and the earlier lookup's miss
  * says so ("... product is left empty") instead of a warning per row. A parameter that is
  * empty because the page had no value is bound as NULL, and the lookup runs.
  *
- * @param query - Runs one query; the IBM i connection, or a stand-in in tests
  * @throws LookupError naming the lookup when a query fails, `one` finds more than one row,
- *   `many` finds more than 1,000 rows, or no row is found and the lookup says to stop
+ *   `many` finds more than 1,000 rows, no row is found and the lookup says to stop, or its
+ *   lookup table was deleted
  */
 export async function applyLookups(
   groups: readonly Record<string, unknown>[],
   lookups: readonly Lookup[],
-  query: LookupQuery,
+  sources: LookupSources,
   options: ApplyLookupsOptions = {},
 ): Promise<LookupsResult> {
   const cache: LookupCache = options.cache ?? new Map<string, Promise<LookupQueryResult>>();
+  const indexes: LookupTableIndexes = new Map();
   const only = options.only ? new Set(options.only) : null;
   const traces: LookupTrace[] = [];
   const misses: MissEntry[] = [];
@@ -324,7 +569,7 @@ export async function applyLookups(
   // The values of lookups that found no row, with the miss they warned of (null for one that did not warn).
   const empties = new WeakMap<object, MissEntry | null>();
   const out = groups.map((group, index) => (lookups.length > 0 && (!only || only.has(index)) ? structuredClone(group) : group));
-  const bound = lookups.map((lookup) => bindParameters(lookup.sql));
+  const bound = lookups.map((lookup) => (lookup.source === "table" ? { sql: "", names: lookupParameterNames(lookup) } : bindParameters(lookup.sql)));
 
   for (const [pageGroup, group] of out.entries()) {
     if (lookups.length === 0 || (only && !only.has(pageGroup))) continue;
@@ -341,7 +586,8 @@ export async function applyLookups(
           const miss = empties.get(source) ?? null;
           if (miss && !miss.leftEmpty.includes(lookup.name)) miss.leftEmpty.push(lookup.name);
           traces.push({ lookup: lookup.name, pageGroup, ...(row !== undefined ? { row } : {}), parameters: [], rows: 0, ms: 0, cached: false, skippedFor: head });
-          const value = emptyValue(lookup, lookup.checked?.columns ?? []);
+          const columns = lookup.source === "table" ? (sources.tables?.get(lookup.table)?.columns ?? lookup.checked?.columns ?? []) : (lookup.checked?.columns ?? []);
+          const value = emptyValue(lookup, columns);
           empties.set(value, miss);
           return value;
         }
@@ -356,47 +602,23 @@ export async function applyLookups(
           }
           return { name, value };
         });
-        const values = parameters.map((p) => p.value);
-        const maxRows = lookup.result === "one" ? 1 : MAX_LOOKUP_ROWS;
-        const key = `${lookup.result}\n${sql}\n${JSON.stringify(values)}`;
-        let pending = cache.get(key);
-        const cached = pending !== undefined;
         const started = performance.now();
-        if (!pending) {
-          pending = query(sql, values, { maxRows, timeoutSeconds: LOOKUP_TIMEOUT_SECONDS });
-          cache.set(key, pending);
-          // A failed query is tried again by the next page group that needs it.
-          pending.catch(() => cache.delete(key));
-        }
-        let result: LookupQueryResult;
-        try {
-          result = await pending;
-        } catch (error) {
-          const text = error instanceof Error ? error.message : String(error);
-          const detail = (error as { detail?: unknown } | null)?.detail;
-          throw new LookupError(lookup.name, `Could not run ${lookup.name}: ${text}`, pageGroup, typeof detail === "string" ? detail : undefined, { cause: error });
-        }
+        const found =
+          lookup.source === "table"
+            ? findTable(lookup, parameters, sources.tables, indexes, pageGroup)
+            : await findDb2(lookup, sql, parameters, sources.query, cache, pageGroup);
         traces.push({
           lookup: lookup.name,
           pageGroup,
           ...(row !== undefined ? { row } : {}),
           parameters,
-          rows: result.rows.length,
+          rows: found.rows.length,
           ms: Math.round(performance.now() - started),
-          cached,
+          cached: found.cached,
         });
-        const forValues = parameters.length > 0 ? ` for ${parameterText(parameters)}` : "";
-        if (result.truncated) {
-          throw new LookupError(
-            lookup.name,
-            lookup.result === "one"
-              ? `${lookup.name} returned more than one row${forValues}${where}. Add a condition, or FETCH FIRST 1 ROW ONLY.`
-              : `${lookup.name} returned more than ${MAX_LOOKUP_ROWS.toLocaleString("en-US")} rows${forValues}${where}. A lookup reads at most ${MAX_LOOKUP_ROWS.toLocaleString("en-US")} rows. Add a condition.`,
-            pageGroup,
-          );
-        }
-        if (result.rows.length === 0) {
-          const text = `No row in ${lookup.name}${forValues}${where}`;
+        if (found.tooMany) throw new LookupError(lookup.name, found.tooManyText(where), pageGroup);
+        if (found.rows.length === 0) {
+          const text = `No row in ${lookup.name}${found.forValues}${where}`;
           if (lookup.missing === "fail") {
             throw new LookupError(lookup.name, `${text}. Check the values, or set When no row is found to Warn and leave it empty.`, pageGroup);
           }
@@ -409,13 +631,12 @@ export async function applyLookups(
               misses.push(miss);
             }
           }
-          const value = emptyValue(lookup, result.columns);
+          const value = emptyValue(lookup, found.columns);
           empties.set(value, miss);
           return value;
         }
-        const rows = result.rows.map((r) => typedRow(r, result.columns));
-        if (lookup.result === "many") return rows;
-        return rows[0]!;
+        if (lookup.result === "many") return found.rows;
+        return found.rows[0]!;
       };
 
       if (lookup.for === undefined) {

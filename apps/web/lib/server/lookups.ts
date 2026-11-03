@@ -12,27 +12,38 @@ import {
   type LookupProblem,
   type LookupQueryResult,
   type LookupsResult,
+  type LookupTableData,
   type LookupTrace,
 } from '@spooldoc/core';
 import type { Connection } from '@spooldoc/ibmi';
 import { redact } from './http';
 import { connectServer, isConnectionError } from './ibmi';
+import { loadLookupTables, lookupTableShapes } from './lookup-tables';
 import type { PreviewLookupRunner } from './render';
 
 /**
- * Run a job's lookups for page groups on an open IBM i connection: the one helper for the
- * run and every preview, so they give the same data.
+ * Run a job's lookups for page groups: the Db2 for i lookups on an open IBM i connection,
+ * the table lookups on the lookup tables given. The one helper for the run and every
+ * preview, so they give the same data.
  *
+ * @param conn - The IBM i connection, or null when no lookup that runs reads Db2 for i
  * @throws LookupError naming the lookup when one stops (see `applyLookups`)
  */
 export function runLookups(
-  conn: Connection,
+  conn: Connection | null,
   lookups: readonly Lookup[],
   groups: readonly Record<string, unknown>[],
-  options: { cache?: LookupCache; only?: readonly number[]; names?: readonly string[] } = {},
+  options: { cache?: LookupCache; only?: readonly number[]; names?: readonly string[]; tables?: ReadonlyMap<string, LookupTableData> } = {},
 ): Promise<LookupsResult> {
-  return applyLookups(groups, lookups, (sql, params, limits) => conn.query(sql, params, limits), options);
+  const { tables, ...rest } = options;
+  return applyLookups(groups, lookups, { ...(conn ? { query: (sql, params, limits) => conn.query(sql, params, limits) } : {}), ...(tables ? { tables } : {}) }, rest);
 }
+
+/** The ids of the lookup tables that lookups read. */
+export const lookupTableIds = (lookups: readonly Lookup[]): string[] => [...new Set(lookups.flatMap((l) => (l.source === 'table' && l.table ? [l.table] : [])))];
+
+/** True when a lookup reads Db2 for i, so running them needs the IBM i. */
+export const needsServer = (lookups: readonly Lookup[]): boolean => lookups.some((l) => l.source !== 'table');
 
 /** How long the preview keeps a lookup's result, so typing in a template does not query the IBM i again. */
 export const PREVIEW_CACHE_MS = 2 * 60 * 1000;
@@ -101,8 +112,9 @@ export interface LookupsPreview {
 /**
  * Run a draft's lookups for a preview, with the job's source server and the preview's
  * cache. Only tested lookups without problems run, up to the first one that is not, so a lookup's SQL
- * runs on the IBM i only after the user tested it. When the lookups cannot run, the page
- * groups come back as they are and `preview.error` says why; nothing is thrown.
+ * runs on the IBM i only after the user tested it. The IBM i is connected only when a
+ * lookup that runs reads Db2 for i: table lookups need no server. When the lookups cannot
+ * run, the page groups come back as they are and `preview.error` says why; nothing is thrown.
  *
  * @param only - The page groups to look up; the preview shows `only[0]`
  * @returns Null when the job has no lookups
@@ -117,22 +129,28 @@ export async function previewLookups(
 ): Promise<{ groups: Record<string, unknown>[]; preview: LookupsPreview } | null> {
   if (lookups.length === 0) return null;
   const shown = only[0] ?? 0;
-  const problems = lookupProblems(def, lookups);
+  const problems = lookupProblems(def, lookups, await lookupTableShapes());
   // Later lookups can read earlier ones, so the first that is untested or has a problem stops the rest.
   const blocked = lookups.findIndex((lookup, index) => lookupUntested(lookup) || problems.some((p) => p.index === index));
   const ran = blocked === -1 ? lookups : lookups.slice(0, blocked);
   const preview: LookupsPreview = { traces: [], misses: [], problems, ran: ran.map((l) => l.name) };
   if (ran.length === 0) return { groups, preview };
-  if (!serverId) {
+  const db2 = needsServer(ran);
+  if (db2 && !serverId) {
     preview.ran = [];
     preview.error = { message: 'Pick a server in the Source step to run the lookups.' };
     return { groups, preview };
   }
   let secrets: string[] = [];
   try {
-    const { conn, password } = await connectServer(serverId);
-    secrets = [password];
-    const result = await runLookups(conn, ran, groups, { cache: previewCache(serverId), only, names });
+    let conn: Connection | null = null;
+    if (db2 && serverId) {
+      const connected = await connectServer(serverId);
+      conn = connected.conn;
+      secrets = [connected.password];
+    }
+    const tables = await loadLookupTables(lookupTableIds(ran));
+    const result = await runLookups(conn, ran, groups, { cache: previewCache(serverId ?? ''), only, names, tables });
     preview.traces = result.traces.filter((t) => t.pageGroup === shown);
     preview.misses = result.misses.filter((m) => m.pageGroup === shown);
     preview.pageGroup = result.groups[shown];

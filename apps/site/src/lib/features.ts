@@ -167,6 +167,7 @@ export const FEATURES: Feature[] = [
       'A lookup is one SELECT. It takes values the definition read, such as the customer number, as bound parameters, never written into the SQL, and runs on a read-only connection. Its rows join the page group\'s data, so templates and email fields use them like any field: <code>{d.pg.customer.EMAIL}</code>.',
       'A lookup can run once per row of a table, such as the description of each item, and use the columns of an earlier one, such as the customer\'s language. When no row is found, the run stops, warns or leaves the columns empty, as you choose.',
       'Test runs a lookup on the job\'s server with the values of the page group shown: each parameter with its Db2 for i type, the rows, and the tags to copy. A version is saved only with lookups that were tested.',
+      'Values that are not in Db2 for i, such as the text of a payment terms code, go in a lookup table kept in Spooldoc. Edit it in a grid, or import a CSV file or cells pasted from a spreadsheet. A lookup matches its rows on key columns, with no SQL and no server, and the job log names the table and the revision each run read.',
     ],
     shots: ['lookups-step', 'lookups-row'],
     docs: [{ slug: 'lookups', title: 'Lookups' }],

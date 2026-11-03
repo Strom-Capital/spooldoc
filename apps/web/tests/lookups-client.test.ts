@@ -1,25 +1,45 @@
 import { describe, expect, it } from 'vitest';
-import type { Lookup, LookupTrace } from '@spooldoc/core';
+import { lookupKeyText, type Lookup, type LookupTrace, type TableLookup } from '@spooldoc/core';
 import { currentColumns, lookupSummary, lookupsSub, previewFor, summaryText, testedColumns } from '@/lib/client/lookups';
 import type { LookupsPreview } from '@/lib/client/render';
 
 const sql = 'SELECT NAME FROM MYLIB.CUSTOMERS WHERE CUSTNO = :customerNo';
 const checked = { sql, columns: [{ name: 'NAME', type: 'string' as const }] };
+const db2 = (over: { sql: string; checked?: typeof checked }): Lookup => ({ name: 'customer', result: 'one', missing: 'warn', ...over });
+
+const TERMS = '6f1d2c1e-0000-4000-8000-000000000001';
+const key = [{ column: 'CODE', param: 'paymentTerms' }];
+const termsChecked = { table: TERMS, tableName: 'payment-terms', key: lookupKeyText(key), columns: [{ name: 'TEXT', type: 'string' as const }] };
+const terms = (over: Partial<TableLookup> = {}): TableLookup => ({ source: 'table', name: 'terms', result: 'one', missing: 'warn', table: TERMS, key, ...over });
 
 describe('lookup columns in the Lookups step', () => {
   it("shows the last Test's columns only while the SQL is the one tested", () => {
-    expect(testedColumns({ sql, checked })).toEqual(checked.columns);
-    expect(testedColumns({ sql: `${sql} AND 1 = 1`, checked })).toEqual([]);
-    expect(testedColumns({ sql })).toEqual([]);
+    expect(testedColumns(db2({ sql, checked }))).toEqual(checked.columns);
+    expect(testedColumns(db2({ sql: `${sql} AND 1 = 1`, checked }))).toEqual([]);
+    expect(testedColumns(db2({ sql }))).toEqual([]);
+  });
+
+  it("shows a table lookup's columns only while its table and key are the ones tested", () => {
+    expect(testedColumns(terms({ checked: termsChecked }))).toEqual(termsChecked.columns);
+    expect(testedColumns(terms({ checked: termsChecked, key: [{ column: 'CODE', param: 'currency' }] }))).toEqual([]);
+    expect(testedColumns(terms({ checked: termsChecked, table: '6f1d2c1e-0000-4000-8000-000000000002' }))).toEqual([]);
+    expect(testedColumns(terms())).toEqual([]);
   });
 
   it("prefers a Test of this SQL in the session, and drops one of other SQL or one that failed", () => {
     const view = { columns: [{ name: 'EMAIL', type: 'string' as const, db2: 'VARCHAR(80)' }] };
-    expect(currentColumns({ sql, checked }, { sql, view })).toEqual(view.columns);
+    expect(currentColumns(db2({ sql, checked }), { subject: sql, view })).toEqual(view.columns);
     const changed = `${sql} AND 1 = 1`;
-    expect(currentColumns({ sql: changed, checked }, { sql, view })).toEqual([]);
-    expect(currentColumns({ sql: changed, checked }, { sql: changed })).toEqual([]);
-    expect(currentColumns({ sql, checked }, { sql: 'SELECT 1 FROM MYLIB.T' })).toEqual(checked.columns);
+    expect(currentColumns(db2({ sql: changed, checked }), { subject: sql, view })).toEqual([]);
+    expect(currentColumns(db2({ sql: changed, checked }), { subject: changed })).toEqual([]);
+    expect(currentColumns(db2({ sql, checked }), { subject: 'SELECT 1 FROM MYLIB.T' })).toEqual(checked.columns);
+  });
+
+  it('prefers a Test of this table and key in the session', () => {
+    const view = { columns: [{ name: 'DAYS', type: 'number' as const }] };
+    const subject = `${TERMS}\n${lookupKeyText(key)}`;
+    expect(currentColumns(terms({ checked: termsChecked }), { subject, view })).toEqual(view.columns);
+    expect(currentColumns(terms({ key: [{ column: 'CODE', param: 'currency' }] }), { subject, view })).toEqual([]);
   });
 });
 

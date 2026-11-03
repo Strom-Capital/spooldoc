@@ -43,7 +43,8 @@ import { fieldTypes } from './email-message';
 import { redact } from './http';
 import { connectServer, isConnectionError } from './ibmi';
 import { log } from './log';
-import { runLookups } from './lookups';
+import { loadLookupTables } from './lookup-tables';
+import { lookupTableIds, runLookups } from './lookups';
 import { HEARTBEAT_MS } from './retention';
 import { capture, storeSample } from './samples';
 import { StepError } from './step-error';
@@ -194,19 +195,31 @@ export async function executeRun(runId: string, request: RunRequest, connection?
     const { def, ranges } = extracted;
     pageGroups = extracted.groups.length;
 
-    // Lookups add values from Db2 for i to each page group. The step is recorded only when the job has some.
+    // Lookups add values from Db2 for i and lookup tables to each page group. The step is
+    // recorded only when the job has some, with the lookup tables it read as they were then.
     let groups = extracted.groups;
     let lookupWarnings: string[] = [];
     if (spec.lookups.length > 0) {
       const printedNames = documentNames(def, groups, sample, false).pageGroups;
-      const looked = await step(
-        'lookup',
-        () => runLookups(conn, spec.lookups, groups, { names: printedNames }),
-        (result) => lookupNote(result.traces.filter((t) => !t.cached && !t.skippedFor).length, spec.lookups.length),
-        (result) => result.misses.map((miss) => miss.text),
-      );
-      groups = looked.groups;
-      lookupWarnings = looked.misses.map((miss) => miss.text);
+      const db2Lookups = new Set(spec.lookups.filter((l) => l.source !== 'table').map((l) => l.name));
+      let read: { id: string; name: string; revision: number }[] = [];
+      try {
+        const looked = await step(
+          'lookup',
+          async () => {
+            const tables = await loadLookupTables(lookupTableIds(spec.lookups));
+            read = [...tables.values()].map((t) => ({ id: t.id, name: t.name, revision: t.revision }));
+            return runLookups(conn, spec.lookups, groups, { names: printedNames, tables });
+          },
+          (result) => lookupNote(result.traces.filter((t) => db2Lookups.has(t.lookup) && !t.cached && !t.skippedFor).length, spec.lookups, read),
+          (result) => result.misses.map((miss) => miss.text),
+        );
+        groups = looked.groups;
+        lookupWarnings = looked.misses.map((miss) => miss.text);
+      } finally {
+        const recorded = steps.findLast((s) => s.step === 'lookup');
+        if (recorded && read.length > 0) recorded.tables = read;
+      }
     }
 
     // Looked up before the render, so an email destination's message template is rendered with the documents.
@@ -444,9 +457,12 @@ async function prepareTemplate(template: JobTemplate, def: Definition, assets: s
   };
 }
 
-/** "1 lookup, 3 queries". */
-function lookupNote(queries: number, lookups: number): string {
-  return `${lookups} ${lookups === 1 ? 'lookup' : 'lookups'}, ${queries} ${queries === 1 ? 'query' : 'queries'}`;
+/** "1 lookup, 3 queries", and the lookup tables read: "2 lookups, 1 query, payment-terms revision 4". */
+function lookupNote(queries: number, lookups: readonly Lookup[], tables: readonly { name: string; revision: number }[]): string {
+  const parts = [`${lookups.length} ${lookups.length === 1 ? 'lookup' : 'lookups'}`];
+  if (lookups.some((l) => l.source !== 'table')) parts.push(`${queries} ${queries === 1 ? 'query' : 'queries'}`);
+  for (const table of tables) parts.push(`${table.name} revision ${table.revision}`);
+  return parts.join(', ');
 }
 
 /** "6 PDFs and 6 DOCX files", "1 XLSX file". */

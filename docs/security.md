@@ -57,6 +57,9 @@ Everything is in Postgres:
   for previews, runs and downloads. Protect the database like the spooled
   files themselves: access, backups and the volume included. Retention
   deletes them with the runs.
+- **Lookup tables** are in clear text, like any value a document prints.
+  Any signed-in user can read, change and delete them. They are not kept
+  on the IBM i, so back them up with the database.
 
 ## Sign-in
 
@@ -78,8 +81,9 @@ data queue, and, when asked from the trigger step, `CRTDTAQ` and
 `CHGOUTQ DTAQ(...)`. It runs SQL against application tables only for a
 job's [lookups](lookups.md), and installs nothing on the system.
 
-Lookups run on a second JDBC connection that is opened read only, so the
-driver refuses a statement that changes data, whatever the SQL says.
+Lookups that read Db2 for i run on a second JDBC connection that is
+opened read only, so the driver refuses a statement that changes data,
+whatever the SQL says.
 Spooldoc also refuses anything but one SELECT, WITH or VALUES statement
 before it is sent. The driver checks only the type of the statement: a
 SELECT that calls a user-defined function which changes data is not
