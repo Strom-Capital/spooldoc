@@ -47,7 +47,7 @@ function deliverSentence(destination: DestinationView, named: boolean): string {
     const where = testFolder ? `to the test folder ${testFolder} on ${sftpServer(destination.config)}` : `to ${folder} on ${sftpServer(destination.config)}`;
     return named ? by('uploads', where) : `Documents will be uploaded ${where}. `;
   }
-  return named ? `${destination.name} keeps documents to download. ` : '';
+  return named ? `${destination.name} keeps the files in Spooldoc. ` : '';
 }
 
 /**
