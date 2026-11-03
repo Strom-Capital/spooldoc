@@ -23,8 +23,8 @@
     "test": "pnpm -r test"
   },
   "devDependencies": {
-    "eslint": "^10.13.0",
+    "eslint": "^10.14.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.71.2"
+    "typescript-eslint": "^8.72.1"
   }
 }
