@@ -743,6 +743,13 @@ whether it matches. The email, webhook and SFTP previews of a
 destination follow the stepper. When the page group shown takes another
 route, they say so, and show what it would get there. Nothing is sent.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/routes-dark.png">
+    <img src="assets/routes-light.png" alt="The Destination step of an invoice job with two routes. The page group stepper shows page group 1 of 6, invoice-260101, and under it the line Page group 1 takes route 1, with Why. Route 1 takes 4 of 6 page groups when pg.customerEmail is not empty, and sends them to the email destination Customer invoices by email. Otherwise takes the other 2 and sends them to the IFS destination Invoice archive, written to /home/docs/invoices." width="900">
+  </picture>
+</p>
+
 **The whole spooled file.** An Excel template of the whole spooled file
 makes one document with no page group. It takes the first route that has
 no conditions, or whose conditions read only `splf` fields. When no
