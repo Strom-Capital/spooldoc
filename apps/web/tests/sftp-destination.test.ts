@@ -90,7 +90,7 @@ describe('the SFTP destination', { timeout: 30_000 }, () => {
       expect(deliveries.map((d) => [d.kind, d.status, d.document, d.test])).toEqual(INVOICES.map((name) => ['sftp', 'sent', name, false]));
       expect(deliveries[0]).toMatchObject({ to: '127.0.0.1:/in/invoices/invoice-260101.pdf', messageId: null, size: expect.any(Number), ms: expect.any(Number) });
       const [view] = await runViews([row]);
-      expect(view!.deliveryKind).toBe('sftp');
+      expect(view!.deliveryTargets.map((target) => target.kind)).toEqual(['sftp']);
       expect(view!.deliveries[0]).toMatchObject({ kind: 'sftp', status: 'sent', size: expect.any(Number) });
       expect(conn.actions()).toEqual(['holdSpooledFile']);
     });
@@ -272,11 +272,14 @@ describe('the SFTP destination', { timeout: 30_000 }, () => {
         runId: run1!.id,
         files: [file('Acme.pdf'), file('ACME.pdf')],
         documents: [],
+        keepFiles: async () => undefined,
         job: { id: jobId, splfKey: 'key' },
         destinationId: destination!.id,
+        route: null,
+        templates: [],
         email: null,
         webhook: null,
-        context: { job: { id: jobId, name: 'MYJOB', version: 1 }, run: { id: run1!.id, seq: 1 }, splf: sample.splf, attributes: sample.attributes },
+        context: { job: { id: jobId, name: 'MYJOB', version: 1 }, run: { id: run1!.id, seq: 1 }, splf: sample.splf, attributes: sample.attributes, pageGroups: 1 },
         valueTypes: {},
         conn: new FakeConnection(),
         host: 'ibmi.example.com',

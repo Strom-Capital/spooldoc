@@ -19,7 +19,7 @@ export type DeliveredDocument = Pick<RunDocument, 'pageGroupIndex' | 'name' | 'p
 /** A delivery row without what `deliveryRecorder` fills in. */
 export type DeliveryFields = Omit<DeliveryRow, 'runId' | 'jobId' | 'splfKey' | 'destinationId' | 'kind'>;
 
-/** A delivery of an earlier run of the same job on the same spooled file, not to a test address. */
+/** A delivery of an earlier run of the same job on the same spooled file through the same destination, not to a test address. */
 export interface EarlierDelivery {
   document: string;
   to: string;
@@ -28,8 +28,6 @@ export interface EarlierDelivery {
   splfCreated: string | null;
   firstPage: number | null;
   lastPage: number | null;
-  /** Null once the destination is deleted. */
-  destinationId: string | null;
   /** When the row was written. */
   sentAt: Date;
   /** The run's number in the Job log. */
@@ -67,12 +65,14 @@ export async function deliveryLock(kind: string, job: DeliverInput['job'], busy:
 }
 
 /**
- * The deliveries, sent or failed, of earlier runs of this job on this spooled file through a
- * kind of destination, first run first. None while the destination is in test mode: then
- * every document goes to the test address or URL, even one sent for real before, so a
- * template change can be checked on a spooled file that was delivered.
+ * The deliveries, sent or failed, of earlier runs of this job on this spooled file through
+ * this destination, first run first. A delivery through another destination does not
+ * count, so a document goes to each of its destinations. None while the destination is in
+ * test mode: then every document goes to the test address or URL, even one sent for real
+ * before, so a template change can be checked on a spooled file that was delivered.
  */
-export async function earlierDeliveries(kind: string, job: DeliverInput['job'], test: boolean): Promise<EarlierDelivery[]> {
+export async function earlierDeliveries(input: Pick<DeliverInput, 'job' | 'destinationId'>, kind: string, test: boolean): Promise<EarlierDelivery[]> {
+  const { job } = input;
   if (test) return [];
   return getDb()
     .select({
@@ -83,7 +83,6 @@ export async function earlierDeliveries(kind: string, job: DeliverInput['job'], 
       splfCreated: runDeliveries.splfCreated,
       firstPage: runDeliveries.firstPage,
       lastPage: runDeliveries.lastPage,
-      destinationId: runDeliveries.destinationId,
       sentAt: runDeliveries.sentAt,
       seq: runs.seq,
     })
@@ -92,6 +91,7 @@ export async function earlierDeliveries(kind: string, job: DeliverInput['job'], 
     .where(
       and(
         eq(runDeliveries.kind, kind),
+        eq(runDeliveries.destinationId, input.destinationId),
         eq(runDeliveries.jobId, job.id),
         eq(runDeliveries.splfKey, job.splfKey),
         inArray(runDeliveries.status, ['sent', 'failed']),

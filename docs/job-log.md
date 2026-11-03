@@ -147,6 +147,10 @@ a new run. Use it after fixing a definition or a template, or after a
 finish step failed. Spooldoc remembers which spooled files a job has
 processed, so the watcher never runs a file a second time on its own.
 
+Retry sends again only what was not already sent through this
+destination. A job that now delivers through another destination sends
+everything through the new one.
+
 With an email destination, Retry sends only the emails that were not sent
 yet. The ones an earlier run sent show as "Sent in run #N", and the
 Deliver step says so: "Sent 1 email, 42 were sent in run #12". A Retry

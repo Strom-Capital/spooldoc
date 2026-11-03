@@ -342,8 +342,26 @@ describe('the email destination in a run', () => {
     expect(deliveries.map((d) => d.kind)).toEqual(Array(6).fill('email'));
     const [row] = await db().select().from(runs).where(eq(runs.id, runId));
     const [view] = await runViews([row!]);
-    expect(view!.deliveryKind).toBe('email');
+    expect(view!.deliveryTargets.map((target) => target.kind)).toEqual(['email']);
     expect(view!.deliveries.map((d) => d.kind)).toEqual(Array(6).fill('email'));
+  });
+
+  it('sends again through another email destination: what destination A sent does not skip destination B', async () => {
+    const { jobId, spec: first } = await emailJob();
+    const conn = new FakeConnection();
+    await run(jobId, conn);
+    expect(sent).toHaveLength(6);
+
+    const [other] = await db().insert(destinations).values({ kind: 'email', name: 'Invoices by email, copy', config: { testAddress: null } }).returning();
+    await db().insert(jobVersions).values({ jobId, number: 2, spec: { ...first, destination: { ...first.destination, destinationId: other!.id } } });
+    sent = [];
+    const second = await run(jobId, conn, 2);
+    expect(sent).toHaveLength(6);
+    expect(await deliverNote(second)).toBe('Sent 6 emails');
+    const deliveries = await db().select().from(runDeliveries).where(eq(runDeliveries.runId, second));
+    expect(deliveries.map((d) => [d.status, d.destinationId])).toEqual(Array(6).fill(['sent', other!.id]));
+    const [row] = await db().select().from(runs).where(eq(runs.id, second));
+    expect(row!.steps.find((step) => step.step === 'deliver')?.destination).toEqual({ id: other!.id, name: 'Invoices by email, copy', kind: 'email' });
   });
 
   it('fails the run when one email fails, leaves the file alone, and Retry sends only that one', async () => {

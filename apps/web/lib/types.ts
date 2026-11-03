@@ -184,6 +184,8 @@ export interface RunStepView {
   warnings?: string[];
   /** The Lookups step: the lookup tables the run read, as they were then. */
   tables?: { id: string; name: string; revision: number }[];
+  /** A Deliver step: the destination it delivered to, as it was named then. Missing when the destination was gone. */
+  destination?: { id: string; name: string; kind: string };
 }
 
 /** A row of the job log. */
@@ -204,8 +206,11 @@ export interface RunView {
   files: { id: string; name: string; size: number; contentType: string; template: string }[];
   /** The deliveries the run made or tried, one per document; empty when its destination records none. */
   deliveries: DeliveryView[];
-  /** The kind of the run's job version destination when that kind records deliveries, such as `email`. */
-  deliveryKind: DeliveryKind | null;
+  /**
+   * The destinations of the run's job version whose kind records deliveries, such as email,
+   * in the version's order. The Job log shows a list of deliveries for each.
+   */
+  deliveryTargets: DeliveryTargetView[];
   startedAt: string;
   finishedAt: string | null;
 }
@@ -213,9 +218,18 @@ export interface RunView {
 /** The destination kinds that record a delivery per document. */
 export type DeliveryKind = 'email' | 'webhook' | 'sftp';
 
+/** A destination a run's deliveries are listed under; no id and name for deliveries through a destination the version does not have. */
+export interface DeliveryTargetView {
+  destinationId: string | null;
+  name: string | null;
+  kind: DeliveryKind;
+}
+
 /** One delivery of a run, for one document, such as one email. */
 export interface DeliveryView {
   id: string;
+  /** The destination it went through; null once that destination is deleted. */
+  destinationId: string | null;
   kind: DeliveryKind;
   document: string;
   /** Where the delivery went. For an email, the addresses it was for, as the job's To gave them. */

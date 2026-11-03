@@ -4,7 +4,7 @@ import type { DocumentData, PageRange, ValueType } from '@spooldoc/core';
 import type { Connection } from '@spooldoc/ibmi';
 import { eq } from 'drizzle-orm';
 import { emailConfigSchema, ifsConfigSchema, sftpConfigSchema, webhookConfigSchema } from '@/lib/destination-config';
-import type { EmailSpec, WebhookSpec } from '@/lib/job-spec';
+import type { EmailSpec, JobTemplate, WebhookSpec } from '@/lib/job-spec';
 import type { DestinationView } from '@/lib/types';
 import { getDb } from '../db';
 import { destinations } from '../db/schema';
@@ -13,9 +13,9 @@ import { ifsDestination } from './ifs';
 import { openSftpSecrets, sftpConfigView, sftpDestination } from './sftp';
 import { openWebhookSecrets, webhookDestination } from './webhook';
 import type { WebhookContext } from '../webhook-payload';
-import { nFiles, storeRunFiles, type RunFile } from './store';
+import { nFiles, type RunFile } from './store';
 
-export { storeRunFiles, type RunFile } from './store';
+export { type RunFile } from './store';
 
 /** A document of a run: its data, for a destination that fills in fields, such as email. */
 export interface RunDocument {
@@ -36,18 +36,31 @@ export interface RunDocument {
 /** What a destination gets to deliver a run. */
 export interface DeliverInput {
   runId: string;
+  /** The files of `documents`. */
   files: RunFile[];
-  /** Every document of the run, in page group order; the whole spooled file's document last. */
+  /** The documents this destination delivers, in page group order; the whole spooled file's document last. */
   documents: RunDocument[];
+  /**
+   * Keep files in Spooldoc, for download from the Job log. Each file is stored once a run,
+   * also when several destinations of its document keep it.
+   */
+  keepFiles(files: RunFile[]): Promise<void>;
   /** The job and the spooled file, for a destination that remembers what it delivered. */
   job: { id: string; splfKey: string };
   destinationId: string;
+  /** The route that sends these documents here; null when the job has no routes. */
+  route: number | null;
+  /** The job's templates, for a destination that works out from them what a run sends, such as email. */
+  templates: JobTemplate[];
   /** The job's email part, for an email destination. */
   email: EmailSpec | null;
   /** The job's webhook part, for a webhook destination. */
   webhook: WebhookSpec | null;
-  /** The job, the run and the spooled file, for a destination that describes them, such as a webhook. */
-  context: WebhookContext;
+  /**
+   * The job, the run and the spooled file, for a destination that describes them, such as a
+   * webhook, with how many page groups the spooled file has in all.
+   */
+  context: WebhookContext & { pageGroups: number };
   /** The type of each typed field of the definition, by path such as `pg.dueDate`, for fields an email prints. */
   valueTypes: Record<string, ValueType>;
   /** The open connection of the job's server, and its host. */
@@ -61,8 +74,8 @@ export interface DeliverInput {
 export interface Destination {
   kind: string;
   /**
-   * Deliver every file of a run. Runs outside any database transaction, since it may write
-   * to another system; `storeRunFiles` saves files in one transaction of its own.
+   * Deliver the files of a run's documents. Runs outside any database transaction, since it
+   * may write to another system; `keepFiles` saves files in one transaction of its own.
    *
    * @returns The deliver step's note, such as "Kept 3 files in Spooldoc"
    */
@@ -72,8 +85,8 @@ export interface Destination {
 /** The built-in destination: files kept in Spooldoc's database for download. */
 export const spooldocDestination: Destination = {
   kind: 'spooldoc',
-  async deliver({ runId, files }) {
-    await storeRunFiles(runId, files);
+  async deliver({ files, keepFiles }) {
+    await keepFiles(files);
     return `Kept ${nFiles(files.length)} in Spooldoc`;
   },
 };
@@ -89,12 +102,21 @@ const KINDS: Record<string, (row: DestinationRow) => Destination> = {
   sftp: (row) => sftpDestination(sftpConfigSchema.parse(row.config), openSftpSecrets(row.secretsEnc), row.name),
 };
 
-/**
- * The destination behind a destination row, or null for an unknown id or kind.
- *
- * @throws Error when the saved settings are not valid for the kind
- */
-export async function destinationFor(id: string | null): Promise<Destination | null> {
+/** A destination row found for a run: its id, name and kind, and the destination it makes. */
+export interface FoundDestination {
+  id: string;
+  name: string;
+  kind: string;
+  /**
+   * The destination, built from the saved settings.
+   *
+   * @throws Error when the saved settings are not valid for the kind
+   */
+  open(): Destination;
+}
+
+/** The destination row behind an id, or null for an unknown id or kind. */
+export async function destinationFor(id: string | null): Promise<FoundDestination | null> {
   if (!id) {
     return null;
   }
@@ -106,6 +128,15 @@ export async function destinationFor(id: string | null): Promise<Destination | n
   if (!row || !build) {
     return null;
   }
+  return { id, name: row.name, kind: row.kind, open: () => openDestination(row, build) };
+}
+
+/**
+ * The destination of a row, built with its kind's builder.
+ *
+ * @throws Error when the saved settings are not valid for the kind
+ */
+function openDestination(row: DestinationRow & { kind: string }, build: (row: DestinationRow) => Destination): Destination {
   try {
     return build(row);
   } catch (error) {

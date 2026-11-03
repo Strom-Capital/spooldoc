@@ -1,13 +1,13 @@
 import 'server-only';
 
 import type { EmailConfig } from '@/lib/destination-config';
-import { addressList, composeEmail, formatOf, type EmailFormatting } from '../email-message';
+import { emailDocuments } from '@/lib/job-spec';
+import { addressList, composeEmail, type EmailFormatting } from '../email-message';
 import { getFormats } from '../formats';
 import { fromHeader, mailErrorText, mailSecrets, mailSender, mailServer, NO_MAIL_SERVER, stopsSending } from '../mail';
 import { StepError } from '../step-error';
 import { deliveryFailed, deliveryLock, deliveryRecorder, documentFields, earlierDeliveries, earlierText, notSent, sentBefore, setDeliveryLockWait } from './deliveries';
 import type { DeliverInput, Destination } from './index';
-import { storeRunFiles } from './store';
 
 /** "1 email", "3 emails". */
 export const nEmails = (n: number): string => `${n} ${n === 1 ? 'email' : 'emails'}`;
@@ -19,7 +19,7 @@ export const setEmailLockWait = setDeliveryLockWait;
  * Sends one email per document through the mail server in Settings: To, Cc, Bcc,
  * Reply-To, Subject and the message from the job's email part, with the document's files
  * in the formats it attaches. The files are kept in Spooldoc first, so the Job log can
- * show what was mailed. A document an earlier run of the same job already sent for the
+ * show what was mailed. A document an earlier run of the same job already sent through this destination for the
  * same spooled file, created at the same time, with the same pages and name, is not sent
  * again (a test send does not count), so Retry sends only the rest. With a test address,
  * every document goes to it, whatever earlier runs sent. One run at a time sends email
@@ -31,7 +31,7 @@ export function emailDestination(config: EmailConfig): Destination {
   return {
     kind: 'email',
     async deliver(input: DeliverInput) {
-      const { runId, files, documents, job } = input;
+      const { files, documents, job } = input;
       const spec = input.email;
       if (!spec || !spec.to.trim()) {
         throw new StepError('deliver', 'The job sets no To address. Open the Destination step of the job and fill in To.');
@@ -42,7 +42,7 @@ export function emailDestination(config: EmailConfig): Destination {
       if (!server) throw new StepError('deliver', NO_MAIL_SERVER);
       for (const secret of mailSecrets(server)) input.addSecret(secret);
 
-      await storeRunFiles(runId, files);
+      await input.keepFiles(files);
       const formatting: EmailFormatting = { formats: await getFormats(), types: input.valueTypes };
 
       const release = await deliveryLock('email', job, 'Another run of this job is sending email for this spooled file. Retry when it has finished.');
@@ -51,21 +51,15 @@ export function emailDestination(config: EmailConfig): Destination {
         // The spooled file's creation time, as the run read it; "" when the IBM i did not give it.
         const created = input.context.attributes.created;
         // Documents sent for real by an earlier run of this job on this spooled file, first run first; none with a test address.
-        const earlier = await earlierDeliveries('email', job, test !== null);
+        const earlier = await earlierDeliveries(input, 'email', test !== null);
 
-        const attached = (index: number | null) =>
-          files.filter((file) => {
-            const format = formatOf(file.contentType);
-            return file.pageGroupIndex === index && format !== undefined && spec.attach.includes(format);
-          });
-        // The whole spooled file's document gets an email when Attach picks one of its files. A page group
-        // gets one when Attach picks one of its files, or no file of the whole spooled file either, so an
-        // email that is the document goes to each page group.
-        const whole = attached(null).length > 0;
-        const emails = documents.filter((document) => (document.pageGroupIndex === null ? whole : !whole || attached(document.pageGroupIndex).length > 0));
-        if (emails.length === 0) {
+        // Which documents get an email, from the job's templates and Attach, so a destination given
+        // only some of a run's documents decides as one given them all.
+        const which = emailDocuments(input.templates, spec.attach);
+        if (!which.pageGroups && !which.spooledFile) {
           throw new StepError('deliver', 'No email to send: Attach picks none of the files the templates make. Change Attach in the Destination step of the job.');
         }
+        const emails = documents.filter((document) => (document.pageGroupIndex === null ? which.spooledFile : which.pageGroups));
 
         const record = deliveryRecorder(input, 'email');
 

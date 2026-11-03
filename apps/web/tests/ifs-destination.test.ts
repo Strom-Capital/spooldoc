@@ -23,10 +23,12 @@ function setup(ifExists: IfExists, existing: string[] = []) {
   const conn = new FakeConnection();
   conn.folders.add(FOLDER);
   for (const name of existing) conn.ifs.set(`${FOLDER}/${name}`, { bytes: OLD, ccsid: 65535 });
-  const deliver = (files: RunFile[]) => ifsDestination({ folder: FOLDER, ifExists, keepCopy: false }).deliver({ runId: 'run-1', files, documents: [], job: { id: 'job-1', splfKey: 'key' }, destinationId: 'destination-1',
+  const deliver = (files: RunFile[]) => ifsDestination({ folder: FOLDER, ifExists, keepCopy: false }).deliver({ runId: 'run-1', files, documents: [], keepFiles: async () => undefined, job: { id: 'job-1', splfKey: 'key' }, destinationId: 'destination-1',
+      route: null,
+      templates: [],
       email: null,
       webhook: null,
-      context: { job: { id: 'job-1', name: 'MYJOB', version: 1 }, run: { id: 'run-1', seq: 1 }, splf: sample.splf, attributes: sample.attributes },
+      context: { job: { id: 'job-1', name: 'MYJOB', version: 1 }, run: { id: 'run-1', seq: 1 }, splf: sample.splf, attributes: sample.attributes, pageGroups: 1 },
       valueTypes: {},
       conn,
       host: HOST,

@@ -37,6 +37,7 @@ import { FORMAT_FILES, jobSpecSchema, perSpooledFile, splfKey, type JobTemplate,
 import { assetNames, assetResolver } from './assets';
 import { getDb } from './db';
 import { jobs, jobVersions, runs, watchSeen, type RunStep } from './db/schema';
+import { deliverAll, deliveryTargets, type FoundTarget } from './deliver';
 import { destinationFor, type RunDocument, type RunFile } from './destinations';
 import { documentNames, documentRenderer, runFileNames, templateHtml, type DocumentRenderer } from './documents';
 import { fieldTypes } from './email-message';
@@ -113,7 +114,9 @@ export async function executeRun(runId: string, request: RunRequest, connection?
     fn: () => Promise<T>,
     note?: (value: T) => string | undefined,
     warnings?: (value: T) => string[],
+    destination?: RunStep['destination'],
   ): Promise<T> => {
+    const about = destination ? { destination } : {};
     const started = performance.now();
     try {
       const value = await fn();
@@ -124,13 +127,14 @@ export async function executeRun(runId: string, request: RunRequest, connection?
         ms: Math.round(performance.now() - started),
         ...(note ? { note: note(value) } : {}),
         ...(warned.length > 0 ? { warnings: warned } : {}),
+        ...about,
       });
       return value;
     } catch (err) {
       const message = err instanceof StepError ? err.message : firstLine(err, secrets);
       const detail =
         err instanceof StepError ? err.detail : isCarboneError(err) || isConnectionError(err) || isLookupError(err) ? err.detail : undefined;
-      steps.push({ step: name, ok: false, ms: Math.round(performance.now() - started), error: message, ...(detail ? { detail } : {}) });
+      steps.push({ step: name, ok: false, ms: Math.round(performance.now() - started), error: message, ...(detail ? { detail } : {}), ...about });
       throw new StepError(name, message, detail);
     }
   };
@@ -222,18 +226,6 @@ export async function executeRun(runId: string, request: RunRequest, connection?
       }
     }
 
-    // Looked up before the render, so an email destination's message template is rendered with the documents.
-    const destinationLookup = destinationFor(spec.destination.destinationId);
-    destinationLookup.catch(() => undefined);
-    const emailSpec = spec.destination.email;
-    const bodyTemplateId = emailSpec?.bodyTemplateId && (await destinationLookup.catch(() => null))?.kind === 'email' ? emailSpec.bodyTemplateId : null;
-
-    const { files, bodies } = await step(
-      'render',
-      async () => renderFiles(spec, def, groups, sample, { render: await documentRenderer(), bodyTemplateId }),
-      ({ files: out }) => fileCount(out),
-    );
-
     // Each document's name and data, for a destination that fills in fields. Two page groups
     // with the same name get a number, as their files do.
     const names = documentNames(def, groups, sample, spec.render.templates.some(perSpooledFile));
@@ -242,39 +234,53 @@ export async function executeRun(runId: string, request: RunRequest, connection?
       name: names.pageGroups[index]!,
       pages: ranges[index] ?? null,
       data: { pg: group, splf: sample.splf },
-      html: bodies.get(index) ?? null,
     }));
     if (names.spooledFile !== null) {
       documents.push({ pageGroupIndex: null, name: names.spooledFile, pages: null, data: spooledFileData(groups, sample) });
     }
 
-    await step(
-      'deliver',
-      async () => {
-        const destination = await destinationLookup;
-        if (!destination) throw new Error('The destination is gone.');
-        return destination.deliver({
-          runId,
-          files,
-          documents,
-          job: { id: request.jobId, splfKey: splfKey(request.splf) },
-          destinationId: spec.destination.destinationId!,
-          email: spec.destination.email,
-          webhook: spec.destination.webhook,
-          context: {
-            job: { id: request.jobId, name: version.jobName, version: request.version },
-            run: { id: runId, seq: version.seq },
-            splf: request.splf,
-            attributes: sample.attributes,
-          },
-          valueTypes: fieldTypes(def, spec.lookups),
-          conn,
-          host,
-          addSecret: (secret) => secrets.push(secret),
-        });
-      },
-      (note) => note,
+    // Each destination is looked up before the render, so an email destination's message
+    // template is rendered with the documents. A failed lookup fails its own deliver step.
+    const targets: FoundTarget[] = deliveryTargets(spec, documents).map((target) => {
+      const destination = destinationFor(target.destinationId);
+      destination.catch(() => undefined);
+      return { ...target, destination };
+    });
+    const bodyTemplateOf = new Map<FoundTarget, string>();
+    for (const target of targets) {
+      const id = target.email?.bodyTemplateId;
+      if (id && (await target.destination.catch(() => null))?.kind === 'email') bodyTemplateOf.set(target, id);
+    }
+
+    const { files, bodies } = await step(
+      'render',
+      async () => renderFiles(spec, def, groups, sample, { render: await documentRenderer(), bodyTemplateIds: [...new Set(bodyTemplateOf.values())] }),
+      ({ files: out }) => fileCount(out),
     );
+    // An email destination with a message template gets each page group's message with its document.
+    for (const [target, id] of bodyTemplateOf) {
+      const html = bodies.get(id);
+      target.documents = target.documents.map((document) => ({ ...document, html: document.pageGroupIndex === null ? null : (html?.get(document.pageGroupIndex) ?? null) }));
+    }
+
+    await deliverAll(targets, {
+      runId,
+      files,
+      job: { id: request.jobId, splfKey: splfKey(request.splf) },
+      templates: spec.render.templates,
+      context: {
+        job: { id: request.jobId, name: version.jobName, version: request.version },
+        run: { id: runId, seq: version.seq },
+        splf: request.splf,
+        attributes: sample.attributes,
+        pageGroups: groups.length,
+      },
+      valueTypes: fieldTypes(def, spec.lookups),
+      conn,
+      host,
+      addSecret: (secret) => secrets.push(secret),
+      step: (destination, deliver) => step('deliver', deliver, (note) => note, undefined, destination),
+    });
 
     if (lookupWarnings.length > 0) {
       status = 'warning';
@@ -321,8 +327,8 @@ export async function executeRun(runId: string, request: RunRequest, connection?
 /**
  * Render the files of a run: each template in each of its formats, for every page group,
  * or once for the whole spooled file, with names made unique. With `pageGroup`, only that
- * page group's files in `formats`, for a test from the job builder. Also the HTML of the
- * email message template of each page group.
+ * page group's files in `formats`, for a test from the job builder. Also the HTML of each
+ * email message template, by template id and page group.
  *
  * @throws StepError when a template has problems or Carbone refuses a document
  * @throws CarboneError when Carbone cannot be reached
@@ -332,27 +338,29 @@ export async function renderFiles(
   def: Definition,
   groups: Record<string, unknown>[],
   sample: Sample,
-  options: { render: DocumentRenderer; bodyTemplateId?: string | null; pageGroup?: number; formats?: Format[] },
-): Promise<{ files: RunFile[]; bodies: Map<number, string> }> {
+  options: { render: DocumentRenderer; bodyTemplateIds?: string[]; pageGroup?: number; formats?: Format[] },
+): Promise<{ files: RunFile[]; bodies: Map<string, Map<number, string>> }> {
   const { render } = options;
-  const bodyTemplateId = options.bodyTemplateId ?? null;
   const only = options.pageGroup;
   const asset = await assetResolver();
   const assets = (await assetNames()).map((entry) => entry.name);
   // Every file's name as a run of the whole spooled file gives it, also when only one page group is rendered.
   const fileName = runFileNames(spec.render.templates, def, groups, sample);
   const out: RunFile[] = [];
-  // The email message of each page group, from the job's email body template.
-  const bodies = new Map<number, string>();
-  const bodyTemplate = bodyTemplateId ? spec.render.templates.find((t) => t.id === bodyTemplateId) : undefined;
-  if (bodyTemplateId && bodyTemplate?.kind !== 'html') {
-    throw new StepError('render', "The email's message template is not an HTML template of the job. Pick another one in the Destination step.");
+  // The email message of each page group, by message template: two email destinations can each have their own.
+  const bodies = new Map<string, Map<number, string>>();
+  for (const id of options.bodyTemplateIds ?? []) {
+    if (spec.render.templates.find((t) => t.id === id)?.kind !== 'html') {
+      throw new StepError('render', "The email's message template is not an HTML template of the job. Pick another one in the Destination step.");
+    }
+    bodies.set(id, new Map());
   }
   for (const [templateIndex, template] of spec.render.templates.entries()) {
     // A preview of one page group makes no file of the whole spooled file.
     if (only !== undefined && perSpooledFile(template)) continue;
     const formats = only !== undefined && options.formats ? template.formats.filter((format) => options.formats!.includes(format)) : template.formats;
-    if (only !== undefined && formats.length === 0 && template.id !== bodyTemplateId) continue;
+    const body = bodies.get(template.id);
+    if (only !== undefined && formats.length === 0 && !body) continue;
     // Checked once per template: Carbone prints some mistakes without an error.
     const prepared = await prepareTemplate(template, def, assets, spec.lookups);
     // The documents to make: one of the whole spooled file, or one per page group.
@@ -383,11 +391,11 @@ export async function renderFiles(
       for (const format of formats) {
         const content = await renderTo(format);
         out.push({ ...file, name: fileName(templateIndex, document.index, format), contentType: FORMAT_FILES[format].contentType, content });
-        if (format === 'html' && template.id === bodyTemplateId && document.index !== null) bodies.set(document.index, new TextDecoder().decode(content));
+        if (format === 'html' && body && document.index !== null) body.set(document.index, new TextDecoder().decode(content));
       }
       // The message template makes no HTML file of its own: its HTML is rendered for the email only.
-      if (template.id === bodyTemplateId && document.index !== null && !bodies.has(document.index)) {
-        bodies.set(document.index, new TextDecoder().decode(await renderTo('html')));
+      if (body && document.index !== null && !body.has(document.index)) {
+        body.set(document.index, new TextDecoder().decode(await renderTo('html')));
       }
     }
   }
