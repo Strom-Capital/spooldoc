@@ -201,7 +201,7 @@ the whole spooled file's email. Nothing is sent from the preview.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/email-step-dark.png">
-    <img src="assets/email-step-light.png" alt="The destination step of an invoice job sends to {d.pg.customerEmail} with a Bcc to an archive mailbox, a Reply-To and the subject Invoice {d.pg.invoiceNo} from MyCo Ltd. Beside the fields, the preview of page group 1 of 6 shows the email to invoices@northernsupply.example with invoice-260101.pdf attached and the message filled in, its total formatted as 302,66 € and its due date as 29.10.2026." width="900">
+    <img src="assets/email-step-light.png" alt="The destination step of an invoice job, with the page group stepper at the top on page group 1 of 6. The email destination Customer invoices by email is picked, with Add a condition and Add a route below the destinations. The fields send to {d.pg.customerEmail} with a Bcc to an archive mailbox, a Reply-To and the subject Invoice {d.pg.invoiceNo} from MyCo Ltd. Beside them, the preview shows the email to invoices@northernsupply.example with invoice-260101.pdf attached and the message filled in, its total formatted as 302,66 € and its due date as 29.10.2026." width="900">
   </picture>
 </p>
 
@@ -322,7 +322,7 @@ numbers, as a run would make it, with the real values of the sample:
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/webhook-step-dark.png">
-    <img src="assets/webhook-step-light.png" alt="The destination step of an invoice job sends its PDF and HTML files to a webhook. Beside the fields, a preview of the call of page group 1 of 6 with line numbers: POST /spooldoc, the headers with the Authorization value masked and the signature, and the JSON body with the document, the job, the spooled file and the invoice's fields. Below it, the receiver's answer HTTP/1.1 200 OK in 142 ms." width="900">
+    <img src="assets/webhook-step-light.png" alt="The destination step of an invoice job, with the page group stepper at the top on page group 1 of 6. The webhook destination Order system is picked, with Add a condition and Add a route below the destinations. The fields send the PDF and HTML files. Beside them, a preview of the call with line numbers: POST /spooldoc, the headers with the Authorization value masked and the signature, and the JSON body with the document, the job, the spooled file and the invoice fields. Below it, the receiver answered HTTP/1.1 200 OK in 142 ms." width="900">
   </picture>
 </p>
 
@@ -643,7 +643,7 @@ then looked up one by one; when a lookup fails, the view says why.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/sftp-step-dark.png">
-    <img src="assets/sftp-step-light.png" alt="The destination step of an invoice job uploads to SFTP. Beside the page group stepper, the test folder MYUSER@sftp.example.com:/test/in is listed with earlier invoices around invoice-260101.pdf, which Upload test has just uploaded, with its size and time. Below the listing, Upload test and the line Test: files go to /test/in." width="900">
+    <img src="assets/sftp-step-light.png" alt="The destination step of an invoice job, with the page group stepper at the top on page group 1 of 6. The SFTP destination Invoices to bank is picked, with Add a condition and Add a route below the destinations. Below them, the test folder MYUSER@sftp.example.com:/test/in is listed with earlier invoices around invoice-260101.pdf, which Upload test has just uploaded, with its size and time. Below the listing, Upload test and the line Test: files go to /test/in." width="900">
   </picture>
 </p>
 
