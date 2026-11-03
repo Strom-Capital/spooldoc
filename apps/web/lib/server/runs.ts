@@ -9,7 +9,7 @@ import { UUID } from './servers';
 type RunRow = typeof runs.$inferSelect;
 
 /** The destination kinds that record a delivery per document in `run_deliveries`. */
-const DELIVERY_KINDS: readonly DeliveryKind[] = ['email', 'webhook', 'sftp'];
+const DELIVERY_KINDS: readonly DeliveryKind[] = ['email', 'webhook', 'sftp', 'ifs'];
 
 /** The most of a receiver's answer the Job log shows. One more character is stored, to tell it was cut. */
 export const RESPONSE_LIMIT = 2048;

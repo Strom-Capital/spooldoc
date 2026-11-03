@@ -58,8 +58,8 @@ Each step is recorded with its outcome, so a run shows where it stopped.
 The captured sample and the delivered files stay with the run while it is
 kept. When the job has more than one template, the run's files are
 grouped by template. The log's Page groups column counts what the
-definition found. With several routes, each email, webhook call and
-upload says the route that sent it, such as "Route 2".
+definition found. With several routes, each email, webhook call, file
+written and upload says the route that sent it, such as "Route 2".
 
 <p align="center">
   <picture>
@@ -142,6 +142,26 @@ time.
 
 A run that uploaded nothing says "This run uploaded no file."
 
+## Files written
+
+A run of a job that delivers to an [IFS folder](destinations.md#ifs-folder)
+has a Files written section under its files, with a count such as "Files
+written (5 of 6 written)". It lists one row per file: the file, the path
+it got in the IFS, such as `/home/docs/out/invoice-1001-2.pdf` when a
+number was added, its size and how long the write took, then its status
+and the time.
+
+| Status | Meaning |
+|--------|---------|
+| Written | The file is in the folder. |
+| Written in run #N | An earlier run of the job wrote it for the same spooled file, with the same creation time, pages and name, so it was not written again. |
+| Failed | Open the row to see why, with the IBM i's own text under Details. A file the run did not try says "Not written" and why. |
+
+A run that did not get to write, such as one whose template failed, has
+no Files written section. Neither do runs from before Spooldoc kept this
+list, though they wrote their files: the Deliver step says what they
+wrote.
+
 ## Retry
 
 Retry runs the same spooled file again with the job's active version, as
@@ -172,6 +192,16 @@ hooks.example.com, 5 were sent in run #12". A Retry that starts while
 another run is still sending calls for the same spooled file waits for it
 first. While the destination has a test URL, Retry sends every document
 to it, also the ones sent for real before.
+
+With an IFS destination, Retry writes only the files that the
+destination has not written yet to its folder: "Wrote 1 file to
+/home/docs/out on ibmi.example.com, 5 were written in run #12". So a
+setting of Add a number never makes a second copy of a file on retry,
+and with Fail the run the files the earlier run wrote are not in the
+way. A Retry that starts while another run is still writing files of the
+same spooled file waits for it first. A run from before Spooldoc kept
+the Files written list has no record of its files, so a Retry of it
+writes every file again.
 
 With an SFTP destination, Retry uploads only the files that the
 destination has not uploaded yet to its folder on its server: "Uploaded

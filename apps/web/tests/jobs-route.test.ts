@@ -667,7 +667,7 @@ describe('runs that deliver to an IFS folder', () => {
     expect(written()).toEqual([]);
   });
 
-  it('says how many files were written when a write fails part way, with the IBM i text one step away', async () => {
+  it('writes the other files when one fails, says how many were written, and keeps the IBM i text one step away', async () => {
     const id = await ifsJob();
     const conn = fake();
     const write = conn.writeIfsFile.bind(conn);
@@ -682,9 +682,9 @@ describe('runs that deliver to an IFS folder', () => {
     });
     const r = await run(id);
     expect(r.status).toBe('failed');
-    expect(r.error).toBe(`Wrote 2 of 6 files to ${FOLDER}, then: DEMOUSER needs *WX authority on /home/docs/out and *X on every folder above it.`);
+    expect(r.error).toBe(`Wrote 5 of 6 files to ${FOLDER} on ibmi.example.com. invoice-260103.pdf: DEMOUSER needs *WX authority on /home/docs/out and *X on every folder above it.`);
     expect(deliver(r)?.detail).toBe('IFS file /home/docs/out/x.pdf: Access to request was denied.');
-    expect(written()).toHaveLength(2);
+    expect(written()).toHaveLength(5);
     expect(fake().actions()).toEqual([]);
   });
 });

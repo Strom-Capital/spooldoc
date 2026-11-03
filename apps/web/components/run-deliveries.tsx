@@ -14,10 +14,11 @@ const PAGE = 50;
 
 /**
  * The words of the deliveries table for each kind: its title, the plural for Show more, its
- * empty text, where each went, and the verb of a delivery that went, such as "Sent".
+ * empty text, where each went, the verb of a delivery that went, such as "Sent", and what
+ * an earlier run did, such as "sent".
  */
-const KIND_TEXT: Record<DeliveryKind, { title: string; plural: string; none: string; to: string; noTarget: string; test: string; verb: string }> = {
-  email: { title: 'Emails', plural: 'emails', none: 'This run sent no email.', to: 'To', noTarget: 'No address', test: 'Sent to the test address of the destination.', verb: 'Sent' },
+const KIND_TEXT: Record<DeliveryKind, { title: string; plural: string; none: string; to: string; noTarget: string; test: string; verb: string; did: string }> = {
+  email: { title: 'Emails', plural: 'emails', none: 'This run sent no email.', to: 'To', noTarget: 'No address', test: 'Sent to the test address of the destination.', verb: 'Sent', did: 'sent' },
   webhook: {
     title: 'Webhook calls',
     plural: 'calls',
@@ -26,6 +27,7 @@ const KIND_TEXT: Record<DeliveryKind, { title: string; plural: string; none: str
     noTarget: 'No URL',
     test: 'Sent to the test URL of the destination.',
     verb: 'Sent',
+    did: 'sent',
   },
   sftp: {
     title: 'Uploads',
@@ -35,6 +37,17 @@ const KIND_TEXT: Record<DeliveryKind, { title: string; plural: string; none: str
     noTarget: 'Not uploaded',
     test: 'Uploaded to the test folder of the destination.',
     verb: 'Uploaded',
+    did: 'uploaded',
+  },
+  ifs: {
+    title: 'Files written',
+    plural: 'files',
+    none: 'This run wrote no file.',
+    to: 'Written to',
+    noTarget: 'Not written',
+    test: 'Written to the test folder of the destination.',
+    verb: 'Written',
+    did: 'wrote',
   },
 };
 
@@ -43,13 +56,17 @@ export const RETRY_TEXT: Record<DeliveryKind, string> = {
   email: 'Emails an earlier run sent are not sent again.',
   webhook: 'Documents an earlier run sent to the webhook are not sent again.',
   sftp: 'Uploads only the files that were not uploaded yet.',
+  ifs: 'Writes only the files that were not written yet.',
 };
 
 /**
  * A run's deliveries by destination: one list for each destination of its job version that
  * records deliveries, in order, and one per kind for deliveries through a destination the
  * version does not have, such as one since deleted. A destination with no deliveries
- * still gets its list, which says the run made none.
+ * still gets its list, which says the run made none, except an IFS folder: runs from
+ * before Spooldoc recorded IFS writes have none, though they wrote their files, and a run
+ * that tried to write records every file, so an IFS list with none would say what may
+ * not be true.
  */
 export function deliveryGroups(run: Pick<RunView, 'deliveryTargets' | 'deliveries'>): { target: DeliveryTargetView; deliveries: DeliveryView[] }[] {
   const groups = run.deliveryTargets.map((target) => ({ target, deliveries: run.deliveries.filter((delivery) => delivery.destinationId === target.destinationId) }));
@@ -60,7 +77,24 @@ export function deliveryGroups(run: Pick<RunView, 'deliveryTargets' | 'deliverie
     if (group) group.deliveries.push(delivery);
     else groups.push({ target: { destinationId: null, name: null, kind: delivery.kind }, deliveries: [delivery] });
   }
-  return groups;
+  return groups.filter((group) => group.target.kind !== 'ifs' || group.deliveries.length > 0);
+}
+
+/**
+ * What a run's Files section says when no file was kept in Spooldoc. "None delivered." only
+ * when nothing went anywhere: no deliver step went well and no delivery went out, now or in
+ * an earlier run. Otherwise it points to the lists of the deliveries that went out, such as
+ * Files written, or to the Deliver steps, since a step can fail after some files went.
+ */
+export function noCopyText(run: Pick<RunView, 'steps' | 'deliveries'>): string {
+  const lists = [...new Set(run.deliveries.filter((delivery) => delivery.status !== 'failed').map((delivery) => KIND_TEXT[delivery.kind].title))];
+  if (lists.length > 0) {
+    const named = lists.length === 1 ? `The ${lists[0]} list says` : `The ${lists.slice(0, -1).join(', ')} and ${lists.at(-1)} lists say`;
+    return `No copy kept in Spooldoc. ${named} where the files went.`;
+  }
+  const deliverSteps = run.steps.filter((step) => step.step === 'deliver');
+  if (deliverSteps.some((step) => step.ok)) return `No copy kept in Spooldoc. ${deliverSteps.length > 1 ? 'The Deliver steps say' : 'The Deliver step says'} where the files went.`;
+  return 'None delivered.';
 }
 
 /** "Page group 3 (invoice-1003)", "Whole spooled file (spdinvoice)". */
@@ -138,12 +172,12 @@ const STATUS_TEXT: Record<number, string> = {
   504: 'Gateway Timeout',
 };
 
-/** How a delivery reads: Sent (or Uploaded), Test, Sent in run #N or Failed. */
-function deliveryStatus(delivery: DeliveryView, text: { test: string; verb: string }): { tone: StatusTone; icon: typeof CheckCircle2Icon; label: string; title?: string } {
+/** How a delivery reads: Sent (or Uploaded, Written), Test, Sent in run #N or Failed. */
+function deliveryStatus(delivery: DeliveryView, text: { test: string; verb: string; did: string }): { tone: StatusTone; icon: typeof CheckCircle2Icon; label: string; title?: string } {
   if (delivery.status === 'failed') return { tone: 'message', icon: XCircleIcon, label: 'Failed' };
   if (delivery.status === 'already_sent') {
     const verb = text.verb.toLowerCase();
-    return { tone: 'neutral', icon: HistoryIcon, label: `${text.verb} in run #${delivery.sentInRun}`, title: `An earlier run ${verb} it, so it was not ${verb} again.` };
+    return { tone: 'neutral', icon: HistoryIcon, label: `${text.verb} in run #${delivery.sentInRun}`, title: `An earlier run ${text.did} it, so it was not ${verb} again.` };
   }
   if (delivery.test) return { tone: 'held', icon: FlaskConicalIcon, label: 'Test', title: text.test };
   return { tone: 'ready', icon: CheckCircle2Icon, label: text.verb };
@@ -198,7 +232,8 @@ export function RunDeliveries({
 }) {
   const text = KIND_TEXT[kind];
   const webhook = kind === 'webhook';
-  const upload = kind === 'sftp';
+  // Files in a folder: an upload, or a file written to the IFS.
+  const upload = kind === 'sftp' || kind === 'ifs';
   const [shown, setShown] = useState(PAGE);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const sent = deliveries.filter((delivery) => delivery.status !== 'failed').length;
@@ -263,7 +298,7 @@ export function RunDeliveries({
                           ) : upload ? (
                             // Broken only after a slash, so a file name stays whole.
                             <span className="font-mono [overflow-wrap:anywhere]">
-                              {remotePath(delivery.to)
+                              {(kind === 'sftp' ? remotePath(delivery.to) : delivery.to)
                                 .split('/')
                                 .map((part, index, parts) => (
                                   <Fragment key={index}>
