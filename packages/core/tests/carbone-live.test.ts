@@ -285,6 +285,66 @@ describe.skipIf(!url)("Carbone server", () => {
     expect(values.filter((v) => v.type === "e")).toEqual([]);
   });
 
+  it.each([false, true])("keeps a design's row styles on every loop row and on a row below the loop (hardRefresh %s)", async (hardRefresh) => {
+    const yellow = { type: "pattern", pattern: "solid", fgColor: "FFF2CC" };
+    const template = await buildXlsx({
+      sheets: [
+        {
+          name: "Lines",
+          columns: [{ ref: "C", style: { font: { italic: true }, fill: { type: "pattern", pattern: "solid", fgColor: "DDEBF7" } } }],
+          rows: [
+            { row: 2, style: { fill: yellow } },
+            { row: 4, style: { font: { bold: true }, border: { top: { style: "thin" } } } },
+          ],
+          cells: [
+            { ref: "A1", value: "Name" },
+            { ref: "A2", value: "{d.pgs[i].name}" },
+            { ref: "B2", value: "{d.pgs[i].amount:formatN}", style: { numFmt: "#,##0.00" } },
+            { ref: "A3", value: "{d.pgs[i+1].name}" },
+            { ref: "A4", value: "Total" },
+          ],
+        },
+      ],
+    });
+    const data = { pgs: [{ name: "MYLIB", amount: 1 }, { name: "MYOUTQ", amount: 2 }, { name: "MYOUTQ2", amount: 3 }], splf: {} };
+    const files = unzipSync(await renderDocument(server, { kind: "xlsx", template, data, format: "xlsx", hardRefresh }));
+    const sheet = strFromU8(files["xl/worksheets/sheet1.xml"]!);
+    const styles = strFromU8(files["xl/styles.xml"]!);
+    const list = (tag: string, item: string) => /<(\w+)[^>]*>([\s\S]*?)<\/\1>/.exec(styles.slice(styles.indexOf(`<${tag}`)))![2]!.match(new RegExp(`<${item}(?:\\s[^>]*?)?(?:/>|>[\\s\\S]*?</${item}>)`, "g"))!;
+    const xfs = list("cellXfs", "xf");
+    /** What a style index holds: bold, italic, its fill colour, a top border and its number format. */
+    const style = (s: string | undefined) => {
+      const xf = xfs[Number(s ?? 0)]!;
+      const id = (name: string) => Number(new RegExp(`${name}="(\\d+)"`).exec(xf)![1]);
+      const font = list("fonts", "font")[id("fontId")]!;
+      return {
+        bold: /<b(?: val="(?:1|true)")?\/>/.test(font),
+        italic: /<i(?: val="(?:1|true)")?\/>/.test(font),
+        fill: /<fgColor rgb="FF(\w{6})"/.exec(list("fills", "fill")[id("fillId")]!)?.[1],
+        top: /<top style="thin"/.test(list("borders", "border")[id("borderId")]!),
+        numFmt: new RegExp(`<numFmt numFmtId="${id("numFmtId")}" formatCode="([^"]*)"`).exec(styles)?.[1],
+      };
+    };
+    const rows = [...sheet.matchAll(/<row([^>]*)>([\s\S]*?)<\/row>/g)].map((m) => ({ s: /\bs="(\d+)"/.exec(m[1]!)?.[1], cells: [...m[2]!.matchAll(/<c\b([^>]*?)(?:\/>|>[\s\S]*?<\/c>)/g)].map((c) => /\bs="(\d+)"/.exec(c[1]!)?.[1]) }));
+    // The header, three loop rows, then the total row.
+    expect(rows).toHaveLength(5);
+    const fill = { bold: false, italic: false, fill: "FFF2CC", top: false };
+    for (const row of rows.slice(1, 4)) {
+      expect(style(row.s)).toMatchObject(fill);
+      expect(row.cells).toHaveLength(3);
+      expect(style(row.cells[0])).toMatchObject(fill);
+      expect(style(row.cells[1])).toMatchObject({ ...fill, numFmt: "#,##0.00" });
+      // Column C: the row's fill over the column's, and the column's italics.
+      expect(style(row.cells[2])).toMatchObject({ ...fill, italic: true });
+    }
+    const total = { bold: true, italic: false, top: true };
+    expect(style(rows[4]!.s)).toMatchObject(total);
+    // LibreOffice leaves out the empty B cell, which has the row's style.
+    for (const s of rows[4]!.cells.slice(0, -1)) expect(style(s)).toMatchObject(total);
+    expect(style(rows[4]!.cells.at(-1))).toMatchObject({ ...total, italic: true, fill: "DDEBF7" });
+    expect(style(rows[0]!.s)).toMatchObject({ bold: false, fill: undefined });
+  });
+
   it("prints a long Excel starter on several A4 landscape pages", async () => {
     const { sample, definition } = loadFixture("order-report");
     const { pageGroups } = extract(definition, sample);

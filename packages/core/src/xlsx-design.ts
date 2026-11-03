@@ -222,6 +222,7 @@ const row = z.strictObject({
   height: z.number().min(0).max(409).optional(),
   hidden: z.boolean().optional(),
   outlineLevel: z.number().int().min(0).max(7).optional(),
+  style: style.optional(),
 });
 
 const views = z.strictObject({
@@ -692,11 +693,18 @@ class Builder {
     });
     if (columns.length > 0) out.columns = Array.from(columns, (c) => c ?? {});
 
+    const rowStyles = new Map<number, Style>();
     if (design.rows) {
       const rowDefs = new Map<number, NonNullable<WriteSheet["rowDefs"]> extends Map<number, infer R> ? R : never>();
       design.rows.forEach((r, i) => {
         if (rowDefs.has(r.row - 1)) this.problem([...path, "rows", i, "row"], `Row ${r.row} is in an earlier entry too. Give each row once.`);
-        rowDefs.set(r.row - 1, { ...(r.height !== undefined ? { height: r.height } : {}), ...(r.hidden ? { hidden: true } : {}), ...(r.outlineLevel ? { outlineLevel: r.outlineLevel } : {}) });
+        rowDefs.set(r.row - 1, {
+          ...(r.height !== undefined ? { height: r.height } : {}),
+          ...(r.hidden ? { hidden: true } : {}),
+          ...(r.outlineLevel ? { outlineLevel: r.outlineLevel } : {}),
+          ...(r.style ? { style: toStyle(r.style, defaultFont) } : {}),
+        });
+        if (r.style) rowStyles.set(r.row, r.style);
       });
       out.rowDefs = rowDefs;
     }
@@ -709,9 +717,10 @@ class Builder {
       const before = seen.get(c.ref);
       if (before !== undefined) this.problem([...at, "ref"], `${c.ref} is given in cells[${before}] too. Give each cell once.`);
       seen.set(c.ref, i);
-      const built = this.cell(c, at, mergeStyle(columnStyles.get(ref.column), c.style), defaultFont);
+      const built = this.cell(c, at, mergeStyle(mergeStyle(columnStyles.get(ref.column), rowStyles.get(ref.row)), c.style), defaultFont);
       if (built) cells.set(`${ref.row - 1},${ref.column - 1}`, built);
     });
+    this.fillStyledRows(cells, rowStyles, columnStyles, path, defaultFont);
     if (cells.size > 0) out.cells = cells;
 
     const merges = design.merges ?? [];
@@ -791,6 +800,42 @@ class Builder {
       out.freezePane = { ...(frozen.rows ? { rows: frozen.rows } : {}), ...(frozen.columns ? { columns: frozen.columns } : {}) };
     }
     return out;
+  }
+
+  /**
+   * Gives a styled row an empty cell, with its style, in each column from A up to its last
+   * cell or styled column. Where the row crosses a styled column, Excel writes such a cell
+   * with both styles, the row's on top; without it, Excel shows the row's style alone. And
+   * Carbone, when it writes the rows of a sheet, fills a gap before a cell with a cell
+   * without a style, which then shows no row style.
+   */
+  fillStyledRows(cells: Map<string, Partial<Cell>>, rowStyles: Map<number, Style>, columnStyles: Map<number, Style>, path: Path, defaultFont: Font): void {
+    if (rowStyles.size === 0) return;
+    const lastColumn = new Map<number, number>();
+    const given = new Map<number, number>();
+    for (const key of cells.keys()) {
+      const [r, n] = key.split(",").map(Number) as [number, number];
+      if (!rowStyles.has(r + 1)) continue;
+      lastColumn.set(r + 1, Math.max(lastColumn.get(r + 1) ?? 0, n + 1));
+      given.set(r + 1, (given.get(r + 1) ?? 0) + 1);
+    }
+    const lastStyled = Math.max(0, ...columnStyles.keys());
+    let added = 0;
+    for (const r of rowStyles.keys()) added += Math.max(lastColumn.get(r) ?? 0, lastStyled) - (given.get(r) ?? 0);
+    if (cells.size + added > MAX_CELLS) {
+      this.problem(
+        [...path, "rows"],
+        `With the empty cells its styled rows need, the sheet would hold ${cells.size + added} cells, and it holds at most ${MAX_CELLS}. Style fewer rows, or style the cells.`,
+      );
+      return;
+    }
+    for (const [r, rowStyle] of rowStyles) {
+      const last = Math.max(lastColumn.get(r) ?? 0, lastStyled);
+      for (let n = 1; n <= last; n++) {
+        const key = `${r - 1},${n - 1}`;
+        if (!cells.has(key)) cells.set(key, { value: null, style: toStyle(mergeStyle(columnStyles.get(n), rowStyle)!, defaultFont) });
+      }
+    }
   }
 
   cell(design: z.output<typeof cell>, path: Path, style: Style | undefined, defaultFont: Font): Partial<Cell> | undefined {
@@ -934,13 +979,15 @@ function hideFilterNames(bytes: Uint8Array): Uint8Array {
  * `activeSheet`. A sheet has `name`, and optionally `tabColor`, `views` (`frozen`,
  * `zoom`, `showGridLines`, `rightToLeft`), `columns` (`ref` such as `B` or `B:D`, `width`
  * in characters, `hidden`, `outlineLevel`, `style`), `rows` (`row`, `height` in points,
- * `hidden`, `outlineLevel`), `cells`, `merges`, `autoFilter`, `conditionalFormatting`,
+ * `hidden`, `outlineLevel`, `style`), `cells`, `merges`, `autoFilter`, `conditionalFormatting`,
  * `dataValidations`, `images`, `pageSetup` and `headerFooter`.
  *
  * A cell has `ref` such as `B5`, and optionally `value` (text, which may hold tags, a
  * number, a boolean, `{ date: "2026-10-15" }` written as a date serial, `{ richText }` or
- * `{ formula, result }`), `style` (`numFmt`, `font`, `fill`, `border`, `alignment`; a
- * column's style goes under it), `hyperlink` and `note`. Colours are six hex digits.
+ * `{ formula, result }`), `style` (`numFmt`, `font`, `fill`, `border`, `alignment`; its
+ * row's style goes under it, and its column's under that, key by key), `hyperlink` and
+ * `note`. Where a styled row crosses a styled column, an empty cell gets both styles, as
+ * Excel writes it. Colours are six hex digits.
  * Formulas take no `=`; newer functions such as XLOOKUP get the `_xlfn.` prefix they
  * need. A picture is `{ asset, tl, ext }`, anchored to its top-left cell with its size
  * in pixels, or `{ asset, range }`, filling the range.
