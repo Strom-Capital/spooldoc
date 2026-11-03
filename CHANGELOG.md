@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.0](https://github.com/Strom-Capital/spooldoc/compare/v0.6.0...v0.7.0) (2026-11-03)
+
+
+### Features
+
+* **core:** row styles in Excel designs ([#165](https://github.com/Strom-Capital/spooldoc/issues/165)) ([a84bd97](https://github.com/Strom-Capital/spooldoc/commit/a84bd9703048d16c3544a64a41701d6be87dac5b))
+* lookup tables kept in Spooldoc ([#169](https://github.com/Strom-Capital/spooldoc/issues/169)) ([f8e7efd](https://github.com/Strom-Capital/spooldoc/commit/f8e7efdb0a5728b360e234f7e9e7c3381cb39632))
+
+
+### Bug Fixes
+
+* **core:** keep a column's style in the gaps Carbone fills ([#166](https://github.com/Strom-Capital/spooldoc/issues/166)) ([7838f27](https://github.com/Strom-Capital/spooldoc/commit/7838f2735c11e65ed0fcf12ae20c3c9bad4ab8d0))
+* **core:** move to hucre 1.3.0 and drop its workarounds ([#160](https://github.com/Strom-Capital/spooldoc/issues/160)) ([ea5c8c5](https://github.com/Strom-Capital/spooldoc/commit/ea5c8c583ad2134078aff9303baa30506f8f0975))
+
 ## [0.6.0](https://github.com/Strom-Capital/spooldoc/compare/v0.5.0...v0.6.0) (2026-10-23)
 
 
