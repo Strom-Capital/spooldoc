@@ -46,6 +46,46 @@ function sheetCells(xlsx: Uint8Array): Map<string, { type: string; value: string
   return cells;
 }
 
+/**
+ * The rows of the first sheet of an XLSX Carbone made, each with its style and its cells'
+ * styles and columns, the styles of its columns, and what a style index holds: bold,
+ * italic, its fill colour, a top border and its number format. Without `r`, a cell's
+ * column comes from its place, since Carbone then writes every cell from A.
+ */
+function sheetStyles(xlsx: Uint8Array) {
+  const files = unzipSync(xlsx);
+  const sheet = strFromU8(files["xl/worksheets/sheet1.xml"]!);
+  const styles = strFromU8(files["xl/styles.xml"]!);
+  const list = (tag: string, item: string) => /<(\w+)[^>]*>([\s\S]*?)<\/\1>/.exec(styles.slice(styles.indexOf(`<${tag}`)))![2]!.match(new RegExp(`<${item}(?:\\s[^>]*?)?(?:/>|>[\\s\\S]*?</${item}>)`, "g"))!;
+  const xfs = list("cellXfs", "xf");
+  const style = (s: string | undefined) => {
+    const xf = xfs[Number(s ?? 0)]!;
+    const id = (name: string) => Number(new RegExp(`${name}="(\\d+)"`).exec(xf)![1]);
+    const font = list("fonts", "font")[id("fontId")]!;
+    return {
+      bold: /<b(?: val="(?:1|true)")?\/>/.test(font),
+      italic: /<i(?: val="(?:1|true)")?\/>/.test(font),
+      fill: /<fgColor rgb="FF(\w{6})"/.exec(list("fills", "fill")[id("fillId")]!)?.[1],
+      top: /<top style="thin"/.test(list("borders", "border")[id("borderId")]!),
+      numFmt: new RegExp(`<numFmt numFmtId="${id("numFmtId")}" formatCode="([^"]*)"`).exec(styles)?.[1],
+    };
+  };
+  const rows = [...sheet.matchAll(/<row([^>]*)>([\s\S]*?)<\/row>/g)].map((m) => {
+    const cells = [...m[2]!.matchAll(/<c\b([^>]*?)(?:\/>|>[\s\S]*?<\/c>)/g)].map((c) => c[1]!);
+    return {
+      s: /\bs="(\d+)"/.exec(m[1]!)?.[1],
+      cells: cells.map((c) => /\bs="(\d+)"/.exec(c)?.[1]),
+      columns: cells.map((c, i) => /\br="([A-Z]+)\d+"/.exec(c)?.[1] ?? String.fromCharCode(65 + i)),
+    };
+  });
+  const columns = [...sheet.matchAll(/<col\b([^>]*)\/>/g)].map((m) => ({
+    min: Number(/\bmin="(\d+)"/.exec(m[1]!)![1]),
+    max: Number(/\bmax="(\d+)"/.exec(m[1]!)![1]),
+    s: /\bstyle="(\d+)"/.exec(m[1]!)?.[1],
+  }));
+  return { rows, columns, style };
+}
+
 async function failure(promise: Promise<unknown>): Promise<CarboneError> {
   try {
     await promise;
@@ -307,25 +347,7 @@ describe.skipIf(!url)("Carbone server", () => {
       ],
     });
     const data = { pgs: [{ name: "MYLIB", amount: 1 }, { name: "MYOUTQ", amount: 2 }, { name: "MYOUTQ2", amount: 3 }], splf: {} };
-    const files = unzipSync(await renderDocument(server, { kind: "xlsx", template, data, format: "xlsx", hardRefresh }));
-    const sheet = strFromU8(files["xl/worksheets/sheet1.xml"]!);
-    const styles = strFromU8(files["xl/styles.xml"]!);
-    const list = (tag: string, item: string) => /<(\w+)[^>]*>([\s\S]*?)<\/\1>/.exec(styles.slice(styles.indexOf(`<${tag}`)))![2]!.match(new RegExp(`<${item}(?:\\s[^>]*?)?(?:/>|>[\\s\\S]*?</${item}>)`, "g"))!;
-    const xfs = list("cellXfs", "xf");
-    /** What a style index holds: bold, italic, its fill colour, a top border and its number format. */
-    const style = (s: string | undefined) => {
-      const xf = xfs[Number(s ?? 0)]!;
-      const id = (name: string) => Number(new RegExp(`${name}="(\\d+)"`).exec(xf)![1]);
-      const font = list("fonts", "font")[id("fontId")]!;
-      return {
-        bold: /<b(?: val="(?:1|true)")?\/>/.test(font),
-        italic: /<i(?: val="(?:1|true)")?\/>/.test(font),
-        fill: /<fgColor rgb="FF(\w{6})"/.exec(list("fills", "fill")[id("fillId")]!)?.[1],
-        top: /<top style="thin"/.test(list("borders", "border")[id("borderId")]!),
-        numFmt: new RegExp(`<numFmt numFmtId="${id("numFmtId")}" formatCode="([^"]*)"`).exec(styles)?.[1],
-      };
-    };
-    const rows = [...sheet.matchAll(/<row([^>]*)>([\s\S]*?)<\/row>/g)].map((m) => ({ s: /\bs="(\d+)"/.exec(m[1]!)?.[1], cells: [...m[2]!.matchAll(/<c\b([^>]*?)(?:\/>|>[\s\S]*?<\/c>)/g)].map((c) => /\bs="(\d+)"/.exec(c[1]!)?.[1]) }));
+    const { rows, style } = sheetStyles(await renderDocument(server, { kind: "xlsx", template, data, format: "xlsx", hardRefresh }));
     // The header, three loop rows, then the total row.
     expect(rows).toHaveLength(5);
     const fill = { bold: false, italic: false, fill: "FFF2CC", top: false };
@@ -343,6 +365,40 @@ describe.skipIf(!url)("Carbone server", () => {
     for (const s of rows[4]!.cells.slice(0, -1)) expect(style(s)).toMatchObject(total);
     expect(style(rows[4]!.cells.at(-1))).toMatchObject({ ...total, italic: true, fill: "DDEBF7" });
     expect(style(rows[0]!.s)).toMatchObject({ bold: false, fill: undefined });
+  });
+
+  it.each([false, true])("keeps a design's column style in the gaps of rows without a style, loop rows too (hardRefresh %s)", async (hardRefresh) => {
+    const template = await buildXlsx({
+      sheets: [
+        {
+          name: "Lines",
+          columns: [{ ref: "B", style: { font: { italic: true }, fill: { type: "pattern", pattern: "solid", fgColor: "DDEBF7" } } }],
+          cells: [
+            { ref: "A1", value: "Name" },
+            { ref: "D1", value: "Amount" },
+            { ref: "A2", value: "{d.pgs[i].name}" },
+            { ref: "D2", value: "{d.pgs[i].amount:formatN}" },
+            { ref: "A3", value: "{d.pgs[i+1].name}" },
+            { ref: "A4", value: "Total" },
+            { ref: "D4", value: 6 },
+          ],
+        },
+      ],
+    });
+    const data = { pgs: [{ name: "MYLIB", amount: 1 }, { name: "MYOUTQ", amount: 2 }, { name: "MYOUTQ2", amount: 3 }], splf: {} };
+    const { rows, columns, style } = sheetStyles(await renderDocument(server, { kind: "xlsx", template, data, format: "xlsx", hardRefresh }));
+    /** The style a column of a row shows: its cell's, or the column's where it has no cell. */
+    const shown = (row: (typeof rows)[number], column: string) => {
+      const i = row.columns.indexOf(column);
+      const n = column.charCodeAt(0) - 64;
+      return style(i >= 0 ? row.cells[i] : columns.find((c) => c.min <= n && n <= c.max)?.s);
+    };
+    // The header, three loop rows, then the total row.
+    expect(rows).toHaveLength(5);
+    for (const row of rows) {
+      expect(shown(row, "B")).toMatchObject({ italic: true, fill: "DDEBF7" });
+      expect(shown(row, "C")).toMatchObject({ italic: false, fill: undefined });
+    }
   });
 
   it("prints a long Excel starter on several A4 landscape pages", async () => {

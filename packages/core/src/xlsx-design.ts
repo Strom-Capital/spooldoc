@@ -720,7 +720,7 @@ class Builder {
       const built = this.cell(c, at, mergeStyle(mergeStyle(columnStyles.get(ref.column), rowStyles.get(ref.row)), c.style), defaultFont);
       if (built) cells.set(`${ref.row - 1},${ref.column - 1}`, built);
     });
-    this.fillStyledRows(cells, rowStyles, columnStyles, path, defaultFont);
+    this.fillStyledGaps(cells, rowStyles, columnStyles, path, defaultFont);
     if (cells.size > 0) out.cells = cells;
 
     const merges = design.merges ?? [];
@@ -806,36 +806,45 @@ class Builder {
    * Gives a styled row an empty cell, with its style, in each column from A up to its last
    * cell or styled column. Where the row crosses a styled column, Excel writes such a cell
    * with both styles, the row's on top; without it, Excel shows the row's style alone. And
-   * Carbone, when it writes the rows of a sheet, fills a gap before a cell with a cell
-   * without a style, which then shows no row style.
+   * gives any other row an empty cell with a styled column's style where that column comes
+   * before the row's last cell. Carbone, when it writes the rows of a sheet, fills a gap
+   * before a cell with a cell without a style, which then shows neither the row's style
+   * nor the column's.
    */
-  fillStyledRows(cells: Map<string, Partial<Cell>>, rowStyles: Map<number, Style>, columnStyles: Map<number, Style>, path: Path, defaultFont: Font): void {
-    if (rowStyles.size === 0) return;
+  fillStyledGaps(cells: Map<string, Partial<Cell>>, rowStyles: Map<number, Style>, columnStyles: Map<number, Style>, path: Path, defaultFont: Font): void {
+    if (rowStyles.size === 0 && columnStyles.size === 0) return;
     const lastColumn = new Map<number, number>();
-    const given = new Map<number, number>();
     for (const key of cells.keys()) {
       const [r, n] = key.split(",").map(Number) as [number, number];
-      if (!rowStyles.has(r + 1)) continue;
       lastColumn.set(r + 1, Math.max(lastColumn.get(r + 1) ?? 0, n + 1));
-      given.set(r + 1, (given.get(r + 1) ?? 0) + 1);
     }
     const lastStyled = Math.max(0, ...columnStyles.keys());
+    function* gaps(): Generator<[string, Style]> {
+      for (const [r, rowStyle] of rowStyles) {
+        const last = Math.max(lastColumn.get(r) ?? 0, lastStyled);
+        for (let n = 1; n <= last; n++) {
+          const key = `${r - 1},${n - 1}`;
+          if (!cells.has(key)) yield [key, mergeStyle(columnStyles.get(n), rowStyle)!];
+        }
+      }
+      for (const [r, last] of lastColumn) {
+        if (rowStyles.has(r)) continue;
+        for (const [n, columnStyle] of columnStyles) {
+          const key = `${r - 1},${n - 1}`;
+          if (n < last && !cells.has(key)) yield [key, columnStyle];
+        }
+      }
+    }
     let added = 0;
-    for (const r of rowStyles.keys()) added += Math.max(lastColumn.get(r) ?? 0, lastStyled) - (given.get(r) ?? 0);
+    for (const gap = gaps(); !gap.next().done; ) added++;
     if (cells.size + added > MAX_CELLS) {
       this.problem(
-        [...path, "rows"],
-        `With the empty cells its styled rows need, the sheet would hold ${cells.size + added} cells, and it holds at most ${MAX_CELLS}. Style fewer rows, or style the cells.`,
+        [...path, rowStyles.size > 0 ? "rows" : "columns"],
+        `With the empty cells its styled rows and columns need, the sheet would hold ${cells.size + added} cells, and it holds at most ${MAX_CELLS}. Style fewer rows or columns, or style the cells.`,
       );
       return;
     }
-    for (const [r, rowStyle] of rowStyles) {
-      const last = Math.max(lastColumn.get(r) ?? 0, lastStyled);
-      for (let n = 1; n <= last; n++) {
-        const key = `${r - 1},${n - 1}`;
-        if (!cells.has(key)) cells.set(key, { value: null, style: toStyle(mergeStyle(columnStyles.get(n), rowStyle)!, defaultFont) });
-      }
-    }
+    for (const [key, style] of gaps()) cells.set(key, { value: null, style: toStyle(style, defaultFont) });
   }
 
   cell(design: z.output<typeof cell>, path: Path, style: Style | undefined, defaultFont: Font): Partial<Cell> | undefined {
