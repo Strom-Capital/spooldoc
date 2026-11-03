@@ -226,12 +226,23 @@ describe('the step folder view and Upload test', { timeout: 30_000 }, () => {
     const [job] = await db().insert(jobs).values({ name: 'MYJOB', draft }).returning();
     return { jobId: job!.id, destinationId: destination!.id };
   }
-  const folder = async (jobId: string, body: unknown) => {
-    const response = await folderRoute.POST(appRequest(`/api/jobs/${jobId}/sftp-folder`, { method: 'POST', body, headers: auth }), params({ id: jobId }));
+  /** The SFTP destination of the job, which the step names in each request. */
+  const withDestination = async (body: Record<string, unknown>) => {
+    const [destination] = await db().select({ id: destinations.id }).from(destinations).where(eq(destinations.kind, 'sftp'));
+    return { destinationId: destination?.id, ...body };
+  };
+  const folder = async (jobId: string, body: Record<string, unknown>) => {
+    const response = await folderRoute.POST(
+      appRequest(`/api/jobs/${jobId}/sftp-folder`, { method: 'POST', body: await withDestination(body), headers: auth }),
+      params({ id: jobId }),
+    );
     return { status: response.status, view: (await response.json()) as SftpFolderView };
   };
-  const uploadTest = async (jobId: string, body: unknown) => {
-    const response = await testRoute.POST(appRequest(`/api/jobs/${jobId}/sftp-test`, { method: 'POST', body, headers: auth }), params({ id: jobId }));
+  const uploadTest = async (jobId: string, body: Record<string, unknown>) => {
+    const response = await testRoute.POST(
+      appRequest(`/api/jobs/${jobId}/sftp-test`, { method: 'POST', body: await withDestination(body), headers: auth }),
+      params({ id: jobId }),
+    );
     return { status: response.status, view: (await response.json()) as SftpUploadTestView & { error?: string } };
   };
 

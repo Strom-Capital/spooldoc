@@ -8,9 +8,7 @@ import { ErrorNote } from '@/components/page';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Spinner } from '@/components/ui/spinner';
@@ -19,6 +17,7 @@ import { EMAIL_FIELDS, tagSegments, type EmailField } from '@/lib/email-fields';
 import { emptyEmailSpec, FORMAT_FILES, FORMATS, type EmailSpec } from '@/lib/job-spec';
 import type { DestinationView, EmailPreviewView, EmailSegment } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { FieldPicker } from './field-picker';
 import { useJob } from './job-provider';
 
 type EmailDestination = Extract<DestinationView, { kind: 'email' }>;
@@ -117,46 +116,6 @@ function Row({ label, htmlFor, hint, children }: { label: string; htmlFor?: stri
         {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
       </div>
     </div>
-  );
-}
-
-/** The fields an email can read, to put one at the cursor of the field last in. */
-function InsertField({ fields, disabled, onPick }: { fields: EmailPreviewView['fields']; disabled?: boolean; onPick(path: string): void }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <Hint text="Put a field of the definition at the cursor, in the field you were last in. Each email fills it in from its own page group.">
-        <PopoverTrigger asChild>
-          <Button type="button" variant="outline" size="sm" disabled={disabled || fields.length === 0}>
-            <BracesIcon />
-            Insert field
-          </Button>
-        </PopoverTrigger>
-      </Hint>
-      <PopoverContent className="w-80 p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Find a field" />
-          <CommandList>
-            <CommandEmpty>No field matches.</CommandEmpty>
-            <CommandGroup>
-              {fields.map((field) => (
-                <CommandItem
-                  key={field.path}
-                  value={field.path}
-                  onSelect={() => {
-                    onPick(field.path);
-                    setOpen(false);
-                  }}
-                >
-                  <span className="font-mono text-xs">{field.path}</span>
-                  <span className="ml-auto max-w-32 truncate text-muted-foreground text-xs">{field.value || 'empty'}</span>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
   );
 }
 
@@ -420,22 +379,41 @@ function useEmailPreview(email: EmailSpec, destinationId: string, shown: Shown) 
 }
 
 /**
- * The email part of the destination step: To, Cc, Bcc, Reply-To, Subject and the message,
- * each with fields of the definition, what to attach, and the live preview of the email
- * of one page group, or of the whole spooled file, beside them.
+ * The email part of the destination step, for one destination of a route: To, Cc, Bcc,
+ * Reply-To, Subject and the message, each with fields of the definition, what to attach,
+ * and the live preview beside them of the email of the page group the Destination step
+ * shows, or of the whole spooled file. `notice` says when that page group takes another
+ * route.
  */
-export function EmailStep({ destination }: { destination: EmailDestination }) {
-  const { spec, updateDraft, readOnly } = useJob();
-  const { pageGroupIndex } = useWorkbench();
-  const email = spec.destination.email ?? emptyEmailSpec();
-  const [shown, setShown] = useState<Shown>({ pageGroup: pageGroupIndex, splf: false });
+export function EmailStep({
+  destination,
+  part,
+  onChange,
+  notice,
+}: {
+  destination: EmailDestination;
+  part: EmailSpec | null;
+  onChange(change: Partial<EmailSpec>, debounce: boolean): void;
+  notice?: ReactNode;
+}) {
+  const { spec, readOnly } = useJob();
+  const { pageGroupIndex, setPageGroupIndex } = useWorkbench();
+  const email = part ?? emptyEmailSpec();
+  // Previous and Next step through the page groups of the Destination step. The whole spooled
+  // file's email is this step's own, shown until another page group is picked.
+  const [splfAt, setSplfAt] = useState<number | null>(null);
+  const splf = splfAt === pageGroupIndex;
+  const shown: Shown = { pageGroup: pageGroupIndex, splf };
   const { preview, previous, loading, error } = useEmailPreview(email, destination.id, shown);
   const [showMore, setShowMore] = useState(false);
   const inputs = useRef<Partial<Record<EmailField, HTMLInputElement | HTMLTextAreaElement | null>>>({});
   const lastField = useRef<EmailField>('subject');
 
-  const set = (change: Partial<EmailSpec>, debounce = true) =>
-    updateDraft({ destination: { ...spec.destination, email: { ...email, ...change } } }, { debounce });
+  const set = (change: Partial<EmailSpec>, debounce = true) => onChange(change, debounce);
+  const step = (next: Shown) => {
+    setSplfAt(next.splf ? pageGroupIndex : null);
+    if (!next.splf) setPageGroupIndex(next.pageGroup);
+  };
 
   function insert(path: string) {
     const field = lastField.current === 'body' && email.bodyTemplateId !== null ? 'subject' : lastField.current;
@@ -523,7 +501,15 @@ export function EmailStep({ destination }: { destination: EmailDestination }) {
           </Row>
         )}
         <div className="sm:pl-[calc(6.5rem+0.75rem)]">
-          <InsertField fields={preview?.fields ?? []} disabled={readOnly} onPick={insert} />
+          <FieldPicker
+            fields={preview?.fields ?? []}
+            disabled={readOnly}
+            onPick={insert}
+            hint="Put a field of the definition at the cursor, in the field you were last in. Each email fills it in from its own page group."
+          >
+            <BracesIcon />
+            Insert field
+          </FieldPicker>
         </div>
         <Row label="Attach">
           <div role="group" aria-label="Attach" className="flex flex-wrap gap-x-4 gap-y-2 sm:min-h-8 sm:items-center">
@@ -555,8 +541,9 @@ export function EmailStep({ destination }: { destination: EmailDestination }) {
           </ul>
         )}
       </div>
-      <div className="lg:sticky lg:top-0">
-        <EmailPreview preview={preview} previous={previous} loading={loading} error={error} onStep={setShown} />
+      <div className="flex flex-col gap-2 lg:sticky lg:top-0">
+        {!splf && notice}
+        <EmailPreview preview={preview} previous={previous} loading={loading} error={error} onStep={step} />
         {error && preview && <p className="mt-2 text-destructive text-xs">{error}</p>}
       </div>
     </div>

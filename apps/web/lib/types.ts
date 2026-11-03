@@ -173,7 +173,7 @@ export interface JobDetail {
 
 /** One step of a run. */
 export interface RunStepView {
-  step: 'capture' | 'extract' | 'lookup' | 'render' | 'deliver' | 'finish';
+  step: 'capture' | 'extract' | 'lookup' | 'route' | 'render' | 'deliver' | 'finish';
   ok: boolean;
   ms: number;
   error?: string;
@@ -186,6 +186,10 @@ export interface RunStepView {
   tables?: { id: string; name: string; revision: number }[];
   /** A Deliver step: the destination it delivered to, as it was named then. Missing when the destination was gone. */
   destination?: { id: string; name: string; kind: string };
+  /** A Deliver step: the route that sent the documents there, counted from 1, when the job had several routes or conditions. */
+  route?: number;
+  /** The Route step: each document that took no route, and why each route did not take it. */
+  unrouted?: { pageGroup: number | null; document: string; reasons: string[] }[];
 }
 
 /** A row of the job log. */
@@ -211,6 +215,8 @@ export interface RunView {
    * in the version's order. The Job log shows a list of deliveries for each.
    */
   deliveryTargets: DeliveryTargetView[];
+  /** How many routes the run's job version has. The Job log names the route of each delivery only when there are several. */
+  routes: number;
   startedAt: string;
   finishedAt: string | null;
 }
@@ -230,6 +236,8 @@ export interface DeliveryView {
   id: string;
   /** The destination it went through; null once that destination is deleted. */
   destinationId: string | null;
+  /** The route that sent it, counted from 1; null for a delivery from before routes. */
+  route: number | null;
   kind: DeliveryKind;
   document: string;
   /** Where the delivery went. For an email, the addresses it was for, as the job's To gave them. */
@@ -423,6 +431,34 @@ export interface EmailPreviewView {
   unknownTags: string[];
   /** The fields an email can read, such as `pg.invoiceNo`, with their value in this page group, for Insert field. */
   fields: { path: string; value: string }[];
+}
+
+/** One route checked against one document: each condition, whether it matches and why not. */
+export interface RouteCheckView {
+  ok: boolean;
+  conditions: { ok: boolean; reason: string | null }[];
+}
+
+/** Where the documents of the preview spooled file go with the routes as the editor has them. Nothing is sent. */
+export interface RoutesPreviewView {
+  /** The page group shown, and how many the spooled file has. */
+  pageGroup: number;
+  pageGroups: number;
+  /**
+   * The single values of the page group shown, as the routes compare them: the raw value
+   * as text, "" when empty, null when the field is not in its data.
+   */
+  fields: { path: string; value: string | null }[];
+  /** The route the page group shown takes, counted from 0; null for none. */
+  route: number | null;
+  /** Every route, checked against the page group shown. */
+  checks: RouteCheckView[];
+  /** The route each page group takes, counted from 0; null for none. */
+  taken: (number | null)[];
+  /** The route of the document of the whole spooled file, when a template makes one. */
+  spooledFile: { route: number | null; checks: RouteCheckView[] } | null;
+  /** Why the values of lookups are not in the data, when a condition reads one and the lookups could not run. */
+  lookupError: string | null;
 }
 
 /** The webhook call of one document of the preview spooled file, as Send test would make it. Nothing is sent. */

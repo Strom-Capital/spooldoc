@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { Webhook } from 'standardwebhooks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { emptySpec, type JobSpec } from '@/lib/job-spec';
+import { emptySpec, type JobSpec, type WebhookSpec } from '@/lib/job-spec';
 import { destinations, jobs, jobVersions, runDeliveries, runs } from '@/lib/server/db/schema';
 import { sealWebhookSecrets, webhookDestination, webhookTiming } from '@/lib/server/destinations/webhook';
 import { runJob } from '@/lib/server/runner';
@@ -12,7 +12,7 @@ import type { WebhookPreviewView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, GOOD_PASSWORD, loadSample } from './helpers/fake-connection';
-import { db, insertServer } from './helpers/fixtures';
+import { db, insertServer, oneRoute, onlyEntry } from './helpers/fixtures';
 import { appRequest, params } from './helpers/mocks';
 
 const previewRoute = await import('@/app/api/jobs/[id]/webhook-preview/route');
@@ -73,7 +73,7 @@ describe('the webhook destination', () => {
   });
 
   /** An invoice job with an active version that posts each invoice, as PDF, to MYHOOK. */
-  async function webhookJob(testUrl: string | null = null, webhook: JobSpec['destination']['webhook'] = null): Promise<{ jobId: string; spec: JobSpec }> {
+  async function webhookJob(testUrl: string | null = null, webhook: WebhookSpec | null = null): Promise<{ jobId: string; spec: JobSpec }> {
     const [destination] = await db()
       .insert(destinations)
       .values({
@@ -84,7 +84,7 @@ describe('the webhook destination', () => {
       })
       .returning();
     const base = emptySpec({ serverId, library: 'MYLIB', queue: 'MYOUTQ', destinationId: destination!.id });
-    const spec: JobSpec = { ...base, extract: { definition: fixtureText('invoice', 'definition.yaml') }, destination: { ...base.destination, webhook } };
+    const spec: JobSpec = { ...base, extract: { definition: fixtureText('invoice', 'definition.yaml') }, destination: oneRoute(destination!.id, { webhook }) };
     const [job] = await db().insert(jobs).values({ name: 'MYJOB', draft: spec, activeVersion: 1 }).returning();
     await db().insert(jobVersions).values({ jobId: job!.id, number: 1, spec });
     return { jobId: job!.id, spec };
@@ -479,7 +479,7 @@ describe('the webhook destination', () => {
     const auth = await signedIn();
     for (const pageGroupIndex of [0, 2]) {
       const response = await previewRoute.POST(
-        appRequest(`/api/jobs/${jobId}/webhook-preview`, { method: 'POST', body: { pageGroupIndex }, headers: auth }),
+        appRequest(`/api/jobs/${jobId}/webhook-preview`, { method: 'POST', body: { pageGroupIndex, destinationId: onlyEntry(spec).destinationId }, headers: auth }),
         params({ id: jobId }),
       );
       const view = (await response.json()) as WebhookPreviewView;

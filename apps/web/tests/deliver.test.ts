@@ -3,7 +3,7 @@ import nodemailer, { type SendMailOptions } from 'nodemailer';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emailSpecSchema, emptySpec, type JobTemplate } from '@/lib/job-spec';
 import { destinations, jobs, runDeliveries, runFiles, runs, type RunStep } from '@/lib/server/db/schema';
-import { deliverAll, deliveryTargets, type DeliverBase, type FoundTarget } from '@/lib/server/deliver';
+import { deliverAll, type DeliverBase, type FoundTarget } from '@/lib/server/deliver';
 import { destinationFor, type RunDocument, type RunFile } from '@/lib/server/destinations';
 import { setMailSender, updateMail } from '@/lib/server/mail';
 import { StepError } from '@/lib/server/step-error';
@@ -102,11 +102,6 @@ describe('delivering a run to several destinations', () => {
   });
 
   const storedNames = async () => (await db().select({ name: runFiles.name }).from(runFiles).where(eq(runFiles.runId, runId))).map((row) => row.name).sort();
-
-  it('gives a job without routes one target with every document', () => {
-    const spec = emptySpec({ serverId: 'server-1', library: 'MYLIB', queue: 'MYOUTQ', destinationId: 'destination-1' });
-    expect(deliveryTargets(spec, documents)).toEqual([{ route: null, destinationId: 'destination-1', email: null, webhook: null, documents }]);
-  });
 
   it('still delivers to the second destination when the first fails, records both steps, and the first error leads', async () => {
     const missing = await ifs('/home/docs/missing', false);

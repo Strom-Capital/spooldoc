@@ -1,4 +1,4 @@
-import { spooledFileData, templatePaths, type Definition, type Lookup } from '@spooldoc/core';
+import { spooledFileData, type Definition, type Lookup } from '@spooldoc/core';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { emailConfigSchema } from '@/lib/destination-config';
@@ -26,6 +26,7 @@ import { getJobRow } from '@/lib/server/jobs';
 import { previewLookupRunner } from '@/lib/server/lookups';
 import { getMailView } from '@/lib/server/mail';
 import { renderSample } from '@/lib/server/render';
+import { valueFields } from '@/lib/server/value-fields';
 import type { EmailPreviewView } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -33,7 +34,8 @@ export const dynamic = 'force-dynamic';
 const previewSchema = z.object({
   /** The email part as the editor has it, saved or not. */
   email: emailSpecSchema,
-  destinationId: z.string().uuid().nullable().optional(),
+  /** The email destination the email goes through: a job can have several, one per route. */
+  destinationId: z.string().uuid(),
   pageGroup: z.number().int().nonnegative().optional(),
   /** `splf` for the email of the whole spooled file, when the run sends one; else a page group's. */
   document: z.enum(['pageGroup', 'splf']).optional(),
@@ -46,15 +48,7 @@ const previewSchema = z.object({
  * reads the spooled file's fields only.
  */
 function emailFields(def: Definition, lookups: readonly Lookup[], data: unknown, formatting: EmailFormatting, spooledFile: boolean): { path: string; value: string }[] {
-  const paths = [...templatePaths(def, lookups)];
-  const lists = new Set(paths.filter((path) => path.includes('[]')).map((path) => path.slice(0, path.indexOf('[]'))));
-  // A lookup of one row per page group is a row, not a value: its columns are the values.
-  const rows = new Set(lookups.filter((l) => l.for === undefined && l.result === 'one').map((l) => `pg.${l.name}`));
-  const single = spooledFile ? /^splf\.[^.[\]]+$/ : /^(pg|splf)\.[^.[\]]+$/;
-  const column = /^(pg\.[^.[\]]+)\.[^.[\]]+$/;
-  return paths
-    .filter((path) => (single.test(path) && !lists.has(path) && !rows.has(path)) || (!spooledFile && rows.has(column.exec(path)?.[1] ?? '')))
-    .map((path) => ({ path, value: expandText(`{d.${path}}`, data, formatting).text }));
+  return valueFields(def, lookups, spooledFile).map((path) => ({ path, value: expandText(`{d.${path}}`, data, formatting).text }));
 }
 
 /**
@@ -91,8 +85,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const names = documentNames(def, groups, sample, templates.some(perSpooledFile));
   const document = whole ? (names.spooledFile ?? spooledFileName(sample)) : names.pageGroups[index]!;
 
-  const destinationId = body.data.destinationId ?? draft.destination.destinationId;
-  const [row] = destinationId ? await getDb().select({ kind: destinations.kind, config: destinations.config }).from(destinations).where(eq(destinations.id, destinationId)) : [];
+  const [row] = await getDb().select({ kind: destinations.kind, config: destinations.config }).from(destinations).where(eq(destinations.id, body.data.destinationId));
   const testAddress = row?.kind === 'email' ? (emailConfigSchema.safeParse(row.config).data?.testAddress ?? null) : null;
   const mail = await getMailView();
   const formatting: EmailFormatting = { formats: await getFormats(), types: fieldTypes(def, draft.lookups) };

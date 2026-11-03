@@ -17,7 +17,7 @@ type DeliveryRow = typeof runDeliveries.$inferInsert;
 export type DeliveredDocument = Pick<RunDocument, 'pageGroupIndex' | 'name' | 'pages'>;
 
 /** A delivery row without what `deliveryRecorder` fills in. */
-export type DeliveryFields = Omit<DeliveryRow, 'runId' | 'jobId' | 'splfKey' | 'destinationId' | 'kind'>;
+export type DeliveryFields = Omit<DeliveryRow, 'runId' | 'jobId' | 'splfKey' | 'destinationId' | 'route' | 'kind'>;
 
 /** A delivery of an earlier run of the same job on the same spooled file through the same destination, not to a test address. */
 export interface EarlierDelivery {
@@ -159,8 +159,9 @@ export function documentFields(document: DeliveredDocument, created: string) {
 }
 
 /** Records one delivery of the run, as it goes. */
-export function deliveryRecorder(input: Pick<DeliverInput, 'runId' | 'job' | 'destinationId'>, kind: string): (row: DeliveryFields) => Promise<unknown> {
-  return (row) => getDb().insert(runDeliveries).values({ runId: input.runId, jobId: input.job.id, splfKey: input.job.splfKey, destinationId: input.destinationId, kind, ...row });
+export function deliveryRecorder(input: Pick<DeliverInput, 'runId' | 'job' | 'destinationId' | 'route'>, kind: string): (row: DeliveryFields) => Promise<unknown> {
+  return (row) =>
+    getDb().insert(runDeliveries).values({ runId: input.runId, jobId: input.job.id, splfKey: input.job.splfKey, destinationId: input.destinationId, route: input.route, kind, ...row });
 }
 
 /** The error of a document not tried, since an earlier one failed in a way the rest would too. */

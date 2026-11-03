@@ -1,12 +1,9 @@
 'use client';
 
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Hint } from '@/components/hint';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CallPreview, type SendTestState } from '@/components/call-preview';
 import { useWorkbench } from '@/components/workbench/workbench-provider';
-import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { api, ApiError, errorText, shownError } from '@/lib/client/api';
@@ -64,23 +61,31 @@ function useWebhookPreview(webhook: WebhookSpec, destination: WebhookDestination
 }
 
 /**
- * The webhook part of the destination step: the formats of the files each call carries,
- * the page group to show, and the live call of that page group shown beside them, with
- * Send test.
+ * The webhook part of the destination step, for one destination of a route: the formats
+ * of the files each call carries, and the live call of the page group the Destination
+ * step shows, with Send test. `notice` says when that page group takes another route.
  */
-export function WebhookStep({ destination }: { destination: WebhookDestination }) {
-  const { job, spec, updateDraft, readOnly } = useJob();
+export function WebhookStep({
+  destination,
+  part,
+  onChange,
+  notice,
+}: {
+  destination: WebhookDestination;
+  part: WebhookSpec | null;
+  onChange(change: Partial<WebhookSpec>): void;
+  notice?: ReactNode;
+}) {
+  const { job, spec, readOnly } = useJob();
   const { pageGroupIndex, sampleId } = useWorkbench();
-  const webhook = spec.destination.webhook ?? emptyWebhookSpec();
-  const [pageGroup, setPageGroup] = useState(pageGroupIndex);
-  const { preview, previous, loading, error } = useWebhookPreview(webhook, destination, pageGroup);
+  const webhook = part ?? emptyWebhookSpec();
+  const { preview, previous, loading, error } = useWebhookPreview(webhook, destination, pageGroupIndex);
   const [test, setTest] = useState<SendTestState>({ sending: false, result: null, error: null, seq: 0 });
 
-  const set = (change: Partial<WebhookSpec>) => updateDraft({ destination: { ...spec.destination, webhook: { ...webhook, ...change } } }, { debounce: false });
+  const set = onChange;
   const made = FORMATS.filter((format) => spec.render.templates.some((template) => template.formats.includes(format)));
   const sends = made.filter((format) => webhook.attach.includes(format));
-  const shown = preview?.pageGroup ?? pageGroup;
-  const total = preview?.pageGroups ?? null;
+  const shown = preview?.pageGroup ?? pageGroupIndex;
 
   async function sendTest() {
     setTest((current) => ({ ...current, sending: true, error: null }));
@@ -129,39 +134,15 @@ export function WebhookStep({ destination }: { destination: WebhookDestination }
               : "Each call carries its document's files in these formats, in base64. Leave out the ones the receiver does not need, to keep calls small."}
           </p>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <span className="font-medium text-sm">Page group</span>
-          <div className="flex items-center gap-1">
-            <Hint text="Show the call of the page group before this one.">
-              <Button type="button" variant="outline" size="icon-sm" disabled={shown === 0} onClick={() => setPageGroup(shown - 1)} aria-label="Previous page group">
-                <ChevronLeftIcon />
-              </Button>
-            </Hint>
-            <span className="tabular min-w-28 text-center text-sm" aria-live="polite">
-              {total === null ? `Page group ${shown + 1}` : `${shown + 1} of ${total}`}
-            </span>
-            <Hint text="Show the call of the next page group.">
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-sm"
-                disabled={total === null || shown >= total - 1}
-                onClick={() => setPageGroup(shown + 1)}
-                aria-label="Next page group"
-              >
-                <ChevronRightIcon />
-              </Button>
-            </Hint>
-          </div>
-          <p className="text-muted-foreground text-xs">
-            Each document is one call. The receiver checks the signature with the destination&apos;s secret.{' '}
-            <Link href="/docs/destinations#webhook" className="text-primary hover:underline">
-              What each call holds
-            </Link>
-          </p>
-        </div>
+        <p className="text-muted-foreground text-xs">
+          Each document is one call. The receiver checks the signature with the destination&apos;s secret.{' '}
+          <Link href="/docs/destinations#webhook" className="text-primary hover:underline">
+            What each call holds
+          </Link>
+        </p>
       </div>
-      <div className="min-w-0 lg:sticky lg:top-0">
+      <div className="flex min-w-0 flex-col gap-2 lg:sticky lg:top-0">
+        {notice}
         <CallPreview
           preview={preview}
           previous={previous}

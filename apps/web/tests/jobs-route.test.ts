@@ -8,7 +8,7 @@ import { signedIn } from './helpers/auth';
 import { fakeCarbone, fakeRenderer, PDF_BYTES, sentPageGroup } from './helpers/carbone';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, loadSample } from './helpers/fake-connection';
-import { db, insertServer } from './helpers/fixtures';
+import { db, insertServer, oneRoute } from './helpers/fixtures';
 import { appRequest, connections, params, spyConsole } from './helpers/mocks';
 
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
@@ -124,7 +124,7 @@ describe('jobs', () => {
     const created = await job(id);
     expect(created.name).toBe(`${library}/${queue}`);
     expect(created.draft.source).toMatchObject({ serverId, library, queue });
-    expect(created.draft.destination.destinationId).toBeTruthy();
+    expect(created.draft.destination.routes).toEqual([{ when: [], destinations: [{ destinationId: expect.any(String), email: null, webhook: null }] }]);
     expect(created.draft.finish).toEqual({ action: 'hold', queue: null });
 
     await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { extract: { definition: yaml } } }), params({ id }));
@@ -583,7 +583,7 @@ describe('runs that deliver to an IFS folder', () => {
       .values({ kind: 'ifs', name: 'Output folder', config: { folder: FOLDER, ...config } })
       .returning({ id: destinations.id });
     await jobRoute.PATCH(
-      patch(`/api/jobs/${id}`, { draft: { destination: { destinationId: destination!.id }, render: { templates: [tpl({ formats })] } } }),
+      patch(`/api/jobs/${id}`, { draft: { destination: oneRoute(destination!.id), render: { templates: [tpl({ formats })] } } }),
       params({ id }),
     );
     await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));

@@ -10,7 +10,7 @@ import { signedIn } from './helpers/auth';
 import { fakeCarbone, sentPageGroup } from './helpers/carbone';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, GOOD_PASSWORD, loadSample } from './helpers/fake-connection';
-import { db, insertServer } from './helpers/fixtures';
+import { db, insertServer, oneRoute, onlyEntry } from './helpers/fixtures';
 import { appRequest, connections, params } from './helpers/mocks';
 
 vi.mock('@spooldoc/ibmi/jt400', async () => (await import('./helpers/mocks')).fakeJt400);
@@ -344,7 +344,7 @@ describe('an email To address from a lookup', () => {
       ...base,
       extract: { definition: yaml },
       lookups,
-      destination: { destinationId: destination!.id, email: emailSpecSchema.parse({ to: '{d.pg.customer.EMAIL}', subject: 'Invoice {d.pg.invoiceNo}' }), webhook: null },
+      destination: oneRoute(destination!.id, { email: emailSpecSchema.parse({ to: '{d.pg.customer.EMAIL}', subject: 'Invoice {d.pg.invoiceNo}' }) }),
     };
     const [job] = await db().insert(jobs).values({ name: 'Invoices', draft: spec, activeVersion: 1 }).returning();
     await db().insert(jobVersions).values({ jobId: job!.id, number: 1, spec });
@@ -370,7 +370,7 @@ describe('an email To address from a lookup', () => {
     fake().queryAnswer = customers;
     const [job] = await db().select().from(jobs).where(eq(jobs.id, jobId));
     const preview = await (
-      await emailPreview.POST(post(`/api/jobs/${jobId}/email-preview`, { email: (job!.draft as JobSpec).destination.email }), params({ id: jobId }))
+      await emailPreview.POST(post(`/api/jobs/${jobId}/email-preview`, { email: onlyEntry(job!.draft as JobSpec).email, destinationId: onlyEntry(job!.draft as JobSpec).destinationId }), params({ id: jobId }))
     ).json();
     expect(preview.to).toEqual([{ text: 'ap-10001@example.com', tag: '{d.pg.customer.EMAIL}', state: 'found' }]);
     expect(preview.unknownTags).toEqual([]);

@@ -7,6 +7,7 @@ import type { DeliveryView } from '@/lib/types';
 const delivery = (id: string, destinationId: string | null, kind: DeliveryView['kind'] = 'email'): DeliveryView => ({
   id,
   destinationId,
+  route: null,
   kind,
   document: `invoice-${id}`,
   to: 'buyer@example.com',

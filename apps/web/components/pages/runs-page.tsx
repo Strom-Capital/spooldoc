@@ -9,7 +9,7 @@ import { Hint } from '@/components/hint';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
 import { RowOpenButton, useRowOpen } from '@/components/row-actions';
-import { deliveryGroups, RETRY_TEXT, RunDeliveries } from '@/components/run-deliveries';
+import { deliveryGroups, RETRY_TEXT, RunDeliveries, UnroutedList } from '@/components/run-deliveries';
 import { RunStatusBadge } from '@/components/run-status';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,7 +23,14 @@ import { bytes, dateTime, duration, splfLabel } from '@/lib/client/format';
 import type { JobSummary, RunStatus, RunView } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-const STEP_LABEL: Record<string, string> = { capture: 'Capture', extract: 'Extract', lookup: 'Lookups', render: 'Render', deliver: 'Deliver', finish: 'Finish' };
+const STEP_LABEL: Record<string, string> = { capture: 'Capture', extract: 'Extract', lookup: 'Lookups', route: 'Route', render: 'Render', deliver: 'Deliver', finish: 'Finish' };
+
+/** A step's label. A Deliver step of several names its destination and route: "Deliver to MYIFS, route 2". */
+function stepLabel(step: RunView['steps'][number], severalDeliveries: boolean): string {
+  const label = STEP_LABEL[step.step] ?? step.step;
+  if (step.step !== 'deliver' || !severalDeliveries) return label;
+  return [step.destination ? `${label} to ${step.destination.name}` : label, ...(step.route ? [`route ${step.route}`] : [])].join(', ');
+}
 
 const RETRIED: Record<RunStatus, string> = { running: 'started', success: 'succeeded', warning: 'done with warnings', failed: 'failed', skipped: 'skipped' };
 
@@ -345,9 +352,10 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                         )}
                         <span className="sr-only">{step.ok ? 'Passed:' : 'Failed:'}</span>
                         <div className="min-w-0 flex-1">
-                          <span className="font-medium">{STEP_LABEL[step.step] ?? step.step}</span>
+                          <span className="font-medium">{stepLabel(step, deliverSteps.length > 1)}</span>
                           {step.note && <span className="text-muted-foreground">: {step.note}</span>}
                           {step.error && <div className="break-words text-destructive text-xs">{step.error}</div>}
+                          {step.unrouted && step.unrouted.length > 0 && <UnroutedList unrouted={step.unrouted} />}
                           {step.warnings && step.warnings.length > 0 && (
                             <ul className="mt-0.5 flex flex-col gap-0.5 text-amber-700 text-xs dark:text-amber-400" aria-label="Warnings">
                               {step.warnings.map((warning) => (
@@ -407,6 +415,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                     kind={group.target.kind}
                     deliveries={group.deliveries}
                     destination={openDeliveries.length > 1 ? group.target.name : null}
+                    routes={open.routes}
                   />
                 ))}
               </div>

@@ -39,8 +39,11 @@ async function webhookJob(testUrl: string | null = null): Promise<string> {
   return job!.id;
 }
 
-const post = (route: typeof previewRoute | typeof testRoute, id: string, body: unknown) =>
-  route.POST(appRequest(`/api/jobs/${id}/webhook`, { method: 'POST', body, headers: auth }), params({ id }));
+/** A preview or test request, for the job's webhook destination unless the body names another. */
+const post = async (route: typeof previewRoute | typeof testRoute, id: string, body: Record<string, unknown>) => {
+  const [hook] = await db().select({ id: destinations.id }).from(destinations).where(eq(destinations.kind, 'webhook'));
+  return route.POST(appRequest(`/api/jobs/${id}/webhook`, { method: 'POST', body: { destinationId: hook?.id, ...body }, headers: auth }), params({ id }));
+};
 
 let calls: { url: string; headers: Record<string, string>; body: string }[];
 
@@ -97,7 +100,9 @@ describe('the webhook preview', () => {
       .where(eq(jobs.id, id));
     expect((await (await post(previewRoute, id, {})).json()).error).toBe('Pick a spooled file to preview first.');
     await db().update(jobs).set({ draft: job!.draft }).where(eq(jobs.id, id));
-    expect((await (await post(previewRoute, id, { destinationId: null, pageGroupIndex: 0 })).status)).toBe(200);
+    expect((await (await post(previewRoute, id, { pageGroupIndex: 0 })).status)).toBe(200);
+    // A job can have several destinations, so the request names one.
+    expect((await (await post(previewRoute, id, { destinationId: undefined, pageGroupIndex: 0 })).status)).toBe(400);
     const [builtin] = await db().select().from(destinations).where(eq(destinations.builtin, true));
     expect((await (await post(previewRoute, id, { destinationId: builtin!.id })).json()).error).toBe('Pick a webhook destination first.');
   });

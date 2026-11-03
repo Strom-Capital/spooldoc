@@ -10,7 +10,7 @@ import { runViews } from '@/lib/server/runs';
 import { hostKeyInfo, makeKeyPair, sftpTiming } from '@/lib/server/sftp';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, GOOD_PASSWORD, loadSample } from './helpers/fake-connection';
-import { db, insertServer } from './helpers/fixtures';
+import { db, insertServer, oneRoute } from './helpers/fixtures';
 import { makeHostKey, publicBlob, TestSftpServer, type SftpServerOptions } from './helpers/sftp-server';
 
 const KEY = makeKeyPair('ed25519', 'MYSFTP');
@@ -408,7 +408,7 @@ describe('the SFTP destination', { timeout: 30_000 }, () => {
       const spec = version!.spec as JobSpec;
       await db()
         .insert(jobVersions)
-        .values({ jobId, number: 2, spec: { ...spec, destination: { ...spec.destination, destinationId: other!.id } } });
+        .values({ jobId, number: 2, spec: { ...spec, destination: oneRoute(other!.id) } });
       await db().update(jobs).set({ activeVersion: 2 }).where(eq(jobs.id, jobId));
       const second = await runJob({ jobId, version: 2, splf: sample.splf, trigger: 'manual' }, { conn: new FakeConnection(), host: 'ibmi.example.com', serverId, password: GOOD_PASSWORD });
       expect((await deliverStep(second)).note).toBe(`Uploaded 6 files to /in/invoices on 127.0.0.1 port ${server.port} (6 replaced), a copy kept in Spooldoc`);

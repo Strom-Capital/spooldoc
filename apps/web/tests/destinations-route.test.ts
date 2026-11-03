@@ -4,7 +4,7 @@ import { destinations, jobs, jobVersions } from '@/lib/server/db/schema';
 import type { DestinationView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
-import { builtinDestination, db, insertJob, insertServer } from './helpers/fixtures';
+import { builtinDestination, db, insertJob, insertServer, oneRoute } from './helpers/fixtures';
 import { appRequest, params, spyConsole } from './helpers/mocks';
 
 const list = await import('@/app/api/destinations/route');
@@ -94,7 +94,7 @@ describe('/api/destinations', () => {
     const serverId = await insertServer();
     const jobId = await insertJob(serverId);
     const [row] = await db().select().from(jobs).where(eq(jobs.id, jobId));
-    await db().update(jobs).set({ draft: { ...row!.draft, destination: { destinationId: id, email: null, webhook: null } } }).where(eq(jobs.id, jobId));
+    await db().update(jobs).set({ draft: { ...row!.draft, destination: oneRoute(id) } }).where(eq(jobs.id, jobId));
 
     const refused = await remove(id);
     expect(refused.status).toBe(409);
@@ -110,7 +110,7 @@ describe('/api/destinations', () => {
     const jobId = await insertJob(await insertServer());
     const [row] = await db().select().from(jobs).where(eq(jobs.id, jobId));
     // The draft moved on to the built-in destination; version 1 still delivers to the IFS.
-    await db().insert(jobVersions).values({ jobId, number: 1, spec: { ...row!.draft, destination: { destinationId: id, email: null, webhook: null } } });
+    await db().insert(jobVersions).values({ jobId, number: 1, spec: { ...row!.draft, destination: oneRoute(id) } });
 
     const refused = await remove(id);
     expect(refused.status).toBe(409);

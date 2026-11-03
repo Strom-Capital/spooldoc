@@ -26,21 +26,26 @@ export async function jobsUsingServer(serverId: string): Promise<{ id: string; n
     .orderBy(jobs.name);
 }
 
+/** Every destination id of a spec's routes. */
+const DESTINATION_IDS = '$.destination.routes[*].destinations[*].destinationId';
+
 /**
- * Jobs whose draft or any version delivers to a destination, by name.
+ * Jobs whose draft or any version delivers to a destination, in any route, by name.
  *
  * @param destinationId - The destination's id
  */
 export async function jobsUsingDestination(destinationId: string): Promise<{ id: string; name: string }[]> {
   const db = getDb();
+  const sendsTo = '$.destination.routes[*].destinations[*] ? (@.destinationId == $id)';
+  const vars = JSON.stringify({ id: destinationId });
   return db
     .selectDistinct({ id: jobs.id, name: jobs.name })
     .from(jobs)
     .leftJoin(jobVersions, eq(jobVersions.jobId, jobs.id))
     .where(
       or(
-        sql`${jobs.draft} -> 'destination' ->> 'destinationId' = ${destinationId}`,
-        sql`${jobVersions.spec} -> 'destination' ->> 'destinationId' = ${destinationId}`,
+        sql`jsonb_path_exists(${jobs.draft}, ${sendsTo}::jsonpath, ${vars}::jsonb)`,
+        sql`jsonb_path_exists(${jobVersions.spec}, ${sendsTo}::jsonpath, ${vars}::jsonb)`,
       ),
     )
     .orderBy(jobs.name);
@@ -55,8 +60,8 @@ export async function destinationJobs(): Promise<Map<string, QueueView['jobs']>>
     getDb()
       .selectDistinct({
         id: jobs.id,
-        draft: sql<string | null>`${jobs.draft} -> 'destination' ->> 'destinationId'`,
-        version: sql<string | null>`${jobVersions.spec} -> 'destination' ->> 'destinationId'`,
+        draft: sql<string[] | null>`jsonb_path_query_array(${jobs.draft}, ${DESTINATION_IDS}::jsonpath)`,
+        version: sql<string[] | null>`jsonb_path_query_array(${jobVersions.spec}, ${DESTINATION_IDS}::jsonpath)`,
       })
       .from(jobs)
       .leftJoin(jobVersions, eq(jobVersions.jobId, jobs.id)),
@@ -65,7 +70,7 @@ export async function destinationJobs(): Promise<Map<string, QueueView['jobs']>>
   const destinationsOf = new Map<string, Set<string>>();
   for (const row of rows) {
     const ids = destinationsOf.get(row.id) ?? new Set<string>();
-    for (const id of [row.draft, row.version]) if (id) ids.add(id);
+    for (const id of [...(row.draft ?? []), ...(row.version ?? [])]) if (typeof id === 'string' && id) ids.add(id);
     destinationsOf.set(row.id, ids);
   }
   const byDestination = new Map<string, QueueView['jobs']>();

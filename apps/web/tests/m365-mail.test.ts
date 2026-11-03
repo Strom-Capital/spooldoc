@@ -10,7 +10,7 @@ import type { SettingsView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
 import { FakeConnection, fixtureText, GOOD_PASSWORD, loadSample } from './helpers/fake-connection';
-import { db, insertServer } from './helpers/fixtures';
+import { db, insertServer, oneRoute } from './helpers/fixtures';
 import { appRequest } from './helpers/mocks';
 
 const settingsRoute = await import('@/app/api/settings/route');
@@ -413,7 +413,7 @@ describe('the email destination through Microsoft 365', () => {
     const spec: JobSpec = {
       ...emptySpec({ serverId, library: 'MYLIB', queue: 'INVOICES', destinationId: destination!.id }),
       extract: { definition: fixtureText('invoice', 'definition.yaml') },
-      destination: { destinationId: destination!.id, email: emailSpecSchema.parse({ to: '{d.pg.customerNo}@example.com', subject: 'Invoice {d.pg.invoiceNo}' }), webhook: null },
+      destination: oneRoute(destination!.id, { email: emailSpecSchema.parse({ to: '{d.pg.customerNo}@example.com', subject: 'Invoice {d.pg.invoiceNo}' }) }),
     };
     const [job] = await db().insert(jobs).values({ name: 'Invoices', draft: spec, activeVersion: 1 }).returning();
     await db().insert(jobVersions).values({ jobId: job!.id, number: 1, spec });

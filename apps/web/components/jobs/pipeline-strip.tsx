@@ -23,6 +23,7 @@ import { STEP_TITLE, STEPS } from '@/lib/client/job-steps';
 import { lookupsSub, previewFor } from '@/lib/client/lookups';
 import { missingFields, type StepStatus } from '@/lib/client/step-status';
 import { contentLabel, formatList, hasOwnContent, type TemplateContent } from '@/lib/job-spec';
+import { isSimpleDestination, routeDestinationIds } from '@/lib/routes';
 import { cn } from '@/lib/utils';
 import { useJob, type Step } from './job-provider';
 import { useStepStatuses } from './use-step-statuses';
@@ -147,7 +148,14 @@ function useSteps(): StepInfo[] {
   const hasSource = !!spec.source.serverId && !!spec.source.library && !!spec.source.queue;
   const extract = render?.extract;
   const missing = extract ? missingFields(extract) : 0;
-  const destination = destinations.find((d) => d.id === spec.destination.destinationId);
+  const { routes } = spec.destination;
+  const ids = routeDestinationIds(routes);
+  const used = ids.flatMap((id) => destinations.filter((d) => d.id === id));
+  // A destination in test mode says so, since its documents go to the test address, URL or folder.
+  const inTest = used.filter(
+    (d) => (d.kind === 'email' && d.config.testAddress) || (d.kind === 'webhook' && d.config.testUrl) || (d.kind === 'sftp' && d.config.testFolder),
+  ).length;
+  const destination = isSimpleDestination(spec.destination) ? used[0] : undefined;
   const finish = spec.finish;
   const templates = spec.render.templates;
   const picked = templates.find((t) => t.id === templateId) ?? templates[0];
@@ -219,14 +227,13 @@ function useSteps(): StepInfo[] {
       step: 'destination',
       title: STEP_TITLE.destination,
       icon: SendIcon,
-      // A destination in test mode says so, since its documents go to the test address, URL or folder.
       detail: destination
-        ? (destination.kind === 'email' && destination.config.testAddress) ||
-          (destination.kind === 'webhook' && destination.config.testUrl) ||
-          (destination.kind === 'sftp' && destination.config.testFolder)
+        ? inTest > 0
           ? `${destination.name} (test)`
           : destination.name
-        : 'Pick a destination',
+        : ids.length === 0
+          ? 'Pick a destination'
+          : `${routes.length} ${routes.length === 1 ? 'route' : 'routes'}, ${ids.length} ${ids.length === 1 ? 'destination' : 'destinations'}${inTest > 0 ? `, ${inTest} in test` : ''}`,
       status: statuses.destination,
     },
     {

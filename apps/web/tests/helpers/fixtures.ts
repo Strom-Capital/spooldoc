@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import type { TestDb } from './db';
 import type { Db } from '@/lib/server/db';
 import { destinations, jobs, servers, user } from '@/lib/server/db/schema';
-import { emptySpec, type JobSpec } from '@/lib/job-spec';
+import { emptySpec, type EmailSpec, type JobSpec, type RouteDestination, type WebhookSpec } from '@/lib/job-spec';
 
 /** The database of the running test file (see tests/setup.ts). */
 export function testDb(): TestDb {
@@ -43,4 +43,14 @@ export async function insertJob(serverId: string, spec: Partial<JobSpec> = {}): 
 export async function insertUser(id = 'user-1'): Promise<string> {
   await db().insert(user).values({ id, name: 'Test', email: `${id}@example.com` });
   return id;
+}
+
+/** The destination part of a job with one route, no conditions and one destination, with its email or webhook part. */
+export function oneRoute(destinationId: string, part: { email?: EmailSpec | null; webhook?: WebhookSpec | null } = {}): JobSpec['destination'] {
+  return { routes: [{ when: [], destinations: [{ destinationId, email: part.email ?? null, webhook: part.webhook ?? null }] }] };
+}
+
+/** The only destination entry of a job with one route. */
+export function onlyEntry(spec: Pick<JobSpec, 'destination'>): RouteDestination {
+  return spec.destination.routes[0]!.destinations[0]!;
 }

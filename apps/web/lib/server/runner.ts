@@ -37,7 +37,7 @@ import { FORMAT_FILES, jobSpecSchema, perSpooledFile, splfKey, type JobTemplate,
 import { assetNames, assetResolver } from './assets';
 import { getDb } from './db';
 import { jobs, jobVersions, runs, watchSeen, type RunStep } from './db/schema';
-import { deliverAll, deliveryTargets, type FoundTarget } from './deliver';
+import { deliverAll, type FoundTarget } from './deliver';
 import { destinationFor, type RunDocument, type RunFile } from './destinations';
 import { documentNames, documentRenderer, runFileNames, templateHtml, type DocumentRenderer } from './documents';
 import { fieldTypes } from './email-message';
@@ -47,6 +47,7 @@ import { log } from './log';
 import { loadLookupTables } from './lookup-tables';
 import { lookupTableIds, runLookups } from './lookups';
 import { HEARTBEAT_MS } from './retention';
+import { routeDocuments, routeNote, unroutedError } from './routing';
 import { capture, storeSample } from './samples';
 import { StepError } from './step-error';
 import { getTemplateFile, TEMPLATE_FILE_GONE } from './template-files';
@@ -115,8 +116,9 @@ export async function executeRun(runId: string, request: RunRequest, connection?
     note?: (value: T) => string | undefined,
     warnings?: (value: T) => string[],
     destination?: RunStep['destination'],
+    route?: number | null,
   ): Promise<T> => {
-    const about = destination ? { destination } : {};
+    const about = { ...(destination ? { destination } : {}), ...(route ? { route } : {}) };
     const started = performance.now();
     try {
       const value = await fn();
@@ -239,9 +241,27 @@ export async function executeRun(runId: string, request: RunRequest, connection?
       documents.push({ pageGroupIndex: null, name: names.spooledFile, pages: null, data: spooledFileData(groups, sample) });
     }
 
+    // Each document takes the first route it matches. The Route step is recorded only when
+    // the job has a choice to make: several routes, or conditions. A document that takes no
+    // route fails the run, but only after the others are delivered.
+    const routes = spec.destination.routes;
+    const valueTypes = fieldTypes(def, spec.lookups);
+    const routed = routeDocuments(routes, documents, valueTypes);
+    const choosesRoute = routes.length > 1 || routes.some((route) => route.when.length > 0);
+    if (choosesRoute) {
+      const missed = routed.unrouted.length;
+      steps.push({
+        step: 'route',
+        ok: missed === 0,
+        ms: 0,
+        note: routeNote(routes, documents, routed.taken),
+        ...(missed > 0 ? { error: `${missed} ${missed === 1 ? 'document' : 'documents'} matched no route.`, unrouted: routed.unrouted } : {}),
+      });
+    }
+
     // Each destination is looked up before the render, so an email destination's message
     // template is rendered with the documents. A failed lookup fails its own deliver step.
-    const targets: FoundTarget[] = deliveryTargets(spec, documents).map((target) => {
+    const targets: FoundTarget[] = routed.targets.map((target) => {
       const destination = destinationFor(target.destinationId);
       destination.catch(() => undefined);
       return { ...target, destination };
@@ -263,6 +283,7 @@ export async function executeRun(runId: string, request: RunRequest, connection?
       target.documents = target.documents.map((document) => ({ ...document, html: document.pageGroupIndex === null ? null : (html?.get(document.pageGroupIndex) ?? null) }));
     }
 
+    let deliverError: unknown = null;
     await deliverAll(targets, {
       runId,
       files,
@@ -275,12 +296,23 @@ export async function executeRun(runId: string, request: RunRequest, connection?
         attributes: sample.attributes,
         pageGroups: groups.length,
       },
-      valueTypes: fieldTypes(def, spec.lookups),
+      valueTypes,
       conn,
       host,
       addSecret: (secret) => secrets.push(secret),
-      step: (destination, deliver) => step('deliver', deliver, (note) => note, undefined, destination),
+      step: (destination, deliver, route) => step('deliver', deliver, (note) => note, undefined, destination, choosesRoute ? route : null),
+    }).catch((err: unknown) => {
+      deliverError = err;
     });
+    // Documents that took no route fail the run after the rest were delivered, so the
+    // finish step is skipped and Retry sends only what was not sent. A failed delivery leads.
+    if (routed.unrouted.length > 0) {
+      const text = unroutedError(routed.unrouted, documents.length, deliverError === null);
+      if (deliverError instanceof StepError) throw new StepError('deliver', `${deliverError.message} ${text}`, deliverError.detail);
+      if (deliverError) throw new StepError('deliver', `${deliverError instanceof Error ? deliverError.message : String(deliverError)} ${text}`);
+      throw new StepError('route', text);
+    }
+    if (deliverError) throw deliverError;
 
     if (lookupWarnings.length > 0) {
       status = 'warning';

@@ -19,8 +19,36 @@ import { Switch } from '@/components/ui/switch';
 import { api, errorText, shownError, type ShownError } from '@/lib/client/api';
 import { sftpServer, shortUrl } from '@/lib/destination-config';
 import { deleteNotice, filterParams, splfKey, startsDeleting, triggerStatuses } from '@/lib/job-spec';
-import type { RunView, SpooledFileView } from '@/lib/types';
+import { routeDestinationIds } from '@/lib/routes';
+import type { DestinationView, RunView, SpooledFileView } from '@/lib/types';
 import { useJob } from './job-provider';
+
+/**
+ * What Run now says a destination will do, with a space at the end; "" for a download.
+ * With `named`, as one destination of several: "MYEMAIL emails documents to ...".
+ */
+function deliverSentence(destination: DestinationView, named: boolean): string {
+  const by = (verb: string, rest: string) => `${destination.name} ${verb} documents ${rest}. `;
+  if (destination.kind === 'ifs') {
+    return named ? by('writes', `to ${destination.config.folder} on the IBM i`) : `Documents will be written to ${destination.config.folder} on the IBM i. `;
+  }
+  if (destination.kind === 'email') {
+    const { testAddress } = destination.config;
+    if (named) return by('emails', testAddress ? `to the test address ${testAddress}` : 'to the addresses the job sets');
+    return testAddress ? `Each document will be emailed to the test address ${testAddress}. ` : 'Each document will be emailed to the addresses the job sets. ';
+  }
+  if (destination.kind === 'webhook') {
+    const { testUrl, url } = destination.config;
+    if (named) return by('sends', testUrl ? `to the test URL ${shortUrl(testUrl)}` : `to ${shortUrl(url)}`);
+    return testUrl ? `Each document is sent to the test URL ${shortUrl(testUrl)}. ` : `Each document is sent to ${shortUrl(url)}. `;
+  }
+  if (destination.kind === 'sftp') {
+    const { testFolder, folder } = destination.config;
+    const where = testFolder ? `to the test folder ${testFolder} on ${sftpServer(destination.config)}` : `to ${folder} on ${sftpServer(destination.config)}`;
+    return named ? by('uploads', where) : `Documents will be uploaded ${where}. `;
+  }
+  return named ? `${destination.name} keeps documents to download. ` : '';
+}
 
 /**
  * Save the draft as the next version, by default the active one. When that makes the job
@@ -202,25 +230,15 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
         : finish === 'delete'
           ? 'Files will be deleted from the IBM i after delivery.'
           : 'Files are left as they are.';
-  // Writing to the IFS changes the IBM i, so it is named before it happens.
-  const destination = destinations.find((d) => d.id === activeSpec?.destination.destinationId);
-  // Sending email, a webhook call or an upload reaches outside systems, so it is named too, and where it goes while testing.
+  // Writing to the IFS changes the IBM i, so it is named before it happens. Sending email, a
+  // webhook call or an upload reaches outside systems, so it is named too, and where it goes while testing.
+  const routes = activeSpec?.destination.routes ?? [];
+  const chooses = routes.length > 1 || routes.some((route) => route.when.length > 0);
+  const used = routeDestinationIds(routes).flatMap((id) => destinations.filter((d) => d.id === id));
   const deliverText =
-    destination?.kind === 'ifs'
-      ? `Documents will be written to ${destination.config.folder} on the IBM i. `
-      : destination?.kind === 'email'
-        ? destination.config.testAddress
-          ? `Each document will be emailed to the test address ${destination.config.testAddress}. `
-          : 'Each document will be emailed to the addresses the job sets. '
-        : destination?.kind === 'webhook'
-          ? destination.config.testUrl
-            ? `Each document is sent to the test URL ${shortUrl(destination.config.testUrl)}. `
-            : `Each document is sent to ${shortUrl(destination.config.url)}. `
-          : destination?.kind === 'sftp'
-            ? destination.config.testFolder
-              ? `Documents will be uploaded to the test folder ${destination.config.testFolder} on ${sftpServer(destination.config)}. `
-              : `Documents will be uploaded to ${destination.config.folder} on ${sftpServer(destination.config)}. `
-            : '';
+    !chooses && used.length === 1
+      ? deliverSentence(used[0]!, false)
+      : `${chooses ? 'Each document goes to the first route it matches. ' : ''}${used.map((destination) => deliverSentence(destination, true)).join('')}`;
 
   async function onRun() {
     setBusy(true);
