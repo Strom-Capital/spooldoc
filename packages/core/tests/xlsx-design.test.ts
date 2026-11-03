@@ -371,6 +371,42 @@ describe("buildXlsx", () => {
       expect(styleOf(parts, "B1")).toEqual({ numFmt: "General", font: '<font><i/><sz val="10"/><name val="Arial"/></font>', fill: '<fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill>' });
     });
 
+    it("gives any other row an empty cell with a styled column's style where the column comes before its last cell, so Carbone fills no gap without a style", async () => {
+      const parts = await partsOf(
+        one({
+          columns: [{ ref: "B", style: { font: { italic: true }, fill: blue } }, { ref: "F", style: { font: { bold: true } } }],
+          cells: [
+            { ref: "A1", value: "Name" },
+            { ref: "D1", value: "Amount" },
+            { ref: "A2", value: "{d.pgs[i].name}" },
+            { ref: "D2", value: "{d.pgs[i].amount:formatN}" },
+            { ref: "A3", value: "{d.pgs[i+1].name}" },
+            { ref: "D4", value: 6 },
+          ],
+        }),
+      );
+      const sheet = parts["xl/worksheets/sheet1.xml"]!;
+      const columns = (r: number) => [...new RegExp(`<row r="${r}"[^>]*>(.*?)</row>`).exec(sheet)![1]!.matchAll(/<c r="([A-Z]+)\d+"/g)].map((m) => m[1]);
+      // B, before the last cell, gets one; C, with no style, and F, after the last cell, none.
+      expect(columns(1)).toEqual(["A", "B", "D"]);
+      expect(columns(2)).toEqual(["A", "B", "D"]);
+      expect(columns(4)).toEqual(["B", "D"]);
+      expect(sheet).toMatch(/<c r="B2" s="\d+"\/>/);
+      expect(styleOf(parts, "B2")).toEqual({ numFmt: "General", font: '<font><i/><sz val="10"/><name val="Arial"/></font>', fill: '<fill><patternFill patternType="solid"><fgColor rgb="FFDDEBF7"/></patternFill></fill>' });
+      // A row whose last cell comes before the styled column gets none.
+      expect(columns(3)).toEqual(["A"]);
+    });
+
+    it("refuses styled columns whose gaps need too many cells, at the columns", async () => {
+      const gaps = one({
+        columns: [{ ref: "A:AMI", style: { font: { bold: true } } }],
+        cells: Array.from({ length: 10 }, (_, n) => ({ ref: `AMJ${n + 1}`, value: n })),
+      });
+      expect(await problems(gaps)).toEqual([
+        "sheets[0].columns: With the empty cells its styled rows and columns need, the sheet would hold 10240 cells, and it holds at most 10000. Style fewer rows or columns, or style the cells.",
+      ]);
+    });
+
     it("refuses a bad row style, and styled rows that need too many cells, each with its path", async () => {
       expect(
         await problems(
@@ -391,7 +427,7 @@ describe("buildXlsx", () => {
       ]);
       const wide = one({ columns: [{ ref: "AMJ", style: { font: { bold: true } } }], rows: Array.from({ length: 10 }, (_, n) => ({ row: n + 1, style: { fill: yellow } })) });
       expect(await problems(wide)).toEqual([
-        "sheets[0].rows: With the empty cells its styled rows need, the sheet would hold 10240 cells, and it holds at most 10000. Style fewer rows, or style the cells.",
+        "sheets[0].rows: With the empty cells its styled rows and columns need, the sheet would hold 10240 cells, and it holds at most 10000. Style fewer rows or columns, or style the cells.",
       ]);
       // 9000 given cells and the 1024 empty ones of row 1 cross the limit only together.
       const together = (given: number) =>
@@ -401,7 +437,7 @@ describe("buildXlsx", () => {
           columns: [{ ref: "AMJ", style: { font: { bold: true } } }],
         });
       expect(await problems(together(9000))).toEqual([
-        "sheets[0].rows: With the empty cells its styled rows need, the sheet would hold 10024 cells, and it holds at most 10000. Style fewer rows, or style the cells.",
+        "sheets[0].rows: With the empty cells its styled rows and columns need, the sheet would hold 10024 cells, and it holds at most 10000. Style fewer rows or columns, or style the cells.",
       ]);
       await expect(buildXlsx(together(8900))).resolves.toBeInstanceOf(Uint8Array);
     });
