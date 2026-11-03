@@ -257,6 +257,34 @@ describe.skipIf(!url)("Carbone server", () => {
     expect(values.filter((v) => v.type === "e")).toEqual([]);
   });
 
+  it("writes a :formatN tag in a design's rich text as a number cell, without the other text", async () => {
+    const template = await buildXlsx({
+      sheets: [
+        {
+          name: "Lines",
+          cells: [
+            { ref: "A1", value: { richText: [{ text: "{d.pgs[i].amount:formatN}", font: { bold: true, color: "C00000" } }] }, style: { numFmt: "#,##0.00" } },
+            { ref: "B1", value: { richText: [{ text: "Net " }, { text: "{d.pgs[i].amount:formatN}", font: { bold: true } }] } },
+            { ref: "C1", value: { richText: [{ text: "Hello " }, { text: "{d.pgs[i].name}", font: { italic: true } }] } },
+            { ref: "A2", value: "{d.pgs[i+1].amount}" },
+            { ref: "A3", value: { formula: 'SUM(INDIRECT("A1:A"&ROW()-1))' } },
+          ],
+        },
+      ],
+    });
+    const data = { pgs: [{ amount: 1234.5, name: "NORTHERN SUPPLY CO" }, { amount: 10, name: "MYLIB" }], splf: {} };
+    const values = readXlsxValues(await renderDocument(server, { kind: "xlsx", template, data, format: "xlsx", hardRefresh: true }));
+    const at = (ref: string): XlsxValue | undefined => values.find((v) => v.ref === ref);
+    expect(at("A1")).toMatchObject({ type: "n", value: 1234.5, format: "#,##0.00" });
+    expect(at("B1")).toMatchObject({ type: "n", value: 1234.5 });
+    expect(at("C1")).toMatchObject({ type: "s", value: "Hello NORTHERN SUPPLY CO" });
+    expect(at("A2")).toMatchObject({ type: "n", value: 10, format: "#,##0.00" });
+    expect(at("B2")).toMatchObject({ type: "n", value: 10 });
+    expect(at("C2")).toMatchObject({ type: "s", value: "Hello MYLIB" });
+    expect(at("A3")).toMatchObject({ type: "n", value: 1244.5 });
+    expect(values.filter((v) => v.type === "e")).toEqual([]);
+  });
+
   it("prints a long Excel starter on several A4 landscape pages", async () => {
     const { sample, definition } = loadFixture("order-report");
     const { pageGroups } = extract(definition, sample);

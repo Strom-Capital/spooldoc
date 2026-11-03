@@ -418,8 +418,8 @@ importers:
         specifier: ^0.8.3
         version: 0.8.3
       hucre:
-        specifier: 1.2.0
-        version: 1.2.0
+        specifier: 1.3.0
+        version: 1.3.0
       yaml:
         specifier: ^2.9.1
         version: 2.9.1
@@ -5002,8 +5002,8 @@ packages:
     resolution: {integrity: sha512-vK9P5/iUfdl95AI+JVyUuIcVtd4ofvtrOr3HNtM2yxC9bnMbEdp3x01OhQNnjb8IJYi38VlTE3mBXwcfvywuSw==}
     engines: {node: '>= 14'}
 
-  hucre@1.2.0:
-    resolution: {integrity: sha512-7PU0o0ZEpBmNbS2FZb9I8lD0F40TVxX3qqq/u3tvQ557xs0GPjsxNtR01YHT4nvni3C0FD+scnFErHEhM/x+oQ==}
+  hucre@1.3.0:
+    resolution: {integrity: sha512-KGwkZB3BipILI/Y2AxE9nyjt4TWjfuD3xy1Xlx+BDJ4/TIaVHI2iLf1IALK/264RdvVzyonIWTtEHEFpyIxwbw==}
     engines: {node: '>=24'}
     hasBin: true
 
@@ -12540,7 +12540,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  hucre@1.2.0: {}
+  hucre@1.3.0: {}
 
   human-signals@2.1.0: {}
 

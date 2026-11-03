@@ -275,7 +275,7 @@ describe('Excel templates in the instructions', () => {
     expect(section).toContain('Notes print in the PDF as note icons');
     expect(section).toContain('not icon sets, and a gradient fill prints as one colour');
     expect(section).toContain('Avoid LET, FILTER, SORT, UNIQUE, SEQUENCE');
-    expect(section).toContain('A rich text cell cannot hold :formatN.');
+    expect(section).toContain('In rich text, :formatN makes the whole cell the number, without the other text and the run fonts.');
     // The scope is the user's setting.
     expect(section).toContain('To change it for an Excel template, ask the user first: they change "Each file holds" in the template menu.');
     // Editing, design and checking the result.

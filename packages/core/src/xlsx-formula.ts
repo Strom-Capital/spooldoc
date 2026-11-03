@@ -2,6 +2,9 @@
  * Excel's newer functions in formulas. A file stores them with a prefix, such as
  * `_xlfn.XLOOKUP`; without it LibreOffice, and so Carbone, computes `#NAME?`. Excel adds
  * the prefix itself when it saves, but a formula written into the XML needs it written.
+ * hucre 1.3.0 adds a missing prefix when it writes a design, but neither writes the name in
+ * capitals nor corrects a wrong prefix, so a design's formulas go through
+ * `withFunctionPrefixes` first.
  */
 
 /** The newer functions LibreOffice computes, with the prefix each needs in the file. Tried against Carbone 5.15.5. */
