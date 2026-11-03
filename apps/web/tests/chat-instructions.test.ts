@@ -262,6 +262,8 @@ describe('Excel templates in the instructions', () => {
     expect(section).toContain('write_excel_template switches a template that still uses a starter to Excel.');
     // The tree, with an example sheet of the whole spooled file.
     expect(section).toContain('- Workbook: `{ sheets, defaultFont?, definedNames?, activeSheet? }`.');
+    expect(section).toContain('`rows: [{ row, height (points), hidden, outlineLevel, style }]`');
+    expect(section).toContain("- Style (on a cell, a row or a column; a cell's own style wins over its row's, and its row's over its column's, key by key):");
     expect(section).toContain('"value": "{d.pgs[i].lines[i].amount:formatN}", "style": { "numFmt": "#,##0.00" }');
     expect(section).toContain('{ "ref": "A3", "value": "{d.pgs[i+1].lines[i+1]}" }');
     expect(section).toContain('"autoFilter": "A:D"');

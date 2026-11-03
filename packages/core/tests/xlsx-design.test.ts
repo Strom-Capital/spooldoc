@@ -299,6 +299,103 @@ describe("buildXlsx", () => {
     expect(xfs[Number(b2)]).toMatch(/numFmtId="16\d"/);
   });
 
+  describe("row styles", () => {
+    const yellow = { type: "pattern", pattern: "solid", fgColor: "FFF2CC" };
+    const blue = { type: "pattern", pattern: "solid", fgColor: "DDEBF7" };
+    const design = one({
+      columns: [{ ref: "C", style: { numFmt: "0.0", font: { italic: true }, fill: blue } }],
+      rows: [
+        { row: 2, height: 20, style: { font: { bold: true }, fill: yellow } },
+        { row: 3, hidden: true },
+      ],
+      cells: [
+        { ref: "A2", value: "{d.pgs[i].name}" },
+        { ref: "C2", value: "{d.pgs[i].amount:formatN}", style: { font: { color: "C00000" } } },
+        { ref: "E2", value: "{d.pgs[i].city}" },
+        { ref: "A3", value: "{d.pgs[i+1].name}" },
+        { ref: "C4", value: 1 },
+      ],
+    });
+
+    /** The number format, font and fill of a cell's style, or of a row's with `row: true`. */
+    function styleOf(parts: Record<string, string>, ref: string, row = false): { numFmt: string; font: string; fill: string } {
+      const sheet = parts["xl/worksheets/sheet1.xml"]!;
+      const styles = parts["xl/styles.xml"]!;
+      const s = row ? new RegExp(`<row r="${ref}"[^>]* s="(\\d+)" customFormat="1"`).exec(sheet)![1] : (new RegExp(`<c r="${ref}"[^>]* s="(\\d+)"`).exec(sheet)?.[1] ?? "0");
+      const list = (tag: string, item: string) => new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`).exec(styles)![1]!.match(new RegExp(`<${item}(?:\\s[^>]*?)?(?:/>|>[\\s\\S]*?</${item}>)`, "g"))!;
+      const xf = list("cellXfs", "xf")[Number(s)]!;
+      const id = (name: string) => Number(new RegExp(`${name}="(\\d+)"`).exec(xf)![1]);
+      const numFmt = id("numFmtId") === 0 ? "General" : new RegExp(`<numFmt numFmtId="${id("numFmtId")}" formatCode="([^"]*)"`).exec(styles)![1]!;
+      return { numFmt, font: list("fonts", "font")[id("fontId")]!, fill: list("fills", "fill")[id("fillId")]! };
+    }
+
+    it("writes a row's style as the row's format, with its height and hidden flag", async () => {
+      const parts = await partsOf(design);
+      const sheet = parts["xl/worksheets/sheet1.xml"]!;
+      expect(sheet).toMatch(/<row r="2" ht="20" customHeight="1" s="\d+" customFormat="1">/);
+      expect(sheet).toMatch(/<row r="3" hidden="1">/);
+      expect(styleOf(parts, "2", true)).toEqual({ numFmt: "General", font: '<font><b/><sz val="10"/><name val="Arial"/></font>', fill: '<fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill>' });
+    });
+
+    it("styles a cell with its own style over its row's, and its row's over its column's, key by key", async () => {
+      const parts = await partsOf(design);
+      // A2 and E2 take the row's style.
+      expect(styleOf(parts, "A2")).toEqual(styleOf(parts, "2", true));
+      expect(styleOf(parts, "E2")).toEqual(styleOf(parts, "2", true));
+      // C2: the column's number format and italics, the row's bold and fill, its own colour.
+      expect(styleOf(parts, "C2")).toEqual({
+        numFmt: "0.0",
+        font: '<font><b/><i/><color rgb="FFC00000"/><sz val="10"/><name val="Arial"/></font>',
+        fill: '<fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill>',
+      });
+      // C4 is in no styled row: the column's style.
+      expect(styleOf(parts, "C4")).toEqual({ numFmt: "0.0", font: '<font><i/><sz val="10"/><name val="Arial"/></font>', fill: '<fill><patternFill patternType="solid"><fgColor rgb="FFDDEBF7"/></patternFill></fill>' });
+      // A3 is in a row with no style.
+      expect(styleOf(parts, "A3").fill).toBe('<fill><patternFill patternType="none"/></fill>');
+    });
+
+    it("gives a styled row an empty cell with its style in each column up to its last cell, so Carbone fills no gap without a style", async () => {
+      const sheet = (await partsOf(design))["xl/worksheets/sheet1.xml"]!;
+      const row2 = /<row r="2"[^>]*>(.*?)<\/row>/.exec(sheet)![1]!;
+      expect([...row2.matchAll(/<c r="([A-Z]+)2"/g)].map((m) => m[1])).toEqual(["A", "B", "C", "D", "E"]);
+      expect(row2).toMatch(/<c r="B2" s="\d+"\/>/);
+      const parts = await partsOf(design);
+      expect(styleOf(parts, "B2")).toEqual(styleOf(parts, "2", true));
+      // A row with no style gets no empty cells.
+      expect(/<row r="3"[^>]*>(.*?)<\/row>/.exec(sheet)![1]).toMatch(/^<c r="A3" t="s"><v>\d+<\/v><\/c>$/);
+    });
+
+    it("writes an empty cell with both styles where a styled row crosses a styled column, as Excel does", async () => {
+      const parts = await partsOf(one({ columns: [{ ref: "B", style: { font: { italic: true }, fill: blue } }], rows: [{ row: 1, style: { fill: yellow } }] }));
+      expect(parts["xl/worksheets/sheet1.xml"]).toMatch(/<row r="1" s="\d+" customFormat="1"><c r="A1" s="\d+"\/><c r="B1" s="\d+"\/><\/row>/);
+      expect(styleOf(parts, "B1")).toEqual({ numFmt: "General", font: '<font><i/><sz val="10"/><name val="Arial"/></font>', fill: '<fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill>' });
+    });
+
+    it("refuses a bad row style, and styled rows that need too many cells, each with its path", async () => {
+      expect(
+        await problems(
+          one({
+            rows: [
+              { row: 1, style: { font: { color: "yellow" } } },
+              { row: 2, style: { fill: { type: "pattern", pattern: "solid", degree: 90 } } },
+              { row: 3, style: { color: "FFF2CC" } },
+              { row: 4, style: { alignment: { textRotation: 200 } } },
+            ],
+          }),
+        ),
+      ).toEqual([
+        'sheets[0].rows[0].style.font.color: Use six hex digits such as "1F3A5F"',
+        'sheets[0].rows[1].style.fill.degree: "degree" is not used by a pattern fill. Use "type", "pattern", "fgColor", "bgColor".',
+        'sheets[0].rows[2].style: Unknown key "color"',
+        "sheets[0].rows[3].style.alignment.textRotation: Use 0 to 180 degrees, or 255 for stacked letters",
+      ]);
+      const wide = one({ columns: [{ ref: "AMJ", style: { font: { bold: true } } }], rows: Array.from({ length: 10 }, (_, n) => ({ row: n + 1, style: { fill: yellow } })) });
+      expect(await problems(wide)).toEqual([
+        "sheets[0].rows: The styled rows need 10240 empty cells with their style, up to their last cell or styled column, and a sheet holds at most 10000. Style fewer rows, or style the cells.",
+      ]);
+    });
+  });
+
   it("refuses unknown keys and values, each with its path", async () => {
     expect(
       await problems({

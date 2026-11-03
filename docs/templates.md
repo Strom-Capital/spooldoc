@@ -377,12 +377,15 @@ parts only:
 | The workbook | Its sheets, the default font (Arial 10 unless set), named ranges, the sheet that opens first. |
 | A sheet | Name, tab color, frozen rows and columns, zoom, grid lines, column widths, hidden and grouped columns and rows, row heights, merged cells, a filter. |
 | A cell | Text with tags, a number, true or false, a date, rich text, a formula, a link, a note. |
-| A style, on a cell or a column | Number format, font, size, color, bold, italics, underline, strikethrough, a solid or gradient fill, borders, alignment, wrapping, indent, rotation. |
+| A style, on a cell, a row or a column | Number format, font, size, color, bold, italics, underline, strikethrough, a solid or gradient fill, borders, alignment, wrapping, indent, rotation. |
 | Conditional formatting | Rules on a value, a formula, text, duplicates, the top or bottom values and the average, color scales, data bars, icon sets. |
 | Data validation | A list, whole or decimal numbers, dates, text length or a formula, with its prompt and error message. |
 | Images | A PNG or JPEG uploaded under Assets, by name, at a cell with a size in pixels, or over a range. |
 | Page setup | Paper size, orientation, fit to pages or a scale, margins, centering, grid lines, the print area, rows and columns repeated on each page. |
 | Header and footer | Left, center and right parts with the page number, the number of pages, the date and the sheet name; a different first page, and different even pages. |
+
+A cell's own style wins over its row's, and its row's over its column's,
+setting by setting: a bold cell in a row with a fill keeps the fill.
 
 Anything else in a design is refused with where it is, and nothing is
 saved. Excel tables, charts, sparklines, protection and macros are not
