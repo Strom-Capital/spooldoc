@@ -44,6 +44,15 @@ beforeEach(async () => {
   auth = await signedIn();
 });
 
+describe('the email preview request', () => {
+  it('names the email destination, since a job can have several', async () => {
+    const job = await emailJob([invoice]);
+    const body = { email: emailSpecSchema.parse({ to: '{d.pg.customerNo}@example.com' }) };
+    const response = await previewRoute.POST(appRequest(`/api/jobs/${job.id}/email-preview`, { method: 'POST', body, headers: auth }), params({ id: job.id }));
+    expect(response.status).toBe(400);
+  });
+});
+
 describe('which emails a run sends', () => {
   it('sends the whole spooled file its own email only when Attach picks one of its formats', () => {
     expect(emailDocuments([invoice], ['pdf'])).toEqual({ pageGroups: true, spooledFile: false });

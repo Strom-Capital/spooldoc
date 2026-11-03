@@ -119,6 +119,23 @@ describe('/api/destinations', () => {
     expect(views.find((d) => d.id === id)?.jobs).toMatchObject([{ id: jobId, name: 'Invoices' }]);
     expect(views.find((d) => d.builtin)?.jobs).toMatchObject([{ id: jobId, name: 'Invoices' }]);
   });
+
+  it('refuses to delete a destination a job sends to only in its second route', async () => {
+    const { id } = (await (await add()).json()) as DestinationView;
+    const builtin = await builtinDestination();
+    const jobId = await insertJob(await insertServer());
+    const [row] = await db().select().from(jobs).where(eq(jobs.id, jobId));
+    const routes = [
+      { when: [{ field: 'pg.email', op: 'notEmpty' as const }], destinations: [{ destinationId: builtin, email: null, webhook: null }] },
+      { when: [], destinations: [{ destinationId: builtin, email: null, webhook: null }, { destinationId: id, email: null, webhook: null }] },
+    ];
+    await db().update(jobs).set({ draft: { ...row!.draft, destination: { routes } } }).where(eq(jobs.id, jobId));
+
+    const refused = await remove(id);
+    expect(refused.status).toBe(409);
+    expect((await refused.json()).jobs).toEqual([{ id: jobId, name: 'Invoices' }]);
+    expect((await all()).find((d) => d.id === id)?.jobs).toMatchObject([{ id: jobId, name: 'Invoices' }]);
+  });
 });
 
 describe('webhook destinations', () => {

@@ -22,6 +22,7 @@ const renderRoute = await import('@/app/api/jobs/[id]/render/route');
 const testRoute = await import('@/app/api/jobs/[id]/lookups/test/route');
 const emailPreview = await import('@/app/api/jobs/[id]/email-preview/route');
 const versions = await import('@/app/api/jobs/[id]/versions/route');
+const routesPreview = await import('@/app/api/jobs/[id]/routes-preview/route');
 const runsRoute = await import('@/app/api/jobs/[id]/runs/route');
 const { clearPreviewCache } = await import('@/lib/server/lookups');
 const { runJob } = await import('@/lib/server/runner');
@@ -185,6 +186,23 @@ describe('saving a version with lookups', () => {
 
     await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { lookups: [customer({ checked: CHECKED })] } }), params({ id }));
     expect((await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }))).status).toBe(201);
+  });
+
+  it('takes a route condition on a lookup column, and the routes preview looks up every page group', async () => {
+    const id = await lookupJob([customer({ checked: CHECKED })]);
+    const [job] = await db().select().from(jobs).where(eq(jobs.id, id));
+    const builtin = onlyEntry(job!.draft as JobSpec).destinationId;
+    const routes = [
+      { when: [{ field: 'pg.customer.EMAIL', op: 'notEmpty' }], destinations: [{ destinationId: builtin }] },
+      { when: [], destinations: [{ destinationId: builtin }] },
+    ];
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { destination: { routes } } }), params({ id }));
+    expect((await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }))).status).toBe(201);
+
+    const preview = await (await routesPreview.POST(post(`/api/jobs/${id}/routes-preview`, { routes, pageGroup: 0 }), params({ id }))).json();
+    // Customer 10003, of page group 2, has no row.
+    expect(preview).toMatchObject({ route: 0, taken: [0, 1, 0, 0, 0, 0], lookupError: null });
+    expect(preview.fields).toContainEqual({ path: 'pg.customer.EMAIL', value: 'ap-10001@example.com' });
   });
 });
 

@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { deliveryGroups, RunDeliveries } from '@/components/run-deliveries';
+import { deliveryGroups, RunDeliveries, UnroutedList } from '@/components/run-deliveries';
 import type { DeliveryView } from '@/lib/types';
 
 const delivery = (id: string, destinationId: string | null, kind: DeliveryView['kind'] = 'email'): DeliveryView => ({
@@ -52,5 +52,22 @@ describe('the deliveries of a run', () => {
   it('name the destination in the title only when given one', () => {
     expect(renderToStaticMarkup(createElement(RunDeliveries, { kind: 'email', deliveries: [] }))).toContain('Emails <');
     expect(renderToStaticMarkup(createElement(RunDeliveries, { kind: 'email', deliveries: [], destination: 'Invoices by email' }))).toContain('Emails through Invoices by email');
+  });
+});
+
+describe('routes in the job log', () => {
+  it('name the route of each delivery only when the run had several routes', () => {
+    const routed = { ...delivery('1', 'a'), route: 2 };
+    expect(renderToStaticMarkup(createElement(RunDeliveries, { kind: 'email', deliveries: [routed], routes: 2 }))).toContain('Route 2');
+    expect(renderToStaticMarkup(createElement(RunDeliveries, { kind: 'email', deliveries: [routed], routes: 1 }))).not.toContain('Route 2');
+  });
+
+  it('list each document that took no route, and say how many more there are', () => {
+    const unrouted = Array.from({ length: 52 }, (_, at) => ({ pageGroup: at, document: `invoice-${at + 1}`, reasons: ['pg.email is empty'] }));
+    const html = renderToStaticMarkup(createElement(UnroutedList, { unrouted: [{ pageGroup: null, document: 'spdinvoice', reasons: ['Route 1: pg.email is empty'] }, ...unrouted] }));
+    expect(html).toContain('Whole spooled file (spdinvoice):');
+    expect(html).toContain('Page group 1 (invoice-1):');
+    expect(html).toContain('Showing 50 of 53 documents.');
+    expect(html).not.toContain('invoice-52');
   });
 });

@@ -19,7 +19,7 @@ $$ LANGUAGE sql IMMUTABLE;--> statement-breakpoint
 -- A spec without routes yet.
 CREATE FUNCTION pg_temp.spooldoc_without_routes(spec jsonb) RETURNS boolean AS $$
   SELECT jsonb_typeof(spec) = 'object'
-    AND NOT (jsonb_typeof(spec->'destination') = 'object' AND spec->'destination' ? 'routes')
+    AND NOT coalesce(jsonb_typeof(spec->'destination') = 'object' AND spec->'destination' ? 'routes', false)
 $$ LANGUAGE sql IMMUTABLE;--> statement-breakpoint
 
 UPDATE "jobs" SET "draft" = jsonb_set("draft", '{destination}', pg_temp.spooldoc_routes("draft"->'destination'))
