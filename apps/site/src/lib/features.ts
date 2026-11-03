@@ -57,6 +57,8 @@ export const SHOTS = {
   jobs: 'The Jobs page lists five jobs with their server, queue, mode, version and last run: three watching and two run on demand, three of them deleting their spooled files after delivery, and one whose last run failed.',
   'lookups-step':
     'The Lookups step of a pick list job lists the lookups customer and product, both ready. The customer form shows the SQL SELECT NAME, EMAIL, LANG FROM MYLIB.CUSTOMERS WHERE CUSTNO = :customerNo with the value 10001 after the parameter. Beside it, the Test tab shows the parameter with its VARCHAR(10) type, the one row found with the customer\'s name, email address and language, and the three tags templates write, each with a copy button.',
+  'lookup-table':
+    'The payment-terms lookup table open in the grid, read by 1 job: the columns TERMS, TEXT_FI and TEXT_SV are text and DAYS is a number, and the rows map 14 DAYS NET, 30 DAYS NET and 60 DAYS NET to their Finnish and Swedish text, with Import CSV, Download CSV and Save at the top.',
   'lookups-row':
     'The row lookup product runs once per row of lines, with the SQL SELECT DESCRIPTION FROM MYLIB.ITEMS WHERE ITEMNO = :item AND LANG = :customer.LANG and the values D-4001 and FI after the parameters. The Test tab says it ran with row 1 of lines, lists :item from d.pg.lines[0].item and :customer.LANG from d.pg.customer.LANG, shows the Finnish description found, and the tag {d.pg.lines[i].product.DESCRIPTION}.',
   trigger:
@@ -169,7 +171,7 @@ export const FEATURES: Feature[] = [
       'Test runs a lookup on the job\'s server with the values of the page group shown: each parameter with its Db2 for i type, the rows, and the tags to copy. A version is saved only with lookups that were tested.',
       'Values that are not in Db2 for i, such as the text of a payment terms code, go in a lookup table kept in Spooldoc. Edit it in a grid, or import a CSV file or cells pasted from a spreadsheet. A lookup matches its rows on key columns, with no SQL and no server, and the job log names the table and the revision each run read.',
     ],
-    shots: ['lookups-step', 'lookups-row'],
+    shots: ['lookups-step', 'lookups-row', 'lookup-table'],
     docs: [{ slug: 'lookups', title: 'Lookups' }],
   },
   {

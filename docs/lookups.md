@@ -221,6 +221,13 @@ digits, dashes and underscores, starting with a letter or digit. A new
 table starts empty, with the columns `CODE` and `TEXT`, or from a CSV file
 or cells pasted from a spreadsheet.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/lookup-tables-dark.png">
+    <img src="assets/lookup-tables-light.png" alt="The Lookup tables page lists three tables: customer-groups with the columns GROUP, HANDLER and EMAIL, payment-terms with TERMS, TEXT_FI, TEXT_SV and DAYS, read by 1 job, and warehouses with CODE, NAME, PRINTER and OPENED. Each row shows its rows, jobs and when it changed, with Open and Download CSV." width="900">
+  </picture>
+</p>
+
 Open a table to edit it in a grid, 100 rows a page, with a filter box
 that finds rows by any cell.
 
@@ -244,6 +251,13 @@ you opened it. Reload to see the changes." **Download your changes** then
 saves the grid as it is on your screen as a CSV file, so you can reload
 and import it without losing your edits. Each save raises the table's
 revision by one.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/lookup-table-dark.png">
+    <img src="assets/lookup-table-light.png" alt="The payment-terms table open in the grid: 3 rows, revision 2, read by 1 job. The columns TERMS, TEXT_FI and TEXT_SV are text and DAYS is a number. The rows map 14 DAYS NET, 30 DAYS NET and 60 DAYS NET to their Finnish and Swedish text and the number of days. Import CSV, Download CSV and Save are at the top, and Add column and Add row above the grid." width="900">
+  </picture>
+</p>
 
 ### Columns and types
 
@@ -306,15 +320,22 @@ In the Lookups step, set **Source** to Lookup table. Then pick:
 - **Table**: the lookup table. With no tables yet, the step links to the
   Lookup tables page.
 - **Key**: up to 5 key columns, each with the value it must equal, such as
-  `CODE` equals `:paymentTerms`. A value is written like an SQL parameter
+  `TERMS` equals `:paymentTerms`. A value is written like an SQL parameter
   and names the same things: a field of the page group, a column of the
   row in a row lookup, or a column of an earlier lookup that reads one
   row.
 
 Runs, Rows and When no row is found work as for Db2 for i. To print the
 text of the payment terms the invoice prints as `paymentTerms`, name the
-lookup `terms`, pick `payment-terms`, and match `CODE` on `:paymentTerms`.
-A template writes `{d.pg.terms.TEXT}`.
+lookup `terms`, pick `payment-terms`, and match `TERMS` on `:paymentTerms`.
+A Finnish template writes `{d.pg.terms.TEXT_FI}`.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/lookups-table-dark.png">
+    <img src="assets/lookups-table-light.png" alt="The Lookups step of an invoice job with the lookup terms. Its source is Lookup table, its table payment-terms, and its key column TERMS equals :paymentTerms, with the value 14 DAYS NET after it. The Test tab says it matched in payment-terms, revision 2, shows the parameter with the column it must equal, the one row found with the Finnish and Swedish text and 14 days, and the four tags templates write." width="900">
+  </picture>
+</p>
 
 A row matches when each key column equals its value:
 
