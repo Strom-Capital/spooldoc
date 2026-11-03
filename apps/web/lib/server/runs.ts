@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { and, desc, eq, gte, inArray, lt, lte, sql, type SQL } from 'drizzle-orm';
+import type { JobSpec } from '@/lib/job-spec';
 import type { DeliveryKind, DeliveryView, RunStatus, RunView } from '@/lib/types';
 import { getDb } from './db';
 import { destinations, jobs, jobVersions, runDeliveries, runFiles, runs } from './db/schema';
@@ -30,6 +31,7 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
     .select({
       id: runDeliveries.id,
       runId: runDeliveries.runId,
+      destinationId: runDeliveries.destinationId,
       kind: runDeliveries.kind,
       document: runDeliveries.document,
       to: runDeliveries.to,
@@ -53,15 +55,9 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
     .from(jobs)
     .where(inArray(jobs.id, [...new Set(rows.map((row) => row.jobId))]));
   const jobName = new Map(jobRows.map((job) => [job.id, job.name]));
-  // The job versions of these runs whose destination records deliveries, with its kind.
-  const deliveryVersions = await db
-    .select({ jobId: jobVersions.jobId, number: jobVersions.number, kind: destinations.kind })
-    .from(jobVersions)
-    .innerJoin(destinations, sql`${destinations.id}::text = ${jobVersions.spec} -> 'destination' ->> 'destinationId'`)
-    .where(and(inArray(jobVersions.jobId, [...new Set(rows.map((row) => row.jobId))]), inArray(destinations.kind, [...DELIVERY_KINDS])));
-  const deliveryKind = new Map(deliveryVersions.map((version) => [`${version.jobId}/${version.number}`, version.kind as DeliveryKind]));
+  const deliveryTargets = await versionDeliveryTargets(rows);
   return rows.map((row) => ({
-    deliveryKind: deliveryKind.get(`${row.jobId}/${row.version}`) ?? null,
+    deliveryTargets: deliveryTargets.get(`${row.jobId}/${row.version}`) ?? [],
     id: row.id,
     seq: row.seq,
     jobId: row.jobId,
@@ -78,6 +74,7 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
       .filter((d) => d.runId === row.id)
       .map((d) => ({
         id: d.id,
+        destinationId: d.destinationId,
         kind: d.kind as DeliveryKind,
         document: d.document,
         to: d.to,
@@ -97,6 +94,40 @@ export async function runViews(rows: RunRow[]): Promise<RunView[]> {
     startedAt: row.startedAt.toISOString(),
     finishedAt: row.finishedAt?.toISOString() ?? null,
   }));
+}
+
+/** The destinations a job version delivers to, in its order: for now, the one destination of the job. */
+const specDestinationIds = (destination: JobSpec['destination'] | null): string[] => (destination?.destinationId ? [destination.destinationId] : []);
+
+/**
+ * The destinations that record deliveries of the job versions of these runs, by `jobId/number`:
+ * every destination of the version whose kind records them, in order, each once.
+ */
+async function versionDeliveryTargets(rows: RunRow[]): Promise<Map<string, RunView['deliveryTargets']>> {
+  const db = getDb();
+  const versions = await db
+    .select({ jobId: jobVersions.jobId, number: jobVersions.number, destination: sql<JobSpec['destination'] | null>`${jobVersions.spec} -> 'destination'` })
+    .from(jobVersions)
+    .where(inArray(jobVersions.jobId, [...new Set(rows.map((row) => row.jobId))]));
+  const ids = new Map(versions.map((version) => [`${version.jobId}/${version.number}`, [...new Set(specDestinationIds(version.destination))]]));
+  const all = [...new Set([...ids.values()].flat())];
+  const found =
+    all.length === 0
+      ? []
+      : await db
+          .select({ id: destinations.id, name: destinations.name, kind: destinations.kind })
+          .from(destinations)
+          .where(and(inArray(destinations.id, all), inArray(destinations.kind, [...DELIVERY_KINDS])));
+  const byId = new Map(found.map((destination) => [destination.id, destination]));
+  return new Map(
+    [...ids].map(([key, list]) => [
+      key,
+      list.flatMap((id) => {
+        const destination = byId.get(id);
+        return destination ? [{ destinationId: id, name: destination.name, kind: destination.kind as DeliveryKind }] : [];
+      }),
+    ]),
+  );
 }
 
 /** Filters of the job log. */

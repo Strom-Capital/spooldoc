@@ -287,8 +287,11 @@ export function RunNowDialog({ open, onClose, onSaveVersion }: { open: boolean; 
                       {run.status === 'running'
                         ? 'Still running; see the Job log.'
                         : (run.error ??
-                          run.steps.find((step) => step.step === 'deliver')?.note ??
-                          `${run.files.length} ${run.files.length === 1 ? 'file' : 'files'} delivered`)}
+                          (run.steps
+                            .filter((step) => step.step === 'deliver' && step.note)
+                            .map((step) => step.note)
+                            .join('. ') ||
+                            `${run.files.length} ${run.files.length === 1 ? 'file' : 'files'} delivered`))}
                     </div>
                   </div>
                   {run.files.slice(0, 3).map((file) => (

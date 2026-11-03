@@ -153,18 +153,21 @@ Schema changes go in `apps/web/lib/server/db/schema.ts`; then run
 ### Adding a destination
 
 A destination is a `kind` and a `deliver` call in
-`apps/web/lib/server/destinations`. `deliver` receives the run id, the
-files, the data of each document, the job and the spooled file, the
-job's part for its kind (such as `email` or `webhook`), a `context` with
-the job's name and version, the run's number and the spooled file's
-attributes, and the open connection and host of the job's server, and
-returns
-the note the Deliver step shows, such as "Wrote 6 files to
-/home/docs/out on ibmi.example.com". It runs outside any database
-transaction, since it may wait on another system. To keep the files in
-Spooldoc as well, call `storeRunFiles`, which saves them in one
-transaction of its own. Throw a `StepError` with a message that says what
-to do, and the system's own text as its detail.
+`apps/web/lib/server/destinations`. A run can deliver through several
+destinations, one after another, with a Deliver step each
+(`lib/server/deliver.ts`). `deliver` receives the run id, the documents
+it delivers with their data and their files, the job and the spooled
+file, the destination's id, the job's templates, the job's part for its
+kind (such as `email` or `webhook`), a `context` with the job's name and
+version, the run's number, the spooled file's attributes and how many
+page groups it has in all, and the open connection and host of the job's
+server, and returns the note the Deliver step shows, such as "Wrote 6
+files to /home/docs/out on ibmi.example.com". It runs outside any
+database transaction, since it may wait on another system. To keep the
+files in Spooldoc as well, call `input.keepFiles`, which saves them in
+one transaction of its own, and only once a run when several
+destinations keep the same files. Throw a `StepError` with a message
+that says what to do, and the system's own text as its detail.
 
 Then:
 
@@ -181,9 +184,12 @@ Then:
   from `lib/server/destinations/names.ts` (`ownNames`, `numbered`), so
   every folder destination follows one case rule.
 - A kind that records one delivery per document or file, as email,
-  webhook and SFTP do, writes `run_deliveries` rows with its `kind`, is listed in
-  `DELIVERY_KINDS` and `DeliveryKind`, and gets its words in `KIND_TEXT`
-  of `components/run-deliveries.tsx`.
+  webhook and SFTP do, writes `run_deliveries` rows with its `kind`
+  (`deliveryRecorder`). What was already sent counts per destination:
+  `earlierDeliveries` reads only the rows of the same destination, so a
+  document still goes to each of its destinations. It is listed in
+  `DELIVERY_KINDS` and `DeliveryKind`, and gets its words in
+  `KIND_TEXT` and `RETRY_TEXT` of `components/run-deliveries.tsx`.
 - A call that changes the IBM i goes on the `Connection` interface, in
   both fake connections, and in the wrappers in `jt400/jvm.ts` (as a
   change, not retried) and `lib/server/ibmi.ts`.

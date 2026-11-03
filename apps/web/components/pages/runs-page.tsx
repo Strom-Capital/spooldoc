@@ -9,7 +9,7 @@ import { Hint } from '@/components/hint';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
 import { RowOpenButton, useRowOpen } from '@/components/row-actions';
-import { RunDeliveries } from '@/components/run-deliveries';
+import { deliveryGroups, RETRY_TEXT, RunDeliveries } from '@/components/run-deliveries';
 import { RunStatusBadge } from '@/components/run-status';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,8 +51,10 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
   const [loadingMore, setLoadingMore] = useState(false);
   const [open, setOpen] = useState<RunView | null>(null);
   const rowOpen = useRowOpen();
-  // Which deliveries the open run shows: those of its destination's kind, or of the ones it made.
-  const openDeliveryKind = open ? (open.deliveryKind ?? open.deliveries[0]?.kind ?? null) : null;
+  // The deliveries the open run shows: a list for each of its destinations, and for the ones it made through others.
+  const openDeliveries = open ? deliveryGroups(open) : [];
+  const retryText = [...new Set(openDeliveries.map((group) => RETRY_TEXT[group.target.kind]))].map((text) => ` ${text}`).join('');
+  const deliverSteps = open ? open.steps.filter((step) => step.step === 'deliver') : [];
 
   const query = useCallback(
     (before?: number) => {
@@ -312,7 +314,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                   <RunStatusBadge status={open.status} />
                   {(open.status === 'failed' || open.status === 'warning' || open.status === 'skipped') && (
                     <Hint
-                      text={`Run this spooled file again with the job's active version, as a new run.${open.deliveryKind === 'email' ? ' Emails an earlier run sent are not sent again.' : open.deliveryKind === 'webhook' ? ' Documents an earlier run sent to the webhook are not sent again.' : open.deliveryKind === 'sftp' ? ' Uploads only the files that were not uploaded yet.' : ''} Its finish step runs too, if it has one.`}
+                      text={`Run this spooled file again with the job's active version, as a new run.${retryText} Its finish step runs too, if it has one.`}
                     >
                       <Button variant="outline" size="sm" onClick={() => retry(open)} disabled={retrying !== null}>
                         {retrying === open.id ? <Spinner /> : <RotateCcwIcon />}
@@ -366,8 +368,8 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                   <h3 className="mb-2 font-medium text-sm">Files</h3>
                   {open.files.length === 0 ? (
                     <p className="text-muted-foreground text-sm">
-                      {open.steps.some((step) => step.step === 'deliver' && step.ok)
-                        ? 'No copy kept in Spooldoc. The Deliver step says where the files went.'
+                      {deliverSteps.some((step) => step.ok)
+                        ? `No copy kept in Spooldoc. ${deliverSteps.length > 1 ? 'The Deliver steps say' : 'The Deliver step says'} where the files went.`
                         : 'None delivered.'}
                     </p>
                   ) : (
@@ -399,7 +401,14 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                     </div>
                   )}
                 </div>
-                {openDeliveryKind && <RunDeliveries kind={openDeliveryKind} deliveries={open.deliveries} />}
+                {openDeliveries.map((group, index) => (
+                  <RunDeliveries
+                    key={group.target.destinationId ?? `other-${group.target.kind}-${index}`}
+                    kind={group.target.kind}
+                    deliveries={group.deliveries}
+                    destination={openDeliveries.length > 1 ? group.target.name : null}
+                  />
+                ))}
               </div>
             </>
           )}

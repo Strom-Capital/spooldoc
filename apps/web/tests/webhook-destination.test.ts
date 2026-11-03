@@ -3,7 +3,7 @@ import { Webhook } from 'standardwebhooks';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptySpec, type JobSpec } from '@/lib/job-spec';
 import { destinations, jobs, jobVersions, runDeliveries, runs } from '@/lib/server/db/schema';
-import { sealWebhookSecrets, webhookTiming } from '@/lib/server/destinations/webhook';
+import { sealWebhookSecrets, webhookDestination, webhookTiming } from '@/lib/server/destinations/webhook';
 import { runJob } from '@/lib/server/runner';
 import { runViews } from '@/lib/server/runs';
 import { storeSample } from '@/lib/server/samples';
@@ -137,9 +137,34 @@ describe('the webhook destination', () => {
     expect(deliveries[0]!.to).toBe('https://hooks.example.com/spooldoc');
     expect(deliveries[0]!.response).toBe('{"received":true}');
     const [view] = await runViews([row]);
-    expect(view!.deliveryKind).toBe('webhook');
+    expect(view!.deliveryTargets.map((target) => target.kind)).toEqual(['webhook']);
     expect(view!.deliveries[0]).toMatchObject({ kind: 'webhook', httpStatus: 200, attempts: 1, response: '{"received":true}', responseTruncated: false });
     expect(conn.actions()).toEqual(['holdSpooledFile']);
+  });
+
+  it("gives the spooled file's page groups in all, to a destination that gets only some of them", async () => {
+    const { jobId } = await webhookJob();
+    const [destination] = await db().select().from(destinations).where(eq(destinations.kind, 'webhook'));
+    const [row] = await db().insert(runs).values({ jobId, version: 1, trigger: 'manual', splf: sample.splf }).returning();
+    const document = { pageGroupIndex: 2, name: 'invoice-260103', pages: { first: 3, last: 3 }, data: { pg: { invoiceNo: '260103' }, splf: sample.splf } };
+    await webhookDestination({ url: URL_IN_USE, testUrl: null }, { signingSecret: secret, headers: [] }, 'MYHOOK').deliver({
+      runId: row!.id,
+      files: [],
+      documents: [document],
+      keepFiles: async () => undefined,
+      job: { id: jobId, splfKey: 'key' },
+      destinationId: destination!.id,
+      route: null,
+      templates: [],
+      email: null,
+      webhook: null,
+      context: { job: { id: jobId, name: 'MYJOB', version: 1 }, run: { id: row!.id, seq: 1 }, splf: sample.splf, attributes: sample.attributes, pageGroups: 6 },
+      valueTypes: {},
+      conn: new FakeConnection(),
+      host: 'ibmi.example.com',
+      addSecret: () => undefined,
+    });
+    expect(receiver.payloads().map((payload) => payload.data.document)).toEqual([expect.objectContaining({ name: 'invoice-260103', pageGroup: 3, pageGroups: 6 })]);
   });
 
   it('sends the data only when the job picks no files', async () => {

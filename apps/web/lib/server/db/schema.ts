@@ -273,6 +273,8 @@ export interface RunStep {
   warnings?: string[];
   /** The Lookups step: the lookup tables the run read, as they were then. */
   tables?: { id: string; name: string; revision: number }[];
+  /** A Deliver step: the destination it delivered to, as it was named then. Missing when the destination was gone. */
+  destination?: { id: string; name: string; kind: string };
 }
 
 /** One processing of one spooled file by a job version. */

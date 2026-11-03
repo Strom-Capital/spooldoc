@@ -23,7 +23,7 @@ import { StepError } from '../step-error';
 import type { DeliverInput, Destination } from './index';
 import { key, numbered, ownNames } from './names';
 import { deliveryFailed, deliveryLock, deliveryRecorder, documentFields, earlierDeliveries, earlierText, sentBefore, type DeliveredDocument } from './deliveries';
-import { nFiles, storeRunFiles, type RunFile } from './store';
+import { nFiles, type RunFile } from './store';
 
 /** The secrets of an SFTP destination, kept encrypted in `destinations.secrets_enc`. */
 export interface SftpSecrets {
@@ -194,12 +194,12 @@ export function sftpDestination(config: SftpConfig, secrets: SftpSecrets, name: 
   return {
     kind: 'sftp',
     async deliver(input: DeliverInput) {
-      const { runId, files, documents, job } = input;
+      const { files, documents, job } = input;
       const hidden = sftpSecretValues(secrets);
       for (const secret of hidden) input.addSecret(secret);
       const clean = (text: string) => redact(text, hidden);
 
-      if (config.keepCopy) await storeRunFiles(runId, files);
+      if (config.keepCopy) await input.keepFiles(files);
 
       const test = config.testFolder !== null;
       const folder = config.testFolder ?? config.folder;
@@ -248,7 +248,7 @@ export function sftpDestination(config: SftpConfig, secrets: SftpSecrets, name: 
       try {
         // Files uploaded for real by earlier runs of this job on this spooled file, through this
         // destination; none with a test folder. Which went to this host and folder is known once the folder is found.
-        const earlier = (await earlierDeliveries('sftp', job, test)).filter((row) => row.status === 'sent' && row.destinationId === input.destinationId);
+        const earlier = (await earlierDeliveries(input, 'sftp', test)).filter((row) => row.status === 'sent');
         if (pending.length > 0) {
           if (!config.hostKey) {
             const message = `The host key of ${config.host} is not trusted yet. Open ${name} on the Destinations page, check the connection and trust the key.`;

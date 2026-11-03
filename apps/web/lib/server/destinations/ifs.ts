@@ -6,7 +6,7 @@ import { isConnectionError } from '../ibmi';
 import { StepError } from '../step-error';
 import type { Destination } from './index';
 import { key, numbered, ownNames, SUFFIX_TRIES } from './names';
-import { nFiles, storeRunFiles, type RunFile } from './store';
+import { nFiles, type RunFile } from './store';
 
 /** The CCSID a file is tagged with: UTF-8 for text such as HTML, binary for PDF, DOCX and XLSX. */
 export function ccsidFor(contentType: string): number {
@@ -35,9 +35,9 @@ export function ifsDestination(config: IfsConfig): Destination {
   const pathOf = (name: string) => `${folder}/${name}`;
   return {
     kind: 'ifs',
-    async deliver({ runId, files, conn, host }) {
+    async deliver({ files, keepFiles, conn, host }) {
       if (keepCopy) {
-        await storeRunFiles(runId, files);
+        await keepFiles(files);
       }
       const at = await conn.ifsStat(folder);
       if (at === 'file') {

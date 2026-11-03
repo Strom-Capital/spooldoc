@@ -10,7 +10,6 @@ import { decryptSecret, encryptSecret } from '../secrets';
 import { webhookHeaders, webhookId, webhookPayload, type WebhookType } from '../webhook-payload';
 import { deliveryFailed, deliveryLock, deliveryRecorder, documentFields, earlierDeliveries, earlierText, notSent, sameDocument, sentBefore } from './deliveries';
 import type { DeliverInput, Destination, RunFile } from './index';
-import { storeRunFiles } from './store';
 
 /** The secrets of a webhook destination, kept encrypted in `destinations.secrets_enc`. */
 export interface WebhookSecrets {
@@ -275,7 +274,7 @@ export function callFiles(files: RunFile[], pageGroupIndex: number | null, forma
  * Posts one call per document to the destination's URL, as JSON with the document's data
  * and the files in the formats the job picks, signed with the destination's secret. The
  * files are kept in Spooldoc first, so the download works too. A document an earlier run
- * of the same job already sent for the same spooled file is not sent again (a test call
+ * of the same job already sent through this destination for the same spooled file is not sent again (a test call
  * does not count), so Retry sends only the rest, with the same `webhook-id`. With a test
  * URL, every document goes to it, whatever earlier runs sent. One run at a time calls for
  * a job and spooled file; a second waits for the first. Every call is recorded as it goes.
@@ -286,12 +285,12 @@ export function webhookDestination(config: WebhookConfig, secrets: WebhookSecret
   return {
     kind: 'webhook',
     async deliver(input: DeliverInput) {
-      const { runId, files, documents, job, context } = input;
+      const { files, documents, job, context } = input;
       const hidden = webhookSecretValues(secrets);
       for (const secret of hidden) input.addSecret(secret);
       const clean = (text: string) => redact(text, hidden);
 
-      await storeRunFiles(runId, files);
+      await input.keepFiles(files);
 
       const test = config.testUrl !== null;
       const target: WebhookTarget = { url: config.testUrl ?? config.url, toTestUrl: test, secret: secrets.signingSecret, headers: secrets.headers, destination: name };
@@ -304,11 +303,10 @@ export function webhookDestination(config: WebhookConfig, secrets: WebhookSecret
         // The spooled file's creation time, as the run read it; "" when the IBM i did not give it.
         const created = context.attributes.created;
         // Calls of earlier runs of this job on this spooled file, first run first; none in test mode.
-        const earlier = await earlierDeliveries('webhook', job, test);
+        const earlier = await earlierDeliveries(input, 'webhook', test);
 
         // A call per page group; the whole spooled file's document only when one of its files goes.
         const calls = documents.filter((document) => document.pageGroupIndex !== null || callFiles(files, null, formats).length > 0);
-        const pageGroups = documents.filter((document) => document.pageGroupIndex !== null).length;
         const to = urlWithoutQuery(target.url);
         const record = deliveryRecorder(input, 'webhook');
 
@@ -335,7 +333,7 @@ export function webhookDestination(config: WebhookConfig, secrets: WebhookSecret
             await record({ ...base, to, test, status: 'failed', messageId: id, attempts: 0, error: message, detail: stopped.detail ?? null });
             continue;
           }
-          const payload = webhookPayload({ type, at: new Date(), document, pageGroups, context, files: callFiles(files, document.pageGroupIndex, formats) });
+          const payload = webhookPayload({ type, at: new Date(), document, pageGroups: context.pageGroups, context, files: callFiles(files, document.pageGroupIndex, formats) });
           const result = await postWebhook(target, { id, body: JSON.stringify(payload) });
           const answer = {
             httpStatus: result.status,

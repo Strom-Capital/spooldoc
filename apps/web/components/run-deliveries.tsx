@@ -7,7 +7,7 @@ import { StatusPill, type StatusTone } from '@/components/status-pill';
 import { Button } from '@/components/ui/button';
 import { bytes, duration } from '@/lib/client/format';
 import { shortUrl } from '@/lib/destination-config';
-import type { DeliveryKind, DeliveryView } from '@/lib/types';
+import type { DeliveryKind, DeliveryTargetView, DeliveryView, RunView } from '@/lib/types';
 
 /** Deliveries shown at first and per Show more. */
 const PAGE = 50;
@@ -37,6 +37,31 @@ const KIND_TEXT: Record<DeliveryKind, { title: string; plural: string; none: str
     verb: 'Uploaded',
   },
 };
+
+/** What Retry does again for each kind, for its hint. */
+export const RETRY_TEXT: Record<DeliveryKind, string> = {
+  email: 'Emails an earlier run sent are not sent again.',
+  webhook: 'Documents an earlier run sent to the webhook are not sent again.',
+  sftp: 'Uploads only the files that were not uploaded yet.',
+};
+
+/**
+ * A run's deliveries by destination: one list for each destination of its job version that
+ * records deliveries, in order, and one per kind for deliveries through a destination the
+ * version does not have, such as one since deleted. A destination with no deliveries
+ * still gets its list, which says the run made none.
+ */
+export function deliveryGroups(run: Pick<RunView, 'deliveryTargets' | 'deliveries'>): { target: DeliveryTargetView; deliveries: DeliveryView[] }[] {
+  const groups = run.deliveryTargets.map((target) => ({ target, deliveries: run.deliveries.filter((delivery) => delivery.destinationId === target.destinationId) }));
+  const known = new Set(run.deliveryTargets.map((target) => target.destinationId));
+  for (const delivery of run.deliveries) {
+    if (delivery.destinationId !== null && known.has(delivery.destinationId)) continue;
+    const group = groups.find((g) => g.target.destinationId === null && g.target.kind === delivery.kind);
+    if (group) group.deliveries.push(delivery);
+    else groups.push({ target: { destinationId: null, name: null, kind: delivery.kind }, deliveries: [delivery] });
+  }
+  return groups;
+}
 
 /** The path of an upload on the server, without the host: `sftp.example.com:/in/a.pdf` is `/in/a.pdf`. */
 const remotePath = (to: string): string => {
@@ -123,9 +148,10 @@ const time = (iso: string): string => new Date(iso).toLocaleTimeString(undefined
  * The deliveries of a run, such as its emails, webhook calls or uploads, one row per
  * document or file: what it was, where it went (for a webhook call the answer and the
  * tries, for an upload the path, the size and how long it took), the status and the time. A failed row opens to show what went wrong and the other system's own text. A
- * long list shows the first deliveries and says how many more there are.
+ * long list shows the first deliveries and says how many more there are. With `destination`, the
+ * title names the destination they went through, for a run with several lists.
  */
-export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; deliveries: DeliveryView[] }) {
+export function RunDeliveries({ kind, deliveries, destination }: { kind: DeliveryKind; deliveries: DeliveryView[]; destination?: string | null }) {
   const text = KIND_TEXT[kind];
   const webhook = kind === 'webhook';
   const upload = kind === 'sftp';
@@ -142,7 +168,8 @@ export function RunDeliveries({ kind, deliveries }: { kind: DeliveryKind; delive
   return (
     <div>
       <h3 className="mb-2 font-medium text-sm">
-        {text.title}{' '}
+        {text.title}
+        {destination ? ` through ${destination}` : ''}{' '}
         {deliveries.length > 0 && (
           <span className="font-normal text-muted-foreground">
             ({sent} of {deliveries.length} {text.verb.toLowerCase()})
