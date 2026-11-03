@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/Strom-Capital/spooldoc/compare/v0.7.0...v0.8.0) (2026-11-03)
+
+
+### Features
+
+* routes send each document to a destination by its fields ([#175](https://github.com/Strom-Capital/spooldoc/issues/175)) ([ea85940](https://github.com/Strom-Capital/spooldoc/commit/ea85940cbb78ec07d3793e1de037f21c0f427047))
+
+
+### Bug Fixes
+
+* **web:** Retry skips files already written to an IFS folder ([#173](https://github.com/Strom-Capital/spooldoc/issues/173)) ([64f3aed](https://github.com/Strom-Capital/spooldoc/commit/64f3aed774d22ff2d287ec963143fcc2825a5419))
+
 ## [0.7.0](https://github.com/Strom-Capital/spooldoc/compare/v0.6.0...v0.7.0) (2026-11-03)
 
 
