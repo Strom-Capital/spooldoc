@@ -52,4 +52,27 @@ describe('the deliveries of a run', () => {
     expect(renderToStaticMarkup(createElement(RunDeliveries, { kind: 'email', deliveries: [] }))).toContain('Emails <');
     expect(renderToStaticMarkup(createElement(RunDeliveries, { kind: 'email', deliveries: [], destination: 'Invoices by email' }))).toContain('Emails through Invoices by email');
   });
+
+  it('show no IFS list for a run without IFS rows, such as one from before they were recorded', () => {
+    const ifs = { destinationId: 'c', name: 'MYIFS', kind: 'ifs' as const };
+    expect(deliveryGroups({ deliveryTargets: [ifs], deliveries: [] })).toEqual([]);
+    expect(deliveryGroups({ deliveryTargets: [ifs], deliveries: [delivery('1', 'c', 'ifs')] })).toEqual([{ target: ifs, deliveries: [expect.objectContaining({ id: '1' })] }]);
+    // Another kind keeps its empty list.
+    expect(deliveryGroups({ deliveryTargets: [ifs, { destinationId: 'd', name: 'MYSFTP', kind: 'sftp' }], deliveries: [] }).map((group) => group.target.kind)).toEqual(['sftp']);
+  });
+
+  it('list the files written to an IFS folder with the path, size and time', () => {
+    const written: DeliveryView = { ...delivery('1', 'c', 'ifs'), document: 'invoice-1001.pdf', to: '/home/docs/out/invoice-1001-2.pdf', size: 2048, ms: 120 };
+    const before: DeliveryView = { ...delivery('2', 'c', 'ifs'), document: 'invoice-1002.pdf', to: '', status: 'already_sent', sentInRun: 4 };
+    const html = renderToStaticMarkup(createElement(RunDeliveries, { kind: 'ifs', deliveries: [written, before] }));
+    expect(html).toContain('Files written');
+    expect(html).toContain('(2 of 2 written)');
+    expect(html).toContain('invoice-1001-2.pdf');
+    expect(html).toContain('/<wbr/>home/<wbr/>docs/<wbr/>out/<wbr/>invoice-1001-2.pdf');
+    expect(html).toContain('2 KB in 120 ms');
+    expect(html).toContain('Written in run #4');
+    expect(html).toContain('An earlier run wrote it, so it was not written again.');
+    expect(html).not.toContain('Not written');
+  });
 });
+

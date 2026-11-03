@@ -167,7 +167,7 @@ export function deliveryRecorder(input: Pick<DeliverInput, 'runId' | 'job' | 'de
 export const notSent = (reason: string): string => `Not sent: ${reason}`;
 
 /** `, 2 were sent in run #4`, or "" when none was delivered before. */
-export function earlierText(already: number, runsBefore: Iterable<number>, verb: 'sent' | 'uploaded'): string {
+export function earlierText(already: number, runsBefore: Iterable<number>, verb: 'sent' | 'uploaded' | 'written'): string {
   if (already === 0) return '';
   const seqs = [...new Set(runsBefore)];
   return `, ${already} ${already === 1 ? 'was' : 'were'} ${verb} in ${seqs.length === 1 ? `run #${seqs[0]}` : 'earlier runs'}`;
