@@ -80,6 +80,23 @@ export function deliveryGroups(run: Pick<RunView, 'deliveryTargets' | 'deliverie
   return groups.filter((group) => group.target.kind !== 'ifs' || group.deliveries.length > 0);
 }
 
+/**
+ * What a run's Files section says when no file was kept in Spooldoc. "None delivered." only
+ * when nothing went anywhere: no deliver step went well and no delivery went out, now or in
+ * an earlier run. Otherwise it points to the lists of the deliveries that went out, such as
+ * Files written, or to the Deliver steps, since a step can fail after some files went.
+ */
+export function noCopyText(run: Pick<RunView, 'steps' | 'deliveries'>): string {
+  const lists = [...new Set(run.deliveries.filter((delivery) => delivery.status !== 'failed').map((delivery) => KIND_TEXT[delivery.kind].title))];
+  if (lists.length > 0) {
+    const named = lists.length === 1 ? `The ${lists[0]} list says` : `The ${lists.slice(0, -1).join(', ')} and ${lists.at(-1)} lists say`;
+    return `No copy kept in Spooldoc. ${named} where the files went.`;
+  }
+  const deliverSteps = run.steps.filter((step) => step.step === 'deliver');
+  if (deliverSteps.some((step) => step.ok)) return `No copy kept in Spooldoc. ${deliverSteps.length > 1 ? 'The Deliver steps say' : 'The Deliver step says'} where the files went.`;
+  return 'None delivered.';
+}
+
 /** The path of an upload on the server, without the host: `sftp.example.com:/in/a.pdf` is `/in/a.pdf`. */
 const remotePath = (to: string): string => {
   const at = to.indexOf(':/');

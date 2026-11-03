@@ -273,7 +273,7 @@ describe('the IFS destination', () => {
       await expect(deliver(invoices())).rejects.toThrow();
       vi.restoreAllMocks();
       const note = await deliver(invoices());
-      expect(note).toMatch(new RegExp(`^Wrote 2 files to ${FOLDER} on ${HOST}, 1 was written in run #\\d+$`));
+      expect(note).toMatch(/^Wrote 2 files to \/home\/docs\/out on ibmi\.example\.com, 1 was written in run #\d+$/);
       expect(names()).toEqual(['invoice-1001.pdf', 'invoice-1002.pdf', 'invoice-1003.pdf']);
     });
 

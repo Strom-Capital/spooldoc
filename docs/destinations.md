@@ -85,8 +85,9 @@ other. Spooldoc does this in every folder.
 kept as with [Spooldoc download](#spooldoc-download), and saved before the
 write to the IFS, so they can be downloaded from the job log even when the
 write fails. With it off, the run's Files section says no copy was kept,
-and the Deliver step says where the files went: "Wrote 6 files to
-/home/docs/out on ibmi.example.com (1 replaced)".
+and points to the [Files written](job-log.md#files-written) list, which
+has the path of each file. The Deliver step says how many: "Wrote 6 files
+to /home/docs/out on ibmi.example.com (1 replaced)".
 
 **A file is never half written.** Each file is written to a part file of
 its own first, such as `.invoice-1001.pdf.1a2b3c4d.part`, and renamed when

@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { deliveryGroups, RunDeliveries } from '@/components/run-deliveries';
+import { deliveryGroups, noCopyText, RunDeliveries } from '@/components/run-deliveries';
 import type { DeliveryView } from '@/lib/types';
 
 const delivery = (id: string, destinationId: string | null, kind: DeliveryView['kind'] = 'email'): DeliveryView => ({
@@ -74,5 +74,19 @@ describe('the deliveries of a run', () => {
     expect(html).toContain('An earlier run wrote it, so it was not written again.');
     expect(html).not.toContain('Not written');
   });
-});
 
+  it('say None delivered only when nothing went anywhere', () => {
+    const failedStep = { step: 'deliver' as const, ok: false, ms: 0, error: 'Wrote 2 of 3 files.' };
+    const okStep = { step: 'deliver' as const, ok: true, ms: 0, note: 'Wrote 3 files' };
+    const ifs = (status: DeliveryView['status']): DeliveryView => ({ ...delivery(status, 'c', 'ifs'), status });
+    expect(noCopyText({ steps: [failedStep], deliveries: [ifs('sent'), ifs('sent'), ifs('failed')] })).toBe('No copy kept in Spooldoc. The Files written list says where the files went.');
+    expect(noCopyText({ steps: [failedStep], deliveries: [ifs('already_sent')] })).toBe('No copy kept in Spooldoc. The Files written list says where the files went.');
+    expect(noCopyText({ steps: [okStep, failedStep], deliveries: [ifs('sent'), { ...delivery('2', 'd', 'sftp') }] })).toBe(
+      'No copy kept in Spooldoc. The Files written and Uploads lists say where the files went.',
+    );
+    expect(noCopyText({ steps: [okStep], deliveries: [] })).toBe('No copy kept in Spooldoc. The Deliver step says where the files went.');
+    expect(noCopyText({ steps: [okStep, okStep], deliveries: [] })).toBe('No copy kept in Spooldoc. The Deliver steps say where the files went.');
+    expect(noCopyText({ steps: [failedStep], deliveries: [ifs('failed')] })).toBe('None delivered.');
+    expect(noCopyText({ steps: [], deliveries: [] })).toBe('None delivered.');
+  });
+});
