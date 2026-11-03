@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import nodemailer, { type SendMailOptions } from 'nodemailer';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { emailSpecSchema, emptySpec, type JobSpec, type JobTemplate, type Route } from '@/lib/job-spec';
@@ -152,11 +152,16 @@ describe('routes in a run', () => {
     expect(sent.map((message) => (message.to as string[])[0])).toEqual(['10004@example.com', 'archive@example.com']);
     expect(String(sent[0]!.text)).toContain('Written for Sweden');
     expect(String(sent[1]!.html)).toContain('Dear customer 10004');
-    const rows = await db().select({ route: runDeliveries.route, destinationId: runDeliveries.destinationId }).from(runDeliveries).where(eq(runDeliveries.runId, view.id));
+    const rows = await db()
+      .select({ route: runDeliveries.route, destinationId: runDeliveries.destinationId })
+      .from(runDeliveries)
+      .where(and(eq(runDeliveries.runId, view.id), eq(runDeliveries.kind, 'email')));
     expect(rows).toEqual([
       { route: 1, destinationId: ids.email },
       { route: 1, destinationId: ids.copy },
     ]);
+    // The files written to the IFS, two templates for each of five page groups, came by Otherwise.
+    expect(view.deliveries.filter((d) => d.kind === 'ifs').map((d) => d.route)).toEqual(Array(10).fill(2));
     expect((await db().select({ status: runs.status }).from(runs))[0]!.status).toBe('success');
   });
 });
