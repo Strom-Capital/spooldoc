@@ -205,7 +205,7 @@ export function LookupTablesPage() {
             <AlertDialogTitle>Delete {deleting?.name}?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleting && deleting.jobs.length > 0
-                ? `${jobNames(deleting.jobs)} ${deleting.jobs.length === 1 ? 'has a lookup that reads' : 'have lookups that read'} it. Their runs stop at the Lookups step until another table is picked. This cannot be undone.`
+                ? `${jobNames(deleting.jobs)} ${deleting.jobs.length === 1 ? 'has a lookup that reads' : 'have lookups that read'} it. ${deleting.jobs.length === 1 ? 'Its' : 'Their'} runs stop at the Lookups step until another table is picked. This cannot be undone.`
                 : 'No job reads it. This cannot be undone. Download it as CSV first to keep a copy.'}
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -700,7 +700,7 @@ function TableFields({
     <>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={id('table')}>Table</Label>
-        <Select value={table ? lookup.table : undefined} onValueChange={(value) => onChange({ table: value }, false)} disabled={readOnly}>
+        <Select value={table ? lookup.table : ''} onValueChange={(value) => onChange({ table: value }, false)} disabled={readOnly}>
           <SelectTrigger id={id('table')} className="w-full font-mono">
             <SelectValue placeholder={lookup.table ? (lookup.checked?.tableName ? `${lookup.checked.tableName} (deleted)` : 'A deleted table') : 'Pick a table'} />
           </SelectTrigger>
@@ -721,7 +721,7 @@ function TableFields({
             const shownValue = !param ? null : values.has(param) ? `‹${shortValue(values.get(param))}›` : LOOKUP_PARAMETER.test(param) ? 'Not in the data' : null;
             return (
               <li key={i} className="flex flex-wrap items-center gap-2">
-                <Select value={key.column || undefined} onValueChange={(value) => setKey(i, { column: value }, false)} disabled={readOnly || !table}>
+                <Select value={key.column} onValueChange={(value) => setKey(i, { column: value }, false)} disabled={readOnly || !table}>
                   <SelectTrigger aria-label={`Column of key ${i + 1}`} className="w-40 font-mono">
                     <SelectValue placeholder="Column" />
                   </SelectTrigger>

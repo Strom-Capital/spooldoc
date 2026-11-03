@@ -320,13 +320,21 @@ export function LookupTablePage({ id }: { id: string }) {
       description={
         table ? (
           <>
-            {rows.length.toLocaleString('en-US')} {rows.length === 1 ? 'row' : 'rows'}, revision {table.revision}. Read by{' '}
-            <JobsPopover
-              jobs={table.jobs}
-              label={`${table.jobs.length} ${table.jobs.length === 1 ? 'job reads' : 'jobs read'} ${table.name}`}
-              heading="Jobs with a lookup that reads it"
-            />{' '}
-            {table.jobs.length === 1 ? 'job' : 'jobs'}. A lookup matches rows on key columns and adds every column to the data.
+            {rows.length.toLocaleString('en-US')} {rows.length === 1 ? 'row' : 'rows'}, revision {table.revision}.{' '}
+            {table.jobs.length === 0 ? (
+              'No job reads it yet.'
+            ) : (
+              <>
+                Read by{' '}
+                <JobsPopover
+                  jobs={table.jobs}
+                  label={`${table.jobs.length} ${table.jobs.length === 1 ? 'job reads' : 'jobs read'} ${table.name}`}
+                  heading="Jobs with a lookup that reads it"
+                />{' '}
+                {table.jobs.length === 1 ? 'job' : 'jobs'}.
+              </>
+            )}{' '}
+            A lookup matches rows on key columns and adds every column to the data.
           </>
         ) : undefined
       }
@@ -680,7 +688,10 @@ function ColumnDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isNew ? 'Add column' : `Column ${column.name}`}</DialogTitle>
-          <DialogDescription>Templates write the name, such as {`{d.pg.terms.${trimmed && LOOKUP_NAME.test(trimmed) ? trimmed : 'TEXT'}}`}.</DialogDescription>
+          <DialogDescription>
+            Templates write it after the lookup&apos;s name, such as {`{d.pg.terms.${trimmed && LOOKUP_NAME.test(trimmed) ? trimmed : 'TEXT'}}`} for a lookup
+            named terms.
+          </DialogDescription>
         </DialogHeader>
         <form id="column-form" onSubmit={onSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
