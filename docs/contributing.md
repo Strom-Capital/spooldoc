@@ -184,7 +184,7 @@ Then:
   from `lib/server/destinations/names.ts` (`ownNames`, `numbered`), so
   every folder destination follows one case rule.
 - A kind that records one delivery per document or file, as email,
-  webhook and SFTP do, writes `run_deliveries` rows with its `kind`
+  webhook, SFTP and IFS do, writes `run_deliveries` rows with its `kind`
   (`deliveryRecorder`). What was already sent counts per destination:
   `earlierDeliveries` reads only the rows of the same destination, so a
   document still goes to each of its destinations. It is listed in

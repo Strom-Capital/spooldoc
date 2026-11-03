@@ -85,8 +85,9 @@ other. Spooldoc does this in every folder.
 kept as with [Spooldoc download](#spooldoc-download), and saved before the
 write to the IFS, so they can be downloaded from the job log even when the
 write fails. With it off, the run's Files section says no copy was kept,
-and the Deliver step says where the files went: "Wrote 6 files to
-/home/docs/out on ibmi.example.com (1 replaced)".
+and points to the [Files written](job-log.md#files-written) list, which
+has the path of each file. The Deliver step says how many: "Wrote 6 files
+to /home/docs/out on ibmi.example.com (1 replaced)".
 
 **A file is never half written.** Each file is written to a part file of
 its own first, such as `.invoice-1001.pdf.1a2b3c4d.part`, and renamed when
@@ -103,19 +104,23 @@ If even that fails, the run says where each file is, and you rename the
 one to keep. If the old file cannot be deleted at the end, the Deliver
 step names it, and you delete it.
 
-**When a write fails part way**, the run fails with "Wrote 2 of 6 files to
-/home/docs/out, then: ..." and the reason. The files already written stay
-in the folder. The spooled file is not held, moved or deleted, so after
-fixing the problem, [Retry](job-log.md#retry) runs it again. What the
-retry does with the files the first try wrote depends on the setting:
+**When a file fails**, the others are still written, and the run fails
+with "Wrote 5 of 6 files to /home/docs/out on ibmi.example.com." and the
+first reason. When the connection to the IBM i is lost, or the sign-on
+fails, the run stops, and each file it did not try says "Not written" and
+why. The job log's [Files written](job-log.md#files-written) list has
+each file. The files already written stay in the folder. The spooled file
+is not held, moved or deleted, so after fixing the problem,
+[Retry](job-log.md#retry) runs it again.
 
-| Setting | On retry |
-|---------|----------|
-| Replace | They are written again under the same names, so the folder holds one copy of each. |
-| Fail the run | The retry fails at once, since their names are taken. Move them first. |
-| Add a number | They are written again with a number: `invoice-1001-2.pdf` next to `invoice-1001.pdf`. A program that watches the folder takes each document twice. |
-
-Use Replace for jobs you may retry.
+**Retry writes only the files that were not written yet.** A file an
+earlier run of the job wrote for the same spooled file, through this
+destination to this folder, is not written again, in every setting. So
+Add a number makes no second copy, and with Fail the run those files are
+not in the way; any other file with a taken name still is. Retry goes by
+what Spooldoc recorded, not by what is in the folder now: a file that a
+program has since moved is not written again. After the destination's
+folder changes, Retry writes every file to the new folder.
 
 A destination that a job's draft or any saved version delivers to cannot
 be deleted. Deleting one never touches the folder or its files.

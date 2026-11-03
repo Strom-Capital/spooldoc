@@ -216,7 +216,7 @@ export interface RunView {
 }
 
 /** The destination kinds that record a delivery per document. */
-export type DeliveryKind = 'email' | 'webhook' | 'sftp';
+export type DeliveryKind = 'email' | 'webhook' | 'sftp' | 'ifs';
 
 /** A destination a run's deliveries are listed under; no id and name for deliveries through a destination the version does not have. */
 export interface DeliveryTargetView {

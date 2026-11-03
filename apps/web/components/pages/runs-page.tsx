@@ -9,7 +9,7 @@ import { Hint } from '@/components/hint';
 import { EmptyState, Loading } from '@/components/empty-state';
 import { ErrorNote, Page } from '@/components/page';
 import { RowOpenButton, useRowOpen } from '@/components/row-actions';
-import { deliveryGroups, RETRY_TEXT, RunDeliveries } from '@/components/run-deliveries';
+import { deliveryGroups, noCopyText, RETRY_TEXT, RunDeliveries } from '@/components/run-deliveries';
 import { RunStatusBadge } from '@/components/run-status';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,7 +54,6 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
   // The deliveries the open run shows: a list for each of its destinations, and for the ones it made through others.
   const openDeliveries = open ? deliveryGroups(open) : [];
   const retryText = [...new Set(openDeliveries.map((group) => RETRY_TEXT[group.target.kind]))].map((text) => ` ${text}`).join('');
-  const deliverSteps = open ? open.steps.filter((step) => step.step === 'deliver') : [];
 
   const query = useCallback(
     (before?: number) => {
@@ -367,11 +366,7 @@ export function RunsPage({ job, status, from, to }: { job: string; status: strin
                 <div>
                   <h3 className="mb-2 font-medium text-sm">Files</h3>
                   {open.files.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">
-                      {deliverSteps.some((step) => step.ok)
-                        ? `No copy kept in Spooldoc. ${deliverSteps.length > 1 ? 'The Deliver steps say' : 'The Deliver step says'} where the files went.`
-                        : 'None delivered.'}
-                    </p>
+                    <p className="text-muted-foreground text-sm">{noCopyText(open)}</p>
                   ) : (
                     <div className="flex flex-col gap-3">
                       {fileGroups(open.files).map((group) => (
