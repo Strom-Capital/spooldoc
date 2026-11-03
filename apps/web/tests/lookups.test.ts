@@ -1,10 +1,10 @@
-import type { Lookup } from '@spooldoc/core';
+import { lookupKeyText, type Db2Lookup, type Lookup, type TableLookup } from '@spooldoc/core';
 import { ConnectionError, type QueryParam } from '@spooldoc/ibmi';
 import { eq } from 'drizzle-orm';
 import nodemailer, { type SendMailOptions } from 'nodemailer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emailSpecSchema, emptySpec, type JobSpec } from '@/lib/job-spec';
-import { destinations, jobs, jobVersions, runs } from '@/lib/server/db/schema';
+import { destinations, jobs, jobVersions, lookupTables, runs } from '@/lib/server/db/schema';
 import type { LookupTestView, RunView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { fakeCarbone, sentPageGroup } from './helpers/carbone';
@@ -37,7 +37,7 @@ const COLUMNS = [
   { name: 'EMAIL', type: 'VARCHAR', precision: 80, scale: 0, nullable: true },
   { name: 'BALANCE', type: 'DECIMAL', precision: 11, scale: 2, nullable: false },
 ];
-const CHECKED: Lookup['checked'] = {
+const CHECKED: Db2Lookup['checked'] = {
   sql: SQL,
   columns: [
     { name: 'NAME', type: 'string' },
@@ -47,7 +47,7 @@ const CHECKED: Lookup['checked'] = {
 };
 const TEMPLATE = '<p>{d.pg.invoiceNo}</p><p>{d.pg.customer.EMAIL}</p>';
 
-const customer = (change: Partial<Lookup> = {}): Lookup => ({ name: 'customer', sql: SQL, result: 'one', missing: 'warn', ...change });
+const customer = (change: Partial<Db2Lookup> = {}): Db2Lookup => ({ name: 'customer', sql: SQL, result: 'one', missing: 'warn', ...change });
 
 /** Answers like MYLIB.CUSTOMERS: one row for each customer number, none for 10003. */
 function customers(sql: string, values: readonly QueryParam[]) {
@@ -376,5 +376,171 @@ describe('an email To address from a lookup', () => {
     expect(preview.unknownTags).toEqual([]);
     expect(preview.fields.map((f: { path: string }) => f.path)).toEqual(expect.arrayContaining(['pg.customer.EMAIL', 'pg.customer.BALANCE']));
     expect(preview.fields.map((f: { path: string }) => f.path)).not.toContain('pg.customer');
+  });
+});
+
+describe('table lookups', () => {
+  const TERMS_TEMPLATE = '<p>{d.pg.invoiceNo}</p><p>{d.pg.terms.TEXT}</p>';
+  const KEY = [{ column: 'CODE', param: 'paymentTerms' }];
+
+  /** The lookup table payment-terms, with the code every invoice of the sample prints. */
+  async function termsTable(): Promise<{ id: string; revision: number }> {
+    const [row] = await db()
+      .insert(lookupTables)
+      .values({
+        name: 'payment-terms',
+        columns: [
+          { name: 'CODE', type: 'string' },
+          { name: 'DAYS', type: 'number' },
+          { name: 'TEXT', type: 'string' },
+        ],
+        rows: [
+          ['14 DAYS NET', 14, 'Net 14 days'],
+          ['30 DAYS NET', 30, 'Net 30 days'],
+        ],
+        revision: 4,
+      })
+      .returning();
+    return { id: row!.id, revision: row!.revision };
+  }
+
+  const terms = (table: string, change: Partial<TableLookup> = {}): TableLookup => ({ source: 'table', name: 'terms', result: 'one', missing: 'warn', table, key: KEY, ...change });
+  const tested = (table: string): TableLookup['checked'] => ({
+    table,
+    tableName: 'payment-terms',
+    key: lookupKeyText(KEY),
+    columns: [
+      { name: 'CODE', type: 'string' },
+      { name: 'DAYS', type: 'number' },
+      { name: 'TEXT', type: 'string' },
+    ],
+  });
+
+  /** A job like `lookupJob`, whose template prints the terms, with no server picked when `server` is false. */
+  async function termsJob(lookups: Lookup[], server = true): Promise<string> {
+    const id = await lookupJob(lookups);
+    const templates = [{ id: 'main', name: 'Document', kind: 'html', source: TERMS_TEMPLATE, formats: ['html'] }];
+    const [row] = await db().select().from(jobs).where(eq(jobs.id, id));
+    const source = { ...(row!.draft as JobSpec).source, ...(server ? {} : { serverId: null }) };
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { render: { templates }, source } }), params({ id }));
+    return id;
+  }
+
+  it('tests a table lookup with no server, and answers with the table, its revision and the matched row', async () => {
+    const table = await termsTable();
+    const id = await termsJob([terms(table.id)], false);
+    const calls = fake().calls.length;
+    const response = await testLookup(id, [terms(table.id)]);
+    expect(response.status, JSON.stringify(await response.clone().json())).toBe(200);
+    const view = (await response.json()) as LookupTestView;
+    expect(view).toMatchObject({
+      checked: tested(table.id),
+      table: { id: table.id, name: 'payment-terms', revision: 4 },
+      parameters: [{ name: 'paymentTerms', value: '14 DAYS NET', source: 'd.pg.paymentTerms', marker: null, column: 'CODE' }],
+      rows: [{ CODE: '14 DAYS NET', DAYS: 14, TEXT: 'Net 14 days' }],
+      rowCount: 1,
+    });
+    expect(view.host).toBeUndefined();
+    // Nothing was asked of the IBM i.
+    expect(fake().calls.length).toBe(calls);
+  });
+
+  it('refuses a Test of a key column the table does not have, and of a deleted table', async () => {
+    const table = await termsTable();
+    const id = await termsJob([], false);
+    const wrong = await testLookup(id, [terms(table.id, { key: [{ column: 'NOPE', param: 'paymentTerms' }] })]);
+    expect(wrong.status).toBe(422);
+    expect((await wrong.json()).error).toBe('payment-terms has no column NOPE. Its columns are CODE, DAYS, TEXT.');
+    await db().delete(lookupTables);
+    const gone = await testLookup(id, [terms(table.id, { checked: tested(table.id) })]);
+    expect((await gone.json()).error).toBe('terms reads the lookup table payment-terms, which was deleted. Pick another table in the Lookups step.');
+  });
+
+  it('refuses to save a version with a table lookup that was not tested since its key changed', async () => {
+    const table = await termsTable();
+    const id = await termsJob([terms(table.id)]);
+    const untested = await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    expect((await untested.json()).problems).toEqual(['Lookups: Test lookup terms before you save this version.']);
+    const changed = terms(table.id, { checked: tested(table.id), key: [{ column: 'CODE', param: 'currency' }] });
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { lookups: [changed] } }), params({ id }));
+    const again = await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    expect((await again.json()).problems).toEqual(['Lookups: terms changed since its test. Test it again before you save this version.']);
+    await jobRoute.PATCH(patch(`/api/jobs/${id}`, { draft: { lookups: [terms(table.id, { checked: tested(table.id) })] } }), params({ id }));
+    expect((await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }))).status).toBe(201);
+  });
+
+  it('renders the preview with the table values and no server', async () => {
+    const table = await termsTable();
+    const id = await termsJob([terms(table.id, { checked: tested(table.id) })], false);
+    const result = await (await renderRoute.POST(post(`/api/jobs/${id}/render`, {}), params({ id }))).json();
+    expect(result.errors).toEqual([]);
+    expect(result.html).toContain('<p>Net 14 days</p>');
+    expect(result.lookups).toMatchObject({ ran: ['terms'], problems: [], traces: [{ lookup: 'terms', rows: 1 }] });
+    expect(result.lookups.error).toBeUndefined();
+  });
+
+  it('records the table and its revision in the Lookups step of a run', async () => {
+    const table = await termsTable();
+    const id = await termsJob([terms(table.id, { checked: tested(table.id) })]);
+    const run = await runOnce(id);
+    expect(run.status, run.error ?? '').toBe('success');
+    const step = run.steps.find((s) => s.step === 'lookup')!;
+    expect(step).toMatchObject({ ok: true, note: '1 lookup, payment-terms revision 4', tables: [{ id: table.id, name: 'payment-terms', revision: 4 }] });
+  });
+
+  it('fails a run at the Lookups step after the table was deleted, and says what to do', async () => {
+    const table = await termsTable();
+    const id = await termsJob([terms(table.id, { checked: tested(table.id) })]);
+    const saved = await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    expect(saved.status).toBe(201);
+    await db().delete(lookupTables);
+    const [run] = (await (await runsRoute.POST(post(`/api/jobs/${id}/runs`, { splfs: [sample.splf] }), params({ id }))).json()).runs as RunView[];
+    expect(run!.status).toBe('failed');
+    expect(run!.steps.map((s) => [s.step, s.ok])).toEqual([
+      ['capture', true],
+      ['extract', true],
+      ['lookup', false],
+    ]);
+    expect(run!.error).toBe('terms reads the lookup table payment-terms, which was deleted. Pick another table in the Lookups step.');
+    expect(fake().actions()).toEqual([]);
+  });
+
+  it('tests a table lookup after an earlier Db2 for i lookup, keyed on its column, on the server', async () => {
+    const table = await termsTable();
+    const withTerms = { sql: SQL, columns: [...CHECKED!.columns, { name: 'TERMS', type: 'string' as const }] };
+    const db2 = customer({ checked: withTerms });
+    const keyed = terms(table.id, { key: [{ column: 'CODE', param: 'customer.TERMS' }] });
+    const id = await termsJob([db2, keyed]);
+    fake().queryAnswer = (sql, values) => {
+      const answer = customers(sql, values);
+      return { ...answer, columns: [...COLUMNS, { name: 'TERMS', type: 'CHAR', precision: 12, scale: 0, nullable: false }], rows: answer.rows.map((r) => ({ ...r, TERMS: '30 DAYS NET ' })) };
+    };
+    const response = await testLookup(id, [db2, keyed], 1);
+    expect(response.status, JSON.stringify(await response.clone().json())).toBe(200);
+    const view = (await response.json()) as LookupTestView;
+    expect(view).toMatchObject({
+      parameters: [{ name: 'customer.TERMS', value: '30 DAYS NET', source: 'd.pg.customer.TERMS', column: 'CODE' }],
+      rows: [{ CODE: '30 DAYS NET', TEXT: 'Net 30 days' }],
+      table: { name: 'payment-terms', revision: 4 },
+    });
+    expect(fake().calls.some((c) => c.method === 'query')).toBe(true);
+  });
+
+  it('refuses to save a version after the columns of its lookup table changed', async () => {
+    const table = await termsTable();
+    const id = await termsJob([terms(table.id, { checked: tested(table.id) })]);
+    await db()
+      .update(lookupTables)
+      .set({ columns: [{ name: 'CODE', type: 'string' }, { name: 'DAYS', type: 'number' }, { name: 'DESCR', type: 'string' }] });
+    const response = await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    expect((await response.json()).problems).toEqual(['Lookups: The columns of payment-terms changed since terms was tested. Test it again.']);
+  });
+
+  it('refuses to save a version whose lookup table was deleted', async () => {
+    const table = await termsTable();
+    const id = await termsJob([terms(table.id, { checked: tested(table.id) })]);
+    await db().delete(lookupTables);
+    const response = await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    expect((await response.json()).problems).toEqual(['Lookups: terms reads the lookup table payment-terms, which was deleted. Pick another table in the Lookups step.']);
   });
 });

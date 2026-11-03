@@ -2,12 +2,16 @@ import {
   bindParameters,
   boundValue,
   db2ValueType,
+  deletedTableMessage,
   extract,
   isLookupError,
   LOOKUP_NAME,
   LOOKUP_TIMEOUT_SECONDS,
+  lookupKeyText,
+  lookupParameterNames,
   lookupProblems,
   lookupsSchema,
+  matchTable,
   MAX_LOOKUP_ROWS,
   parameterText,
   parameterValue,
@@ -15,15 +19,18 @@ import {
   typedLookupRows,
   type Definition,
   type Lookup,
+  type TableLookup,
+  type TableMatch,
 } from '@spooldoc/core';
-import { ConnectionError, type QueryColumn, type QueryParameter } from '@spooldoc/ibmi';
+import { ConnectionError, type Connection, type QueryColumn, type QueryParameter } from '@spooldoc/ibmi';
 import { z } from 'zod';
 import { guard } from '@/lib/server/auth';
 import { errorResponse, json, readJson } from '@/lib/server/http';
 import { isConnectionError, withConnection } from '@/lib/server/ibmi';
 import { draftAndSample } from '@/lib/server/job-preview';
 import { getJobRow } from '@/lib/server/jobs';
-import { previewCache, runLookups } from '@/lib/server/lookups';
+import { loadLookupTables, lookupTableShapes } from '@/lib/server/lookup-tables';
+import { lookupTableIds, needsServer, previewCache, runLookups } from '@/lib/server/lookups';
 import type { LookupTestParameter, LookupTestView } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -89,6 +96,9 @@ function columnProblems(name: string, columns: readonly QueryColumn[]): string[]
  * and where they came from, up to 50 rows, the row count and the time. A problem is 422;
  * an IBM i error is mapped by `connectionErrorResponse`. Nothing changes on the IBM i:
  * the query runs on a read-only connection.
+ *
+ * A table lookup is matched against its lookup table as it is now, with no SQL (see
+ * `testTable`). It needs the IBM i only when an earlier lookup reads Db2 for i.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
   const auth = await guard(request);
@@ -129,13 +139,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return errorResponse(422, 'The definition finds no page groups in this spooled file, so the lookup has no values to run with.');
   }
   const pageGroup = Math.min(body.data.pageGroup ?? 0, groups.length - 1);
-  const problems = lookupProblems(def, lookups)
+  const problems = lookupProblems(def, lookups, await lookupTableShapes())
     .filter((p) => p.index === index)
     .map((p) => p.message);
   if (problems.length > 0) {
     return json({ error: problems[0], problems }, { status: 422 });
   }
   const serverId = draft.source.serverId;
+  if (lookup.source === 'table') {
+    if (!needsServer(lookups.slice(0, index))) {
+      return testTable(null, null, lookup, name, lookups, index, groups, pageGroup).catch((error: unknown) => {
+        if (isLookupError(error)) return errorResponse(422, error.message);
+        throw error;
+      });
+    }
+    if (!serverId) {
+      return errorResponse(409, 'Pick a server in the Source step first. An earlier lookup runs on its IBM i.');
+    }
+    return withConnection(serverId, (conn, server) => testTable(conn, server.id, lookup, name, lookups, index, groups, pageGroup).catch(earlierFailed));
+  }
   if (!serverId) {
     return errorResponse(409, 'Pick a server in the Source step first. Lookups run on its IBM i.');
   }
@@ -159,29 +181,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     // The earlier lookups give the values this one may read, as a run would have them.
-    let group = groups[pageGroup]!;
-    if (index > 0) {
-      const earlier = await runLookups(conn, lookups.slice(0, index), groups, { cache: previewCache(server.id), only: [pageGroup] }).catch((error: unknown) => {
-        if (!isLookupError(error)) throw error;
-        // An earlier lookup stopped: its own message names it.
-        throw new ConnectionError(isConnectionError(error.cause) ? error.cause.code : 'query', error.message, error.detail ? { detail: error.detail } : {});
-      });
-      group = earlier.groups[pageGroup]!;
-    }
-
-    let scopes: Record<string, unknown>[] = [group];
-    let row: number | undefined;
-    let prefix = 'd.pg';
-    if (lookup.for !== undefined) {
-      const table = group[lookup.for];
-      const first = Array.isArray(table) ? (table[0] as Record<string, unknown> | undefined) : undefined;
-      if (!first) {
-        return errorResponse(422, `${lookup.for} has no rows in page group ${pageGroup + 1}. Pick a page group that has some to test ${name}.`);
-      }
-      scopes = [first, group];
-      row = 0;
-      prefix = `d.pg.${lookup.for}[0]`;
-    }
+    const at = await scopeOf(conn, server.id, lookup, name, lookups, index, groups, pageGroup).catch(earlierFailed);
+    if (at instanceof Response) return at;
+    const { scopes, row, prefix } = at;
 
     const parameters: LookupTestParameter[] = [];
     const markerProblems: string[] = [];
@@ -227,4 +229,109 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     };
     return json(view);
   });
+}
+
+/** An earlier lookup that stopped, as an IBM i error: its own message names it. */
+function earlierFailed(error: unknown): never {
+  if (!isLookupError(error)) throw error;
+  throw new ConnectionError(isConnectionError(error.cause) ? error.cause.code : 'query', error.message, error.detail ? { detail: error.detail } : {});
+}
+
+/**
+ * The values a lookup runs with in a page group: the page group after the earlier
+ * lookups, and for a row lookup its table's first row. A 422 when that table has no rows.
+ *
+ * @throws LookupError when an earlier lookup stops
+ */
+async function scopeOf(
+  conn: Connection | null,
+  serverId: string | null,
+  lookup: Lookup,
+  name: string,
+  lookups: readonly Lookup[],
+  index: number,
+  groups: Record<string, unknown>[],
+  pageGroup: number,
+): Promise<{ scopes: Record<string, unknown>[]; row?: number; prefix: string } | Response> {
+  let group = groups[pageGroup]!;
+  if (index > 0) {
+    const earlier = lookups.slice(0, index);
+    const tables = await loadLookupTables(lookupTableIds(earlier));
+    const result = await runLookups(conn, earlier, groups, { cache: previewCache(serverId ?? ''), only: [pageGroup], tables });
+    group = result.groups[pageGroup]!;
+  }
+  if (lookup.for === undefined) return { scopes: [group], prefix: 'd.pg' };
+  const table = group[lookup.for];
+  const first = Array.isArray(table) ? (table[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) {
+    return errorResponse(422, `${lookup.for} has no rows in page group ${pageGroup + 1}. Pick a page group that has some to test ${name}.`);
+  }
+  return { scopes: [first, group], row: 0, prefix: `d.pg.${lookup.for}[0]` };
+}
+
+/**
+ * Test a table lookup: match its key against its lookup table as it is now, with the
+ * values of the page group. It answers with the table's columns to keep as `checked`,
+ * the table and its revision, the values and the key columns they must equal, and the
+ * rows matched. Nothing is read from the IBM i but the earlier Db2 for i lookups.
+ *
+ * @throws LookupError when an earlier lookup stops
+ */
+async function testTable(
+  conn: Connection | null,
+  serverId: string | null,
+  lookup: TableLookup,
+  name: string,
+  lookups: readonly Lookup[],
+  index: number,
+  groups: Record<string, unknown>[],
+  pageGroup: number,
+): Promise<Response> {
+  const started = performance.now();
+  const table = (await loadLookupTables([lookup.table])).get(lookup.table);
+  if (!table) {
+    return errorResponse(422, deletedTableMessage(lookup));
+  }
+  const at = await scopeOf(conn, serverId, lookup, name, lookups, index, groups, pageGroup);
+  if (at instanceof Response) return at;
+  const { scopes, row, prefix } = at;
+  const parameters: LookupTestParameter[] = [];
+  for (const [i, parameter] of lookupParameterNames(lookup).entries()) {
+    const found = parameterValue(parameter, scopes);
+    const value = found.found ? boundValue(found.value) : undefined;
+    if (value === undefined) {
+      return errorResponse(422, `:${parameter} has no single value in page group ${pageGroup + 1}. Check the name against the definition.`);
+    }
+    const inRow = lookup.for !== undefined && parameter.split('.')[0]! in scopes[0]!;
+    parameters.push({ name: parameter, value, source: `${inRow ? prefix : 'd.pg'}.${parameter}`, marker: null, column: lookup.key[i]!.column.trim() });
+  }
+  let match: TableMatch;
+  try {
+    match = matchTable(
+      table,
+      parameters.map((p) => p.column ?? ''),
+      parameters.map((p) => p.value),
+    );
+  } catch (error) {
+    return errorResponse(422, error instanceof Error ? error.message : String(error));
+  }
+  const count = match.rows.length;
+  const matched = `${name} matched ${count.toLocaleString('en-US')} rows of ${table.name} for ${match.keyText}`;
+  if (lookup.result === 'one' && count > 1) {
+    return errorResponse(422, `${matched}. Pick key columns that name one row, or set Rows to All rows.`);
+  }
+  if (count > MAX_LOOKUP_ROWS) {
+    return errorResponse(422, `${matched}. A lookup reads at most ${MAX_LOOKUP_ROWS.toLocaleString('en-US')} rows. Add a key column.`);
+  }
+  const view: LookupTestView = {
+    checked: { table: table.id, tableName: table.name, key: lookupKeyText(lookup.key), columns: table.columns },
+    columns: table.columns,
+    parameters,
+    rows: match.rows.slice(0, SHOWN_ROWS),
+    rowCount: count,
+    ms: Math.round(performance.now() - started),
+    table: { id: table.id, name: table.name, revision: table.revision },
+    ...(row !== undefined ? { row } : {}),
+  };
+  return json(view);
 }

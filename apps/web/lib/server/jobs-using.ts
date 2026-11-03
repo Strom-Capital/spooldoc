@@ -79,3 +79,53 @@ export async function destinationJobs(): Promise<Map<string, QueueView['jobs']>>
   }
   return byDestination;
 }
+
+
+/**
+ * The jobs whose draft or any version has a lookup that reads each lookup table, by table
+ * id, in name order, with their state for the jobs popover. With a table id, only that
+ * table's jobs are read.
+ *
+ * @param tableId - One lookup table's id; every table without it
+ */
+export async function lookupTableJobs(tableId?: string): Promise<Map<string, QueueView['jobs']>> {
+  const tablesPath = '$.lookups[*] ? (@.source == "table").table';
+  const readsTable = '$.lookups[*] ? (@.source == "table" && @.table == $id)';
+  const vars = JSON.stringify({ id: tableId ?? '' });
+  const [rows, summaries] = await Promise.all([
+    getDb()
+      .selectDistinct({
+        id: jobs.id,
+        draft: sql<string[] | null>`jsonb_path_query_array(${jobs.draft}, ${tablesPath}::jsonpath)`,
+        version: sql<string[] | null>`jsonb_path_query_array(${jobVersions.spec}, ${tablesPath}::jsonpath)`,
+      })
+      .from(jobs)
+      .leftJoin(jobVersions, eq(jobVersions.jobId, jobs.id))
+      .where(
+        tableId === undefined
+          ? undefined
+          : or(
+              sql`jsonb_path_exists(${jobs.draft}, ${readsTable}::jsonpath, ${vars}::jsonb)`,
+              sql`jsonb_path_exists(${jobVersions.spec}, ${readsTable}::jsonpath, ${vars}::jsonb)`,
+            ),
+      ),
+    listJobs(),
+  ]);
+  const tablesOf = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const ids = tablesOf.get(row.id) ?? new Set<string>();
+    for (const id of [...(row.draft ?? []), ...(row.version ?? [])]) if (typeof id === 'string' && id) ids.add(id);
+    tablesOf.set(row.id, ids);
+  }
+  const byTable = new Map<string, QueueView['jobs']>();
+  // listJobs is in name order, so each list is too.
+  for (const job of summaries) {
+    for (const id of tablesOf.get(job.id) ?? []) {
+      if (tableId !== undefined && id !== tableId) continue;
+      const list = byTable.get(id) ?? [];
+      list.push({ id: job.id, name: job.name, mode: job.mode, paused: job.paused, activeVersion: job.activeVersion });
+      byTable.set(id, list);
+    }
+  }
+  return byTable;
+}

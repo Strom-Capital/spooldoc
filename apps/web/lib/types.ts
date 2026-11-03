@@ -1,7 +1,7 @@
 // Shapes the API returns, shared by the server routes and the pages.
 
 import type { SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
-import type { LookupColumn } from '@spooldoc/core/lookups';
+import type { Db2Lookup, LookupColumn, LookupTableColumn, TableLookup } from '@spooldoc/core/lookups';
 import type { AiProviderId, Effort } from './ai-providers';
 import type { EmailConfig, HostKeyInfo, IfExists, IfsConfig, SftpConfigView, WebhookConfigView } from './destination-config';
 import type { Formats } from './formats';
@@ -91,6 +91,31 @@ export interface AssetView {
   jobs: { id: string; name: string }[];
 }
 
+/** A lookup table in the list, without its rows. */
+export interface LookupTableSummary {
+  id: string;
+  name: string;
+  columns: LookupTableColumn[];
+  /** How many rows it has. */
+  rows: number;
+  revision: number;
+  updatedAt: string;
+  /** Jobs whose draft or any version has a lookup that reads it, in name order. */
+  jobs: QueueView['jobs'];
+}
+
+/** A lookup table with its rows, as its page edits it. */
+export interface LookupTableView {
+  id: string;
+  name: string;
+  columns: LookupTableColumn[];
+  rows: (string | number | null)[][];
+  revision: number;
+  updatedAt: string;
+  /** Jobs whose draft or any version has a lookup that reads it, in name order: the jobs a change of its columns breaks. */
+  jobs: QueueView['jobs'];
+}
+
 /** A Word or Excel template file, uploaded or made by the agent, without its bytes. */
 export interface TemplateFileView {
   id: string;
@@ -157,6 +182,8 @@ export interface RunStepView {
   note?: string;
   /** What went wrong without stopping the run, such as a lookup that found no row. */
   warnings?: string[];
+  /** The Lookups step: the lookup tables the run read, as they were then. */
+  tables?: { id: string; name: string; revision: number }[];
 }
 
 /** A row of the job log. */
@@ -409,23 +436,28 @@ export interface LookupTestParameter {
   value: string | number | null;
   /** The tag of the value, such as `d.pg.customerNo` or `d.pg.lines[0].item`. */
   source: string;
-  /** The Db2 for i type of its marker, such as `DECIMAL(7,0)`, when the driver says. */
+  /** The Db2 for i type of its marker, such as `DECIMAL(7,0)`, when the driver says. Null for a table lookup. */
   marker: string | null;
+  /** For a table lookup: the key column the value must equal. */
+  column?: string;
 }
 
 /** What a lookup Test found: the result columns, the parameters, and the rows it ran with for one page group. */
 export interface LookupTestView {
   /** What the client writes into the lookup's `checked`. */
-  checked: { sql: string; columns: LookupColumn[] };
-  /** Each result column with its Db2 for i type, such as `VARCHAR(80)`. */
-  columns: (LookupColumn & { db2: string })[];
+  checked: NonNullable<Db2Lookup['checked']> | NonNullable<TableLookup['checked']>;
+  /** Each result column, with its Db2 for i type, such as `VARCHAR(80)`, for a Db2 for i lookup. */
+  columns: (LookupColumn & { db2?: string })[];
   parameters: LookupTestParameter[];
   /** Up to 50 rows, typed as a run adds them. */
   rows: Record<string, unknown>[];
   /** How many rows the query returned. */
   rowCount: number;
   ms: number;
-  host: string;
+  /** The IBM i it ran on, for a Db2 for i lookup. */
+  host?: string;
+  /** The lookup table it matched rows of, and its revision then, for a table lookup. */
+  table?: { id: string; name: string; revision: number };
   /** For a row lookup: the row of the table whose values it ran with, 0-based. */
   row?: number;
 }

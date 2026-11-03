@@ -48,7 +48,7 @@ was cut off". Retry it to run the file again.
 |------|--------------|
 | Capture | Reads the spooled file and stores it as a sample. |
 | Extract | Matches the file against the definition and reads its page groups. |
-| Lookups | Runs the job's [lookups](lookups.md) against Db2 for i for every page group, such as "1 lookup, 6 queries". Shown only when the job has lookups. A lookup that finds no row and warns is listed under the step with its document, such as "No row in customer for customerNo 10042 (invoice-260101)". |
+| Lookups | Runs the job's [lookups](lookups.md) against Db2 for i and lookup tables for every page group, such as "1 lookup, 6 queries". Each lookup table it read is named with its revision, such as "payment-terms revision 4". Shown only when the job has lookups. A lookup that finds no row and warns is listed under the step with its document, such as "No row in customer for customerNo 10042 (invoice-260101)". |
 | Render | Checks each template, then makes the document of each page group with it, in the template's formats, with [Carbone](carbone.md). An Excel template of the whole spooled file makes one document of all of them. A failed render shows Carbone's own text under Details. |
 | Deliver | Hands every file to the destination. |
 | Finish | Holds, moves, deletes or leaves the spooled file. |

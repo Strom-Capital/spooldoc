@@ -1,7 +1,7 @@
 // The database schema. Also read by drizzle-kit, so this module must not import
 // `server-only` or anything that needs the Next.js runtime.
 
-import type { SamplePage, SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
+import type { LookupTableCell, LookupTableColumn, SamplePage, SpooledFileAttributes, SpooledFileId } from '@spooldoc/core';
 import type { UIMessage } from 'ai';
 import { sql } from 'drizzle-orm';
 import {
@@ -271,6 +271,8 @@ export interface RunStep {
   note?: string;
   /** What went wrong without stopping the run, such as a lookup that found no row. */
   warnings?: string[];
+  /** The Lookups step: the lookup tables the run read, as they were then. */
+  tables?: { id: string; name: string; revision: number }[];
 }
 
 /** One processing of one spooled file by a job version. */
@@ -505,6 +507,24 @@ export const assets = pgTable(
     ...timestamps,
   },
   (t) => [check('assets_name_check', sql`${t.name} ~ '^[a-z0-9][a-z0-9_-]{0,63}$'`)],
+);
+
+/**
+ * A lookup table kept in Spooldoc, which table lookups match rows of. `rows` are
+ * positional, one cell per column, with dates as `YYYY-MM-DD`. `revision` goes up by one
+ * on every save, so a save over someone else's is refused and a run records what it read.
+ */
+export const lookupTables = pgTable(
+  'lookup_tables',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull().unique(),
+    columns: jsonb('columns').$type<LookupTableColumn[]>().notNull(),
+    rows: jsonb('rows').$type<LookupTableCell[][]>().notNull(),
+    revision: integer('revision').notNull().default(1),
+    ...timestamps,
+  },
+  (t) => [check('lookup_tables_name_check', sql`${t.name} ~ '^[a-z0-9][a-z0-9_-]{0,63}$'`)],
 );
 
 /**

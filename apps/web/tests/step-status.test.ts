@@ -68,6 +68,26 @@ describe('stepStatuses', () => {
     expect(stepStatuses(input({ spec: { ...readySpec(), lookups: [tested] }, render: missRender, pageGroup: 4 })).lookups).toBe('ok');
   });
 
+  it('has a table lookup ready once its table and key are tested, and a problem after either changes', () => {
+    const table = '6f1d2c1e-0000-4000-8000-000000000001';
+    const key = [{ column: 'CODE', param: 'paymentTerms' }];
+    const terms = {
+      source: 'table' as const,
+      name: 'terms',
+      result: 'one' as const,
+      missing: 'warn' as const,
+      table,
+      key,
+      checked: { table, tableName: 'payment-terms', key: JSON.stringify([['CODE', 'paymentTerms']]), columns: [{ name: 'TEXT', type: 'string' as const }] },
+    };
+    const status = (lookup: JobSpec['lookups'][number]) =>
+      stepStatuses(input({ spec: { ...readySpec(), lookups: [lookup] }, render: rendered({ lookups: { traces: [], misses: [], problems: [], ran: ['terms'] } }) })).lookups;
+    expect(status(terms)).toBe('ok');
+    expect(status({ ...terms, checked: undefined })).toBe('error');
+    expect(status({ ...terms, key: [{ column: 'CODE', param: 'currency' }] })).toBe('error');
+    expect(status({ ...terms, table: '6f1d2c1e-0000-4000-8000-000000000002' })).toBe('error');
+  });
+
   it('warns about the source when its server has an error', () => {
     expect(stepStatuses(input({ serverError: 'CPF2204' })).source).toBe('warn');
   });

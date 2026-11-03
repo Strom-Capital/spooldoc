@@ -15,6 +15,7 @@ import {
   SendIcon,
   ServerIcon,
   SettingsIcon,
+  Table2Icon,
   UserIcon,
   WorkflowIcon,
   type LucideIcon,
@@ -45,8 +46,9 @@ import { REPOSITORY } from '@/lib/repository';
 import { Logo } from './logo';
 
 /**
- * The pages in the order a spooled file goes: the server and its queues, the job and the
- * assets its template uses, where the documents go, and the runs.
+ * The pages in the order a spooled file goes: the server and its queues, the job, the
+ * assets its template uses and the lookup tables its lookups read, where the documents
+ * go, and the runs.
  */
 const PAGES = [
   { href: '/', label: 'Home', icon: HomeIcon },
@@ -54,6 +56,7 @@ const PAGES = [
   { href: '/queues', label: 'Queues', icon: InboxIcon },
   { href: '/jobs', label: 'Jobs', icon: WorkflowIcon },
   { href: '/assets', label: 'Assets', icon: ImageIcon },
+  { href: '/lookup-tables', label: 'Lookup tables', icon: Table2Icon },
   { href: '/destinations', label: 'Destinations', icon: SendIcon },
   { href: '/runs', label: 'Job log', icon: ScrollTextIcon },
 ];

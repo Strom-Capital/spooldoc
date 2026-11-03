@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { lookupProblems, lookupTestProblems, parseDefinition, type Definition } from '@spooldoc/core';
+import { lookupProblems, lookupTestProblems, parseDefinition, type Definition, type LookupTableData } from '@spooldoc/core';
 import { and, desc, eq, isNotNull, max, sql } from 'drizzle-orm';
 import type { ZodError } from 'zod';
 import {
@@ -21,6 +21,7 @@ import type { JobDetail, JobSummary, RunStatus } from '@/lib/types';
 import { getDb, type Db, type Tx } from './db';
 import { destinations, jobs, jobVersions, queueHealth, runs, servers } from './db/schema';
 import { UUID } from './servers';
+import { lookupTableShapes } from './lookup-tables';
 import { getTemplateFile } from './template-files';
 
 export type JobRow = typeof jobs.$inferSelect;
@@ -206,7 +207,7 @@ export class ConfirmDeleteError extends Error {
  * that does not parse, and lookups with problems or not tested since they changed. It
  * needs no IBM i connection: each lookup's last Test is stored with it.
  */
-export function versionProblems(spec: JobSpec): string[] {
+export function versionProblems(spec: JobSpec, tables?: ReadonlyMap<string, Pick<LookupTableData, 'name' | 'columns'>>): string[] {
   const problems = missingParts(spec);
   let def: Definition | null = null;
   if (spec.extract.definition.trim()) {
@@ -216,7 +217,7 @@ export function versionProblems(spec: JobSpec): string[] {
       problems.push(`Extract: the definition has errors. ${error instanceof Error ? error.message.split('\n')[0] : ''}`.trim());
     }
   }
-  const lookups = [...lookupProblems(def, spec.lookups), ...lookupTestProblems(spec.lookups)];
+  const lookups = [...lookupProblems(def, spec.lookups, tables), ...lookupTestProblems(spec.lookups)];
   for (const problem of lookups.sort((a, b) => a.index - b.index)) problems.push(`Lookups: ${problem.message}`);
   return problems;
 }
@@ -268,7 +269,8 @@ export async function saveVersion(
   input: { note: string; activate: boolean; userId: string; confirmDelete?: boolean },
 ): Promise<number> {
   const spec = versionSpec(jobSpecSchema.parse(job.draft));
-  const problems = [...versionProblems(spec), ...(await templateFileProblems(spec)), ...(await destinationProblems(spec))];
+  const tables = spec.lookups.some((l) => l.source === 'table') ? await lookupTableShapes() : undefined;
+  const problems = [...versionProblems(spec, tables), ...(await templateFileProblems(spec)), ...(await destinationProblems(spec))];
   if (problems.length > 0) {
     throw new IncompleteJobError(problems);
   }
