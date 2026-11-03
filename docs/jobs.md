@@ -3,7 +3,7 @@ title: "Jobs"
 description: "The job builder, versions, running on demand, watching a queue and what happens to the spooled file."
 ---
 
-A job is a pipeline from one output queue to a destination. The Jobs page
+A job is a pipeline from one output queue to one or more destinations. The Jobs page
 lists them with their server, queue, trigger and last run. A job whose
 active version or draft no longer matches the job format, after an upgrade
 for example, is listed with the reason instead of breaking the page.
@@ -50,7 +50,7 @@ has changes.
 | Extract | The [definition](definitions.md): the YAML that turns pages into JSON. |
 | Lookups | [Lookups](lookups.md): SELECT statements against Db2 for i that add values, such as a customer's email address, to each page group. The step reads None, and is ready, when the job has none. |
 | Render | The [templates](templates.md): each has a name, HTML or a Word or Excel file, and the formats it makes. The starter template renders every field and table of the definition until you write your own. See [Templates](#templates). |
-| Destination | Where the files go. See [Destinations](destinations.md). |
+| Destination | Where the files go: one destination, or [routes](destinations.md#routes) that send each document to destinations by its fields. The pipeline reads the destination's name, or how many routes and destinations there are, such as "2 routes, 3 destinations". See [Destinations](destinations.md). |
 | Finish | What happens to the spooled file after every document was delivered. |
 
 ## Designing with a sample
@@ -75,6 +75,11 @@ paging into another page group picks it. Fit width and 100% in the
 corner of the page fit it to the pane or show its actual size. Hover the
 spooled file for when the copy was saved, its page count, page size and
 CCSID.
+
+The Destination step has the same page group stepper at its top, and the
+previews of the email, the webhook call and the SFTP folder follow it.
+With routes, each page group in its list says the route it takes, such
+as "Page group 3 of 6: invoice-1003, route 2".
 
 The [agent](agent.md) sits beside the workbench. It writes
 the definition and the template to the draft, reads the extraction report

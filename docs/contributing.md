@@ -155,9 +155,11 @@ Schema changes go in `apps/web/lib/server/db/schema.ts`; then run
 A destination is a `kind` and a `deliver` call in
 `apps/web/lib/server/destinations`. A run can deliver through several
 destinations, one after another, with a Deliver step each
-(`lib/server/deliver.ts`). `deliver` receives the run id, the documents
-it delivers with their data and their files, the job and the spooled
-file, the destination's id, the job's templates, the job's part for its
+(`lib/server/deliver.ts`): each destination of each route that took
+documents (`routeDocuments` in `lib/server/routing.ts`). `deliver`
+receives the run id, the documents it delivers with their data and their
+files, the job and the spooled file, the destination's id, the route
+that sent the documents, the job's templates, the job's part for its
 kind (such as `email` or `webhook`), a `context` with the job's name and
 version, the run's number, the spooled file's attributes and how many
 page groups it has in all, and the open connection and host of the job's

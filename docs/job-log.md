@@ -24,7 +24,7 @@ the path opens the log without filters.
 | Running | The run is in progress. A run whose server stopped while it ran is marked failed within a few minutes. |
 | Success | Every document was delivered and the finish step did what it should. |
 | Warning | The documents were delivered, but something needs a look: the finish step failed and the spooled file is still where it was (hold, move or delete it by hand, or retry), or a [lookup](lookups.md#when-no-row-is-found) found no row and left its values empty. |
-| Failed | A step failed before anything was delivered. The error names the step and the cause, with secrets removed. The spooled file is left alone. |
+| Failed | A step failed, or a document took no [route](destinations.md#routes). What was delivered before stays delivered. The error names the step and the cause, with secrets removed. The spooled file is left alone. |
 | Skipped | The spooled file does not pass the definition's `match` rules, so it is not one the job is for. It is left alone. |
 
 Failed and warning runs appear under Needs attention on the Home page
@@ -50,14 +50,16 @@ was cut off". Retry it to run the file again.
 | Extract | Matches the file against the definition and reads its page groups. |
 | Lookups | Runs the job's [lookups](lookups.md) against Db2 for i and lookup tables for every page group, such as "1 lookup, 6 queries". Each lookup table it read is named with its revision, such as "payment-terms revision 4". Shown only when the job has lookups. A lookup that finds no row and warns is listed under the step with its document, such as "No row in customer for customerNo 10042 (invoice-260101)". |
 | Render | Checks each template, then makes the document of each page group with it, in the template's formats, with [Carbone](carbone.md). An Excel template of the whole spooled file makes one document of all of them. A failed render shows Carbone's own text under Details. |
-| Deliver | Hands every file to the destination. |
-| Finish | Holds, moves, deletes or leaves the spooled file. |
+| Route | Sends each document to the first [route](destinations.md#routes) it matches, such as "Route 1: 9 page groups, otherwise: 2, no route: 1". Shown only when the job has several routes or conditions. A document that takes no route is listed under the step with why each route did not take it, such as "Page group 3 (invoice-1003): pg.country is DK, not SE". A long list shows the first 50 and says how many more there are. |
+| Deliver | Hands the files to the destination. With several destinations there is one Deliver step for each destination of each route, such as "Deliver to MYIFS, route 2". One that fails does not stop the next. |
+| Finish | Holds, moves, deletes or leaves the spooled file, only when every route delivered every document. |
 
 Each step is recorded with its outcome, so a run shows where it stopped.
 The captured sample and the delivered files stay with the run while it is
 kept. When the job has more than one template, the run's files are
 grouped by template. The log's Page groups column counts what the
-definition found.
+definition found. With several routes, each email, webhook call and
+upload says the route that sent it, such as "Route 2".
 
 <p align="center">
   <picture>
@@ -150,6 +152,11 @@ processed, so the watcher never runs a file a second time on its own.
 Retry sends again only what was not already sent through this
 destination. A job that now delivers through another destination sends
 everything through the new one.
+
+When documents took no [route](destinations.md#routes), add a route that
+takes them, such as Otherwise, save a version and Retry. The documents
+that were sent show as sent, and only the others go. The spooled file is
+held, moved or deleted once every document was delivered.
 
 With an email destination, Retry sends only the emails that were not sent
 yet. The ones an earlier run sent show as "Sent in run #N", and the

@@ -158,7 +158,9 @@ HTML, PDF, DOCX and XLSX output and the Spooldoc download destination
 work and are tested against demo spooled files captured from PUB400. Jobs
 can also write their files to a folder in the IFS, email each document
 through an SMTP server or Microsoft 365, post it to a webhook, or upload
-it to an SFTP server. Alerts by email say when a run fails or watching
+it to an SFTP server. Routes send each document to one or more of these
+by its fields, such as email when the invoice has an address and an IFS
+folder when it does not. Alerts by email say when a run fails or watching
 stops, and when it works again. Lookups read values the spooled file does
 not print, such as a customer's email address, from Db2 for i, read only,
 or from lookup tables kept in Spooldoc. Next: the agent writing lookups,
