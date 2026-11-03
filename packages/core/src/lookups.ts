@@ -11,12 +11,13 @@ import {
   parameterValue,
   type Db2Lookup,
   type Lookup,
+  type LookupColumn,
   type LookupTableColumn,
   type LookupTableData,
   type TableLookup,
 } from "./lookup-spec.js";
 import { starterLayout } from "./template.js";
-import { convertValue } from "./values.js";
+import { convertValue, parseNumber } from "./values.js";
 
 /** A problem with one lookup of a job, by its index. */
 export interface LookupProblem {
@@ -99,7 +100,7 @@ export function lookupProblems(
     for (const parameter of lookupParameterNames(lookup)) {
       if (reported.has(parameter)) continue;
       reported.add(parameter);
-      const problem = parameterProblem(parameter, lookup, shape, rowColumns, earlier, later);
+      const problem = parameterProblem(parameter, lookup, shape, rowColumns, earlier, later, tables);
       if (problem) add(problem);
     }
   });
@@ -134,6 +135,9 @@ function tableProblems(
     return false;
   }
   let ok = true;
+  if (table && lookup.checked && lookup.checked.table === lookup.table && !sameColumns(lookup.checked.columns, table.columns)) {
+    add(`The columns of ${table.name} changed since ${label} was tested. Test it again.`);
+  }
   const seen = new Set<string>();
   for (const [i, key] of lookup.key.entries()) {
     const column = key.column.trim();
@@ -160,6 +164,12 @@ function tableProblems(
   return ok;
 }
 
+/** Whether two lists have the same columns, by name and type, in any order. */
+function sameColumns(a: readonly LookupColumn[], b: readonly LookupColumn[]): boolean {
+  const key = (columns: readonly LookupColumn[]) => JSON.stringify(columns.map((c) => `${c.name}:${c.type}`).sort());
+  return key(a) === key(b);
+}
+
 /** What is wrong with one parameter of a lookup, or null. */
 function parameterProblem(
   parameter: string,
@@ -168,6 +178,7 @@ function parameterProblem(
   rowColumns: Set<string> | undefined,
   earlier: readonly Lookup[],
   later: readonly Lookup[],
+  tables: ReadonlyMap<string, Pick<LookupTableData, "name" | "columns">> | undefined,
 ): string | null {
   const [head = "", column] = parameter.split(".");
   const rowLookup = rowColumns ? earlier.find((l) => l.for === lookup.for && l.name === head) : undefined;
@@ -181,8 +192,11 @@ function parameterProblem(
   if (from) {
     if (from.result === "many") return `:${parameter} reads every row of ${from.name}, and a parameter takes one value. Read one row in ${from.name}.`;
     if (column === undefined) return `:${parameter} is a whole row of ${from.name}. Name one of its columns, such as :${from.name}.${from.checked?.columns[0]?.name ?? "EMAIL"}.`;
-    if (from.checked && !lookupUntested(from) && !from.checked.columns.some((c) => c.name === column)) {
-      return `${from.name} has no column ${column}. Its columns are ${from.checked.columns.map((c) => c.name).join(", ")}.`;
+    // A table lookup's columns are the table's as it is now, when the tables are known.
+    const live = from.source === "table" ? tables?.get(from.table)?.columns : undefined;
+    const columns = live ?? (from.checked && !lookupUntested(from) ? from.checked.columns : undefined);
+    if (columns && !columns.some((c) => c.name === column)) {
+      return `${from.name} has no column ${column}. Its columns are ${columns.map((c) => c.name).join(", ")}.`;
     }
     return null;
   }
@@ -376,8 +390,8 @@ function keyValue(value: string | number | null, type: LookupTableColumn["type"]
   const text = String(value).trim();
   if (text === "") return null;
   if (type === "number") {
-    const n = typeof value === "number" ? value : Number(text);
-    return Number.isFinite(n) ? String(n) : null;
+    const n = typeof value === "number" ? value : parseNumber(text);
+    return n !== null && Number.isFinite(n) ? String(n) : null;
   }
   if (type === "date") {
     const converted = convertValue(text, "date");

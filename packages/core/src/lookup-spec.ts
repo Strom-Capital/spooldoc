@@ -28,6 +28,9 @@ export const MAX_TABLE_ROWS = 10_000;
 /** How many columns a lookup table may have. */
 export const MAX_TABLE_COLUMNS = 50;
 
+/** How many characters a cell of a lookup table may hold. */
+export const MAX_CELL_LENGTH = 1000;
+
 /** How many key columns a table lookup may match on. */
 export const MAX_LOOKUP_KEYS = 5;
 
@@ -95,11 +98,13 @@ export const tableLookupSchema = z
 export type TableLookup = z.infer<typeof tableLookupSchema>;
 
 /**
- * A lookup as a job stores it: a Db2 for i lookup, or a table lookup. A draft may hold one
+ * A lookup as a job stores it: a Db2 for i lookup, or a table lookup, by `source`. A stored
+ * lookup without `source` is a Db2 for i lookup. Picking the kind by `source` keeps the
+ * messages of each kind's own rules, such as the most key columns. A draft may hold one
  * that is not complete yet, such as a name that is not an identifier; `lookupProblems`
  * says what is wrong.
  */
-export const lookupSchema = z.union([db2LookupSchema, tableLookupSchema]);
+export const lookupSchema = z.discriminatedUnion("source", [db2LookupSchema, tableLookupSchema]);
 export type Lookup = Db2Lookup | TableLookup;
 
 export const lookupsSchema = z.array(lookupSchema).max(20, "A job takes up to 20 lookups.");
@@ -175,7 +180,7 @@ export const lookupTableContentSchema = z
       .min(1, "A table needs at least one column.")
       .max(MAX_TABLE_COLUMNS, `A table has up to ${MAX_TABLE_COLUMNS} columns.`),
     rows: z
-      .array(z.array(z.union([z.string().max(10_000), z.number(), z.null()])))
+      .array(z.array(z.union([z.string(), z.number(), z.null()])))
       .max(MAX_TABLE_ROWS, `A table has up to ${MAX_TABLE_ROWS.toLocaleString("en-US")} rows.`),
   })
   .strict()
@@ -195,6 +200,10 @@ export const lookupTableContentSchema = z
       }
       for (const [c, cell] of row.entries()) {
         const column = table.columns[c]!;
+        if (typeof cell === "string" && cell.length > MAX_CELL_LENGTH) {
+          ctx.addIssue({ code: "custom", message: `Row ${r + 1}, column ${column.name} holds more than ${MAX_CELL_LENGTH.toLocaleString("en-US")} characters, the most a cell takes.`, path: ["rows", r, c] });
+          return;
+        }
         if (!cellFits(cell, column.type)) {
           ctx.addIssue({ code: "custom", message: `Row ${r + 1}, column ${column.name} is not ${cellKind(column.type)}.`, path: ["rows", r, c] });
           return;

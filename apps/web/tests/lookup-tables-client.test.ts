@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { badCells, badCellsText, cellText, filterRows, jobNames, newColumnName, parseCell, toCells } from '@/lib/client/lookup-tables';
+import { badCells, badCellsText, cellText, decodeCsv, filterRows, jobNames, newColumnName, parseCell, toCells } from '@/lib/client/lookup-tables';
 
 const columns = [
   { name: 'CODE', type: 'string' as const },
@@ -19,6 +19,19 @@ describe('cells in the table page', () => {
     expect(parseCell(' as typed ', 'string')).toEqual({ cell: ' as typed ', ok: true });
     expect(cellText(null)).toBe('');
     expect(cellText(1.5)).toBe('1.5');
+  });
+
+  it('shows small numbers without an exponent, so they read back and do not block Save', () => {
+    expect(cellText(0.0000001)).toBe('0.0000001');
+    expect(parseCell(cellText(0.0000001), 'number')).toEqual({ cell: 0.0000001, ok: true });
+    expect(badCells(columns, [['A', cellText(0.0000001), '']])).toEqual([]);
+  });
+
+  it('reads a UTF-8 file, and falls back to Windows-1252 when the bytes are not UTF-8', () => {
+    expect(decodeCsv(new TextEncoder().encode('CODE;TEXT\n1;Päivä'))).toEqual({ text: 'CODE;TEXT\n1;Päivä', fallback: false });
+    // "Päivä" as Windows-1252 saves it: ä is 0xE4.
+    const ansi = new Uint8Array([...new TextEncoder().encode('CODE;TEXT\n1;P'), 0xe4, 0x69, 0x76, 0xe4]);
+    expect(decodeCsv(ansi)).toEqual({ text: 'CODE;TEXT\n1;Päivä', fallback: true });
   });
 
   it('finds the cells that do not fit their column and says where the first one is', () => {

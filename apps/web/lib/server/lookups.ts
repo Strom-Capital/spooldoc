@@ -129,7 +129,14 @@ export async function previewLookups(
 ): Promise<{ groups: Record<string, unknown>[]; preview: LookupsPreview } | null> {
   if (lookups.length === 0) return null;
   const shown = only[0] ?? 0;
-  const problems = lookupProblems(def, lookups, await lookupTableShapes());
+  let shapes: Awaited<ReturnType<typeof lookupTableShapes>> | undefined;
+  try {
+    // The lookup tables are read only for a job that has a table lookup.
+    shapes = lookups.some((l) => l.source === 'table') ? await lookupTableShapes() : undefined;
+  } catch (error) {
+    return { groups, preview: { traces: [], misses: [], problems: [], ran: [], error: { message: `Could not read the lookup tables: ${redact(error)}` } } };
+  }
+  const problems = lookupProblems(def, lookups, shapes);
   // Later lookups can read earlier ones, so the first that is untested or has a problem stops the rest.
   const blocked = lookups.findIndex((lookup, index) => lookupUntested(lookup) || problems.some((p) => p.index === index));
   const ran = blocked === -1 ? lookups : lookups.slice(0, blocked);

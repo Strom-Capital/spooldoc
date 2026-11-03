@@ -25,6 +25,10 @@
       "types": "./dist/lookup-spec.d.ts",
       "import": "./dist/lookup-spec.js"
     },
+    "./values": {
+      "types": "./dist/values.d.ts",
+      "import": "./dist/values.js"
+    },
     "./csv": {
       "types": "./dist/csv.d.ts",
       "import": "./dist/csv.js"

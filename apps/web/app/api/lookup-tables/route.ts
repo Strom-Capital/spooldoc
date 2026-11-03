@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { guard } from '@/lib/server/auth';
 import { errorResponse, json, readJson } from '@/lib/server/http';
 import { lookupTableJobs } from '@/lib/server/jobs-using';
-import { contentError, createLookupTable, listLookupTables, TABLE_NAME_RULE } from '@/lib/server/lookup-tables';
+import { contentError, createLookupTable, listLookupTables, TABLE_NAME_RULE, tooLarge } from '@/lib/server/lookup-tables';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,6 +29,10 @@ export async function POST(request: Request): Promise<Response> {
   if ('response' in auth) {
     return auth.response;
   }
+  const large = tooLarge(request);
+  if (large) {
+    return large;
+  }
   const body = await readJson(request, createSchema);
   if ('response' in body) {
     return body.response;
@@ -41,5 +45,5 @@ export async function POST(request: Request): Promise<Response> {
   if (!table) {
     return errorResponse(409, `There is already a lookup table named ${body.data.name}. Pick another name.`);
   }
-  return json({ ...table, jobs: [], keyJobs: {} }, { status: 201 });
+  return json({ ...table, jobs: [] }, { status: 201 });
 }

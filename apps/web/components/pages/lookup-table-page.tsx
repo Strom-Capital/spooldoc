@@ -1,6 +1,6 @@
 'use client';
 
-import type { CsvTable } from '@spooldoc/core/csv';
+import { parseCsv, toCsv, type CsvTable } from '@spooldoc/core/csv';
 import { LOOKUP_NAME, MAX_TABLE_COLUMNS, MAX_TABLE_ROWS, type LookupTableColumn } from '@spooldoc/core/lookups';
 import {
   ArrowLeftIcon,
@@ -43,7 +43,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { api, errorText } from '@/lib/client/api';
+import { ApiError, api, errorText } from '@/lib/client/api';
 import {
   badCells,
   badCellsText,
@@ -58,6 +58,7 @@ import {
 } from '@/lib/client/lookup-tables';
 import type { LookupTableView } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { JobsPopover } from '@/components/jobs-popover';
 import { CsvInput } from './lookup-table-csv';
 
 /** Rows the grid shows a page. */
@@ -95,6 +96,8 @@ export function LookupTablePage({ id }: { id: string }) {
   const [importing, setImporting] = useState(false);
   const [pending, setPending] = useState<Pending | null>(null);
   const [leaving, setLeaving] = useState<string | null>(null);
+  // A save refused because someone else saved first: the edits here can still be downloaded.
+  const [conflict, setConflict] = useState(false);
 
   const show = useCallback((view: LookupTableView) => {
     setTable(view);
@@ -102,6 +105,7 @@ export function LookupTablePage({ id }: { id: string }) {
     setRows(view.rows.map((row) => row.map(cellText)));
     setDirty(false);
     setSaveError(null);
+    setConflict(false);
   }, []);
 
   useEffect(() => {
@@ -139,8 +143,8 @@ export function LookupTablePage({ id }: { id: string }) {
   const current = Math.min(page, pages - 1);
   const pageRows = shown.slice(current * PAGE_ROWS, (current + 1) * PAGE_ROWS);
 
-  /** Jobs whose lookups key on a column, by its saved name. */
-  const keyJobs = (column: EditColumn) => (column.saved ? (table?.keyJobs[column.saved] ?? []) : []);
+  /** The jobs that read the table, when a change touches a column that was saved: they may print it or key on it. */
+  const jobsFor = (column: EditColumn | undefined) => (column?.saved ? (table?.jobs ?? []) : []);
 
   function edit(next: { columns?: EditColumn[]; rows?: string[][] }) {
     if (next.columns) setColumns(next.columns);
@@ -149,14 +153,22 @@ export function LookupTablePage({ id }: { id: string }) {
     setSaveError(null);
   }
 
-  /** Runs a change at once, or asks first when it breaks the lookups of jobs. */
-  function confirmFor(jobs: readonly { name: string }[], ask: Omit<Pending, 'run' | 'description'> & { breaks: string }, run: () => void) {
+  /**
+   * Runs a change of saved columns at once, or asks first when jobs read the table: a
+   * template may print the column, or a lookup key on it or read it, and each lookup needs
+   * another Test before its job saves a version.
+   */
+  function confirmFor(jobs: readonly { name: string }[], ask: Omit<Pending, 'run' | 'description'> & { changes: string }, run: () => void) {
     if (jobs.length === 0) {
       run();
       return;
     }
-    const what = jobs.length === 1 ? 'has a lookup that keys on' : 'have lookups that key on';
-    setPending({ ...ask, description: `${jobNames(jobs)} ${what} ${ask.breaks}. Their runs stop at the Lookups step until the lookup is changed.`, run });
+    const read = jobs.length === 1 ? 'has a lookup that reads' : 'have lookups that read';
+    setPending({
+      ...ask,
+      description: `${jobNames(jobs)} ${read} ${table?.name ?? 'this table'}. Templates and lookups that use ${ask.changes} stop working, and each lookup needs another Test before its job saves a version.`,
+      run,
+    });
   }
 
   function setCell(row: number, column: number, text: string) {
@@ -165,6 +177,43 @@ export function LookupTablePage({ id }: { id: string }) {
     changed[column] = text;
     next[row] = changed;
     edit({ rows: next });
+  }
+
+  /** Moves the focus to the cell of the same column in the row shown `by` rows down, or up. */
+  function moveFocus(row: number, column: number, by: number) {
+    const at = pageRows.indexOf(row) + by;
+    const target = pageRows[at];
+    if (target === undefined) return;
+    document.querySelector<HTMLInputElement>(`[data-cell="${target}:${column}"]`)?.focus();
+  }
+
+  /** Fills a block of pasted cells from a cell to the right and down, adding rows as needed. */
+  function pasteBlock(row: number, column: number, text: string) {
+    let block: string[][];
+    try {
+      block = parseCsv(text.replace(/\r?\n$/, ''), '\t');
+    } catch {
+      block = text.split(/\r?\n/).map((line) => line.split('\t'));
+    }
+    const next = rows.slice();
+    let cut = 0;
+    let rowsLeft = 0;
+    for (const [i, cells] of block.entries()) {
+      const r = row + i;
+      if (r >= MAX_TABLE_ROWS) {
+        rowsLeft = block.length - i;
+        break;
+      }
+      const target = (next[r] ?? columns.map(() => '')).slice();
+      for (const [j, cell] of cells.entries()) {
+        if (column + j < columns.length) target[column + j] = cell;
+        else if (cell.trim() !== '') cut++;
+      }
+      next[r] = target;
+    }
+    edit({ rows: next });
+    if (cut > 0) toast.warning(`${cut.toLocaleString('en-US')} pasted ${cut === 1 ? 'cell was' : 'cells were'} right of the last column and left out. Add columns first to keep them.`);
+    if (rowsLeft > 0) toast.warning(`${rowsLeft.toLocaleString('en-US')} pasted ${rowsLeft === 1 ? 'row was' : 'rows were'} left out. A table has up to ${MAX_TABLE_ROWS.toLocaleString('en-US')} rows.`);
   }
 
   function addRow() {
@@ -185,7 +234,7 @@ export function LookupTablePage({ id }: { id: string }) {
 
   function deleteColumn(index: number) {
     const column = columns[index]!;
-    confirmFor(keyJobs(column), { title: `Delete the column ${column.name}?`, action: 'Delete column', breaks: column.name }, () =>
+    confirmFor(jobsFor(column), { title: `Delete the column ${column.name}?`, action: 'Delete column', changes: column.name }, () =>
       edit({ columns: columns.filter((_, i) => i !== index), rows: rows.map((row) => row.filter((_, i) => i !== index)) }),
     );
   }
@@ -201,26 +250,38 @@ export function LookupTablePage({ id }: { id: string }) {
       edit({ columns: columns.map((c, i) => (i === index ? { ...c, ...next } : c)) });
       setEditing(null);
     };
-    if (next.name === column.name) {
+    if (next.name === column.name && next.type === column.type) {
       apply();
       return;
     }
-    confirmFor(keyJobs(column), { title: `Rename ${column.name} to ${next.name}?`, action: 'Rename column', breaks: column.name }, apply);
+    const renamed = next.name !== column.name;
+    const title = renamed && next.type !== column.type ? `Rename and retype ${column.name}?` : renamed ? `Rename ${column.name} to ${next.name}?` : `Make ${column.name} a ${TYPE_LABEL[next.type].toLowerCase()} column?`;
+    confirmFor(jobsFor(column), { title, action: 'Change column', changes: column.name }, apply);
   }
 
   function importCsv(csv: CsvTable) {
     const byName = new Map(columns.map((c) => [c.name, c]));
     const next: EditColumn[] = csv.columns.map((c) => ({ ...c, ...(byName.get(c.name)?.saved ? { saved: byName.get(c.name)!.saved } : {}) }));
-    const lost = columns.filter((c) => !csv.columns.some((n) => n.name === c.name)).flatMap(keyJobs);
     const apply = () => {
       edit({ columns: next, rows: csv.rows.map((row) => row.map(cellText)) });
       setImporting(false);
       setFilter('');
       setPage(0);
     };
-    const gone = columns.filter((c) => !csv.columns.some((n) => n.name === c.name) && keyJobs(c).length > 0).map((c) => c.name);
-    const unique = lost.filter((job, i) => lost.findIndex((j) => j.id === job.id) === i);
-    confirmFor(unique, { title: `Replace the rows of ${table?.name ?? 'the table'}?`, action: 'Replace rows', breaks: gone.join(', ') }, apply);
+    // Saved columns the CSV drops or gives another type.
+    const changed = columns.filter((c) => c.saved && csv.columns.find((n) => n.name === c.name)?.type !== c.type).map((c) => c.name);
+    confirmFor(changed.length > 0 ? (table?.jobs ?? []) : [], { title: `Replace the rows of ${table?.name ?? 'the table'}?`, action: 'Replace rows', changes: changed.join(', ') }, apply);
+  }
+
+  /** The grid as it is here, unsaved, as a CSV file, so a refused save loses nothing. */
+  function downloadEdits() {
+    const blob = new Blob([toCsv(columns, toCells(columns, rows))], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${table?.name ?? 'lookup-table'}-changes.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }
 
   async function save() {
@@ -236,6 +297,7 @@ export function LookupTablePage({ id }: { id: string }) {
       toast.success(`Saved ${saved.name}`);
     } catch (err) {
       setSaveError(errorText(err));
+      setConflict(err instanceof ApiError && err.status === 409);
     }
     setSaving(false);
   }
@@ -256,9 +318,17 @@ export function LookupTablePage({ id }: { id: string }) {
     <Page
       title={<span className="font-mono">{name}</span>}
       description={
-        table
-          ? `${rows.length.toLocaleString('en-US')} ${rows.length === 1 ? 'row' : 'rows'}, revision ${table.revision}. A lookup matches rows on key columns and adds every column to the data.`
-          : undefined
+        table ? (
+          <>
+            {rows.length.toLocaleString('en-US')} {rows.length === 1 ? 'row' : 'rows'}, revision {table.revision}. Read by{' '}
+            <JobsPopover
+              jobs={table.jobs}
+              label={`${table.jobs.length} ${table.jobs.length === 1 ? 'job reads' : 'jobs read'} ${table.name}`}
+              heading="Jobs with a lookup that reads it"
+            />{' '}
+            {table.jobs.length === 1 ? 'job' : 'jobs'}. A lookup matches rows on key columns and adds every column to the data.
+          </>
+        ) : undefined
       }
       breadcrumbs={[{ label: 'Lookup tables', href: '/lookup-tables' }, { label: name }]}
       actions={
@@ -287,7 +357,22 @@ export function LookupTablePage({ id }: { id: string }) {
       }
     >
       <div className="flex flex-col gap-3">
-        {saveError && <ErrorNote>{saveError}</ErrorNote>}
+        {saveError && (
+          <ErrorNote
+            action={
+              conflict ? (
+                <Hint text="Saves the grid as it is here, with your changes, as a CSV file. Reload, then import it to keep them.">
+                  <Button size="sm" variant="outline" className="mt-2" onClick={downloadEdits}>
+                    <DownloadIcon />
+                    Download your changes
+                  </Button>
+                </Hint>
+              ) : undefined
+            }
+          >
+            {saveError}
+          </ErrorNote>
+        )}
         {badText && (
           <p role="status" className="text-destructive text-sm">
             {badText}
@@ -393,6 +478,22 @@ export function LookupTablePage({ id }: { id: string }) {
                           <Input
                             value={rows[r]![c] ?? ''}
                             onChange={(event) => setCell(r, c, event.target.value)}
+                            data-cell={`${r}:${c}`}
+                            onKeyDown={(event) => {
+                              if (event.key === 'ArrowDown' || (event.key === 'Enter' && !event.shiftKey)) {
+                                event.preventDefault();
+                                moveFocus(r, c, 1);
+                              } else if (event.key === 'ArrowUp' || (event.key === 'Enter' && event.shiftKey)) {
+                                event.preventDefault();
+                                moveFocus(r, c, -1);
+                              }
+                            }}
+                            onPaste={(event) => {
+                              const text = event.clipboardData.getData('text/plain');
+                              if (!/[\t\n]/.test(text.replace(/\r?\n$/, ''))) return;
+                              event.preventDefault();
+                              pasteBlock(r, c, text);
+                            }}
                             aria-label={`Row ${r + 1}, ${column.name}`}
                             aria-invalid={wrong}
                             title={wrong ? `Takes ${column.type === 'number' ? 'a number' : 'a date, such as 2026-10-15'}` : undefined}
@@ -445,7 +546,7 @@ export function LookupTablePage({ id }: { id: string }) {
         />
       )}
 
-      {importing && table && <ImportDialog name={table.name} onClose={() => setImporting(false)} onImport={importCsv} />}
+      {importing && table && <ImportDialog name={table.name} keep={columns} onClose={() => setImporting(false)} onImport={importCsv} />}
 
       <AlertDialog open={!!pending} onOpenChange={(open) => !open && setPending(null)}>
         <AlertDialogContent>
@@ -630,17 +731,19 @@ function ColumnDialog({
 }
 
 /** Read a CSV file or pasted cells, preview them, and replace the table's columns and rows with them. */
-function ImportDialog({ name, onClose, onImport }: { name: string; onClose(): void; onImport(table: CsvTable): void }) {
+function ImportDialog({ name, keep, onClose, onImport }: { name: string; keep: readonly LookupTableColumn[]; onClose(): void; onImport(table: CsvTable): void }) {
   const [csv, setCsv] = useState<CsvTable | null>(null);
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Import CSV into {name}</DialogTitle>
-          <DialogDescription>The columns and rows of the CSV replace those of the table. Nothing is saved until you save.</DialogDescription>
+          <DialogDescription>
+            The columns and rows of the CSV replace those of the table. A column the table has keeps its type. Nothing is saved until you save.
+          </DialogDescription>
         </DialogHeader>
         <div className="min-w-0">
-          <CsvInput id="import-csv" onParsed={setCsv} />
+          <CsvInput id="import-csv" keep={keep} onParsed={setCsv} />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

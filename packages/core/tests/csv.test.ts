@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { csvNumber, csvToTable, detectDelimiter, detectTypes, lookupTableContentSchema, parseCsv, toCsv } from "../src/index.js";
+import { csvNumber, csvToTable, detectDelimiter, detectTypes, lookupTableContentSchema, numberText, parseCsv, toCsv } from "../src/index.js";
 
 describe("parseCsv", () => {
   it("reads quoted fields with delimiters, doubled quotes and line breaks", () => {
@@ -78,8 +78,48 @@ describe("csvToTable", () => {
     expect(lookupTableContentSchema.safeParse({ columns: table.columns, rows: table.rows }).success).toBe(true);
   });
 
-  it("reads pasted cells, tab delimited", () => {
-    expect(csvToTable("CODE\tTEXT\r\n14\tNet 14 days").rows).toEqual([[14, "Net 14 days"]]);
+  it("reads pasted cells, tab delimited, with decimal commas, and a comma CSV never with them", () => {
+    expect(csvToTable("CODE\tRATE\tTEXT\r\n14\t1,5\tNet 14 days")).toMatchObject({ decimalComma: true, rows: [[14, 1.5, "Net 14 days"]] });
+    const comma = csvToTable('CODE,RATE\n14,"1,5"');
+    expect(comma.decimalComma).toBe(false);
+    expect(comma.columns[1]).toEqual({ name: "RATE", type: "string" });
+  });
+
+  it("leaves out rows with every cell empty, as a spreadsheet saves them", () => {
+    const table = csvToTable("CODE;TEXT\n14;Net\n;\n ; \n30;Net 30\n");
+    expect(table.rows).toEqual([
+      [14, "Net"],
+      [30, "Net 30"],
+    ]);
+    expect(table.emptyRows).toBe(2);
+  });
+
+  it("keeps long numeric codes as text", () => {
+    const table = csvToTable("ACCOUNT,SMALL\n1234567890123456789,1\n42,2\n");
+    expect(table.columns).toEqual([
+      { name: "ACCOUNT", type: "string" },
+      { name: "SMALL", type: "number" },
+    ]);
+    expect(table.rows[0]![0]).toBe("1234567890123456789");
+    expect(csvToTable("A\n1.23456789012345678\n").columns[0]!.type).toBe("string");
+  });
+
+  it("keeps the type of a column the table already has, and types only new columns", () => {
+    const keep = [
+      { name: "CODE", type: "string" as const },
+      { name: "DAYS", type: "number" as const },
+    ];
+    const table = csvToTable("CODE,DAYS,RATE\n14,14,1.5\n30,soon,2\n", keep);
+    expect(table.columns).toEqual([
+      { name: "CODE", type: "string" },
+      { name: "DAYS", type: "number" },
+      { name: "RATE", type: "number" },
+    ]);
+    expect(table.rows).toEqual([
+      ["14", 14, 1.5],
+      ["30", "soon", 2],
+    ]);
+    expect(table.misfits).toBe(1);
   });
 
   it("refuses a header templates cannot read, naming the column", () => {
@@ -115,6 +155,12 @@ describe("toCsv", () => {
       ],
     );
     expect(csv).toBe('﻿CODE,RATE,TEXT\r\n14,1.5,"Net 14, ""bank"""\r\n30,,Netto 30 päivää\r\n');
+  });
+
+  it("writes numbers without an exponent, so they read back", () => {
+    expect(numberText(0.0000001)).toBe("0.0000001");
+    expect(toCsv([{ name: "A" }], [[0.0000001]])).toBe("﻿A\r\n0.0000001\r\n");
+    expect(csvNumber(numberText(0.0000001), false)).toBe(0.0000001);
   });
 
   it("reads back what it writes", () => {

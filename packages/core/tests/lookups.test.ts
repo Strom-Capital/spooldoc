@@ -488,6 +488,55 @@ describe("applyLookups with lookup tables", () => {
   });
 });
 
+describe("table lookups with other lookups", () => {
+  it("leaves a Db2 for i lookup that reads a column of a table lookup empty when the table has no row", async () => {
+    const query = vi.fn<LookupQuery>();
+    const greeting = lookup({ name: "greeting", sql: "SELECT TEXT FROM MYLIB.TEXTS WHERE TERMS = :terms.TEXT" });
+    const result = await applyLookups([{ paymentTerms: "60 DAYS NET" }], [tableLookup(), greeting], { query, tables: tables(termsTable()) });
+    expect(query).not.toHaveBeenCalled();
+    expect(result.misses).toEqual([{ lookup: "terms", pageGroup: 0, text: "No row in terms for CODE 60 DAYS NET. greeting is left empty", leftEmpty: ["greeting"] }]);
+  });
+
+  it("runs a table lookup once per row of a table of the definition", async () => {
+    const items = termsTable({
+      columns: [
+        { name: "ITEM", type: "string" },
+        { name: "COLOR", type: "string" },
+      ],
+      rows: [
+        ["A-1001", "red"],
+        ["B-2001", "blue"],
+      ],
+    });
+    const color = tableLookup({ name: "color", for: "lines", key: [{ column: "ITEM", param: "item" }] });
+    const result = await applyLookups(groups, [color], { tables: tables(items) }, { only: [0] });
+    const lines = result.groups[0]!.lines as { item: string; color: { COLOR: string | null } }[];
+    expect(lines[0]!.color).toEqual({ ITEM: "A-1001", COLOR: "red" });
+    expect(result.traces.filter((t) => t.lookup === "color")).toHaveLength(lines.length);
+  });
+
+  it("checks a column of a table lookup against the table as it is now", () => {
+    const checked = { ...goneChecked, key: lookupKeyText([{ column: "CODE", param: "paymentTerms" }]), columns: termsTable().columns };
+    const greeting = lookup({ name: "greeting", sql: "SELECT 1 FROM MYLIB.T WHERE A = :terms.TEXT" });
+    const renamed = termsTable({ columns: termsTable().columns.map((c) => (c.name === "TEXT" ? { ...c, name: "DESCR" } : c)) });
+    expect(lookupProblems(definition, [tableLookup({ checked }), greeting], tables(termsTable()))).toEqual([]);
+    expect(lookupProblems(definition, [tableLookup({ checked }), greeting], tables(renamed)).map((p) => [p.index, p.message])).toEqual([
+      [0, "The columns of payment-terms changed since terms was tested. Test it again."],
+      [1, "terms has no column TEXT. Its columns are CODE, CUSTNO, FROM, DESCR."],
+    ]);
+    const retyped = termsTable({ columns: termsTable().columns.map((c) => (c.name === "CUSTNO" ? { ...c, type: "string" as const } : c)) });
+    expect(lookupProblems(definition, [tableLookup({ checked })], tables(retyped)).map((p) => p.message)).toEqual([
+      "The columns of payment-terms changed since terms was tested. Test it again.",
+    ]);
+  });
+
+  it("keeps the messages of each kind's own rules", () => {
+    const tooMany = lookupSchema.safeParse({ source: "table", name: "terms", table: TERMS_ID, key: Array.from({ length: 6 }, () => ({ column: "CODE", param: "x" })) });
+    expect(tooMany.success).toBe(false);
+    expect(tooMany.error?.issues[0]?.message).toBe("A lookup matches on up to 5 key columns.");
+  });
+});
+
 describe("matchTable", () => {
   it("builds one index per table revision and key columns", () => {
     const indexes = new Map();

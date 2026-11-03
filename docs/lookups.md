@@ -224,19 +224,25 @@ or cells pasted from a spreadsheet.
 Open a table to edit it in a grid, 100 rows a page, with a filter box
 that finds rows by any cell.
 
+- Up and Down, and Enter, move to the cell above or below. Cells
+  copied from a spreadsheet and pasted into a cell fill the block from
+  that cell, adding rows as needed.
 - **Add row** and the button at the end of a row add and delete rows.
 - **Add column** adds one. The menu of a column renames it, changes its
   type, moves it left or right, or deletes it.
 - **Import CSV** replaces the columns and rows with those of a CSV file or
   pasted cells. It shows what it read first: the delimiter, each column
-  with its type, and the first rows.
+  with its type, and the first rows. A column the table already has keeps
+  its type.
 - **Download CSV** saves the table as last saved.
 - **Save** saves the table: "Saved payment-terms".
 
 Changes are saved together, with Save. Leaving the page with changes
 that are not saved asks first. When someone else saved the table since
 you opened it, Save says so: "Could not save: payment-terms changed since
-you opened it. Reload to see the changes." Each save raises the table's
+you opened it. Reload to see the changes." **Download your changes** then
+saves the grid as it is on your screen as a CSV file, so you can reload
+and import it without losing your edits. Each save raises the table's
 revision by one.
 
 ### Columns and types
@@ -267,13 +273,21 @@ Import and **New table** read a CSV whose first row names the columns.
 
 - The delimiter is a comma, a semicolon or a tab, found from the first
   row. Cells copied from a spreadsheet are tab delimited.
-- With semicolons, numbers are read with a decimal comma, as a spreadsheet
-  saves them in Finnish or German: `1,5`.
+- With semicolons or tabs, numbers are read with a decimal comma, as a
+  spreadsheet saves and copies them in Finnish or German: `1,5`. With
+  commas, numbers take a decimal point.
+- A file is read as UTF-8. A file that is not UTF-8, as older spreadsheets
+  save CSV, is read as Windows-1252, and the preview says so.
+- Rows with every cell empty, such as the `;;;` lines a spreadsheet saves,
+  are left out.
 - A cell in double quotes can hold the delimiter, a line break or a
   doubled quote. A byte order mark at the start is skipped.
-- Each column's type comes from its cells: Number when every cell is a
+- A new column's type comes from its cells: Number when every cell is a
   number, Date when every cell is a date, else Text. A code with a leading
-  zero, such as `007`, stays text.
+  zero, such as `007`, stays text, and so does a number with more than 15
+  digits, such as a long account number, which a number cannot keep
+  exactly. A column the table already has keeps its type, and a cell that
+  does not fit it is marked.
 - A header that is not a column name is refused, and the message names
   it: "Column 2 of the CSV is named "Due date", which templates cannot
   read."
@@ -282,7 +296,8 @@ Import and **New table** read a CSV whose first row names the columns.
 shows ä and ö, comma delimited, with a decimal point and dates as
 `YYYY-MM-DD`.
 
-A table holds up to 10,000 rows and 50 columns.
+A table holds up to 10,000 rows and 50 columns, and a cell up to 1,000
+characters.
 
 ### A lookup that reads a table
 
@@ -324,16 +339,25 @@ Changing the table or the key needs a new Test before a version is saved.
 
 A run reads each table as it is when the run gets to the Lookups step.
 The step in the [job log](job-log.md#steps) names each table it read and
-its revision, such as "1 lookup, payment-terms revision 4", so you can
-tell which values a document got.
+its revision, such as "1 lookup, payment-terms revision 4". Spooldoc keeps
+only the latest table, not earlier revisions, so the revision tells you
+whether the table changed since that run, not what it held then.
 
 ### Changing or deleting a table that jobs read
 
-A change that breaks the lookups of jobs asks first, and names the jobs:
+A change that can break jobs asks first, and names the jobs whose lookups
+read the table:
 
-- deleting a table that a job's lookup reads;
-- renaming or deleting a column that a job's lookup keys on;
-- importing a CSV that has no such column.
+- deleting the table;
+- renaming, retyping or deleting a column, since a template may print
+  it, a lookup may key on it, or a later lookup may read it, such as
+  `:terms.TEXT`;
+- importing a CSV that drops a column or gives it another type.
+
+After the columns change, each lookup that reads the table needs another
+Test: "The columns of payment-terms changed since terms was tested. Test
+it again." Until then, the preview leaves it out and its job cannot save
+a version.
 
 Renaming a table is safe: its lookups keep reading it under its new
 name. Rename it from the menu of its row on the Lookup tables page.
@@ -374,6 +398,7 @@ i message is under Details.
 | More than one row, or more than 1,000 | Add a condition to the query. |
 | A lookup table matched more than one row | Pick key columns that name one row, or set Rows to All rows. |
 | A lookup table has no such column | A key column was renamed or deleted in the table. Pick another key column in the Lookups step. |
+| The columns of a lookup table changed since the Test | Test the lookup again, and check the tags of its columns in the templates. |
 | The lookup table was deleted | Pick another table in the Lookups step. |
 
 A failed lookup stops the run at the Lookups step. Retry it from the job

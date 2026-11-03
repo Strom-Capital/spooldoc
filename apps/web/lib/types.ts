@@ -112,10 +112,8 @@ export interface LookupTableView {
   rows: (string | number | null)[][];
   revision: number;
   updatedAt: string;
-  /** Jobs whose draft or any version has a lookup that reads it, in name order. */
-  jobs: { id: string; name: string }[];
-  /** Jobs whose lookup keys on each column, by column: the jobs a rename or delete of the column breaks. */
-  keyJobs: Record<string, { id: string; name: string }[]>;
+  /** Jobs whose draft or any version has a lookup that reads it, in name order: the jobs a change of its columns breaks. */
+  jobs: QueueView['jobs'];
 }
 
 /** A Word or Excel template file, uploaded or made by the agent, without its bytes. */

@@ -505,6 +505,37 @@ describe('table lookups', () => {
     expect(fake().actions()).toEqual([]);
   });
 
+  it('tests a table lookup after an earlier Db2 for i lookup, keyed on its column, on the server', async () => {
+    const table = await termsTable();
+    const withTerms = { sql: SQL, columns: [...CHECKED!.columns, { name: 'TERMS', type: 'string' as const }] };
+    const db2 = customer({ checked: withTerms });
+    const keyed = terms(table.id, { key: [{ column: 'CODE', param: 'customer.TERMS' }] });
+    const id = await termsJob([db2, keyed]);
+    fake().queryAnswer = (sql, values) => {
+      const answer = customers(sql, values);
+      return { ...answer, columns: [...COLUMNS, { name: 'TERMS', type: 'CHAR', precision: 12, scale: 0, nullable: false }], rows: answer.rows.map((r) => ({ ...r, TERMS: '30 DAYS NET ' })) };
+    };
+    const response = await testLookup(id, [db2, keyed], 1);
+    expect(response.status, JSON.stringify(await response.clone().json())).toBe(200);
+    const view = (await response.json()) as LookupTestView;
+    expect(view).toMatchObject({
+      parameters: [{ name: 'customer.TERMS', value: '30 DAYS NET', source: 'd.pg.customer.TERMS', column: 'CODE' }],
+      rows: [{ CODE: '30 DAYS NET', TEXT: 'Net 30 days' }],
+      table: { name: 'payment-terms', revision: 4 },
+    });
+    expect(fake().calls.some((c) => c.method === 'query')).toBe(true);
+  });
+
+  it('refuses to save a version after the columns of its lookup table changed', async () => {
+    const table = await termsTable();
+    const id = await termsJob([terms(table.id, { checked: tested(table.id) })]);
+    await db()
+      .update(lookupTables)
+      .set({ columns: [{ name: 'CODE', type: 'string' }, { name: 'DAYS', type: 'number' }, { name: 'DESCR', type: 'string' }] });
+    const response = await versions.POST(post(`/api/jobs/${id}/versions`, {}), params({ id }));
+    expect((await response.json()).problems).toEqual(['Lookups: The columns of payment-terms changed since terms was tested. Test it again.']);
+  });
+
   it('refuses to save a version whose lookup table was deleted', async () => {
     const table = await termsTable();
     const id = await termsJob([terms(table.id, { checked: tested(table.id) })]);

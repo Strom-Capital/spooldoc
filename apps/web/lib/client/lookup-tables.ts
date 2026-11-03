@@ -1,30 +1,30 @@
-import { csvDate } from '@spooldoc/core/csv';
+import { csvDate, numberText } from '@spooldoc/core/csv';
 import { cellKind, type LookupTableCell, type LookupTableColumn } from '@spooldoc/core/lookups';
+import { parseNumber } from '@spooldoc/core/values';
 import { toast } from 'sonner';
 import { errorText } from './api';
 import { download } from './download';
 
 /** A column as the table page edits it: its name and type, and its name when it was last saved. */
 export interface EditColumn extends LookupTableColumn {
-  /** The saved name, which jobs key on; none for a column added since. */
+  /** The saved name, which jobs may print or key on; none for a column added since. */
   saved?: string;
 }
 
-/** A cell as the grid shows it: empty, a number with a decimal point, a date as `YYYY-MM-DD`, or the text. */
-export const cellText = (cell: LookupTableCell): string => (cell === null ? '' : String(cell));
+/** A cell as the grid shows it: empty, a number with a decimal point and no exponent, a date as `YYYY-MM-DD`, or the text. */
+export const cellText = (cell: LookupTableCell): string => (cell === null ? '' : typeof cell === 'number' ? numberText(cell) : cell);
 
 /**
- * What a cell's text is in a column of the type: empty for blank text, a number with a
- * decimal point or comma, a date as `YYYY-MM-DD` or `DD.MM.YYYY`, or the text as it is.
+ * What a cell's text is in a column of the type: empty for blank text, a number as
+ * `parseNumber` reads it (`1.5`, `1,5`, `1 234,50`), a date as `YYYY-MM-DD` or `DD.MM.YYYY`, or the text as it is.
  * `ok` is false when the text does not fit the type.
  */
 export function parseCell(text: string, type: LookupTableColumn['type']): { cell: LookupTableCell; ok: boolean } {
   const trimmed = text.trim();
   if (trimmed === '') return { cell: null, ok: true };
   if (type === 'number') {
-    const compact = trimmed.replace(/[\s ]/g, '');
-    if (!/^[-+]?(\d+([.,]\d+)?|[.,]\d+)$/.test(compact)) return { cell: null, ok: false };
-    return { cell: Number(compact.replace(',', '.')), ok: true };
+    const n = parseNumber(trimmed);
+    return n === null ? { cell: null, ok: false } : { cell: n, ok: true };
   }
   if (type === 'date') {
     const date = csvDate(trimmed);
@@ -93,5 +93,17 @@ export async function downloadCsv(table: { id: string; name: string }): Promise<
     await download(response, `${table.name}.csv`);
   } catch (err) {
     toast.error(`Could not download ${table.name}`, { description: errorText(err) });
+  }
+}
+
+/**
+ * A file's text: UTF-8, or Windows-1252 when the bytes are not UTF-8, as an older
+ * spreadsheet saves CSV. `fallback` says the second was used.
+ */
+export function decodeCsv(bytes: ArrayBuffer | Uint8Array):{ text: string; fallback: boolean } {
+  try {
+    return { text: new TextDecoder('utf-8', { fatal: true }).decode(bytes), fallback: false };
+  } catch {
+    return { text: new TextDecoder('windows-1252').decode(bytes), fallback: true };
   }
 }

@@ -2,10 +2,9 @@ import { toCsv } from '@spooldoc/core';
 import { guard } from '@/lib/server/auth';
 import { errorResponse } from '@/lib/server/http';
 import { getLookupTable } from '@/lib/server/lookup-tables';
+import { UUID } from '@/lib/server/servers';
 
 export const dynamic = 'force-dynamic';
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A lookup table as a CSV file: UTF-8 with a BOM, comma delimited, numbers with a decimal point. */
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {

@@ -2,15 +2,14 @@ import { LOOKUP_TABLE_NAME, lookupTableContentSchema } from '@spooldoc/core';
 import { z } from 'zod';
 import { guard } from '@/lib/server/auth';
 import { errorResponse, json, readJson } from '@/lib/server/http';
-import { jobsUsingLookupTable, lookupTableKeyJobs } from '@/lib/server/jobs-using';
-import { contentError, deleteLookupTable, getLookupTable, TABLE_NAME_RULE, updateLookupTable, type LookupTableRecord } from '@/lib/server/lookup-tables';
+import { lookupTableJobs } from '@/lib/server/jobs-using';
+import { contentError, deleteLookupTable, getLookupTable, TABLE_NAME_RULE, tooLarge, updateLookupTable, type LookupTableRecord } from '@/lib/server/lookup-tables';
+import { UUID } from '@/lib/server/servers';
 import type { LookupTableView } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
 type Context = { params: Promise<{ id: string }> };
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const tableId = async (params: Context['params']): Promise<string | null> => {
   const id = (await params).id;
@@ -26,10 +25,9 @@ const updateSchema = z.object({
   rows: z.array(z.unknown()).optional(),
 });
 
-/** The table as its page shows it: with its rows, the jobs that read it, and the jobs keyed on each column. */
+/** The table as its page shows it: with its rows and the jobs that read it. */
 async function withJobs(table: LookupTableRecord): Promise<LookupTableView> {
-  const [jobs, keyJobs] = await Promise.all([jobsUsingLookupTable(table.id), lookupTableKeyJobs(table.id)]);
-  return { ...table, jobs, keyJobs };
+  return { ...table, jobs: (await lookupTableJobs(table.id)).get(table.id) ?? [] };
 }
 
 /** One lookup table with its rows. */
@@ -54,6 +52,10 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
   const auth = await guard(request);
   if ('response' in auth) {
     return auth.response;
+  }
+  const large = tooLarge(request);
+  if (large) {
+    return large;
   }
   const id = await tableId(params);
   const current = id ? await getLookupTable(id) : undefined;
@@ -83,7 +85,7 @@ export async function PATCH(request: Request, { params }: Context): Promise<Resp
     return errorResponse(409, `Could not save: ${current.name} changed since you opened it. Reload to see the changes.`);
   }
   if (result === 'name-taken') {
-    return errorResponse(409, `There is already a lookup table named ${name}. Pick another name.`);
+    return errorResponse(409, `Could not rename: a table named ${name} exists.`);
   }
   return json(await withJobs(result));
 }

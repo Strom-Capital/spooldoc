@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { emptySpec } from '@/lib/job-spec';
 import { jobs, jobVersions } from '@/lib/server/db/schema';
-import { jobsUsingLookupTable } from '@/lib/server/jobs-using';
+import { lookupTableJobs } from '@/lib/server/jobs-using';
 import type { LookupTableSummary, LookupTableView } from '@/lib/types';
 import { signedIn } from './helpers/auth';
 import { resetTables } from './helpers/db';
@@ -48,7 +48,7 @@ beforeEach(async () => {
 describe('lookup tables', () => {
   it('creates, lists, reads, saves and deletes a table', async () => {
     const table = await made();
-    expect(table).toMatchObject({ name: 'payment-terms', columns: COLUMNS, rows: ROWS, revision: 1, jobs: [], keyJobs: {} });
+    expect(table).toMatchObject({ name: 'payment-terms', columns: COLUMNS, rows: ROWS, revision: 1, jobs: [] });
     expect(await list()).toEqual([expect.objectContaining({ id: table.id, name: 'payment-terms', rows: 2, revision: 1, jobs: [] })]);
     expect(await (await get(table.id)).json()).toMatchObject({ rows: ROWS });
 
@@ -101,7 +101,7 @@ describe('lookup tables', () => {
     expect(await (await get(table.id)).json()).toMatchObject({ revision: 2, rows: [] });
   });
 
-  it('lists the jobs whose draft or any version reads a table, and those that key on each column', async () => {
+  it('lists the jobs whose draft or any version reads a table, on the list and on the table', async () => {
     const table = await made();
     const other = await made('other');
     const serverId = await insertServer();
@@ -118,16 +118,13 @@ describe('lookup tables', () => {
     const listed = await list();
     expect(listed.find((t) => t.id === table.id)?.jobs.map((j) => j.name)).toEqual(['Invoices', 'Statements']);
     expect(listed.find((t) => t.id === other.id)?.jobs).toEqual([]);
-    expect(await (await get(table.id)).json()).toMatchObject({
-      jobs: [
-        { id: draftJob, name: 'Invoices' },
-        { id: versionJob!.id, name: 'Statements' },
-      ],
-      keyJobs: { CODE: [{ id: draftJob, name: 'Invoices' }], TEXT: [{ id: versionJob!.id, name: 'Statements' }] },
-    });
-    expect((await jobsUsingLookupTable(table.id, 'CODE')).map((j) => j.name)).toEqual(['Invoices']);
-    expect(await jobsUsingLookupTable(table.id, 'DAYS')).toEqual([]);
-    expect(await jobsUsingLookupTable(other.id)).toEqual([]);
+    const shown = (await (await get(table.id)).json()) as LookupTableView;
+    expect(shown.jobs).toEqual([
+      expect.objectContaining({ id: draftJob, name: 'Invoices', mode: 'manual', paused: false }),
+      expect.objectContaining({ id: versionJob!.id, name: 'Statements', activeVersion: 1 }),
+    ]);
+    expect([...(await lookupTableJobs(table.id)).keys()]).toEqual([table.id]);
+    expect((await lookupTableJobs(other.id)).size).toBe(0);
   });
 
   it('downloads the table as UTF-8 CSV with a BOM, commas and decimal points', async () => {
@@ -142,6 +139,24 @@ describe('lookup tables', () => {
     expect(new TextDecoder().decode(bytes.slice(3))).toBe(
       'CODE,DAYS,FROM,TEXT,RATE\r\n14,14,2026-01-01,Net 14 days,1.5\r\n30,30,,"Netto 30 päivää, ""pankki""",\r\n',
     );
+  });
+
+  it('refuses a request too large to save, and a cell longer than 1,000 characters', async () => {
+    const big = appRequest('/api/lookup-tables', { method: 'POST', body: { name: 'big', columns: COLUMNS, rows: [] }, headers: { ...auth, 'content-length': String(21 * 1024 * 1024) } });
+    const response = await listRoute.POST(big);
+    expect(response.status).toBe(413);
+    expect((await response.json()).error).toMatch(/^The table is too large to save: a save can be at most 20 MB\./);
+    const long = await create({ name: 'long-cell', columns: [COLUMNS[0]], rows: [['x'.repeat(1001)]] });
+    expect(long.status).toBe(400);
+    expect((await long.json()).error).toBe('Row 1, column CODE holds more than 1,000 characters, the most a cell takes.');
+  });
+
+  it('answers a rename to a name taken meanwhile with 409, not a failure', async () => {
+    const table = await made();
+    await made('other');
+    const renamed = await update(table.id, { revision: 1, name: 'other' });
+    expect(renamed.status).toBe(409);
+    expect((await renamed.json()).error).toBe('Could not rename: a table named other exists.');
   });
 
   it('needs a signed-in user', async () => {

@@ -1,13 +1,14 @@
 'use client';
 
 import { csvToTable, delimiterName, type CsvTable } from '@spooldoc/core/csv';
+import type { LookupTableColumn } from '@spooldoc/core/lookups';
 import { useState } from 'react';
 import { ErrorNote } from '@/components/page';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { cellText, TYPE_LABEL } from '@/lib/client/lookup-tables';
+import { cellText, decodeCsv, TYPE_LABEL } from '@/lib/client/lookup-tables';
 import { cn } from '@/lib/utils';
 
 /** Rows the preview shows. */
@@ -22,14 +23,16 @@ function readAs(table: CsvTable): string {
 /**
  * A CSV to read as a lookup table, from a file or pasted cells, with a preview of what
  * was read: the delimiter, each column and its type, and the first rows. The first row
- * names the columns.
+ * names the columns. A column named in `keep` keeps its type.
  */
-export function CsvInput({ id, onParsed }: { id: string; onParsed(table: CsvTable | null): void }) {
+export function CsvInput({ id, keep = [], onParsed }: { id: string; keep?: readonly LookupTableColumn[]; onParsed(table: CsvTable | null): void }) {
   const [text, setText] = useState('');
   const [table, setTable] = useState<CsvTable | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fallback, setFallback] = useState(false);
 
-  function read(next: string) {
+  function read(next: string, fromFile = false) {
+    if (!fromFile) setFallback(false);
     setText(next);
     if (!next.trim()) {
       setTable(null);
@@ -38,7 +41,7 @@ export function CsvInput({ id, onParsed }: { id: string; onParsed(table: CsvTabl
       return;
     }
     try {
-      const parsed = csvToTable(next);
+      const parsed = csvToTable(next, keep);
       setTable(parsed);
       setError(null);
       onParsed(parsed);
@@ -52,7 +55,9 @@ export function CsvInput({ id, onParsed }: { id: string; onParsed(table: CsvTabl
   async function readFile(file: File | undefined) {
     if (!file) return;
     try {
-      read(await file.text());
+      const decoded = decodeCsv(await file.arrayBuffer());
+      setFallback(decoded.fallback);
+      read(decoded.text, true);
     } catch {
       setError(`Could not read ${file.name}. Save it as CSV and choose it again.`);
     }
@@ -83,8 +88,8 @@ export function CsvInput({ id, onParsed }: { id: string; onParsed(table: CsvTabl
           className="h-28 font-mono text-xs"
         />
         <p className="text-muted-foreground text-xs">
-          The first row names the columns. Commas, semicolons and tabs work, so cells copied from a spreadsheet can be pasted. With semicolons,
-          numbers take a decimal comma.
+          The first row names the columns. Commas, semicolons and tabs work, so cells copied from a spreadsheet can be pasted. With semicolons
+          or tabs, numbers take a decimal comma; with commas, a decimal point.
         </p>
       </div>
       {error && <ErrorNote>{error}</ErrorNote>}
@@ -94,7 +99,17 @@ export function CsvInput({ id, onParsed }: { id: string; onParsed(table: CsvTabl
             {table.rows.length.toLocaleString('en-US')} {table.rows.length === 1 ? 'row' : 'rows'}, {table.columns.length}{' '}
             {table.columns.length === 1 ? 'column' : 'columns'}
           </h3>
-          <p className="text-muted-foreground text-xs">{readAs(table)}</p>
+          <p className="text-muted-foreground text-xs">
+            {readAs(table)}
+            {fallback && ' Read as Windows-1252, not UTF-8.'}
+            {table.emptyRows > 0 && ` ${table.emptyRows.toLocaleString('en-US')} ${table.emptyRows === 1 ? 'row' : 'rows'} with every cell empty left out.`}
+          </p>
+          {table.misfits > 0 && (
+            <p className="text-amber-700 text-xs dark:text-amber-400">
+              {table.misfits.toLocaleString('en-US')} {table.misfits === 1 ? 'cell does' : 'cells do'} not fit the type {table.misfits === 1 ? 'its column keeps' : 'their columns keep'}.
+              The grid marks them, and they need fixing before you save.
+            </p>
+          )}
           <div className="max-h-56 overflow-auto rounded-md border">
             <table className="w-full text-xs">
               <thead className="bg-muted/40">

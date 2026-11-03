@@ -6,9 +6,30 @@ import type { LookupTableSummary, LookupTableView } from '@/lib/types';
 import { getDb } from './db';
 import { errorResponse } from './http';
 import { lookupTables } from './db/schema';
+import { UUID } from './servers';
 
 /** What a name must be, as the API says it. */
 export const TABLE_NAME_RULE = 'Name the table with lowercase letters, digits, dashes and underscores, at most 64, starting with a letter or digit.';
+
+/** The largest request that saves a table. A full table of short cells fits well within it. */
+export const MAX_TABLE_REQUEST_BYTES = 20 * 1024 * 1024;
+
+/** A 413 for a request over `MAX_TABLE_REQUEST_BYTES`, or null when its length is within it. */
+export function tooLarge(request: Request): Response | null {
+  if (Number(request.headers.get('content-length') ?? 0) <= MAX_TABLE_REQUEST_BYTES) return null;
+  return errorResponse(
+    413,
+    `The table is too large to save: a save can be at most ${MAX_TABLE_REQUEST_BYTES / 1024 / 1024} MB. Remove rows or shorten long cells, or split it into two tables.`,
+  );
+}
+
+/** True for Postgres's unique violation, also when drizzle wraps it. */
+function isUniqueViolation(error: unknown): boolean {
+  for (let e: unknown = error; e && typeof e === 'object'; e = (e as { cause?: unknown }).cause) {
+    if ((e as { code?: unknown }).code === '23505') return true;
+  }
+  return false;
+}
 
 /** A 400 for columns or rows that `lookupTableContentSchema` refused, with its first message. */
 export function contentError(error: { issues: { message: string }[] }): Response {
@@ -79,20 +100,20 @@ export async function updateLookupTable(
   expectedRevision: number,
 ): Promise<LookupTableRecord | UpdateRefusal> {
   const db = getDb();
+  // A name another table has, also when two renames to it run at once, meets the unique name.
   return db.transaction(async (tx) => {
     const [current] = await tx.select({ revision: lookupTables.revision }).from(lookupTables).where(eq(lookupTables.id, id)).for('update');
     if (!current) return 'not-found';
     if (current.revision !== expectedRevision) return 'changed';
-    if (changes.name !== undefined) {
-      const [taken] = await tx.select({ id: lookupTables.id }).from(lookupTables).where(eq(lookupTables.name, changes.name));
-      if (taken && taken.id !== id) return 'name-taken';
-    }
     const [row] = await tx
       .update(lookupTables)
       .set({ ...changes, revision: current.revision + 1 })
       .where(eq(lookupTables.id, id))
       .returning();
     return view(row!);
+  }).catch((error: unknown) => {
+    if (isUniqueViolation(error)) return 'name-taken' as const;
+    throw error;
   });
 }
 
@@ -107,7 +128,7 @@ export async function deleteLookupTable(id: string): Promise<boolean> {
  * A table that was deleted is not in the map.
  */
 export async function loadLookupTables(ids: Iterable<string>): Promise<Map<string, LookupTableData>> {
-  const wanted = [...new Set(ids)].filter((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+  const wanted = [...new Set(ids)].filter((id) => UUID.test(id));
   if (wanted.length === 0) return new Map();
   const rows = await getDb().select().from(lookupTables).where(inArray(lookupTables.id, wanted));
   return new Map(rows.map((row) => [row.id, { id: row.id, name: row.name, revision: row.revision, columns: row.columns, rows: row.rows }]));
